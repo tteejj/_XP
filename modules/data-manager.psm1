@@ -1,4 +1,3 @@
-
 # Data Manager Module
 # Unified data persistence and CRUD operations with event integration
 
@@ -288,9 +287,26 @@ class DataManager {
 
     [void] LoadData() { Load-UnifiedData }
     [void] SaveData() { Save-UnifiedData }
-    [PmcTask] AddTask([string]$Title, [string]$Description, [TaskPriority]$Priority, [string]$ProjectKey) { return Add-PmcTask -Title $Title -Description $Description -Priority $Priority.ToString() -Category $ProjectKey }
-    [PmcTask[]] GetTasks() { return @($this.DataStore.Tasks) }
-    [PmcProject[]] GetProjects() { return @($this.DataStore.Projects) }
+    
+    [PmcTask] AddTask([string]$Title, [string]$Description, [string]$Priority, [string]$ProjectKey) { 
+        return Add-PmcTask -Title $Title -Description $Description -Priority $Priority -Category $ProjectKey 
+    }
+
+    [PmcTask] UpdateTask([PmcTask]$Task, [string]$Title) {
+        return Update-PmcTask -Task $Task -Title $Title
+    }
+    
+    [void] RemoveTask([PmcTask]$Task) {
+        Remove-PmcTask -Task $Task
+    }
+    
+    [PmcTask[]] GetTasks() { 
+        return Get-PmcTasks 
+    }
+
+    [PmcProject[]] GetProjects() { 
+        return Get-PmcProjects 
+    }
 }
 
 #endregion
