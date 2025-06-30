@@ -1,0 +1,375 @@
+# ==============================================================================
+# PMC Terminal v5 - NCurses Dashboard Screen
+# Main entry screen with buffer-based rendering
+# ==============================================================================
+
+# AI: PHASE 3 REFACTORED - NCurses buffer-based architecture
+using module '..\..\components\tui-primitives.psm1'
+using module '..\..\layout\panels-class.psm1'
+using module '..\..\components\navigation-class.psm1'
+using module '..\..\components\advanced-data-components.psm1'
+using module '..\..\modules\models.psm1'
+
+class DashboardScreen : UIElement {
+    # --- Core Architecture ---
+    [hashtable] $Services
+    [Panel] $MainPanel
+    [Panel] $SummaryPanel
+    [Panel] $MenuPanel
+    [Panel] $StatusPanel
+    [NavigationMenu] $MainMenu
+    [System.Collections.Generic.List[UIElement]] $Components
+
+    # --- State Management ---
+    [object[]] $Tasks = @()
+    [int] $TotalTasks = 0
+    [int] $CompletedTasks = 0
+    [int] $PendingTasks = 0
+
+    # --- Constructor ---
+    DashboardScreen([hashtable]$services) : base(0, 0, 120, 30) {
+        $this.Name = "DashboardScreen"
+        $this.Services = $services
+        $this.Components = [System.Collections.Generic.List[UIElement]]::new()
+        $this.IsFocusable = $true
+        $this.Enabled = $true
+        $this.Visible = $true
+        $this.Tasks = @()
+        
+        Write-Log -Level Info -Message "Creating DashboardScreen with NCurses architecture"
+    }
+
+    # --- Initialization ---
+    [void] Initialize() {
+        Invoke-WithErrorHandling -Component "DashboardScreen" -Context "Initialize" -ScriptBlock {
+            # AI: PHASE 3 - Create main panel structure
+            $this.MainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "PMC Terminal v5 - Dashboard")
+            $this.MainPanel.HasBorder = $true
+            $this.MainPanel.BorderStyle = "Double"
+            $this.MainPanel.BorderColor = [ConsoleColor]::Cyan
+            $this.MainPanel.BackgroundColor = [ConsoleColor]::Black
+            $this.MainPanel.TitleColor = [ConsoleColor]::White
+            $this.MainPanel.Name = "MainDashboardPanel"
+            $this.AddChild($this.MainPanel)
+            
+            # AI: PHASE 3 - Summary panel (left side)
+            $this.SummaryPanel = [Panel]::new(2, 2, 45, 12, "Task Summary")
+            $this.SummaryPanel.HasBorder = $true
+            $this.SummaryPanel.BorderStyle = "Single"
+            $this.SummaryPanel.BorderColor = [ConsoleColor]::Green
+            $this.SummaryPanel.BackgroundColor = [ConsoleColor]::Black
+            $this.SummaryPanel.Name = "SummaryPanel"
+            $this.MainPanel.AddChild($this.SummaryPanel)
+            
+            # AI: PHASE 3 - Menu panel (right side)
+            $this.MenuPanel = [Panel]::new(49, 2, 50, 15, "Main Menu")
+            $this.MenuPanel.HasBorder = $true
+            $this.MenuPanel.BorderStyle = "Single"
+            $this.MenuPanel.BorderColor = [ConsoleColor]::Yellow
+            $this.MenuPanel.BackgroundColor = [ConsoleColor]::Black
+            $this.MenuPanel.Name = "MenuPanel"
+            $this.MainPanel.AddChild($this.MenuPanel)
+            
+            # AI: PHASE 3 - Status panel (bottom)
+            $this.StatusPanel = [Panel]::new(2, 19, 116, 8, "System Status")
+            $this.StatusPanel.HasBorder = $true
+            $this.StatusPanel.BorderStyle = "Single"
+            $this.StatusPanel.BorderColor = [ConsoleColor]::Magenta
+            $this.StatusPanel.BackgroundColor = [ConsoleColor]::Black
+            $this.StatusPanel.Name = "StatusPanel"
+            $this.MainPanel.AddChild($this.StatusPanel)
+            
+            # AI: PHASE 3 - Create navigation menu
+            $this.MainMenu = [NavigationMenu]::new("MainMenu")
+            $this.MainMenu.Move(1, 1)  # Inside menu panel
+            $this.MainMenu.Resize(48, 13)
+            $this.BuildMainMenu()
+            $this.MenuPanel.AddChild($this.MainMenu)
+            
+            # AI: PHASE 3 - Load initial data and update display
+            $this.RefreshData()
+            $this.UpdateDisplay()
+            
+            Write-Log -Level Info -Message "DashboardScreen initialized with NCurses architecture"
+        }
+    }
+
+    # --- Menu Building ---
+    hidden [void] BuildMainMenu() {
+        try {
+            $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", { 
+                $this.Services.Navigation.GoTo("/tasks", @{}) 
+            }))
+            $this.MainMenu.AddItem([NavigationItem]::new("2", "Project Management", { 
+                $this.Services.Navigation.GoTo("/projects", @{}) 
+            }))
+            $this.MainMenu.AddItem([NavigationItem]::new("3", "Settings", { 
+                $this.Services.Navigation.GoTo("/settings", @{}) 
+            }))
+            $this.MainMenu.AddSeparator()
+            $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", { 
+                $this.Services.Navigation.RequestExit() 
+            }))
+            
+            Write-Log -Level Debug -Message "Main menu built with $($this.MainMenu.Items.Count) items"
+        } catch {
+            Write-Log -Level Error -Message "Failed to build main menu: $_"
+        }
+    }
+
+    # --- Data Management ---
+    hidden [void] RefreshData() {
+        Invoke-WithErrorHandling -Component "DashboardScreen" -Context "RefreshData" -ScriptBlock {
+            # AI: PHASE 3 - Safe data loading
+            $this.Tasks = @()
+            $this.TotalTasks = 0
+            $this.CompletedTasks = 0
+            $this.PendingTasks = 0
+            
+            if ($null -eq $this.Services.DataManager) {
+                Write-Log -Level Warning -Message "DataManager service not available"
+                return
+            }
+            
+            try {
+                $taskData = $this.Services.DataManager.GetTasks()
+                $this.Tasks = if ($null -eq $taskData) { @() } else { @($taskData) }
+                
+                # AI: PHASE 3 - Calculate statistics
+                $this.TotalTasks = $this.Tasks.Count
+                
+                if ($this.TotalTasks -gt 0) {
+                    try {
+                        $completedTasks = @($this.Tasks | Where-Object { 
+                            $null -ne $_ -and $_.Status -eq [TaskStatus]::Completed 
+                        })
+                        $this.CompletedTasks = $completedTasks.Count
+                        $this.PendingTasks = $this.TotalTasks - $this.CompletedTasks
+                    } catch {
+                        # AI: PHASE 3 - Fallback for enum issues
+                        Write-Log -Level Warning -Message "TaskStatus enum not available, using string comparison"
+                        $completedTasks = @($this.Tasks | Where-Object { 
+                            $null -ne $_ -and ($_.Status -eq "Completed" -or $_.Status -eq 2)
+                        })
+                        $this.CompletedTasks = $completedTasks.Count
+                        $this.PendingTasks = $this.TotalTasks - $this.CompletedTasks
+                    }
+                }
+                
+                Write-Log -Level Debug -Message "Dashboard data refreshed - $($this.TotalTasks) tasks loaded"
+            } catch {
+                Write-Log -Level Warning -Message "Failed to load tasks: $_"
+                $this.Tasks = @()
+            }
+        }
+    }
+
+    hidden [void] UpdateDisplay() {
+        Invoke-WithErrorHandling -Component "DashboardScreen" -Context "UpdateDisplay" -ScriptBlock {
+            # AI: PHASE 3 - Update summary panel
+            $this.UpdateSummaryPanel()
+            
+            # AI: PHASE 3 - Update status panel
+            $this.UpdateStatusPanel()
+            
+            $this.RequestRedraw()
+        }
+    }
+
+    hidden [void] UpdateSummaryPanel() {
+        if ($null -eq $this.SummaryPanel) { return }
+        
+        # AI: PHASE 3 - Clear summary panel content area
+        $this.ClearPanelContent($this.SummaryPanel)
+        
+        # AI: PHASE 3 - Write summary information
+        $summaryLines = @(
+            "Task Overview",
+            "═══════════════",
+            "",
+            "Total Tasks:    $($this.TotalTasks)",
+            "Completed:      $($this.CompletedTasks)",
+            "Pending:        $($this.PendingTasks)",
+            "",
+            "Progress: $($this.GetProgressBar())",
+            "",
+            "Use number keys or",
+            "arrow keys + Enter"
+        )
+        
+        for ($i = 0; $i -lt $summaryLines.Count; $i++) {
+            $color = if ($i -eq 0) { [ConsoleColor]::White } elseif ($i -eq 1) { [ConsoleColor]::Gray } else { [ConsoleColor]::Cyan }
+            $this.WriteTextToPanel($this.SummaryPanel, $summaryLines[$i], 1, $i, $color)
+        }
+    }
+
+    hidden [void] UpdateStatusPanel() {
+        if ($null -eq $this.StatusPanel) { return }
+        
+        # AI: PHASE 3 - Clear status panel content area
+        $this.ClearPanelContent($this.StatusPanel)
+        
+        # AI: PHASE 3 - Write system status information
+        $statusLines = @(
+            "System Information",
+            "════════════════════",
+            "",
+            "PowerShell Version: $($PSVersionTable.PSVersion)",
+            "Platform:           $($PSVersionTable.Platform)",
+            "Memory Usage:       $(Get-MemoryUsage)",
+            "Current Time:       $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        )
+        
+        for ($i = 0; $i -lt $statusLines.Count; $i++) {
+            $color = if ($i -eq 0) { [ConsoleColor]::White } elseif ($i -eq 1) { [ConsoleColor]::Gray } else { [ConsoleColor]::Green }
+            $this.WriteTextToPanel($this.StatusPanel, $statusLines[$i], 1, $i, $color)
+        }
+    }
+
+    # --- Helper Methods ---
+    hidden [string] GetProgressBar() {
+        if ($this.TotalTasks -eq 0) { return "No tasks" }
+        
+        $percentage = [Math]::Round(($this.CompletedTasks / $this.TotalTasks) * 100)
+        $barLength = 20
+        $filledLength = [Math]::Round(($percentage / 100) * $barLength)
+        $bar = "█" * $filledLength + "░" * ($barLength - $filledLength)
+        return "$bar $percentage%"
+    }
+
+    hidden [string] GetMemoryUsage() {
+        try {
+            $process = Get-Process -Id $PID
+            $memoryMB = [Math]::Round($process.WorkingSet64 / 1MB, 2)
+            return "$memoryMB MB"
+        } catch {
+            return "Unknown"
+        }
+    }
+
+    hidden [void] ClearPanelContent([Panel]$panel) {
+        if ($null -eq $panel -or $null -eq $panel._private_buffer) { return }
+        
+        $clearCell = [TuiCell]::new(' ', [ConsoleColor]::White, $panel.BackgroundColor)
+        for ($y = $panel.ContentY; $y -lt ($panel.ContentY + $panel.ContentHeight); $y++) {
+            for ($x = $panel.ContentX; $x -lt ($panel.ContentX + $panel.ContentWidth); $x++) {
+                $panel._private_buffer.SetCell($x, $y, $clearCell)
+            }
+        }
+    }
+
+    hidden [void] WriteTextToPanel([Panel]$panel, [string]$text, [int]$x, [int]$y, [ConsoleColor]$color) {
+        if ($null -eq $panel -or $null -eq $panel._private_buffer) { return }
+        if ($y -ge $panel.ContentHeight) { return }
+        
+        $chars = $text.ToCharArray()
+        for ($i = 0; $i -lt $chars.Length -and ($x + $i) -lt $panel.ContentWidth; $i++) {
+            $cell = [TuiCell]::new($chars[$i], $color, $panel.BackgroundColor)
+            $panel._private_buffer.SetCell($panel.ContentX + $x + $i, $panel.ContentY + $y, $cell)
+        }
+    }
+
+    # --- Input Handling ---
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Invoke-WithErrorHandling -Component "DashboardScreen" -Context "HandleInput" -ScriptBlock {
+            # AI: PHASE 3 - Handle hotkeys first
+            $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
+            if ($keyChar -match '^[123Q]$') {
+                Write-Log -Level Debug -Message "Processing hotkey: $keyChar"
+                try {
+                    $this.MainMenu.ExecuteAction($keyChar)
+                    return $true
+                } catch {
+                    Write-Log -Level Error -Message "Failed to execute menu action: $_"
+                }
+            }
+            
+            # AI: PHASE 3 - Handle navigation keys
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    if ($this.MainMenu.SelectedIndex -gt 0) {
+                        $this.MainMenu.SelectedIndex--
+                        $this.RequestRedraw()
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this.MainMenu.SelectedIndex -lt ($this.MainMenu.Items.Count - 1)) {
+                        $this.MainMenu.SelectedIndex++
+                        $this.RequestRedraw()
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::Enter) {
+                    try {
+                        $selectedItem = $this.MainMenu.Items[$this.MainMenu.SelectedIndex]
+                        if ($selectedItem -and $selectedItem.Enabled) {
+                            Write-Log -Level Debug -Message "Executing selected menu item: $($selectedItem.Key)"
+                            $selectedItem.Execute()
+                            return $true
+                        }
+                    } catch {
+                        Write-Log -Level Error -Message "Failed to execute selected menu item: $_"
+                    }
+                }
+                ([ConsoleKey]::Escape) {
+                    Write-Log -Level Debug -Message "Escape pressed - requesting exit"
+                    try {
+                        $this.Services.Navigation.RequestExit()
+                        return $true
+                    } catch {
+                        Write-Log -Level Error -Message "Failed to request exit: $_"
+                    }
+                }
+                ([ConsoleKey]::F5) {
+                    # AI: PHASE 3 - Refresh data on F5
+                    $this.RefreshData()
+                    $this.UpdateDisplay()
+                    return $true
+                }
+            }
+        }
+        return $false
+    }
+
+    # --- NCurses Rendering ---
+    [void] _RenderContent() {
+        # AI: PHASE 3 - Buffer-based rendering
+        if ($null -eq $this._private_buffer) { return }
+        
+        # AI: PHASE 3 - Clear buffer
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+        $this._private_buffer.Clear($bgCell)
+        
+        # AI: PHASE 3 - Render all child components
+        foreach ($child in $this.Children) {
+            if ($child.Visible) {
+                $child.Render()
+            }
+        }
+    }
+
+    # --- Lifecycle Methods ---
+    [void] OnEnter() {
+        $this.RefreshData()
+        $this.UpdateDisplay()
+        Write-Log -Level Debug -Message "DashboardScreen entered"
+    }
+
+    [void] OnExit() {
+        Write-Log -Level Debug -Message "DashboardScreen exited"
+    }
+
+    [void] OnDeactivate() {
+        $this.Cleanup()
+        Write-Log -Level Debug -Message "DashboardScreen deactivated"
+    }
+
+    [void] Cleanup() {
+        $this.Components.Clear()
+        $this.Children.Clear()
+        Write-Log -Level Debug -Message "DashboardScreen cleaned up"
+    }
+}
+
+Export-ModuleMember -Function @() -Variable @() -Cmdlet @() -Alias @()
