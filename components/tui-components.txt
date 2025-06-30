@@ -1,7 +1,10 @@
 # TUI Component Library - Phase 1 Migration Complete
 # All components now inherit from UIElement and use buffer-based rendering
 
-using module ..\components\tui-primitives.psm1
+using module .\ui-classes.psm1
+using module ..\layout\panels-class.psm1
+using module ..\modules\exceptions.psm1
+using module ..\modules\logger.psm1
 
 #region Core UI Components
 
@@ -148,10 +151,13 @@ class TextBoxComponent : UIElement {
             $textY = $renderY + 1
             $parentPanel.WriteToBuffer($textX, $textY, $displayText, [ConsoleColor]::White, [ConsoleColor]::Black)
             
-            # AI: Draw cursor if focused
-            if ($this.IsFocused -and $this.CursorPosition -le $displayText.Length) {
+            # AI: Draw cursor if focused - FIXED comparison operator issue
+            if ($this.IsFocused -and ($this.CursorPosition -le $displayText.Length)) {
                 $cursorX = $textX + $this.CursorPosition
-                if ($cursorX < $renderX + $this.Width - 2) {
+                $maxCursorX = $renderX + $this.Width - 2
+                
+                # AI: Only draw cursor if it's within the visible area
+                if ($cursorX -lt $maxCursorX) {
                     $parentPanel.WriteToBuffer($cursorX, $textY, "_", [ConsoleColor]::Yellow, [ConsoleColor]::Black)
                 }
             }
