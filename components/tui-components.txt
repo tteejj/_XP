@@ -19,22 +19,15 @@ class LabelComponent : UIElement {
         $this.Height = 1
     }
     
-    hidden [void] _RenderContent() {
-        # AI: REFACTORED - Now renders to parent Panel's buffer instead of direct output
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    [void] OnRender() {
+        # AI: REFACTORED - Renders to its own private buffer.
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
+            $this._private_buffer.Clear()
             $fg = $this.ForegroundColor ?? [ConsoleColor]::White
-            $parentPanel = [Panel]$this.Parent
-            
-            # AI: Calculate position relative to parent's content area
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
-            
-            # AI: Render to parent's buffer
-            $parentPanel.WriteToBuffer($renderX, $renderY, $this.Text, $fg, [ConsoleColor]::Black)
-            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -ForegroundColor $fg
+
         } catch { 
             Write-Log -Level Error -Message "Label render error for '$($this.Name)': $_" 
         }
@@ -58,28 +51,26 @@ class ButtonComponent : UIElement {
         $this.Text = "Button"
     }
     
-    hidden [void] _RenderContent() {
-        # AI: REFACTORED - Buffer-based rendering with parent Panel integration
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    [void] OnRender() {
+        # AI: REFACTORED - Renders to its own private buffer, not the parent's.
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
-            
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+
             $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
             $bgColor = $this.IsPressed ? [ConsoleColor]::Yellow : [ConsoleColor]::Black
             $fgColor = $this.IsPressed ? [ConsoleColor]::Black : $borderColor
             
-            # AI: Render border to parent buffer
-            $parentPanel.DrawBoxToBuffer($renderX, $renderY, $this.Width, $this.Height, $borderColor, $bgColor)
+            # Render border to own buffer
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
             
-            # AI: Render text centered
-            $textX = $renderX + [Math]::Floor(($this.Width - $this.Text.Length) / 2)
-            $textY = $renderY + [Math]::Floor($this.Height / 2)
-            $parentPanel.WriteToBuffer($textX, $textY, $this.Text, $fgColor, $bgColor)
-            
+            # Render text centered in own buffer
+            $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
+            $textY = [Math]::Floor(($this.Height - 1) / 2)
+            Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -ForegroundColor $fgColor -BackgroundColor $bgColor
+
         } catch { 
             Write-Log -Level Error -Message "Button render error for '$($this.Name)': $_" 
         }
@@ -89,14 +80,15 @@ class ButtonComponent : UIElement {
         try {
             if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
                 $this.IsPressed = $true
-                $this.Parent.RequestRedraw()
+                $this.RequestRedraw()
                 
                 if ($this.OnClick) { 
                     Invoke-WithErrorHandling -Component "$($this.Name).OnClick" -ScriptBlock { & $this.OnClick }
                 }
                 
+                Start-Sleep -Milliseconds 50 # Visual feedback for press
                 $this.IsPressed = $false
-                $this.Parent.RequestRedraw()
+                $this.RequestRedraw()
                 return $true
             }
         } catch { 
@@ -121,44 +113,40 @@ class TextBoxComponent : UIElement {
         $this.MaxLength = 100
     }
     
-    hidden [void] _RenderContent() {
-        # AI: REFACTORED - Renders to parent Panel buffer
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    [void] OnRender() {
+        # AI: REFACTORED - Renders to its own private buffer.
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
             
             $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
             
-            # AI: Draw border
-            $parentPanel.DrawBoxToBuffer($renderX, $renderY, $this.Width, $this.Height, $borderColor, [ConsoleColor]::Black)
-            
-            # AI: Display text or placeholder
+            # Draw border
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+
+            # Display text or placeholder
             $displayText = $this.Text ?? ""
+            $textColor = [ConsoleColor]::White
             if ([string]::IsNullOrEmpty($displayText) -and -not $this.IsFocused) { 
                 $displayText = $this.Placeholder ?? "" 
+                $textColor = [ConsoleColor]::DarkGray
             }
             
-            $maxDisplayLength = $this.Width - 4
-            if ($displayText.Length -gt $maxDisplayLength) { 
+            $maxDisplayLength = $this.Width - 2
+            if ($displayText.Length > $maxDisplayLength) { 
                 $displayText = $displayText.Substring(0, $maxDisplayLength) 
             }
             
-            $textX = $renderX + 2
-            $textY = $renderY + 1
-            $parentPanel.WriteToBuffer($textX, $textY, $displayText, [ConsoleColor]::White, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayText -ForegroundColor $textColor
             
-            # AI: Draw cursor if focused - FIXED comparison operator issue
+            # Draw cursor if focused
             if ($this.IsFocused -and ($this.CursorPosition -le $displayText.Length)) {
-                $cursorX = $textX + $this.CursorPosition
-                $maxCursorX = $renderX + $this.Width - 2
-                
-                # AI: Only draw cursor if it's within the visible area
-                if ($cursorX -lt $maxCursorX) {
-                    $parentPanel.WriteToBuffer($cursorX, $textY, "_", [ConsoleColor]::Yellow, [ConsoleColor]::Black)
+                $cursorX = 1 + $this.CursorPosition
+                # Only draw cursor if it's within the visible area
+                if ($cursorX < ($this.Width - 1)) {
+                    Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" -ForegroundColor [ConsoleColor]::Yellow
                 }
             }
             
@@ -172,6 +160,7 @@ class TextBoxComponent : UIElement {
             $currentText = $this.Text ?? ""
             $cursorPos = $this.CursorPosition ?? 0
             $originalText = $currentText
+            $handled = $true
             
             switch ($key.Key) {
                 ([ConsoleKey]::Backspace) { 
@@ -198,22 +187,24 @@ class TextBoxComponent : UIElement {
                         $currentText = $currentText.Insert($cursorPos, $key.KeyChar)
                         $cursorPos++ 
                     } else { 
-                        return $false 
+                        $handled = $false
                     }
                 }
             }
             
-            if ($currentText -ne $originalText -or $cursorPos -ne $this.CursorPosition) {
-                $this.Text = $currentText
-                $this.CursorPosition = $cursorPos
-                if ($this.OnChange) { 
-                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
-                        & $this.OnChange -NewValue $currentText 
+            if ($handled) {
+                if ($currentText -ne $originalText -or $cursorPos -ne $this.CursorPosition) {
+                    $this.Text = $currentText
+                    $this.CursorPosition = $cursorPos
+                    if ($this.OnChange) { 
+                        Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
+                            & $this.OnChange -NewValue $currentText 
+                        }
                     }
+                    $this.RequestRedraw()
                 }
-                $this.Parent.RequestRedraw()
             }
-            return $true
+            return $handled
         } catch { 
             Write-Log -Level Error -Message "TextBox input error for '$($this.Name)': $_"
             return $false 
@@ -233,20 +224,17 @@ class CheckBoxComponent : UIElement {
         $this.Height = 1
     }
     
-    hidden [void] _RenderContent() {
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
             
             $fg = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::White
             $checkbox = $this.Checked ? "[X]" : "[ ]"
             $displayText = "$checkbox $($this.Text)"
             
-            $parentPanel.WriteToBuffer($renderX, $renderY, $displayText, $fg, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg
             
         } catch { 
             Write-Log -Level Error -Message "CheckBox render error for '$($this.Name)': $_" 
@@ -262,7 +250,7 @@ class CheckBoxComponent : UIElement {
                         & $this.OnChange -NewValue $this.Checked 
                     } 
                 }
-                $this.Parent.RequestRedraw()
+                $this.RequestRedraw()
                 return $true
             }
         } catch { 
@@ -285,21 +273,18 @@ class RadioButtonComponent : UIElement {
         $this.Height = 1
     }
     
-    hidden [void] _RenderContent() {
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
             
             $fg = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::White
             $radio = $this.Selected ? "(●)" : "( )"
             $displayText = "$radio $($this.Text)"
-            
-            $parentPanel.WriteToBuffer($renderX, $renderY, $displayText, $fg, [ConsoleColor]::Black)
-            
+
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg
+
         } catch { 
             Write-Log -Level Error -Message "RadioButton render error for '$($this.Name)': $_" 
         }

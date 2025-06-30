@@ -1,3 +1,4 @@
+####\screens\dashboard\dashboard-screen.psm1
 # ==============================================================================
 # PMC Terminal v5 - NCurses Dashboard Screen
 # Main entry screen with buffer-based rendering
@@ -9,6 +10,7 @@ using module '..\..\layout\panels-class.psm1'
 using module '..\..\components\navigation-class.psm1'
 using module '..\..\components\advanced-data-components.psm1'
 using module '..\..\modules\models.psm1'
+using module '..\..\components\ui-classes.psm1' # AI: FIX - Added missing dependency for UIElement
 
 class DashboardScreen : UIElement {
     # --- Core Architecture ---
@@ -214,8 +216,9 @@ class DashboardScreen : UIElement {
             "System Information",
             "════════════════════",
             "",
-            "PowerShell Version: $($PSVersionTable.PSVersion)",
-            "Platform:           $($PSVersionTable.Platform)",
+            # AI: FIX - Use $global scope for automatic variables inside class methods
+            "PowerShell Version: $($global:PSVersionTable.PSVersion)",
+            "Platform:           $($global:PSVersionTable.Platform)",
             "Memory Usage:       $(Get-MemoryUsage)",
             "Current Time:       $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         )
@@ -239,7 +242,8 @@ class DashboardScreen : UIElement {
 
     hidden [string] GetMemoryUsage() {
         try {
-            $process = Get-Process -Id $PID
+            # AI: FIX - Use $global scope for automatic variables inside class methods
+            $process = Get-Process -Id $global:PID
             $memoryMB = [Math]::Round($process.WorkingSet64 / 1MB, 2)
             return "$memoryMB MB"
         } catch {

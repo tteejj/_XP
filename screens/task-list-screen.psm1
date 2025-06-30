@@ -1,3 +1,4 @@
+####\screens\task-list-screen.psm1
 # ==============================================================================
 # PMC Terminal v5 - NCurses Task List Screen
 # Displays and manages tasks with buffer-based rendering
@@ -10,6 +11,7 @@ using module '..\..\components\advanced-data-components.psm1'
 using module '..\..\components\navigation-class.psm1'
 using module '..\..\modules\dialog-system-class.psm1'
 using module '..\..\modules\models.psm1'
+using module '..\..\components\ui-classes.psm1'
 
 class TaskListScreen : UIElement {
     # --- Core Architecture ---
@@ -207,10 +209,10 @@ class TaskListScreen : UIElement {
         try {
             $newCompletedStatus = $task.Status -ne [TaskStatus]::Completed
             
-            $this.Services.DataManager.UpdateTask(
-                $Task = $task,
-                $Completed = $newCompletedStatus
-            )
+            $this.Services.DataManager.UpdateTask(@{
+                Task = $task
+                Completed = $newCompletedStatus
+            })
             
             $this.RefreshData()
             $this.UpdateDisplay()
@@ -222,7 +224,6 @@ class TaskListScreen : UIElement {
     hidden [void] ShowNewTaskDialog() {
         Write-Log -Level Info -Message "New task dialog requested"
         
-        # AI: PHASE 3 - Implement new task creation
         $dataManager = $this.Services.DataManager
         $refreshCallback = { $this.RefreshData(); $this.UpdateDisplay() }.GetNewClosure()
         
@@ -230,7 +231,8 @@ class TaskListScreen : UIElement {
             Show-InputDialog -Title "New Task" -Prompt "Enter task title:" -OnSubmit {
                 param($Value)
                 if (-not [string]::IsNullOrWhiteSpace($Value)) {
-                    $newTask = $dataManager.AddTask -Title $Value -Description "" -Priority "medium" -Category "General"
+                    # AI: FIX - This now uses correct method call syntax with positional arguments.
+                    $newTask = $dataManager.AddTask($Value, "", "medium", "General")
                     Write-Log -Level Info -Message "Created new task: $($newTask.Title)"
                     & $refreshCallback
                 }
@@ -255,7 +257,10 @@ class TaskListScreen : UIElement {
             Show-InputDialog -Title "Edit Task" -Prompt "New title:" -DefaultValue $task.Title -OnSubmit {
                 param($Value)
                 if (-not [string]::IsNullOrWhiteSpace($Value)) {
-                    $this.Services.DataManager.UpdateTask($task, $Value)
+                    $this.Services.DataManager.UpdateTask(@{
+                        Task = $task
+                        Title = $Value
+                    })
                     & $refreshCallback
                 }
             }

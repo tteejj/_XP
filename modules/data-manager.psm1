@@ -1,3 +1,4 @@
+####\modules\data-manager.psm1
 # Data Manager Module
 # Unified data persistence and CRUD operations with event integration
 
@@ -292,8 +293,12 @@ class DataManager {
         return Add-PmcTask -Title $Title -Description $Description -Priority $Priority -Category $ProjectKey 
     }
 
-    [PmcTask] UpdateTask([PmcTask]$Task, [string]$Title) {
-        return Update-PmcTask -Task $Task -Title $Title
+    # AI: FIX - Changed method to accept a hashtable for flexible updates via splatting.
+    [PmcTask] UpdateTask([hashtable]$UpdateParameters) {
+        if (-not $UpdateParameters.ContainsKey('Task')) {
+            throw [System.ArgumentException]::new("The 'UpdateParameters' hashtable must contain a 'Task' key with the task object to update.")
+        }
+        return Update-PmcTask @UpdateParameters
     }
     
     [void] RemoveTask([PmcTask]$Task) {

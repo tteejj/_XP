@@ -1,6 +1,8 @@
+####\components\tui-components.psm1
 # TUI Component Library - Phase 1 Migration Complete
 # All components now inherit from UIElement and use buffer-based rendering
 
+using module '.\tui-primitives.psm1' # AI: FIX - Added missing dependency for TuiCell and drawing primitives
 using module .\ui-classes.psm1
 using module ..\layout\panels-class.psm1
 using module ..\modules\exceptions.psm1
@@ -145,7 +147,8 @@ class TextBoxComponent : UIElement {
             if ($this.IsFocused -and ($this.CursorPosition -le $displayText.Length)) {
                 $cursorX = 1 + $this.CursorPosition
                 # Only draw cursor if it's within the visible area
-                if ($cursorX < ($this.Width - 1)) {
+                # AI: FIX - Changed '<' to '-lt' to avoid PowerShell parser ambiguity
+                if ($cursorX -lt ($this.Width - 1)) {
                     Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" -ForegroundColor [ConsoleColor]::Yellow
                 }
             }

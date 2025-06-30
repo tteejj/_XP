@@ -224,128 +224,37 @@ class Table : UIElement {
     }
 }
 
-# AI: REFACTORED - DataTableComponent simplified for Phase 1
-class DataTableComponent : UIElement {
-    [hashtable[]] $Data = @()
-    [hashtable[]] $Columns = @()
-    [string] $Title = "Data Table"
-    [bool] $ShowBorder = $true
-    [int] $SelectedRow = 0
-    [scriptblock] $OnRowSelect
-    
-    DataTableComponent([string]$name) : base() {
-        $this.Name = $name
-        $this.IsFocusable = $true
-        $this.Width = 80
-        $this.Height = 20
-    }
-    
-    DataTableComponent([string]$name, [hashtable[]]$data, [hashtable[]]$columns) : base() {
-        $this.Name = $name
-        $this.Data = $data ?? @()
-        $this.Columns = $columns ?? @()
-        $this.IsFocusable = $true
-        $this.Width = 80
-        $this.Height = 20
-    }
-    
-    # AI: REFACTORED - Simplified rendering for Phase 1
-    [void] OnRender() {
-        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-        
-        try {
-            # Clear buffer
-            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-            
-            # Draw border
-            if ($this.ShowBorder) {
-                Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-                    -BorderStyle "Single" -BorderColor ([ConsoleColor]::Gray) -BackgroundColor ([ConsoleColor]::Black) -Title $this.Title
-            }
-            
-            # Simple placeholder rendering for Phase 1
-            $statusText = "DataTable: $($this.Data.Count) rows, $($this.Columns.Count) columns"
-            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 2 -Text $statusText `
-                -ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
-            
-            if ($this.Data.Count -gt 0) {
-                Write-TuiText -Buffer $this._private_buffer -X 2 -Y 3 -Text "Selected: Row $($this.SelectedRow + 1)" `
-                    -ForegroundColor ([ConsoleColor]::Cyan) -BackgroundColor ([ConsoleColor]::Black)
-            }
-            
-        } catch { 
-            Write-Log -Level Error -Message "DataTableComponent render error for '$($this.Name)': $_" 
-        }
-    }
-    
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        try {
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::UpArrow) {
-                    if ($this.SelectedRow -gt 0) {
-                        $this.SelectedRow--
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::DownArrow) {
-                    if ($this.SelectedRow -lt ($this.Data.Count - 1)) {
-                        $this.SelectedRow++
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    if ($this.OnRowSelect -and $this.Data.Count -gt 0) {
-                        & $this.OnRowSelect $this.Data[$this.SelectedRow] $this.SelectedRow
-                    }
-                    return $true
-                }
-            }
-        } catch { 
-            Write-Log -Level Error -Message "DataTableComponent input error for '$($this.Name)': $_" 
-        }
-        
-        return $false
-    }
-    
-    [void] SetData([hashtable[]]$data) {
-        $this.Data = $data ?? @()
-        $this.SelectedRow = 0
-        $this.RequestRedraw()
-    }
-    
-    [void] SetColumns([hashtable[]]$columns) {
-        $this.Columns = $columns ?? @()
-        $this.RequestRedraw()
-    }
-}
+# AI: DELETED - Obsolete DataTableComponent class was here and has been removed.
 
 #endregion
 
 #region Factory Functions
 
-function New-TuiDataTable {
+function New-TuiTable {
+    # AI: REFACTORED - Creates a proper Table instance
     param([hashtable]$Props = @{})
     
-    $name = $Props.Name ?? "DataTable_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-    $data = $Props.Data ?? @()
-    $columns = $Props.Columns ?? @()
+    $name = $Props.Name ?? "Table_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $table = [Table]::new($name)
     
-    $table = [DataTableComponent]::new($name, $data, $columns)
-    
+    if ($Props.Columns) {
+        $table.SetColumns($Props.Columns)
+    }
+    if ($Props.Data) {
+        $table.SetData($Props.Data)
+    }
+
     $table.X = $Props.X ?? $table.X
     $table.Y = $Props.Y ?? $table.Y
     $table.Width = $Props.Width ?? $table.Width
     $table.Height = $Props.Height ?? $table.Height
-    $table.Title = $Props.Title ?? $table.Title
     $table.ShowBorder = $Props.ShowBorder ?? $table.ShowBorder
+    $table.ShowHeader = $Props.ShowHeader ?? $table.ShowHeader
     $table.Visible = $Props.Visible ?? $table.Visible
-    $table.OnRowSelect = $Props.OnRowSelect ?? $table.OnRowSelect
     
     return $table
 }
 
 #endregion
 
-Export-ModuleMember -Function 'New-TuiDataTable'
+Export-ModuleMember -Function 'New-TuiTable'
