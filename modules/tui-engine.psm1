@@ -2,6 +2,9 @@
 # Implements NCurses-style compositor with private buffers and TuiCell rendering
 
 using module .\components\tui-primitives.psm1
+using module .\logger.psm1
+using module .\event-system.psm1
+using module .\exceptions.psm1
 
 #region Core TUI State
 $global:TuiState = @{

@@ -2,6 +2,9 @@
 # Manages screen navigation, routing, and history.
 
 using module ..\components\ui-classes.psm1
+using module ..\logger.psm1
+using module ..\event-system.psm1
+using module ..\exceptions.psm1
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

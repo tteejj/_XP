@@ -5,8 +5,11 @@
 
 using namespace System.Text
 using namespace System.Management.Automation
-using module '.\tui-primitives.psm1'
+# AI: FIXED - Changed relative path to absolute path from project root
+using module '..\components\tui-primitives.psm1'
 using module '..\modules\exceptions.psm1'
+using module '..\modules\logger.psm1'
+using module '..\modules\event-system.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

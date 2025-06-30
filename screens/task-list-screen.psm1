@@ -1,17 +1,18 @@
-####\screens\task-list-screen.psm1
 # ==============================================================================
 # PMC Terminal v5 - NCurses Task List Screen
 # Displays and manages tasks with buffer-based rendering
 # ==============================================================================
 
 # AI: PHASE 3 REFACTORED - NCurses buffer-based architecture
-using module '..\..\components\tui-primitives.psm1'
-using module '..\..\layout\panels-class.psm1'
-using module '..\..\components\advanced-data-components.psm1'
-using module '..\..\components\navigation-class.psm1'
-using module '..\..\modules\dialog-system-class.psm1'
-using module '..\..\modules\models.psm1'
-using module '..\..\components\ui-classes.psm1'
+using module '..\components\tui-primitives.psm1'
+using module '..\layout\panels-class.psm1'
+using module '..\components\advanced-data-components.psm1'
+using module '..\components\navigation-class.psm1'
+using module '..\modules\dialog-system-class.psm1'
+using module '..\modules\models.psm1'
+using module '..\components\ui-classes.psm1'
+using module '..\modules\logger.psm1'
+using module '..\modules\exceptions.psm1'
 
 class TaskListScreen : UIElement {
     # --- Core Architecture ---
@@ -319,7 +320,7 @@ class TaskListScreen : UIElement {
         
         # AI: PHASE 3 - Render all child components
         # Call the base class's _RenderContent which handles compositing children.
-        [super]._RenderContent()
+        ([UIElement]$this)._RenderContent()
     }
     
     # --- Lifecycle Methods ---

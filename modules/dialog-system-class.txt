@@ -1,3 +1,4 @@
+####\modules\dialog-system-class.psm1
 # ==============================================================================
 # PMC Terminal v5 - Class-Based Dialog System
 # Implements dialogs as proper UIElement classes following the unified architecture
@@ -38,7 +39,8 @@ class Dialog : UIElement {
         
         # Register with dialog manager
         $script:DialogState.CurrentDialog = $this
-        & (Get-Module tui-engine) { Request-TuiRefresh }
+        # AI: FIX - Correctly call the exported function directly.
+        Request-TuiRefresh
     }
     
     [void] Close() {
@@ -46,7 +48,8 @@ class Dialog : UIElement {
         if ($script:DialogState.DialogStack.Count -gt 0) {
             $script:DialogState.CurrentDialog = $script:DialogState.DialogStack.Pop()
         }
-        & (Get-Module tui-engine) { Request-TuiRefresh }
+        # AI: FIX - Correctly call the exported function directly.
+        Request-TuiRefresh
     }
     
     # Implement OnRender for new architecture
@@ -75,7 +78,8 @@ class Dialog : UIElement {
         $messageX = 2
         $maxWidth = $this.Width - 4
         
-        $wrappedLines = & (Get-Module tui-engine) { Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth }
+        # AI: FIX - Correctly call the exported function directly.
+        $wrappedLines = Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth
         foreach ($line in $wrappedLines) {
             if ($messageY -ge ($this.Height - 3)) { break }
             Write-TuiText -Buffer $this._private_buffer -X $messageX -Y $messageY -Text $line -ForegroundColor $this.MessageColor
@@ -368,10 +372,11 @@ class InputDialog : Dialog {
     [void] OnConfirm() {
         $this.Close()
         if ($this.OnSubmitAction) {
-            $value = $this.InputValue
+            $submitAction = $this.OnSubmitAction
+            $submittedValue = $this.InputValue
             Invoke-WithErrorHandling -Component "InputDialog" -Context "OnSubmit" -ScriptBlock {
-                & $this.OnSubmitAction -Value $value
-            }.GetNewClosure()
+                & $submitAction -Value $submittedValue
+            }
         }
     }
     
@@ -562,16 +567,17 @@ class ListDialog : Dialog {
     [void] OnConfirm() {
         $this.Close()
         if ($this.OnSelectAction) {
+            $selectAction = $this.OnSelectAction
             if ($this.AllowMultiple) {
                 $selectedValues = @($this.SelectedItems | ForEach-Object { $this.Items[$_] })
                 Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock {
-                    & $this.OnSelectAction -Selected $selectedValues
-                }.GetNewClosure()
+                    & $selectAction -Selected $selectedValues
+                }
             } else {
                 $selected = $this.Items[$this.SelectedIndex]
                 Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock {
-                    & $this.OnSelectAction -Selected $selected
-                }.GetNewClosure()
+                    & $selectAction -Selected $selected
+                }
             }
         }
     }
@@ -594,32 +600,24 @@ $script:DialogState = @{
 function Initialize-DialogSystem {
     Invoke-WithErrorHandling -Component "DialogSystem" -Context "Initialize" -ScriptBlock {
         # Subscribe to dialog events
-        & (Get-Module event-system) {
-            Subscribe-Event -EventName "Confirm.Request" -Handler {
-                param($EventData)
-                $params = $EventData.Data
-                & (Get-Module dialog-system-class) {
-                    Show-ConfirmDialog -Title $params.Title -Message $params.Message `
-                        -OnConfirm $params.OnConfirm -OnCancel $params.OnCancel
-                }
-            }
-            
-            Subscribe-Event -EventName "Alert.Show" -Handler {
-                param($EventData)
-                $params = $EventData.Data
-                & (Get-Module dialog-system-class) {
-                    Show-AlertDialog -Title $params.Title -Message $params.Message
-                }
-            }
-            
-            Subscribe-Event -EventName "Input.Request" -Handler {
-                param($EventData)
-                $params = $EventData.Data
-                & (Get-Module dialog-system-class) {
-                    Show-InputDialog -Title $params.Title -Prompt $params.Prompt `
-                        -DefaultValue $params.DefaultValue -OnSubmit $params.OnSubmit -OnCancel $params.OnCancel
-                }
-            }
+        Subscribe-Event -EventName "Confirm.Request" -Handler {
+            param($EventData)
+            $params = $EventData.Data
+            Show-ConfirmDialog -Title $params.Title -Message $params.Message `
+                -OnConfirm $params.OnConfirm -OnCancel $params.OnCancel
+        }
+        
+        Subscribe-Event -EventName "Alert.Show" -Handler {
+            param($EventData)
+            $params = $EventData.Data
+            Show-AlertDialog -Title $params.Title -Message $params.Message
+        }
+        
+        Subscribe-Event -EventName "Input.Request" -Handler {
+            param($EventData)
+            $params = $EventData.Data
+            Show-InputDialog -Title $params.Title -Prompt $params.Prompt `
+                -DefaultValue $params.DefaultValue -OnSubmit $params.OnSubmit -OnCancel $params.OnCancel
         }
         
         Write-Log -Level Info -Message "Class-based Dialog System initialized"

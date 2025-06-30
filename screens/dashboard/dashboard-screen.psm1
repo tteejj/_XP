@@ -11,6 +11,8 @@ using module '..\..\components\navigation-class.psm1'
 using module '..\..\components\advanced-data-components.psm1'
 using module '..\..\modules\models.psm1'
 using module '..\..\components\ui-classes.psm1' # AI: FIX - Added missing dependency for UIElement
+using module '..\..\modules\logger.psm1'
+using module '..\..\modules\exceptions.psm1'
 
 class DashboardScreen : UIElement {
     # --- Core Architecture ---
@@ -219,7 +221,7 @@ class DashboardScreen : UIElement {
             # AI: FIX - Use $global scope for automatic variables inside class methods
             "PowerShell Version: $($global:PSVersionTable.PSVersion)",
             "Platform:           $($global:PSVersionTable.Platform)",
-            "Memory Usage:       $(Get-MemoryUsage)",
+            "Memory Usage:       $($this.GetMemoryUsage())",
             "Current Time:       $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         )
         
