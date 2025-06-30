@@ -4,12 +4,12 @@
 # ==============================================================================
 
 # AI: PHASE 3 REFACTORED - NCurses buffer-based architecture
-using module '..\components\tui-primitives.psm1'
-using module '..\layout\panels-class.psm1'
-using module '..\components\advanced-data-components.psm1'
-using module '..\components\navigation-class.psm1'
-using module '..\modules\dialog-system-class.psm1'
-using module '..\modules\models.psm1'
+using module '..\..\components\tui-primitives.psm1'
+using module '..\..\layout\panels-class.psm1'
+using module '..\..\components\advanced-data-components.psm1'
+using module '..\..\components\navigation-class.psm1'
+using module '..\..\modules\dialog-system-class.psm1'
+using module '..\..\modules\models.psm1'
 
 class TaskListScreen : UIElement {
     # --- Core Architecture ---
@@ -76,12 +76,16 @@ class TaskListScreen : UIElement {
             $this.TaskTable = [Table]::new("TaskTable")
             $this.TaskTable.Move(1, 1)  # Inside table panel
             $this.TaskTable.Resize(116, 20)
-            $this.TaskTable.SetColumns(@(
-                @{ Name = "Title"; Width = 50; Header = "Task Title" },
-                @{ Name = "Status"; Width = 15; Header = "Status" },
-                @{ Name = "Priority"; Width = 12; Header = "Priority" },
-                @{ Name = "DueDate"; Width = 15; Header = "Due Date" }
-            ))
+
+            # AI: FIX - Use proper TableColumn class instances
+            $columns = @(
+                [TableColumn]::new('Title', 'Task Title', 50),
+                [TableColumn]::new('Status', 'Status', 15),
+                [TableColumn]::new('Priority', 'Priority', 12),
+                [TableColumn]::new('GetDueDateString', 'Due Date', 15) # Use method for display
+            )
+            $this.TaskTable.SetColumns($columns)
+            
             $this.TablePanel.AddChild($this.TaskTable)
             
             # AI: PHASE 3 - Load initial data
@@ -134,7 +138,7 @@ class TaskListScreen : UIElement {
             $this.WriteTextToPanel($this.FooterPanel, $footerText, 0, 0, [ConsoleColor]::Yellow)
             
             # AI: PHASE 3 - Update table selection
-            $this.TaskTable.SetSelectedIndex($this.SelectedIndex)
+            $this.TaskTable.SelectedIndex = $this.SelectedIndex
             
             $this.RequestRedraw()
         }
@@ -201,12 +205,13 @@ class TaskListScreen : UIElement {
         if ($null -eq $task) { return }
         
         try {
-            if ($task.Status -eq [TaskStatus]::Completed) {
-                $task.Status = [TaskStatus]::Pending
-            } else {
-                $task.Status = [TaskStatus]::Completed
-            }
-            $this.Services.DataManager.UpdateTask($task)
+            $newCompletedStatus = $task.Status -ne [TaskStatus]::Completed
+            
+            $this.Services.DataManager.UpdateTask(
+                $Task = $task,
+                $Completed = $newCompletedStatus
+            )
+            
             $this.RefreshData()
             $this.UpdateDisplay()
         } catch {
@@ -225,7 +230,7 @@ class TaskListScreen : UIElement {
             Show-InputDialog -Title "New Task" -Prompt "Enter task title:" -OnSubmit {
                 param($Value)
                 if (-not [string]::IsNullOrWhiteSpace($Value)) {
-                    $newTask = $dataManager.AddTask($Value, "", [TaskPriority]::Medium, "General")
+                    $newTask = $dataManager.AddTask -Title $Value -Description "" -Priority "medium" -Category "General"
                     Write-Log -Level Info -Message "Created new task: $($newTask.Title)"
                     & $refreshCallback
                 }
@@ -244,7 +249,19 @@ class TaskListScreen : UIElement {
         if ($null -eq $task) { return }
         
         Write-Log -Level Info -Message "Edit task requested for: $($task.Title)"
-        # AI: PHASE 3 - Placeholder for edit functionality
+        
+        $refreshCallback = { $this.RefreshData(); $this.UpdateDisplay() }.GetNewClosure()
+        try {
+            Show-InputDialog -Title "Edit Task" -Prompt "New title:" -DefaultValue $task.Title -OnSubmit {
+                param($Value)
+                if (-not [string]::IsNullOrWhiteSpace($Value)) {
+                    $this.Services.DataManager.UpdateTask($task, $Value)
+                    & $refreshCallback
+                }
+            }
+        } catch {
+             Write-Log -Level Error -Message "Failed to show edit task dialog: $_"
+        }
     }
 
     hidden [void] DeleteSelectedTask() {
@@ -256,7 +273,16 @@ class TaskListScreen : UIElement {
         if ($null -eq $task) { return }
         
         Write-Log -Level Info -Message "Delete task requested for: $($task.Title)"
-        # AI: PHASE 3 - Placeholder for delete functionality
+        
+        $refreshCallback = { $this.RefreshData(); $this.UpdateDisplay() }.GetNewClosure()
+        try {
+            Show-ConfirmDialog -Title "Delete Task" -Message "Are you sure you want to delete `"$($task.Title)`"?" -OnConfirm {
+                $this.Services.DataManager.RemoveTask($task)
+                & $refreshCallback
+            }
+        } catch {
+             Write-Log -Level Error -Message "Failed to show delete confirm dialog: $_"
+        }
     }
 
     hidden [void] CycleFilter() {
@@ -287,13 +313,10 @@ class TaskListScreen : UIElement {
         $this._private_buffer.Clear($bgCell)
         
         # AI: PHASE 3 - Render all child components
-        foreach ($child in $this.Children) {
-            if ($child.Visible) {
-                $child.Render()
-            }
-        }
+        # Call the base class's _RenderContent which handles compositing children.
+        [super]._RenderContent()
     }
-
+    
     # --- Lifecycle Methods ---
     [void] OnEnter() {
         $this.RefreshData()
