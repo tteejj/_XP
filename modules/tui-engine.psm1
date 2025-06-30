@@ -11,6 +11,7 @@ $global:TuiState = @{
     FrontBuffer     = $null
     BackBuffer      = $null
     CompositorBuffer = $null    # AI: NEW - Master compositor buffer (TuiBuffer)
+    PreviousCompositorBuffer = $null # AI: NEW - Buffer for diffing against the main compositor
     ScreenStack     = [System.Collections.Stack]::new()
     CurrentScreen   = $null
     IsDirty         = $true
@@ -46,6 +47,7 @@ function Initialize-TuiEngine {
         $global:TuiState.FrontBuffer = New-Object 'object[,]' $Height, $Width
         $global:TuiState.BackBuffer = New-Object 'object[,]' $Height, $Width
         $global:TuiState.CompositorBuffer = [TuiBuffer]::new($Width, $Height, "MainCompositor")
+        $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($Width, $Height, "PreviousCompositor")
         
         # Initialize legacy buffers for compatibility
         for ($y = 0; $y -lt $Height; $y++) {
@@ -230,6 +232,12 @@ function Render-Frame {
             Render-FrameLegacy
         }
         
+        # AI: NEW - After rendering, copy the current compositor state to the previous state buffer for the next frame's diff.
+        if ($global:TuiState.CompositorMode) {
+            $global:TuiState.PreviousCompositorBuffer.Clear()
+            $global:TuiState.PreviousCompositorBuffer.BlendBuffer($global:TuiState.CompositorBuffer, 0, 0)
+        }
+        
         # Position the cursor out of the way to prevent visual artifacts
         [Console]::SetCursorPosition($global:TuiState.BufferWidth - 1, $global:TuiState.BufferHeight - 1)
     } catch { 
@@ -298,65 +306,51 @@ function Render-FrameCompositor {
 }
 
 function Render-CompositorToConsole {
-    # AI: NEW - Convert TuiBuffer to optimized console output
+    # AI: REWRITTEN - True TuiBuffer-to-TuiBuffer diffing.
     $outputBuilder = [System.Text.StringBuilder]::new(20000)
-    $lastFG = -1
-    $lastBG = -1
+    $currentBuffer = $global:TuiState.CompositorBuffer
+    $previousBuffer = $global:TuiState.PreviousCompositorBuffer
+    $lastFG = -1; $lastBG = -1
     $forceFullRender = $global:TuiState.RenderStats.FrameCount -eq 1
-    
+
     try {
-        for ($y = 0; $y -lt $global:TuiState.BufferHeight; $y++) {
+        for ($y = 0; $y -lt $currentBuffer.Height; $y++) {
             $rowChanged = $false
-            $rowOutput = [System.Text.StringBuilder]::new()
-            
-            for ($x = 0; $x -lt $global:TuiState.BufferWidth; $x++) {
-                $newCell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
-                $oldLegacyCell = $global:TuiState.FrontBuffer[$y, $x]
+            for ($x = 0; $x -lt $currentBuffer.Width; $x++) {
+                $newCell = $currentBuffer.GetCell($x, $y)
+                $oldCell = $previousBuffer.GetCell($x, $y)
                 
-                # Convert TuiCell to legacy format for comparison
-                $newLegacyCell = $newCell.ToLegacyFormat()
-                
-                # Check if cell changed
-                if ($forceFullRender -or 
-                    $newLegacyCell.Char -ne $oldLegacyCell.Char -or
-                    $newLegacyCell.FG -ne $oldLegacyCell.FG -or
-                    $newLegacyCell.BG -ne $oldLegacyCell.BG) {
-                    
-                    $rowChanged = $true
-                    
-                    # Update front buffer
-                    $global:TuiState.FrontBuffer[$y, $x] = $newLegacyCell
-                    
-                    # Add color codes if needed
-                    if ($newLegacyCell.FG -ne $lastFG -or $newLegacyCell.BG -ne $lastBG) {
-                        $fgCode = Get-AnsiColorCode $newLegacyCell.FG
-                        $bgCode = Get-AnsiColorCode $newLegacyCell.BG -IsBackground $true
-                        [void]$rowOutput.Append("`e[${fgCode};${bgCode}m")
-                        $lastFG = $newLegacyCell.FG
-                        $lastBG = $newLegacyCell.BG
+                if ($forceFullRender -or $newCell.DiffersFrom($oldCell)) {
+                    if (-not $rowChanged) {
+                        [void]$outputBuilder.Append("`e[$($y + 1);1H")
+                        # On the first change in a row, we must move the cursor.
+                        # For subsequent changes, we need to move it again if there was a gap.
+                        if ($x > 0) { [void]$outputBuilder.Append("`e[$($y + 1);$($x + 1)H") }
+                        $rowChanged = $true
                     }
-                    
-                    [void]$rowOutput.Append($newLegacyCell.Char)
-                } else {
-                    # Cell unchanged - add placeholder for position tracking
-                    [void]$rowOutput.Append($null)
+
+                    if ($newCell.ForegroundColor -ne $lastFG -or $newCell.BackgroundColor -ne $lastBG) {
+                        $fgCode = Get-AnsiColorCode $newCell.ForegroundColor
+                        $bgCode = Get-AnsiColorCode $newCell.BackgroundColor -IsBackground $true
+                        [void]$outputBuilder.Append("`e[${fgCode};${bgCode}m")
+                        $lastFG = $newCell.ForegroundColor
+                        $lastBG = $newCell.BackgroundColor
+                    }
+                    [void]$outputBuilder.Append($newCell.Char)
+                } elseif ($rowChanged) {
+                    # If a change occurred in this row previously, but this cell is the same,
+                    # we need to move the cursor to the next potential change point.
+                    [void]$outputBuilder.Append("`e[$($y + 1);$($x + 2)H")
                 }
             }
-            
-            # Output the row if it changed
-            if ($rowChanged) {
-                [void]$outputBuilder.Append("`e[$($y + 1);1H")
-                $rowStr = $rowOutput.ToString() -replace [char]0, ''
-                [void]$outputBuilder.Append($rowStr)
-            }
         }
         
-        [void]$outputBuilder.Append("`e[0m")
+        # Reset colors at the end
+        if ($lastFG -ne -1) { [void]$outputBuilder.Append("`e[0m") }
         
-        if ($outputBuilder.Length -gt 10) {  # Only output if there are substantial changes
+        if ($outputBuilder.Length -gt 10) {
             [Console]::Write($outputBuilder.ToString())
         }
-        
     } catch {
         Write-Log -Level Error -Message "Compositor-to-console rendering failed: $_" -Data $_
     }
@@ -672,37 +666,30 @@ function Get-FocusedComponent { return $global:TuiState.FocusedComponent }
 function Move-Focus { param([bool]$Reverse = $false); Handle-TabNavigation -Reverse $Reverse }
 
 function Get-CurrentDialog {
+    # AI: REFACTORED - This function now directly and reliably accesses the dialog state
+    # from the single, class-based dialog system.
     try {
         if (Get-Module -Name 'dialog-system-class' -ErrorAction SilentlyContinue) {
-            return & (Get-Module -Name 'dialog-system-class') { $script:DialogState.CurrentDialog }
-        } elseif (Get-Module -Name 'dialog-system' -ErrorAction SilentlyContinue) {
-            return & (Get-Module -Name 'dialog-system') { $script:DialogState.CurrentDialog }
+            # This retrieves the $script:DialogState variable from the specified module's scope.
+            return (Get-Module -Name 'dialog-system-class').SessionState.PSVariable.Get('DialogState').Value.CurrentDialog
         }
     } catch {
-        Write-Log -Level Warning -Message "Error accessing dialog system: $_"
+        Write-Log -Level Error -Message "Critical error accessing dialog system state: $_"
     }
     return $null
 }
 
 function Handle-DialogInput {
     param([System.ConsoleKeyInfo]$Key)
+    # AI: REFACTORED - Simplified to work only with the new UIElement-based dialogs.
     try {
         $dialog = Get-CurrentDialog
-        if ($dialog) {
-            if ($dialog -is [UIElement]) {
-                # New UIElement-based dialog
-                return $dialog.HandleInput($Key)
-            } elseif ($dialog.GetType().IsSubclassOf([UIElement])) {
-                # Legacy class-based dialog
-                $dialog.HandleInput($Key)
-                return $true
-            } elseif ($dialog -is [hashtable] -and $dialog.HandleInput) {
-                # Functional dialog
-                return & $dialog.HandleInput -self $dialog -Key $Key
-            }
+        if ($dialog -and $dialog -is [UIElement]) {
+            # All dialogs are now UIElements and have a HandleInput method.
+            return $dialog.HandleInput($Key)
         }
     } catch {
-        Write-Log -Level Warning -Message "Error handling dialog input: $_"
+        Write-Log -Level Error -Message "Error handling dialog input: $_"
     }
     return $false
 }
