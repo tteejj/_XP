@@ -2,6 +2,10 @@
 # All components now inherit from UIElement and use buffer-based rendering
 
 using module ..\components\tui-primitives.psm1
+using module ..\components\ui-classes.psm1
+using module ..\modules\logger.psm1
+using module ..\modules\exceptions.psm1
+using module ..\layout\panels-class.psm1
 
 #region Advanced Input Classes
 
@@ -17,26 +21,26 @@ class MultilineTextBoxComponent : UIElement {
     [bool]$WordWrap = $true
     [scriptblock]$OnChange
     
-    MultilineTextBoxComponent([string]$name) : base($name) {
+    MultilineTextBoxComponent([string]$name) : base() {
+        $this.Name = $name
         $this.IsFocusable = $true
         $this.Width = 40
         $this.Height = 10
     }
     
-    hidden [void] _RenderContent() {
-        # AI: REFACTORED - Buffer-based rendering with parent Panel integration
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
             
             $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
             
             # AI: Draw border
-            $parentPanel.DrawBoxToBuffer($renderX, $renderY, $this.Width, $this.Height, $borderColor, [ConsoleColor]::Black)
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Calculate visible area
             $textAreaHeight = $this.Height - 2
@@ -54,37 +58,27 @@ class MultilineTextBoxComponent : UIElement {
                     $displayLine = $displayLine.Substring(0, $textAreaWidth)
                 }
                 
-                $lineY = $renderY + 1 + ($i - $startLine)
-                $parentPanel.WriteToBuffer($renderX + 1, $lineY, $displayLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                $lineY = 1 + ($i - $startLine)
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $lineY -Text $displayLine `
+                    -ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
             }
             
             # AI: Show placeholder if empty and not focused
             if ($this.Lines.Count -eq 1 -and [string]::IsNullOrEmpty($this.Lines[0]) -and -not $this.IsFocused) {
-                $parentPanel.WriteToBuffer($renderX + 1, $renderY + 1, $this.Placeholder, [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $this.Placeholder `
+                    -ForegroundColor ([ConsoleColor]::DarkGray) -BackgroundColor ([ConsoleColor]::Black)
             }
             
             # AI: Draw cursor if focused
             if ($this.IsFocused) {
                 $cursorLine = $this.CurrentLine - $this.ScrollOffsetY
                 if ($cursorLine -ge 0 -and $cursorLine -lt $textAreaHeight) {
-                    $cursorX = $renderX + 1 + $this.CursorPosition
-                    $cursorY = $renderY + 1 + $cursorLine
-                    if ($cursorX -lt $renderX + $this.Width - 1) {
-                        $parentPanel.WriteToBuffer($cursorX, $cursorY, "_", [ConsoleColor]::Yellow, [ConsoleColor]::Black)
+                    $cursorX = 1 + $this.CursorPosition
+                    $cursorY = 1 + $cursorLine
+                    if ($cursorX -lt $this.Width - 1) {
+                        Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y $cursorY -Text "_" `
+                            -ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
                     }
-                }
-            }
-            
-            # AI: Draw scrollbar if needed
-            if ($this.Lines.Count -gt $textAreaHeight) {
-                $scrollbarX = $renderX + $this.Width - 1
-                $scrollHeight = $textAreaHeight
-                $thumbSize = [Math]::Max(1, [Math]::Floor($scrollHeight * $textAreaHeight / $this.Lines.Count))
-                $thumbPos = [Math]::Floor($scrollHeight * $this.ScrollOffsetY / ($this.Lines.Count - $textAreaHeight))
-                
-                for ($i = 0; $i -lt $scrollHeight; $i++) {
-                    $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { "█" } else { "│" }
-                    $parentPanel.WriteToBuffer($scrollbarX, $renderY + 1 + $i, $char, [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
                 }
             }
             
@@ -95,7 +89,7 @@ class MultilineTextBoxComponent : UIElement {
     
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         try {
-            $currentLine = $this.Lines[$this.CurrentLine] ?? ""
+            $currentLineText = $this.Lines[$this.CurrentLine] ?? ""
             $originalLines = $this.Lines.Clone()
             $handled = $true
             
@@ -124,7 +118,7 @@ class MultilineTextBoxComponent : UIElement {
                     }
                 }
                 ([ConsoleKey]::RightArrow) {
-                    if ($this.CursorPosition -lt $currentLine.Length) {
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
                         $this.CursorPosition++
                     } elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
                         $this.CurrentLine++
@@ -133,11 +127,11 @@ class MultilineTextBoxComponent : UIElement {
                     }
                 }
                 ([ConsoleKey]::Home) { $this.CursorPosition = 0 }
-                ([ConsoleKey]::End) { $this.CursorPosition = $currentLine.Length }
+                ([ConsoleKey]::End) { $this.CursorPosition = $currentLineText.Length }
                 ([ConsoleKey]::Enter) {
                     if ($this.Lines.Count -lt $this.MaxLines) {
-                        $beforeCursor = $currentLine.Substring(0, $this.CursorPosition)
-                        $afterCursor = $currentLine.Substring($this.CursorPosition)
+                        $beforeCursor = $currentLineText.Substring(0, $this.CursorPosition)
+                        $afterCursor = $currentLineText.Substring($this.CursorPosition)
                         
                         $this.Lines[$this.CurrentLine] = $beforeCursor
                         $this.Lines = @($this.Lines[0..$this.CurrentLine]) + @($afterCursor) + @($this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)])
@@ -149,29 +143,29 @@ class MultilineTextBoxComponent : UIElement {
                 }
                 ([ConsoleKey]::Backspace) {
                     if ($this.CursorPosition -gt 0) {
-                        $this.Lines[$this.CurrentLine] = $currentLine.Remove($this.CursorPosition - 1, 1)
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition - 1, 1)
                         $this.CursorPosition--
                     } elseif ($this.CurrentLine -gt 0 -and $this.Lines.Count -gt 1) {
                         $previousLine = $this.Lines[$this.CurrentLine - 1]
                         $this.CursorPosition = $previousLine.Length
-                        $this.Lines[$this.CurrentLine - 1] = $previousLine + $currentLine
+                        $this.Lines[$this.CurrentLine - 1] = $previousLine + $currentLineText
                         $this.Lines = @($this.Lines[0..($this.CurrentLine - 1)]) + @($this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)])
                         $this.CurrentLine--
                         $this._UpdateScrolling()
                     }
                 }
                 ([ConsoleKey]::Delete) {
-                    if ($this.CursorPosition -lt $currentLine.Length) {
-                        $this.Lines[$this.CurrentLine] = $currentLine.Remove($this.CursorPosition, 1)
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition, 1)
                     } elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
                         $nextLine = $this.Lines[$this.CurrentLine + 1]
-                        $this.Lines[$this.CurrentLine] = $currentLine + $nextLine
+                        $this.Lines[$this.CurrentLine] = $currentLineText + $nextLine
                         $this.Lines = @($this.Lines[0..$this.CurrentLine]) + @($this.Lines[($this.CurrentLine + 2)..($this.Lines.Count - 1)])
                     }
                 }
                 default {
-                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentLine.Length -lt $this.MaxLineLength) {
-                        $this.Lines[$this.CurrentLine] = $currentLine.Insert($this.CursorPosition, $key.KeyChar)
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentLineText.Length -lt $this.MaxLineLength) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Insert($this.CursorPosition, $key.KeyChar)
                         $this.CursorPosition++
                     } else {
                         $handled = $false
@@ -180,10 +174,10 @@ class MultilineTextBoxComponent : UIElement {
             }
             
             if ($handled -and $this.OnChange -and -not $this._ArraysEqual($originalLines, $this.Lines)) {
-                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
+                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock { 
                     & $this.OnChange -NewValue $this.Lines 
                 }
-                $this.Parent.RequestRedraw()
+                $this.RequestRedraw()
             }
             
             return $handled
@@ -219,6 +213,7 @@ class MultilineTextBoxComponent : UIElement {
         $this.CurrentLine = 0
         $this.CursorPosition = 0
         $this.ScrollOffsetY = 0
+        $this.RequestRedraw()
     }
 }
 
@@ -234,26 +229,27 @@ class NumericInputComponent : UIElement {
     [string]$Suffix = ""
     [scriptblock]$OnChange
     
-    NumericInputComponent([string]$name) : base($name) {
+    NumericInputComponent([string]$name) : base() {
+        $this.Name = $name
         $this.IsFocusable = $true
         $this.Width = 20
         $this.Height = 3
         $this.TextValue = $this.Value.ToString("F$($this.DecimalPlaces)")
     }
     
-    hidden [void] _RenderContent() {
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
             
             $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
             
             # AI: Draw border
-            $parentPanel.DrawBoxToBuffer($renderX, $renderY, $this.Width, $this.Height, $borderColor, [ConsoleColor]::Black)
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Display value with suffix
             $displayText = $this.TextValue + $this.Suffix
@@ -262,28 +258,22 @@ class NumericInputComponent : UIElement {
                 $displayText = $displayText.Substring(0, $maxDisplayLength)
             }
             
-            $textX = $renderX + 2
-            $textY = $renderY + 1
-            $parentPanel.WriteToBuffer($textX, $textY, $displayText, [ConsoleColor]::White, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+                -ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Draw spinner arrows
-            $parentPanel.WriteToBuffer($renderX + $this.Width - 3, $renderY, "▲", $borderColor, [ConsoleCore]::Black)
-            $parentPanel.WriteToBuffer($renderX + $this.Width - 3, $renderY + 2, "▼", $borderColor, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 0 -Text "▲" `
+                -ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 2 -Text "▼" `
+                -ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Draw cursor if focused
             if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
-                $cursorX = $textX + $this.CursorPosition
-                if ($cursorX -lt $renderX + $this.Width - 4) {
-                    $parentPanel.WriteToBuffer($cursorX, $textY, "_", [ConsoleColor]::Yellow, [ConsoleColor]::Black)
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt $this.Width - 4) {
+                    Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" `
+                        -ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
                 }
-            }
-            
-            # AI: Show min/max indicators
-            if ($this.Value -le $this.Min) {
-                $parentPanel.WriteToBuffer($renderX + 1, $textY, "⊥", [ConsoleColor]::Red, [ConsoleColor]::Black)
-            }
-            if ($this.Value -ge $this.Max) {
-                $parentPanel.WriteToBuffer($renderX + $this.Width - 2, $textY, "⊤", [ConsoleColor]::Red, [ConsoleColor]::Black)
             }
             
         } catch { 
@@ -341,10 +331,10 @@ class NumericInputComponent : UIElement {
             }
             
             if ($handled -and $this.Value -ne $originalValue -and $this.OnChange) {
-                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
+                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock { 
                     & $this.OnChange -NewValue $this.Value 
                 }
-                $this.Parent.RequestRedraw()
+                $this.RequestRedraw()
             }
             
             return $handled
@@ -397,26 +387,27 @@ class DateInputComponent : UIElement {
     [bool]$ShowCalendar = $false
     [scriptblock]$OnChange
     
-    DateInputComponent([string]$name) : base($name) {
+    DateInputComponent([string]$name) : base() {
+        $this.Name = $name
         $this.IsFocusable = $true
         $this.Width = 25
         $this.Height = 3
         $this.TextValue = $this.Value.ToString($this.Format)
     }
     
-    hidden [void] _RenderContent() {
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
             
             $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
             
             # AI: Draw border
-            $parentPanel.DrawBoxToBuffer($renderX, $renderY, $this.Width, $this.Height, $borderColor, [ConsoleColor]::Black)
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Display date value
             $displayText = $this.TextValue
@@ -425,82 +416,24 @@ class DateInputComponent : UIElement {
                 $displayText = $displayText.Substring(0, $maxDisplayLength)
             }
             
-            $textX = $renderX + 2
-            $textY = $renderY + 1
-            $parentPanel.WriteToBuffer($textX, $textY, $displayText, [ConsoleColor]::White, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+                -ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Draw calendar icon
-            $parentPanel.WriteToBuffer($renderX + $this.Width - 3, $textY, "📅", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text "📅" `
+                -ForegroundColor ([ConsoleColor]::Cyan) -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Draw cursor if focused
             if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
-                $cursorX = $textX + $this.CursorPosition
-                if ($cursorX -lt $renderX + $this.Width - 4) {
-                    $parentPanel.WriteToBuffer($cursorX, $textY, "_", [ConsoleColor]::Yellow, [ConsoleColor]::Black)
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt $this.Width - 4) {
+                    Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" `
+                        -ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
                 }
-            }
-            
-            # AI: Show calendar popup if requested
-            if ($this.ShowCalendar) {
-                $this._RenderCalendar()
             }
             
         } catch { 
             Write-Log -Level Error -Message "DateInput render error for '$($this.Name)': $_" 
-        }
-    }
-    
-    hidden [void] _RenderCalendar() {
-        if (-not $this.Parent) { return }
-        
-        try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $calX = $contentArea.X + $this.X
-            $calY = $contentArea.Y + $this.Y + $this.Height
-            $calWidth = 22
-            $calHeight = 8
-            
-            # AI: Draw calendar background
-            $parentPanel.DrawBoxToBuffer($calX, $calY, $calWidth, $calHeight, [ConsoleColor]::Cyan, [ConsoleColor]::DarkBlue)
-            
-            # AI: Draw month/year header
-            $monthYear = $this.Value.ToString("MMMM yyyy")
-            $headerX = $calX + [Math]::Floor(($calWidth - $monthYear.Length) / 2)
-            $parentPanel.WriteToBuffer($headerX, $calY + 1, $monthYear, [ConsoleColor]::White, [ConsoleColor]::DarkBlue)
-            
-            # AI: Draw day headers
-            $dayHeaders = @("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
-            $dayY = $calY + 2
-            for ($i = 0; $i -lt $dayHeaders.Count; $i++) {
-                $dayX = $calX + 2 + ($i * 3)
-                $parentPanel.WriteToBuffer($dayX, $dayY, $dayHeaders[$i], [ConsoleColor]::Yellow, [ConsoleColor]::DarkBlue)
-            }
-            
-            # AI: Draw calendar days (simplified)
-            $firstDay = Get-Date -Year $this.Value.Year -Month $this.Value.Month -Day 1
-            $daysInMonth = [DateTime]::DaysInMonth($this.Value.Year, $this.Value.Month)
-            $startDayOfWeek = [int]$firstDay.DayOfWeek
-            
-            $currentDay = 1
-            for ($week = 0; $week -lt 4 -and $currentDay -le $daysInMonth; $week++) {
-                for ($dayOfWeek = 0; $dayOfWeek -lt 7 -and $currentDay -le $daysInMonth; $dayOfWeek++) {
-                    if ($week -eq 0 -and $dayOfWeek -lt $startDayOfWeek) { continue }
-                    
-                    $dayX = $calX + 2 + ($dayOfWeek * 3)
-                    $dayY = $calY + 3 + $week
-                    
-                    $isToday = ($currentDay -eq $this.Value.Day)
-                    $fg = $isToday ? [ConsoleColor]::Black : [ConsoleColor]::White
-                    $bg = $isToday ? [ConsoleColor]::Yellow : [ConsoleColor]::DarkBlue
-                    
-                    $parentPanel.WriteToBuffer($dayX, $dayY, $currentDay.ToString().PadLeft(2), $fg, $bg)
-                    $currentDay++
-                }
-            }
-            
-        } catch {
-            Write-Log -Level Error -Message "DateInput calendar render error for '$($this.Name)': $_"
         }
     }
     
@@ -561,10 +494,10 @@ class DateInputComponent : UIElement {
             }
             
             if ($handled -and $this.Value -ne $originalValue -and $this.OnChange) {
-                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
+                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock { 
                     & $this.OnChange -NewValue $this.Value 
                 }
-                $this.Parent.RequestRedraw()
+                $this.RequestRedraw()
             }
             
             return $handled
@@ -604,25 +537,26 @@ class ComboBoxComponent : UIElement {
     [int]$ScrollOffset = 0
     [scriptblock]$OnSelectionChanged
     
-    ComboBoxComponent([string]$name) : base($name) {
+    ComboBoxComponent([string]$name) : base() {
+        $this.Name = $name
         $this.IsFocusable = $true
         $this.Width = 30
         $this.Height = 3
     }
     
-    hidden [void] _RenderContent() {
-        if (-not $this.Visible -or -not $this.Parent) { return }
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $renderX = $contentArea.X + $this.X
-            $renderY = $contentArea.Y + $this.Y
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
             
             $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
             
             # AI: Draw main combobox
-            $parentPanel.DrawBoxToBuffer($renderX, $renderY, $this.Width, $this.Height, $borderColor, [ConsoleColor]::Black)
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Display selected item or placeholder
             $displayText = ""
@@ -643,85 +577,17 @@ class ComboBoxComponent : UIElement {
                 $displayText = $displayText.Substring(0, $maxDisplayLength - 3) + "..."
             }
             
-            $textX = $renderX + 2
-            $textY = $renderY + 1
             $textColor = $this.SelectedItem ? [ConsoleColor]::White : [ConsoleColor]::DarkGray
-            $parentPanel.WriteToBuffer($textX, $textY, $displayText, $textColor, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+                -ForegroundColor $textColor -BackgroundColor ([ConsoleColor]::Black)
             
             # AI: Draw dropdown arrow
             $arrow = $this.IsDropDownOpen ? "▲" : "▼"
-            $parentPanel.WriteToBuffer($renderX + $this.Width - 3, $textY, $arrow, $borderColor, [ConsoleColor]::Black)
-            
-            # AI: Draw dropdown if open
-            if ($this.IsDropDownOpen -and $this.Items.Count -gt 0) {
-                $this._RenderDropDown()
-            }
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text $arrow `
+                -ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
             
         } catch { 
             Write-Log -Level Error -Message "ComboBox render error for '$($this.Name)': $_" 
-        }
-    }
-    
-    hidden [void] _RenderDropDown() {
-        if (-not $this.Parent) { return }
-        
-        try {
-            $parentPanel = [Panel]$this.Parent
-            $contentArea = $parentPanel.GetContentArea()
-            $dropX = $contentArea.X + $this.X
-            $dropY = $contentArea.Y + $this.Y + $this.Height
-            $dropHeight = [Math]::Min($this.MaxDropDownHeight, $this.Items.Count) + 2
-            
-            # AI: Draw dropdown background
-            $parentPanel.DrawBoxToBuffer($dropX, $dropY, $this.Width, $dropHeight, [ConsoleColor]::Gray, [ConsoleColor]::DarkBlue)
-            
-            # AI: Calculate visible items
-            $visibleCount = [Math]::Min($this.MaxDropDownHeight, $this.Items.Count)
-            $startIndex = $this.ScrollOffset
-            $endIndex = [Math]::Min($this.Items.Count - 1, $startIndex + $visibleCount - 1)
-            
-            # AI: Render visible items
-            for ($i = $startIndex; $i -le $endIndex; $i++) {
-                $item = $this.Items[$i]
-                $itemY = $dropY + 1 + ($i - $startIndex)
-                
-                $displayText = ""
-                if ($item -is [string]) {
-                    $displayText = $item
-                } elseif ($item -is [hashtable] -and $item.ContainsKey($this.DisplayMember)) {
-                    $displayText = $item[$this.DisplayMember]
-                } else {
-                    $displayText = $item.ToString()
-                }
-                
-                if ($displayText.Length -gt ($this.Width - 4)) {
-                    $displayText = $displayText.Substring(0, $this.Width - 7) + "..."
-                }
-                
-                $isHighlighted = ($i -eq $this.SelectedIndex)
-                $fg = $isHighlighted ? [ConsoleColor]::Black : [ConsoleColor]::White
-                $bg = $isHighlighted ? [ConsoleColor]::Yellow : [ConsoleColor]::DarkBlue
-                
-                # AI: Clear line first
-                $parentPanel.WriteToBuffer($dropX + 1, $itemY, (" " * ($this.Width - 2)), $fg, $bg)
-                $parentPanel.WriteToBuffer($dropX + 2, $itemY, $displayText, $fg, $bg)
-            }
-            
-            # AI: Draw scrollbar if needed
-            if ($this.Items.Count -gt $this.MaxDropDownHeight) {
-                $scrollbarX = $dropX + $this.Width - 1
-                $scrollHeight = $visibleCount
-                $thumbSize = [Math]::Max(1, [Math]::Floor($scrollHeight * $visibleCount / $this.Items.Count))
-                $thumbPos = [Math]::Floor($scrollHeight * $this.ScrollOffset / ($this.Items.Count - $visibleCount))
-                
-                for ($i = 0; $i -lt $scrollHeight; $i++) {
-                    $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { "█" } else { "│" }
-                    $parentPanel.WriteToBuffer($scrollbarX, $dropY + 1 + $i, $char, [ConsoleColor]::Gray, [ConsoleColor]::DarkBlue)
-                }
-            }
-            
-        } catch {
-            Write-Log -Level Error -Message "ComboBox dropdown render error for '$($this.Name)': $_"
         }
     }
     
@@ -753,22 +619,6 @@ class ComboBoxComponent : UIElement {
                             $this._UpdateScrolling()
                         }
                     }
-                    ([ConsoleKey]::PageUp) {
-                        $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $this.MaxDropDownHeight)
-                        $this._UpdateScrolling()
-                    }
-                    ([ConsoleKey]::PageDown) {
-                        $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $this.MaxDropDownHeight)
-                        $this._UpdateScrolling()
-                    }
-                    ([ConsoleKey]::Home) {
-                        $this.SelectedIndex = 0
-                        $this._UpdateScrolling()
-                    }
-                    ([ConsoleKey]::End) {
-                        $this.SelectedIndex = $this.Items.Count - 1
-                        $this._UpdateScrolling()
-                    }
                     default { $handled = $false }
                 }
             } else {
@@ -783,10 +633,10 @@ class ComboBoxComponent : UIElement {
             }
             
             if ($handled -and $this.SelectedItem -ne $originalSelection -and $this.OnSelectionChanged) {
-                Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -ScriptBlock { 
+                Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -Context "Selection Change" -ScriptBlock { 
                     & $this.OnSelectionChanged -SelectedItem $this.SelectedItem 
                 }
-                $this.Parent.RequestRedraw()
+                $this.RequestRedraw()
             }
             
             return $handled
@@ -841,6 +691,7 @@ class ComboBoxComponent : UIElement {
         $this.SelectedIndex = -1
         $this.ScrollOffset = 0
         $this.IsDropDownOpen = $false
+        $this.RequestRedraw()
     }
     
     [object] GetSelectedValue() {

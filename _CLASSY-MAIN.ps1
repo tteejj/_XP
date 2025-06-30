@@ -14,6 +14,7 @@ using module '.\modules\theme-manager.psm1'
 
 # Base Classes
 using module '.\modules\models.psm1'
+using module '.\components\tui-primitives.psm1'
 using module '.\components\ui-classes.psm1'
 
 # Components (depend on base classes)

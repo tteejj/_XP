@@ -4,6 +4,8 @@
 using namespace System.Text
 using namespace System.Management.Automation
 using module ..\components\tui-primitives.psm1
+using module ..\components\ui-classes.psm1
+using module ..\modules\logger.psm1
 using module ..\layout\panels-class.psm1
 
 Set-StrictMode -Version Latest

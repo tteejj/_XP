@@ -223,43 +223,13 @@ class Component : UIElement {
     }
 }
 
-# --- Base Panel (rectangular area) ---
-class Panel : Component {
-    [string]$Title = ""
-    [bool]$ShowBorder = $true
-
-    Panel([string]$name, [int]$x, [int]$y, [int]$width, [int]$height) : base($name) {
-        if ($width -le 0 -or $height -le 0) { throw [ArgumentOutOfRangeException]::new("Panel dimensions must be positive.") }
-        
-        $this.X = $x
-        $this.Y = $y
-        $this.Width = $width
-        $this.Height = $height
-        $this.Resize($width, $height)  # Initialize buffer with correct size
-    }
-
-    [hashtable] GetContentArea() {
-        $borderOffset = $this.ShowBorder ? 1 : 0
-        return @{
-            X      = $this.X + $borderOffset
-            Y      = $this.Y + $borderOffset
-            Width  = $this.Width - (2 * $borderOffset)
-            Height = $this.Height - (2 * $borderOffset)
-        }
-    }
-    
-    # AI: Panel renders its children but doesn't draw borders (subclasses like BorderPanel handle that)
-    hidden [void] _RenderContent() {
-        # Default panel just renders children using parent implementation
-        ([Component]$this)._RenderContent()
-    }
-}
+# Note: Panel class is now defined in layout\panels-class.psm1
 
 # --- Base Screen (top-level container) ---
 class Screen : UIElement {
     [hashtable]$Services
     [System.Collections.Generic.Dictionary[string, object]]$State
-    [System.Collections.Generic.List[Panel]]$Panels
+    [System.Collections.Generic.List[UIElement]]$Panels
     hidden [System.Collections.Generic.Dictionary[string, string]]$EventSubscriptions
 
     Screen([string]$name, [hashtable]$services) : base($name) {
@@ -267,7 +237,7 @@ class Screen : UIElement {
         
         $this.Services = $services
         $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
-        $this.Panels = [System.Collections.Generic.List[Panel]]::new()
+        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
         $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
     }
     
@@ -291,7 +261,7 @@ class Screen : UIElement {
         Write-Log -Level Debug -Message "Cleaned up screen: $($this.Name)"
     }
     
-    [void] AddPanel([Panel]$panel) {
+    [void] AddPanel([UIElement]$panel) {
         if (-not $panel) { throw [ArgumentNullException]::new("panel") }
         $this.Panels.Add($panel)
     }

@@ -5,24 +5,25 @@
 
 using namespace System.Management.Automation
 using module ..\components\ui-classes.psm1
+using module ..\components\tui-primitives.psm1
+using module ..\modules\exceptions.psm1
+using module ..\modules\logger.psm1
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# Base Dialog Class
+# Base Dialog Class - properly inheriting from UIElement
 class Dialog : UIElement {
     [string] $Title = "Dialog"
     [string] $Message = ""
-    [int] $Width = 50
-    [int] $Height = 10
-    [int] $X
-    [int] $Y
     [ConsoleColor] $BorderColor = [ConsoleColor]::Cyan
     [ConsoleColor] $TitleColor = [ConsoleColor]::White
     [ConsoleColor] $MessageColor = [ConsoleColor]::Gray
     
     Dialog([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.Width = 50
+        $this.Height = 10
     }
     
     [void] Show() {
@@ -30,9 +31,14 @@ class Dialog : UIElement {
         $this.X = [Math]::Floor(($global:TuiState.BufferWidth - $this.Width) / 2)
         $this.Y = [Math]::Floor(($global:TuiState.BufferHeight - $this.Height) / 2)
         
+        # Initialize buffer with correct size
+        if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
+            $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        }
+        
         # Register with dialog manager
         $script:DialogState.CurrentDialog = $this
-        Request-TuiRefresh
+        & (Get-Module tui-engine) { Request-TuiRefresh }
     }
     
     [void] Close() {
@@ -40,14 +46,20 @@ class Dialog : UIElement {
         if ($script:DialogState.DialogStack.Count -gt 0) {
             $script:DialogState.CurrentDialog = $script:DialogState.DialogStack.Pop()
         }
-        Request-TuiRefresh
+        & (Get-Module tui-engine) { Request-TuiRefresh }
     }
     
-    # Base render draws dialog frame
-    hidden [void] _RenderContent() {
+    # Implement OnRender for new architecture
+    [void] OnRender() {
+        if ($null -eq $this._private_buffer) { return }
+        
+        # Clear buffer
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+        $this._private_buffer.Clear($bgCell)
+        
         # Draw dialog box
-        Write-BufferBox -X $this.X -Y $this.Y -Width $this.Width -Height $this.Height `
-            -Title " $($this.Title) " -BorderColor $this.BorderColor
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -BorderStyle "Single" -BorderColor $this.BorderColor -BackgroundColor [ConsoleColor]::Black -Title $this.Title
         
         # Draw message if present
         if (-not [string]::IsNullOrWhiteSpace($this.Message)) {
@@ -55,30 +67,32 @@ class Dialog : UIElement {
         }
         
         # Let derived classes render their specific content
-        $this._RenderDialogContent()
+        $this.RenderDialogContent()
     }
     
     hidden [void] RenderMessage() {
-        $messageY = $this.Y + 2
-        $messageX = $this.X + 2
+        $messageY = 2
+        $messageX = 2
         $maxWidth = $this.Width - 4
         
-        $wrappedLines = Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth
+        $wrappedLines = & (Get-Module tui-engine) { Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth }
         foreach ($line in $wrappedLines) {
-            if ($messageY -ge ($this.Y + $this.Height - 3)) { break }
-            Write-BufferString -X $messageX -Y $messageY -Text $line -ForegroundColor $this.MessageColor
+            if ($messageY -ge ($this.Height - 3)) { break }
+            Write-TuiText -Buffer $this._private_buffer -X $messageX -Y $messageY -Text $line -ForegroundColor $this.MessageColor
             $messageY++
         }
     }
     
-    # Override in derived classes
-    hidden [void] _RenderDialogContent() { }
+    # Virtual method for derived classes
+    [void] RenderDialogContent() { }
     
     # Base input handling - ESC closes dialog
-    [void] HandleInput([ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         if ($key.Key -eq [ConsoleKey]::Escape) {
             $this.OnCancel()
+            return $true
         }
+        return $false
     }
     
     # Virtual methods for derived classes
@@ -97,21 +111,22 @@ class AlertDialog : Dialog {
         $this.Width = [Math]::Min(80, [Math]::Max(40, $message.Length + 10))
     }
     
-    hidden [void] _RenderDialogContent() {
+    [void] RenderDialogContent() {
         # Render OK button
-        $buttonY = $this.Y + $this.Height - 2
-        $buttonText = "[ $($this.ButtonText) ]"
-        $buttonX = $this.X + [Math]::Floor(($this.Width - $buttonText.Length) / 2)
+        $buttonY = $this.Height - 2
+        $buttonLabel = "[ $($this.ButtonText) ]"
+        $buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
         
-        Write-BufferString -X $buttonX -Y $buttonY -Text $buttonText -ForegroundColor ([ConsoleColor]::Yellow)
+        Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor ([ConsoleColor]::Yellow)
     }
     
-    [void] HandleInput([ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         switch ($key.Key) {
-            ([ConsoleKey]::Enter) { $this.OnConfirm() }
-            ([ConsoleKey]::Spacebar) { $this.OnConfirm() }
-            ([ConsoleKey]::Escape) { $this.OnCancel() }
+            ([ConsoleKey]::Enter) { $this.OnConfirm(); return $true }
+            ([ConsoleKey]::Spacebar) { $this.OnConfirm(); return $true }
+            ([ConsoleKey]::Escape) { $this.OnCancel(); return $true }
         }
+        return $false
     }
 }
 
@@ -131,45 +146,54 @@ class ConfirmDialog : Dialog {
         $this.Height = 10
     }
     
-    hidden [void] _RenderDialogContent() {
+    [void] RenderDialogContent() {
         # Render buttons
-        $buttonY = $this.Y + $this.Height - 3
+        $buttonY = $this.Height - 3
         $totalButtonWidth = ($this.Buttons.Count * 12) + (($this.Buttons.Count - 1) * 2)
-        $buttonX = $this.X + [Math]::Floor(($this.Width - $totalButtonWidth) / 2)
+        $buttonX = [Math]::Floor(($this.Width - $totalButtonWidth) / 2)
         
         for ($i = 0; $i -lt $this.Buttons.Count; $i++) {
             $button = $this.Buttons[$i]
             $isSelected = ($i -eq $this.SelectedButton)
-            $buttonText = if ($isSelected) { "[ $button ]" } else { "  $button  " }
+            $buttonLabel = if ($isSelected) { "[ $button ]" } else { "  $button  " }
             $color = if ($isSelected) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
             
-            Write-BufferString -X $buttonX -Y $buttonY -Text $buttonText -ForegroundColor $color
+            Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor $color
             $buttonX += 14
         }
     }
     
-    [void] HandleInput([ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         switch ($key.Key) {
             ([ConsoleKey]::LeftArrow) { 
                 $this.SelectedButton = [Math]::Max(0, $this.SelectedButton - 1)
-                Request-TuiRefresh
+                $this.RequestRedraw()
+                return $true
             }
             ([ConsoleKey]::RightArrow) { 
                 $this.SelectedButton = [Math]::Min($this.Buttons.Count - 1, $this.SelectedButton + 1)
-                Request-TuiRefresh
+                $this.RequestRedraw()
+                return $true
             }
             ([ConsoleKey]::Tab) { 
                 $this.SelectedButton = ($this.SelectedButton + 1) % $this.Buttons.Count
-                Request-TuiRefresh
+                $this.RequestRedraw()
+                return $true
             }
             ([ConsoleKey]::Enter) { 
                 if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }
+                return $true
             }
             ([ConsoleKey]::Spacebar) { 
                 if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }
+                return $true
             }
-            ([ConsoleKey]::Escape) { $this.OnCancel() }
+            ([ConsoleKey]::Escape) { 
+                $this.OnCancel()
+                return $true
+            }
         }
+        return $false
     }
     
     [void] OnConfirm() {
@@ -206,11 +230,11 @@ class InputDialog : Dialog {
         $this.Height = 10
     }
     
-    hidden [void] _RenderDialogContent() {
+    [void] RenderDialogContent() {
         # Render prompt
-        $promptX = $this.X + 2
-        $promptY = $this.Y + 2
-        Write-BufferString -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor ([ConsoleColor]::White)
+        $promptX = 2
+        $promptY = 2
+        Write-TuiText -Buffer $this._private_buffer -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor ([ConsoleColor]::White)
         
         # Render input box
         $inputY = $promptY + 2
@@ -218,87 +242,101 @@ class InputDialog : Dialog {
         $isFocused = ($this.FocusedElement -eq 0)
         $borderColor = if ($isFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::DarkGray }
         
-        Write-BufferBox -X $promptX -Y $inputY -Width $inputWidth -Height 3 -BorderColor $borderColor
+        Write-TuiBox -Buffer $this._private_buffer -X $promptX -Y $inputY -Width $inputWidth -Height 3 -BorderColor $borderColor
         
         # Render input text
         $displayText = $this.InputValue
         if ($displayText.Length -gt ($inputWidth - 3)) {
             $displayText = $displayText.Substring(0, $inputWidth - 3)
         }
-        Write-BufferString -X ($promptX + 1) -Y ($inputY + 1) -Text $displayText -ForegroundColor ([ConsoleColor]::White)
+        Write-TuiText -Buffer $this._private_buffer -X ($promptX + 1) -Y ($inputY + 1) -Text $displayText -ForegroundColor ([ConsoleColor]::White)
         
         # Show cursor when focused
         if ($isFocused -and $this.CursorPosition -le $displayText.Length) {
-            Write-BufferString -X ($promptX + 1 + $this.CursorPosition) -Y ($inputY + 1) `
+            Write-TuiText -Buffer $this._private_buffer -X ($promptX + 1 + $this.CursorPosition) -Y ($inputY + 1) `
                 -Text "_" -ForegroundColor ([ConsoleColor]::Yellow)
         }
         
         # Render buttons
-        $buttonY = $this.Y + $this.Height - 2
+        $buttonY = $this.Height - 2
         $buttonSpacing = 15
         $buttonsWidth = $buttonSpacing * 2
-        $buttonX = $this.X + [Math]::Floor(($this.Width - $buttonsWidth) / 2)
+        $buttonX = [Math]::Floor(($this.Width - $buttonsWidth) / 2)
         
         # OK button
         $okFocused = ($this.FocusedElement -eq 1)
         $okText = if ($okFocused) { "[ OK ]" } else { "  OK  " }
         $okColor = if ($okFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
-        Write-BufferString -X $buttonX -Y $buttonY -Text $okText -ForegroundColor $okColor
+        Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $okText -ForegroundColor $okColor
         
         # Cancel button
         $cancelFocused = ($this.FocusedElement -eq 2)
         $cancelText = if ($cancelFocused) { "[ Cancel ]" } else { "  Cancel  " }
         $cancelColor = if ($cancelFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
-        Write-BufferString -X ($buttonX + $buttonSpacing) -Y $buttonY -Text $cancelText -ForegroundColor $cancelColor
+        Write-TuiText -Buffer $this._private_buffer -X ($buttonX + $buttonSpacing) -Y $buttonY -Text $cancelText -ForegroundColor $cancelColor
     }
     
-    [void] HandleInput([ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         switch ($key.Key) {
             ([ConsoleKey]::Tab) {
                 $direction = if ($key.Modifiers -band [ConsoleModifiers]::Shift) { -1 } else { 1 }
                 $this.FocusedElement = ($this.FocusedElement + $direction + 3) % 3
-                Request-TuiRefresh
+                $this.RequestRedraw()
+                return $true
             }
-            ([ConsoleKey]::Escape) { $this.OnCancel() }
+            ([ConsoleKey]::Escape) { 
+                $this.OnCancel()
+                return $true
+            }
             default {
                 switch ($this.FocusedElement) {
                     0 { # TextBox
                         switch ($key.Key) {
-                            ([ConsoleKey]::Enter) { $this.OnConfirm() }
+                            ([ConsoleKey]::Enter) { 
+                                $this.OnConfirm()
+                                return $true
+                            }
                             ([ConsoleKey]::Backspace) {
                                 if ($this.InputValue.Length -gt 0 -and $this.CursorPosition -gt 0) {
                                     $this.InputValue = $this.InputValue.Remove($this.CursorPosition - 1, 1)
                                     $this.CursorPosition--
-                                    Request-TuiRefresh
+                                    $this.RequestRedraw()
                                 }
+                                return $true
                             }
                             ([ConsoleKey]::Delete) {
                                 if ($this.CursorPosition -lt $this.InputValue.Length) {
                                     $this.InputValue = $this.InputValue.Remove($this.CursorPosition, 1)
-                                    Request-TuiRefresh
+                                    $this.RequestRedraw()
                                 }
+                                return $true
                             }
                             ([ConsoleKey]::LeftArrow) {
                                 $this.CursorPosition = [Math]::Max(0, $this.CursorPosition - 1)
-                                Request-TuiRefresh
+                                $this.RequestRedraw()
+                                return $true
                             }
                             ([ConsoleKey]::RightArrow) {
                                 $this.CursorPosition = [Math]::Min($this.InputValue.Length, $this.CursorPosition + 1)
-                                Request-TuiRefresh
+                                $this.RequestRedraw()
+                                return $true
                             }
                             ([ConsoleKey]::Home) {
                                 $this.CursorPosition = 0
-                                Request-TuiRefresh
+                                $this.RequestRedraw()
+                                return $true
                             }
                             ([ConsoleKey]::End) {
                                 $this.CursorPosition = $this.InputValue.Length
-                                Request-TuiRefresh
+                                $this.RequestRedraw()
+                                return $true
                             }
                             default {
                                 if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
                                     $this.InputValue = $this.InputValue.Insert($this.CursorPosition, $key.KeyChar)
                                     $this.CursorPosition++
-                                    Request-TuiRefresh
+                                    $this.RequestRedraw()
+                                    return $true
                                 }
                             }
                         }
@@ -306,16 +344,19 @@ class InputDialog : Dialog {
                     1 { # OK Button
                         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
                             $this.OnConfirm()
+                            return $true
                         }
                     }
                     2 { # Cancel Button
                         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
                             $this.OnCancel()
+                            return $true
                         }
                     }
                 }
             }
         }
+        return $false
     }
     
     [void] SetDefaultValue([string]$value) {
@@ -355,31 +396,31 @@ class ProgressDialog : Dialog {
         $this.Height = 8
     }
     
-    hidden [void] _RenderDialogContent() {
+    [void] RenderDialogContent() {
         # Render progress bar
-        $barY = $this.Y + 4
+        $barY = 4
         $barWidth = $this.Width - 4
         $filledWidth = [Math]::Floor($barWidth * ($this.PercentComplete / 100.0))
         
         # Draw bar background
-        Write-BufferString -X ($this.X + 2) -Y $barY -Text ("─" * $barWidth) -ForegroundColor ([ConsoleColor]::DarkGray)
+        Write-TuiText -Buffer $this._private_buffer -X 2 -Y $barY -Text ("─" * $barWidth) -ForegroundColor ([ConsoleColor]::DarkGray)
         
         # Draw filled portion
         if ($filledWidth -gt 0) {
-            Write-BufferString -X ($this.X + 2) -Y $barY -Text ("█" * $filledWidth) -ForegroundColor ([ConsoleColor]::Green)
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y $barY -Text ("█" * $filledWidth) -ForegroundColor ([ConsoleColor]::Green)
         }
         
         # Draw percentage
         $percentText = "$($this.PercentComplete)%"
-        $percentX = $this.X + [Math]::Floor(($this.Width - $percentText.Length) / 2)
-        Write-BufferString -X $percentX -Y $barY -Text $percentText -ForegroundColor ([ConsoleColor]::White)
+        $percentX = [Math]::Floor(($this.Width - $percentText.Length) / 2)
+        Write-TuiText -Buffer $this._private_buffer -X $percentX -Y $barY -Text $percentText -ForegroundColor ([ConsoleColor]::White)
         
         # Draw cancel button if enabled
         if ($this.ShowCancel) {
-            $buttonY = $this.Y + $this.Height - 2
-            $buttonText = if ($this.IsCancelled) { "[ Cancelling... ]" } else { "[ Cancel ]" }
-            $buttonX = $this.X + [Math]::Floor(($this.Width - $buttonText.Length) / 2)
-            Write-BufferString -X $buttonX -Y $buttonY -Text $buttonText -ForegroundColor ([ConsoleColor]::Yellow)
+            $buttonY = $this.Height - 2
+            $buttonLabel = if ($this.IsCancelled) { "[ Cancelling... ]" } else { "[ Cancel ]" }
+            $buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
+            Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor ([ConsoleColor]::Yellow)
         }
     }
     
@@ -388,16 +429,18 @@ class ProgressDialog : Dialog {
         if (-not [string]::IsNullOrWhiteSpace($message)) {
             $this.Message = $message
         }
-        Request-TuiRefresh
+        $this.RequestRedraw()
     }
     
-    [void] HandleInput([ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         if ($this.ShowCancel -and -not $this.IsCancelled) {
             if ($key.Key -in @([ConsoleKey]::Escape, [ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
                 $this.IsCancelled = $true
-                Request-TuiRefresh
+                $this.RequestRedraw()
+                return $true
             }
         }
+        return $false
     }
 }
 
@@ -421,8 +464,8 @@ class ListDialog : Dialog {
         $this.SelectedItems = [System.Collections.Generic.HashSet[int]]::new()
     }
     
-    hidden [void] _RenderDialogContent() {
-        $listY = $this.Y + 4
+    [void] RenderDialogContent() {
+        $listY = 4
         $listHeight = $this.Height - 7
         $listWidth = $this.Width - 4
         
@@ -450,46 +493,48 @@ class ListDialog : Dialog {
             $fgColor = if ($isSelected) { [ConsoleColor]::Black } else { [ConsoleColor]::Gray }
             
             # Clear the line first
-            Write-BufferString -X ($this.X + 2) -Y $itemY -Text (" " * ($listWidth - 2)) -BackgroundColor $bgColor
-            Write-BufferString -X ($this.X + 2) -Y $itemY -Text $itemText -ForegroundColor $fgColor -BackgroundColor $bgColor
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y $itemY -Text (" " * ($listWidth - 2)) -BackgroundColor $bgColor
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y $itemY -Text $itemText -ForegroundColor $fgColor -BackgroundColor $bgColor
         }
         
         # Render scrollbar if needed
         if ($this.Items.Count -gt $listHeight) {
-            $scrollbarX = $this.X + $this.Width - 2
+            $scrollbarX = $this.Width - 2
             $scrollbarHeight = $listHeight
             $thumbSize = [Math]::Max(1, [Math]::Floor($scrollbarHeight * $listHeight / $this.Items.Count))
             $thumbPos = [Math]::Floor($scrollbarHeight * $this.SelectedIndex / $this.Items.Count)
             
             for ($i = 0; $i -lt $scrollbarHeight; $i++) {
                 $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { "█" } else { "│" }
-                Write-BufferString -X $scrollbarX -Y ($listY + $i) -Text $char -ForegroundColor ([ConsoleColor]::DarkGray)
+                Write-TuiText -Buffer $this._private_buffer -X $scrollbarX -Y ($listY + $i) -Text $char -ForegroundColor ([ConsoleColor]::DarkGray)
             }
         }
         
         # Render buttons for multi-select
         if ($this.AllowMultiple) {
-            $buttonY = $this.Y + $this.Height - 2
+            $buttonY = $this.Height - 2
             $okText = "[ OK ]"
             $cancelText = "[ Cancel ]"
             $buttonSpacing = 15
             $totalWidth = 30
-            $startX = $this.X + [Math]::Floor(($this.Width - $totalWidth) / 2)
+            $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
             
-            Write-BufferString -X $startX -Y $buttonY -Text $okText -ForegroundColor ([ConsoleColor]::Green)
-            Write-BufferString -X ($startX + $buttonSpacing) -Y $buttonY -Text $cancelText -ForegroundColor ([ConsoleColor]::Gray)
+            Write-TuiText -Buffer $this._private_buffer -X $startX -Y $buttonY -Text $okText -ForegroundColor ([ConsoleColor]::Green)
+            Write-TuiText -Buffer $this._private_buffer -X ($startX + $buttonSpacing) -Y $buttonY -Text $cancelText -ForegroundColor ([ConsoleColor]::Gray)
         }
     }
     
-    [void] HandleInput([ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         switch ($key.Key) {
             ([ConsoleKey]::UpArrow) {
                 $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - 1)
-                Request-TuiRefresh
+                $this.RequestRedraw()
+                return $true
             }
             ([ConsoleKey]::DownArrow) {
                 $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + 1)
-                Request-TuiRefresh
+                $this.RequestRedraw()
+                return $true
             }
             ([ConsoleKey]::Spacebar) {
                 if ($this.AllowMultiple) {
@@ -498,16 +543,20 @@ class ListDialog : Dialog {
                     } else {
                         [void]$this.SelectedItems.Add($this.SelectedIndex)
                     }
-                    Request-TuiRefresh
+                    $this.RequestRedraw()
                 }
+                return $true
             }
             ([ConsoleKey]::Enter) {
                 $this.OnConfirm()
+                return $true
             }
             ([ConsoleKey]::Escape) {
                 $this.OnCancel()
+                return $true
             }
         }
+        return $false
     }
     
     [void] OnConfirm() {
@@ -545,24 +594,32 @@ $script:DialogState = @{
 function Initialize-DialogSystem {
     Invoke-WithErrorHandling -Component "DialogSystem" -Context "Initialize" -ScriptBlock {
         # Subscribe to dialog events
-        Subscribe-Event -EventName "Confirm.Request" -Handler {
-            param($EventData)
-            $params = $EventData.Data
-            Show-ConfirmDialog -Title $params.Title -Message $params.Message `
-                -OnConfirm $params.OnConfirm -OnCancel $params.OnCancel
-        }
-        
-        Subscribe-Event -EventName "Alert.Show" -Handler {
-            param($EventData)
-            $params = $EventData.Data
-            Show-AlertDialog -Title $params.Title -Message $params.Message
-        }
-        
-        Subscribe-Event -EventName "Input.Request" -Handler {
-            param($EventData)
-            $params = $EventData.Data
-            Show-InputDialog -Title $params.Title -Prompt $params.Prompt `
-                -DefaultValue $params.DefaultValue -OnSubmit $params.OnSubmit -OnCancel $params.OnCancel
+        & (Get-Module event-system) {
+            Subscribe-Event -EventName "Confirm.Request" -Handler {
+                param($EventData)
+                $params = $EventData.Data
+                & (Get-Module dialog-system-class) {
+                    Show-ConfirmDialog -Title $params.Title -Message $params.Message `
+                        -OnConfirm $params.OnConfirm -OnCancel $params.OnCancel
+                }
+            }
+            
+            Subscribe-Event -EventName "Alert.Show" -Handler {
+                param($EventData)
+                $params = $EventData.Data
+                & (Get-Module dialog-system-class) {
+                    Show-AlertDialog -Title $params.Title -Message $params.Message
+                }
+            }
+            
+            Subscribe-Event -EventName "Input.Request" -Handler {
+                param($EventData)
+                $params = $EventData.Data
+                & (Get-Module dialog-system-class) {
+                    Show-InputDialog -Title $params.Title -Prompt $params.Prompt `
+                        -DefaultValue $params.DefaultValue -OnSubmit $params.OnSubmit -OnCancel $params.OnCancel
+                }
+            }
         }
         
         Write-Log -Level Info -Message "Class-based Dialog System initialized"

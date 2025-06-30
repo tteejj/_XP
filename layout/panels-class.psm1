@@ -198,6 +198,24 @@ class Panel : UIElement {
             Height = $this.ContentHeight
         }
     }
+    
+    # Alias for compatibility with migrated components
+    [hashtable] GetContentArea() {
+        return $this.GetContentBounds()
+    }
+    
+    # Write text to buffer at specified position
+    [void] WriteToBuffer([int]$x, [int]$y, [string]$text, [ConsoleColor]$fg, [ConsoleColor]$bg) {
+        if ($null -eq $this._private_buffer) { return }
+        Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $text -ForegroundColor $fg -BackgroundColor $bg
+    }
+    
+    # Draw a box to buffer
+    [void] DrawBoxToBuffer([int]$x, [int]$y, [int]$width, [int]$height, [ConsoleColor]$borderColor, [ConsoleColor]$bgColor) {
+        if ($null -eq $this._private_buffer) { return }
+        Write-TuiBox -Buffer $this._private_buffer -X $x -Y $y -Width $width -Height $height `
+            -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+    }
 
     # Clear content area only
     [void] ClearContent() {
