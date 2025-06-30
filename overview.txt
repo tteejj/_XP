@@ -1,0 +1,106 @@
+Of course. Here is a comprehensive breakdown of the PMC Terminal v5 architecture, its file structure, rendering process, and recommendations for stabilization.
+
+### 1. Architecture Overview
+
+PMC Terminal v5 is a PowerShell application built on a sophisticated, **class-based TUI (Text User Interface) framework**. The architecture is heavily influenced by modern UI toolkits and is designed to be modular, extensible, and state-driven. It has recently undergone a major refactoring to a **compositor-based rendering model**, which is now mostly complete.
+
+The architecture is composed of four primary layers:
+
+1.  **Core Foundation & Primitives:**
+    *   At the lowest level are the `TuiCell`, a class representing a single character on screen, and `TuiBuffer`, a 2D "canvas" of `TuiCell`s.
+    *   The `UIElement` class is the abstract foundation for every visual component. It establishes a contract for rendering (`OnRender`), input handling (`HandleInput`), and a parent-child hierarchy, enabling a component tree.
+
+2.  **UI Components & Layout:**
+    *   **Components:** These are reusable, class-based UI elements like `ButtonComponent`, `TextBoxComponent`, and more advanced inputs like `ComboBoxComponent` and `DateInputComponent`. Each is a self-contained unit responsible for its own state and drawing logic.
+    *   **Layout:** The `Panel` class (and its specialized variants like `ScrollablePanel`) acts as a container. Panels manage the positioning and sizing of their child components through layout managers (e.g., Vertical, Horizontal, Grid), creating a structured and responsive UI.
+
+3.  **Application Services (The "Backend"):**
+    *   Logic is decoupled from the UI through a suite of services. These services are "injected" into screens and components where needed.
+    *   **`NavigationService`:** Manages the flow between different application screens using a routing system.
+    *   **`DataManager`:** Handles all data persistence, loading/saving tasks and projects from a JSON file.
+    *   **`EventSystem`:** A publish-subscribe bus that allows components to communicate without direct references, promoting loose coupling. For example, when data is saved, it can publish a `Tasks.Changed` event, which any listening component can react to.
+    *   **`KeybindingService`:** A centralized manager for all keyboard shortcuts.
+
+4.  **Screens & Main Application:**
+    *   A `Screen` is a top-level `UIElement` that represents a complete view, such as the `DashboardScreen` or `TaskListScreen`. It assembles various panels and components to build its interface.
+    *   The **`TuiEngine`** is the conductor of the entire application. It runs the main event loop, listens for and dispatches keyboard input, and orchestrates the frame rendering process by telling the current screen to render itself to the master buffer.
+
+This layered architecture ensures a clear separation of concerns, making the application easier to maintain and extend.
+
+---
+
+### 2. File List and API/Functions
+
+Here is a breakdown of the key files and their purpose.
+
+| File Path | Purpose & Key API/Functions/Classes |
+| :--- | :--- |
+| **`_CLASSY-MAIN.ps1`** | **Main application entry point.** It uses PowerShell 7's `using module` to load all dependencies in the correct order, initializes all services, and starts the `TuiEngine`. |
+| **`modules/tui-engine.psm1`** | **The core of the TUI.**<br/>- `Initialize-TuiEngine`: Sets up the console and buffers.<br/>- `Start-TuiLoop`: Begins the main application loop.<br/>- `Push-Screen`/`Pop-Screen`: Manages the screen stack.<br/>- `Render-Frame`: The master rendering function that drives the compositor. |
+| **`components/ui-classes.psm1`** | **Defines the base classes for all UI.**<br/>- `UIElement`: The foundational class for all components.<br/>- `Component`: A basic `UIElement` that can contain children.<br/>- `Panel`: The base class for all layout containers.<br/>- `Screen`: The top-level container for a view. |
+| **`components/tui-primitives.psm1`** | **Defines the building blocks of the display.**<br/>- `TuiCell`: Represents one character cell.<br/>- `TuiBuffer`: A 2D canvas of `TuiCell`s.<br/>- `Write-TuiText`, `Write-TuiBox`: Primitive drawing functions. |
+| **`layout/panels-class.psm1`** | **Layout and container management.**<br/>- `Panel`: A container with borders, titles, and layout logic.<br/>- `ScrollablePanel`: A panel that supports content larger than its visible area.<br/>- `GroupPanel`: A collapsible panel. |
+| **`components/*.psm1`** | **Reusable UI components.** These files define classes for various UI widgets.<br/>- **`tui-components.psm1`**: `LabelComponent`, `ButtonComponent`, `TextBoxComponent`, `CheckBoxComponent`, `RadioButtonComponent`.<br/>- **`advanced-data-components.psm1`**: `Table`, `DataTableComponent` (rendering is a work-in-progress).<br/>- **`advanced-input-components.psm1`**: `MultilineTextBoxComponent`, `NumericInputComponent`, `DateInputComponent`, `ComboBoxComponent`.<br/>- **`navigation-class.psm1`**: `NavigationItem`, `NavigationMenu`. |
+| **`modules/dialog-system-class.psm1`** | **Handles pop-up dialogs.**<br/>- `Dialog`: Base class for all dialogs.<br/>- `AlertDialog`, `ConfirmDialog`, `InputDialog`, etc.: Specific dialog implementations.<br/>- `Show-AlertDialog`, `Show-ConfirmDialog`: Public functions to trigger dialogs. |
+| **`services/*.psm1`** | **Backend application logic.**<br/>- **`navigation-service-class.psm1`**: `NavigationService` class for screen routing.<br/>- **`keybinding-service.psm1`**: `KeybindingService` class for managing hotkeys. |
+| **`modules/*.psm1`** | **Core application modules.**<br/>- **`data-manager.psm1`**: `DataManager` class and functions for data persistence.<br/>- **`event-system.psm1`**: `Publish-Event`, `Subscribe-Event` for loose coupling.<br/>- **`models.psm1`**: `PmcTask` and `PmcProject` data classes.<br/>- **`theme-manager.psm1`**: Manages application color themes. |
+| **`screens/**/*.psm1`** | **Application views.**<br/>- **`dashboard-screen.psm1`**: `DashboardScreen` class.<br/>- **`task-list-screen.psm1`**: `TaskListScreen` class. |
+
+---
+
+### 3. Rendering Process Map
+
+The rendering process is designed for efficiency, only redrawing what has changed.
+
+**Trigger:** The main loop in `TuiEngine` calls `Render-Frame` if the state is "dirty" (i.e., something changed).
+
+1.  **Clear Master Buffer:** The `Render-FrameCompositor` function clears the main compositor buffer, preparing a blank canvas for the new frame.
+
+2.  **Recursive Component Rendering (`UIElement.Render()`):**
+    *   The engine calls the `Render()` method on the current `Screen` object.
+    *   The `Screen` then calls `Render()` on each of its child `Panel`s.
+    *   Each `Panel`, in turn, calls `Render()` on its child components (`Button`, `Table`, etc.).
+    *   This continues down the component tree.
+
+3.  **Drawing to Private Buffers:**
+    *   When a component's `Render()` method is called, it executes its `OnRender()` logic.
+    *   Inside `OnRender()`, the component uses drawing primitives like `Write-TuiBox` or `Write-TuiText` to draw *only to its own private `_private_buffer`*. It doesn't touch the main screen.
+
+4.  **Compositing (Blending Buffers):**
+    *   As the recursive `Render()` calls return up the tree, each parent component blends its children's completed buffers onto its own.
+    *   A `Panel` will blend the buffer of its child `Button` at the button's relative X/Y coordinates.
+    *   This continues until all panels have been blended onto the main `Screen`'s buffer.
+
+5.  **Final Screen Composition:**
+    *   The `TuiEngine` blends the final buffer from the `Screen` (and any active `Dialog`) onto the master `CompositorBuffer`.
+
+6.  **Optimized Console Output (`Render-CompositorToConsole`):**
+    *   The engine now compares the newly rendered `CompositorBuffer` with the `FrontBuffer` (which represents what is currently visible on the console).
+    *   It builds a string of ANSI escape codes that **only** contains instructions to move the cursor and change the characters/colors for the cells that have actually changed.
+    *   This minimal set of instructions is written to the console, resulting in a fast, flicker-free update.
+
+---
+
+### 4. Suggestions for Stabilization and Improvement
+
+The architecture is robust but has some areas that need attention to be considered fully stable and complete.
+
+1.  **Complete the `DataTableComponent` Rendering:**
+    *   **Problem:** The `_RenderContent` method in `DataTableComponent` is currently a placeholder. The complex rendering logic is commented out and needs to be ported to the new buffer system.
+    *   **Suggestion:** Implement the `OnRender` method. It should iterate through the processed data rows and columns, calculating positions, and use `Write-TuiText` to draw the content into the component's `_private_buffer`. This will involve managing scroll offsets and cell alignment within the buffer, similar to how the `Table` component works but with more advanced features.
+
+2.  **Solidify Focus Management:**
+    *   **Problem:** The focus system relies on a global `Get-FocusedComponent` function and a `LastFocusedComponent` property on the screen. This can become brittle.
+    *   **Suggestion:** Implement a dedicated `FocusManager` service or enhance the `Panel` class to manage focus for its own children. A `Panel` could have a `MoveFocusToNextChild()` method. This would create a more predictable and hierarchical tab order. This also makes it easier to handle focus within temporarily overlaid elements like dialogs.
+
+3.  **Deprecate and Remove Legacy Code Paths:**
+    *   **Problem:** The `TuiEngine` and other parts of the code contain checks like `if ($component -is [UIElement])` versus `elseif ($component.HandleInput)`. This adds complexity and slows down execution.
+    *   **Suggestion:** Now that Phase 1 and 2 are complete and all components are class-based, plan to remove all legacy code paths that handle functional/hashtable components. This will simplify the engine and improve performance.
+
+4.  **Centralize Theme and Color Management:**
+    *   **Problem:** Colors are sometimes hard-coded (e.g., `[ConsoleColor]::Yellow`). The `Get-ThemeColor` function exists but is not used everywhere.
+    *   **Suggestion:** Strictly enforce the use of `Get-ThemeColor` for all color definitions. Add more semantic color names to the themes in `theme-manager.psm1` (e.g., `Button.Border.Focused`, `Table.Header.Foreground`) to allow for more granular theming and remove all hard-coded `[ConsoleColor]` values from components.
+
+5.  **Expand and Automate Testing:**
+    *   **Problem:** The `tui-validation.psm1` file provides a good foundation for testing, but it's not integrated into an automated workflow.
+    *   **Suggestion:** Create a master test script that uses `Test-TuiComponent` for every UI component. For each one, create a "golden" snapshot of its expected output. The test script can then automatically run, render each component, and compare the new snapshot against the golden one to immediately catch any visual regressions.
