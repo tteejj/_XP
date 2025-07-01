@@ -1,11 +1,10 @@
 # Advanced Input Components - Phase 2 Migration Complete
 # All components now inherit from UIElement and use buffer-based rendering
 
-using module ..\components\tui-primitives.psm1
-using module ..\components\ui-classes.psm1
-using module ..\modules\logger.psm1
-using module ..\modules\exceptions.psm1
-using module ..\layout\panels-class.psm1
+#using module '.\components\tui-primitives.psm1'
+#using module '.\components\ui-classes.psm1'
+#using module '..\modules\logger.psm1'
+#using module '..\modules\exceptions.psm1'
 
 #region Advanced Input Classes
 

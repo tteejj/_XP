@@ -1,10 +1,11 @@
 # TUI Engine v5.1 - NCurses Compositor Edition
 # Implements NCurses-style compositor with private buffers and TuiCell rendering
 
-using module .\components\tui-primitives.psm1
-using module .\logger.psm1
-using module .\event-system.psm1
-using module .\exceptions.psm1
+#using module '..\components\tui-primitives.psm1'
+#using module '.\logger.psm1'
+#using module '.\event-system.psm1'
+#using module '.\exceptions.psm1'
+#using module '.\dialog-system-class.psm1'
 
 #region Core TUI State
 $global:TuiState = @{
@@ -69,6 +70,11 @@ function Initialize-TuiEngine {
         $global:TuiState.EventHandlers = @{}
         [Console]::TreatControlCAsInput = $false
         
+        # AI: FIX - Subscribe to refresh requests to decouple dialog system
+        Subscribe-Event -EventName "TUI.RefreshRequested" -Handler {
+            Request-TuiRefresh
+        } -Source "TuiEngine"
+
         Initialize-InputThread
         
         Publish-Event -EventName "System.EngineInitialized" -Data @{ Width = $Width; Height = $Height; CompositorMode = $global:TuiState.CompositorMode }

@@ -2,9 +2,9 @@
 # PURPOSE: Provides theming and color management for the TUI.
 #
 
-using module .\logger.psm1
-using module .\event-system.psm1
-using module .\exceptions.psm1
+#using module '.\logger.psm1'
+#using module '.\event-system.psm1'
+#using module '.\exceptions.psm1'
 
 $script:CurrentTheme = $null
 $script:Themes = @{

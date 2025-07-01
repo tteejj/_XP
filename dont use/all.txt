@@ -4,10 +4,9 @@
 
 using namespace System.Text
 using namespace System.Management.Automation
-using module ..\components\tui-primitives.psm1
-using module ..\components\ui-classes.psm1
-using module ..\modules\logger.psm1
-using module ..\layout\panels-class.psm1
+using module '.\components\tui-primitives.psm1'
+using module '.\components\ui-classes.psm1'
+using module '..\modules\logger.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -265,11 +264,10 @@ Export-ModuleMember -Function 'New-TuiTable'
 # Advanced Input Components - Phase 2 Migration Complete
 # All components now inherit from UIElement and use buffer-based rendering
 
-using module ..\components\tui-primitives.psm1
-using module ..\components\ui-classes.psm1
-using module ..\modules\logger.psm1
-using module ..\modules\exceptions.psm1
-using module ..\layout\panels-class.psm1
+using module '.\components\tui-primitives.psm1'
+using module '.\components\ui-classes.psm1'
+using module '..\modules\logger.psm1'
+using module '..\modules\exceptions.psm1'
 
 #region Advanced Input Classes
 
@@ -1086,11 +1084,10 @@ Export-ModuleMember -Function 'New-TuiMultilineTextBox', 'New-TuiNumericInput', 
 # Phase 1 Migration Complete - Proper UIElement inheritance and Panel integration
 
 using namespace System.Management.Automation
-using module .\tui-primitives.psm1
-using module .\ui-classes.psm1
-using module ..\modules\exceptions.psm1
-using module ..\modules\logger.psm1
-using module ..\layout\panels-class.psm1
+using module '.\tui-primitives.psm1'
+using module '.\ui-classes.psm1'
+using module '..\modules\exceptions.psm1'
+using module '..\modules\logger.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -1409,13 +1406,14 @@ Export-ModuleMember -Function @()
 
 
 ####\components\tui-components.psm1
+####\components\tui-components.psm1
 # TUI Component Library - Phase 1 Migration Complete
 # All components now inherit from UIElement and use buffer-based rendering
 
-using module .\ui-classes.psm1
-using module ..\layout\panels-class.psm1
-using module ..\modules\exceptions.psm1
-using module ..\modules\logger.psm1
+using module '.\tui-primitives.psm1'
+using module '.\ui-classes.psm1'
+using module '..\modules\exceptions.psm1'
+using module '..\modules\logger.psm1'
 
 #region Core UI Components
 
@@ -1556,7 +1554,8 @@ class TextBoxComponent : UIElement {
             if ($this.IsFocused -and ($this.CursorPosition -le $displayText.Length)) {
                 $cursorX = 1 + $this.CursorPosition
                 # Only draw cursor if it's within the visible area
-                if ($cursorX < ($this.Width - 1)) {
+                # AI: FIX - Changed '<' to '-lt' to avoid PowerShell parser ambiguity
+                if ($cursorX -lt ($this.Width - 1)) {
                     Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" -ForegroundColor [ConsoleColor]::Yellow
                 }
             }
@@ -2260,6 +2259,8 @@ using namespace System.Text
 using namespace System.Management.Automation
 using module '.\tui-primitives.psm1'
 using module '..\modules\exceptions.psm1'
+using module '..\modules\logger.psm1'
+using module '..\modules\event-system.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -2543,6 +2544,7 @@ class Screen : UIElement {
 }
 
 
+
 ####\layout\panels-class.psm1
 # Panel Classes v5.1 - NCurses Compositor Foundation
 # Provides Panel base class for layout management
@@ -2550,8 +2552,8 @@ class Screen : UIElement {
 # Import TUI primitives and base classes
 using namespace System
 using namespace System.Management.Automation
-using module ..\components\tui-primitives.psm1
-using module ..\components\ui-classes.psm1
+using module '..\components\tui-primitives.psm1'
+using module '..\components\ui-classes.psm1'
 
 #region Panel Class - Basic Layout Container
 class Panel : UIElement {
@@ -3089,10 +3091,15 @@ Export-ModuleMember -Function @()
 
 
 ####\modules\data-manager.psm1
+####\modules\data-manager.psm1
 # Data Manager Module
 # Unified data persistence and CRUD operations with event integration
 
-using module ..\modules\models.psm1
+# AI: FIX - Corrected relative paths for all dependencies.
+using module '.\models.psm1'
+using module '.\logger.psm1'
+using module '.\event-system.psm1'
+using module '.\exceptions.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -3383,8 +3390,12 @@ class DataManager {
         return Add-PmcTask -Title $Title -Description $Description -Priority $Priority -Category $ProjectKey 
     }
 
-    [PmcTask] UpdateTask([PmcTask]$Task, [string]$Title) {
-        return Update-PmcTask -Task $Task -Title $Title
+    # AI: FIX - Changed method to accept a hashtable for flexible updates via splatting.
+    [PmcTask] UpdateTask([hashtable]$UpdateParameters) {
+        if (-not $UpdateParameters.ContainsKey('Task')) {
+            throw [System.ArgumentException]::new("The 'UpdateParameters' hashtable must contain a 'Task' key with the task object to update.")
+        }
+        return Update-PmcTask @UpdateParameters
     }
     
     [void] RemoveTask([PmcTask]$Task) {
@@ -3425,10 +3436,11 @@ Export-ModuleMember -Function 'Initialize-DataManager', 'Add-PmcTask', 'Update-P
 # ==============================================================================
 
 using namespace System.Management.Automation
-using module ..\components\ui-classes.psm1
-using module ..\components\tui-primitives.psm1
-using module ..\modules\exceptions.psm1
-using module ..\modules\logger.psm1
+using module '..\components\ui-classes.psm1'
+using module '..\components\tui-primitives.psm1'
+using module '.\exceptions.psm1'
+using module '.\logger.psm1'
+using module '.\event-system.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -3448,18 +3460,14 @@ class Dialog : UIElement {
     }
     
     [void] Show() {
-        # Calculate centered position
         $this.X = [Math]::Floor(($global:TuiState.BufferWidth - $this.Width) / 2)
         $this.Y = [Math]::Floor(($global:TuiState.BufferHeight - $this.Height) / 2)
-        
-        # Initialize buffer with correct size
         if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
             $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
         }
-        
-        # Register with dialog manager
         $script:DialogState.CurrentDialog = $this
-        & (Get-Module tui-engine) { Request-TuiRefresh }
+        # AI: FIX - Changed to event-based refresh to break circular dependency
+        Publish-Event -EventName "TUI.RefreshRequested"
     }
     
     [void] Close() {
@@ -3467,36 +3475,22 @@ class Dialog : UIElement {
         if ($script:DialogState.DialogStack.Count -gt 0) {
             $script:DialogState.CurrentDialog = $script:DialogState.DialogStack.Pop()
         }
-        & (Get-Module tui-engine) { Request-TuiRefresh }
+        # AI: FIX - Changed to event-based refresh to break circular dependency
+        Publish-Event -EventName "TUI.RefreshRequested"
     }
     
-    # Implement OnRender for new architecture
     [void] OnRender() {
         if ($null -eq $this._private_buffer) { return }
-        
-        # Clear buffer
-        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
-        $this._private_buffer.Clear($bgCell)
-        
-        # Draw dialog box
+        $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
         Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
             -BorderStyle "Single" -BorderColor $this.BorderColor -BackgroundColor [ConsoleColor]::Black -Title $this.Title
-        
-        # Draw message if present
-        if (-not [string]::IsNullOrWhiteSpace($this.Message)) {
-            $this.RenderMessage()
-        }
-        
-        # Let derived classes render their specific content
+        if (-not [string]::IsNullOrWhiteSpace($this.Message)) { $this.RenderMessage() }
         $this.RenderDialogContent()
     }
     
     hidden [void] RenderMessage() {
-        $messageY = 2
-        $messageX = 2
-        $maxWidth = $this.Width - 4
-        
-        $wrappedLines = & (Get-Module tui-engine) { Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth }
+        $messageY = 2; $messageX = 2; $maxWidth = $this.Width - 4
+        $wrappedLines = Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth
         foreach ($line in $wrappedLines) {
             if ($messageY -ge ($this.Height - 3)) { break }
             Write-TuiText -Buffer $this._private_buffer -X $messageX -Y $messageY -Text $line -ForegroundColor $this.MessageColor
@@ -3504,295 +3498,191 @@ class Dialog : UIElement {
         }
     }
     
-    # Virtual method for derived classes
     [void] RenderDialogContent() { }
     
-    # Base input handling - ESC closes dialog
     [bool] HandleInput([ConsoleKeyInfo]$key) {
-        if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.OnCancel()
-            return $true
-        }
+        if ($key.Key -eq [ConsoleKey]::Escape) { $this.OnCancel(); return $true }
         return $false
     }
     
-    # Virtual methods for derived classes
     [void] OnConfirm() { $this.Close() }
     [void] OnCancel() { $this.Close() }
 }
 
-# Alert Dialog - Simple OK dialog
 class AlertDialog : Dialog {
     [string] $ButtonText = "OK"
-    
     AlertDialog([string]$title, [string]$message) : base("AlertDialog") {
-        $this.Title = $title
-        $this.Message = $message
-        $this.Height = 10
+        $this.Title = $title; $this.Message = $message; $this.Height = 10
         $this.Width = [Math]::Min(80, [Math]::Max(40, $message.Length + 10))
     }
-    
     [void] RenderDialogContent() {
-        # Render OK button
-        $buttonY = $this.Height - 2
-        $buttonLabel = "[ $($this.ButtonText) ]"
+        $buttonY = $this.Height - 2; $buttonLabel = "[ $($this.ButtonText) ]"
         $buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
-        
         Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor ([ConsoleColor]::Yellow)
     }
-    
     [bool] HandleInput([ConsoleKeyInfo]$key) {
-        switch ($key.Key) {
-            ([ConsoleKey]::Enter) { $this.OnConfirm(); return $true }
-            ([ConsoleKey]::Spacebar) { $this.OnConfirm(); return $true }
-            ([ConsoleKey]::Escape) { $this.OnCancel(); return $true }
-        }
-        return $false
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) { $this.OnConfirm(); return $true }
+        return ([Dialog]$this).HandleInput($key)
     }
 }
 
-# Confirm Dialog - Yes/No dialog
 class ConfirmDialog : Dialog {
-    [scriptblock] $OnConfirmAction
-    [scriptblock] $OnCancelAction
-    [string[]] $Buttons = @("Yes", "No")
-    [int] $SelectedButton = 0
-    
+    [scriptblock] $OnConfirmAction; [scriptblock] $OnCancelAction
+    [string[]] $Buttons = @("Yes", "No"); [int] $SelectedButton = 0
     ConfirmDialog([string]$title, [string]$message, [scriptblock]$onConfirm, [scriptblock]$onCancel) : base("ConfirmDialog") {
-        $this.Title = $title
-        $this.Message = $message
-        $this.OnConfirmAction = $onConfirm
-        $this.OnCancelAction = $onCancel
-        $this.Width = [Math]::Min(80, [Math]::Max(50, $message.Length + 10))
-        $this.Height = 10
+        $this.Title = $title; $this.Message = $message; $this.OnConfirmAction = $onConfirm; $this.OnCancelAction = $onCancel
+        $this.Width = [Math]::Min(80, [Math]::Max(50, $message.Length + 10)); $this.Height = 10
     }
-    
     [void] RenderDialogContent() {
-        # Render buttons
-        $buttonY = $this.Height - 3
-        $totalButtonWidth = ($this.Buttons.Count * 12) + (($this.Buttons.Count - 1) * 2)
+        $buttonY = $this.Height - 3; $totalButtonWidth = ($this.Buttons.Count * 12) + (($this.Buttons.Count - 1) * 2)
         $buttonX = [Math]::Floor(($this.Width - $totalButtonWidth) / 2)
-        
         for ($i = 0; $i -lt $this.Buttons.Count; $i++) {
-            $button = $this.Buttons[$i]
             $isSelected = ($i -eq $this.SelectedButton)
-            $buttonLabel = if ($isSelected) { "[ $button ]" } else { "  $button  " }
+            $buttonLabel = if ($isSelected) { "[ $($this.Buttons[$i]) ]" } else { "  $($this.Buttons[$i])  " }
             $color = if ($isSelected) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
-            
             Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor $color
             $buttonX += 14
         }
     }
-    
     [bool] HandleInput([ConsoleKeyInfo]$key) {
         switch ($key.Key) {
-            ([ConsoleKey]::LeftArrow) { 
-                $this.SelectedButton = [Math]::Max(0, $this.SelectedButton - 1)
-                $this.RequestRedraw()
-                return $true
-            }
-            ([ConsoleKey]::RightArrow) { 
-                $this.SelectedButton = [Math]::Min($this.Buttons.Count - 1, $this.SelectedButton + 1)
-                $this.RequestRedraw()
-                return $true
-            }
-            ([ConsoleKey]::Tab) { 
-                $this.SelectedButton = ($this.SelectedButton + 1) % $this.Buttons.Count
-                $this.RequestRedraw()
-                return $true
-            }
-            ([ConsoleKey]::Enter) { 
-                if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }
-                return $true
-            }
-            ([ConsoleKey]::Spacebar) { 
-                if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }
-                return $true
-            }
-            ([ConsoleKey]::Escape) { 
-                $this.OnCancel()
-                return $true
-            }
+            ([ConsoleKey]::LeftArrow) { $this.SelectedButton = [Math]::Max(0, $this.SelectedButton - 1); $this.RequestRedraw(); return $true }
+            ([ConsoleKey]::RightArrow) { $this.SelectedButton = [Math]::Min($this.Buttons.Count - 1, $this.SelectedButton + 1); $this.RequestRedraw(); return $true }
+            ([ConsoleKey]::Tab) { $this.SelectedButton = ($this.SelectedButton + 1) % $this.Buttons.Count; $this.RequestRedraw(); return $true }
+            ([ConsoleKey]::Enter) { if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }; return $true }
+            ([ConsoleKey]::Spacebar) { if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }; return $true }
         }
-        return $false
+        return ([Dialog]$this).HandleInput($key)
     }
-    
-    [void] OnConfirm() {
-        $this.Close()
-        if ($this.OnConfirmAction) {
-            Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnConfirm" -ScriptBlock $this.OnConfirmAction
-        }
-    }
-    
-    [void] OnCancel() {
-        $this.Close()
-        if ($this.OnCancelAction) {
-            Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction
-        }
-    }
+    [void] OnConfirm() { $this.Close(); if ($this.OnConfirmAction) { Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnConfirm" -ScriptBlock $this.OnConfirmAction } }
+    [void] OnCancel() { $this.Close(); if ($this.OnCancelAction) { Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction } }
 }
 
-# Input Dialog - Text input dialog
 class InputDialog : Dialog {
     [string] $Prompt = ""
     [string] $InputValue = ""
-    [string] $DefaultValue = ""
+    [int] $CursorPosition = 0
     [scriptblock] $OnSubmitAction
     [scriptblock] $OnCancelAction
-    [int] $FocusedElement = 0  # 0=TextBox, 1=OK, 2=Cancel
-    [int] $CursorPosition = 0
     
     InputDialog([string]$title, [string]$prompt, [scriptblock]$onSubmit, [scriptblock]$onCancel) : base("InputDialog") {
         $this.Title = $title
         $this.Prompt = $prompt
         $this.OnSubmitAction = $onSubmit
         $this.OnCancelAction = $onCancel
-        $this.Width = [Math]::Min(70, [Math]::Max(50, $prompt.Length + 10))
-        $this.Height = 10
-    }
-    
-    [void] RenderDialogContent() {
-        # Render prompt
-        $promptX = 2
-        $promptY = 2
-        Write-TuiText -Buffer $this._private_buffer -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor ([ConsoleColor]::White)
-        
-        # Render input box
-        $inputY = $promptY + 2
-        $inputWidth = $this.Width - 4
-        $isFocused = ($this.FocusedElement -eq 0)
-        $borderColor = if ($isFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::DarkGray }
-        
-        Write-TuiBox -Buffer $this._private_buffer -X $promptX -Y $inputY -Width $inputWidth -Height 3 -BorderColor $borderColor
-        
-        # Render input text
-        $displayText = $this.InputValue
-        if ($displayText.Length -gt ($inputWidth - 3)) {
-            $displayText = $displayText.Substring(0, $inputWidth - 3)
-        }
-        Write-TuiText -Buffer $this._private_buffer -X ($promptX + 1) -Y ($inputY + 1) -Text $displayText -ForegroundColor ([ConsoleColor]::White)
-        
-        # Show cursor when focused
-        if ($isFocused -and $this.CursorPosition -le $displayText.Length) {
-            Write-TuiText -Buffer $this._private_buffer -X ($promptX + 1 + $this.CursorPosition) -Y ($inputY + 1) `
-                -Text "_" -ForegroundColor ([ConsoleColor]::Yellow)
-        }
-        
-        # Render buttons
-        $buttonY = $this.Height - 2
-        $buttonSpacing = 15
-        $buttonsWidth = $buttonSpacing * 2
-        $buttonX = [Math]::Floor(($this.Width - $buttonsWidth) / 2)
-        
-        # OK button
-        $okFocused = ($this.FocusedElement -eq 1)
-        $okText = if ($okFocused) { "[ OK ]" } else { "  OK  " }
-        $okColor = if ($okFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
-        Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $okText -ForegroundColor $okColor
-        
-        # Cancel button
-        $cancelFocused = ($this.FocusedElement -eq 2)
-        $cancelText = if ($cancelFocused) { "[ Cancel ]" } else { "  Cancel  " }
-        $cancelColor = if ($cancelFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
-        Write-TuiText -Buffer $this._private_buffer -X ($buttonX + $buttonSpacing) -Y $buttonY -Text $cancelText -ForegroundColor $cancelColor
-    }
-    
-    [bool] HandleInput([ConsoleKeyInfo]$key) {
-        switch ($key.Key) {
-            ([ConsoleKey]::Tab) {
-                $direction = if ($key.Modifiers -band [ConsoleModifiers]::Shift) { -1 } else { 1 }
-                $this.FocusedElement = ($this.FocusedElement + $direction + 3) % 3
-                $this.RequestRedraw()
-                return $true
-            }
-            ([ConsoleKey]::Escape) { 
-                $this.OnCancel()
-                return $true
-            }
-            default {
-                switch ($this.FocusedElement) {
-                    0 { # TextBox
-                        switch ($key.Key) {
-                            ([ConsoleKey]::Enter) { 
-                                $this.OnConfirm()
-                                return $true
-                            }
-                            ([ConsoleKey]::Backspace) {
-                                if ($this.InputValue.Length -gt 0 -and $this.CursorPosition -gt 0) {
-                                    $this.InputValue = $this.InputValue.Remove($this.CursorPosition - 1, 1)
-                                    $this.CursorPosition--
-                                    $this.RequestRedraw()
-                                }
-                                return $true
-                            }
-                            ([ConsoleKey]::Delete) {
-                                if ($this.CursorPosition -lt $this.InputValue.Length) {
-                                    $this.InputValue = $this.InputValue.Remove($this.CursorPosition, 1)
-                                    $this.RequestRedraw()
-                                }
-                                return $true
-                            }
-                            ([ConsoleKey]::LeftArrow) {
-                                $this.CursorPosition = [Math]::Max(0, $this.CursorPosition - 1)
-                                $this.RequestRedraw()
-                                return $true
-                            }
-                            ([ConsoleKey]::RightArrow) {
-                                $this.CursorPosition = [Math]::Min($this.InputValue.Length, $this.CursorPosition + 1)
-                                $this.RequestRedraw()
-                                return $true
-                            }
-                            ([ConsoleKey]::Home) {
-                                $this.CursorPosition = 0
-                                $this.RequestRedraw()
-                                return $true
-                            }
-                            ([ConsoleKey]::End) {
-                                $this.CursorPosition = $this.InputValue.Length
-                                $this.RequestRedraw()
-                                return $true
-                            }
-                            default {
-                                if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
-                                    $this.InputValue = $this.InputValue.Insert($this.CursorPosition, $key.KeyChar)
-                                    $this.CursorPosition++
-                                    $this.RequestRedraw()
-                                    return $true
-                                }
-                            }
-                        }
-                    }
-                    1 { # OK Button
-                        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-                            $this.OnConfirm()
-                            return $true
-                        }
-                    }
-                    2 { # Cancel Button
-                        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-                            $this.OnCancel()
-                            return $true
-                        }
-                    }
-                }
-            }
-        }
-        return $false
+        $this.Width = [Math]::Min(80, [Math]::Max(50, $prompt.Length + 20))
+        $this.Height = 12
     }
     
     [void] SetDefaultValue([string]$value) {
         $this.InputValue = $value
-        $this.DefaultValue = $value
         $this.CursorPosition = $value.Length
     }
     
-    [void] OnConfirm() {
+    [void] RenderDialogContent() {
+        # Render prompt
+        $promptY = 3
+        $promptX = 4
+        Write-TuiText -Buffer $this._private_buffer -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor [ConsoleColor]::White
+        
+        # Render input box
+        $inputY = 5
+        $inputX = 4
+        $inputWidth = $this.Width - 8
+        
+        # Input box border
+        Write-TuiBox -Buffer $this._private_buffer -X $inputX -Y $inputY -Width $inputWidth -Height 3 `
+            -BorderStyle "Single" -BorderColor [ConsoleColor]::DarkGray
+        
+        # Input value
+        $displayValue = $this.InputValue
+        if ($displayValue.Length -gt ($inputWidth - 3)) {
+            $displayValue = $displayValue.Substring($displayValue.Length - ($inputWidth - 3))
+        }
+        Write-TuiText -Buffer $this._private_buffer -X ($inputX + 1) -Y ($inputY + 1) -Text $displayValue `
+            -ForegroundColor [ConsoleColor]::Yellow
+        
+        # Render buttons
+        $buttonY = $this.Height - 3
+        $okLabel = "[ OK ]"
+        $cancelLabel = "[ Cancel ]"
+        $totalWidth = $okLabel.Length + $cancelLabel.Length + 4
+        $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
+        
+        Write-TuiText -Buffer $this._private_buffer -X $startX -Y $buttonY -Text $okLabel `
+            -ForegroundColor [ConsoleColor]::Green
+        Write-TuiText -Buffer $this._private_buffer -X ($startX + $okLabel.Length + 4) -Y $buttonY `
+            -Text $cancelLabel -ForegroundColor [ConsoleColor]::Gray
+    }
+    
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        switch ($key.Key) {
+            ([ConsoleKey]::Enter) {
+                $this.OnSubmit()
+                return $true
+            }
+            ([ConsoleKey]::Escape) {
+                $this.OnCancel()
+                return $true
+            }
+            ([ConsoleKey]::Backspace) {
+                if ($this.CursorPosition -gt 0) {
+                    $this.InputValue = $this.InputValue.Remove($this.CursorPosition - 1, 1)
+                    $this.CursorPosition--
+                    $this.RequestRedraw()
+                }
+                return $true
+            }
+            ([ConsoleKey]::Delete) {
+                if ($this.CursorPosition -lt $this.InputValue.Length) {
+                    $this.InputValue = $this.InputValue.Remove($this.CursorPosition, 1)
+                    $this.RequestRedraw()
+                }
+                return $true
+            }
+            ([ConsoleKey]::LeftArrow) {
+                if ($this.CursorPosition -gt 0) {
+                    $this.CursorPosition--
+                    $this.RequestRedraw()
+                }
+                return $true
+            }
+            ([ConsoleKey]::RightArrow) {
+                if ($this.CursorPosition -lt $this.InputValue.Length) {
+                    $this.CursorPosition++
+                    $this.RequestRedraw()
+                }
+                return $true
+            }
+            ([ConsoleKey]::Home) {
+                $this.CursorPosition = 0
+                $this.RequestRedraw()
+                return $true
+            }
+            ([ConsoleKey]::End) {
+                $this.CursorPosition = $this.InputValue.Length
+                $this.RequestRedraw()
+                return $true
+            }
+            default {
+                if ($key.KeyChar -and [char]::IsLetterOrDigit($key.KeyChar) -or 
+                    $key.KeyChar -in @(' ', '.', '-', '_', '@', '!', '?', ',', ';', ':', '/', '\', '(', ')', '[', ']', '{', '}')) {
+                    $this.InputValue = $this.InputValue.Insert($this.CursorPosition, $key.KeyChar)
+                    $this.CursorPosition++
+                    $this.RequestRedraw()
+                    return $true
+                }
+            }
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
+    
+    [void] OnSubmit() {
         $this.Close()
         if ($this.OnSubmitAction) {
-            $value = $this.InputValue
             Invoke-WithErrorHandling -Component "InputDialog" -Context "OnSubmit" -ScriptBlock {
-                & $this.OnSubmitAction -Value $value
-            }.GetNewClosure()
+                & $this.OnSubmitAction $this.InputValue
+            }
         }
     }
     
@@ -3804,9 +3694,9 @@ class InputDialog : Dialog {
     }
 }
 
-# Progress Dialog
 class ProgressDialog : Dialog {
     [int] $PercentComplete = 0
+    [string] $StatusText = ""
     [bool] $ShowCancel = $false
     [bool] $IsCancelled = $false
     
@@ -3814,162 +3704,200 @@ class ProgressDialog : Dialog {
         $this.Title = $title
         $this.Message = $message
         $this.Width = 60
-        $this.Height = 8
+        $this.Height = 10
     }
     
-    [void] RenderDialogContent() {
-        # Render progress bar
-        $barY = 4
-        $barWidth = $this.Width - 4
-        $filledWidth = [Math]::Floor($barWidth * ($this.PercentComplete / 100.0))
-        
-        # Draw bar background
-        Write-TuiText -Buffer $this._private_buffer -X 2 -Y $barY -Text ("─" * $barWidth) -ForegroundColor ([ConsoleColor]::DarkGray)
-        
-        # Draw filled portion
-        if ($filledWidth -gt 0) {
-            Write-TuiText -Buffer $this._private_buffer -X 2 -Y $barY -Text ("█" * $filledWidth) -ForegroundColor ([ConsoleColor]::Green)
-        }
-        
-        # Draw percentage
-        $percentText = "$($this.PercentComplete)%"
-        $percentX = [Math]::Floor(($this.Width - $percentText.Length) / 2)
-        Write-TuiText -Buffer $this._private_buffer -X $percentX -Y $barY -Text $percentText -ForegroundColor ([ConsoleColor]::White)
-        
-        # Draw cancel button if enabled
-        if ($this.ShowCancel) {
-            $buttonY = $this.Height - 2
-            $buttonLabel = if ($this.IsCancelled) { "[ Cancelling... ]" } else { "[ Cancel ]" }
-            $buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
-            Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor ([ConsoleColor]::Yellow)
-        }
-    }
-    
-    [void] UpdateProgress([int]$percent, [string]$message) {
-        $this.PercentComplete = [Math]::Min(100, [Math]::Max(0, $percent))
-        if (-not [string]::IsNullOrWhiteSpace($message)) {
-            $this.Message = $message
-        }
+    [void] UpdateProgress([int]$percent, [string]$status = "") {
+        $this.PercentComplete = [Math]::Max(0, [Math]::Min(100, $percent))
+        if ($status) { $this.StatusText = $status }
         $this.RequestRedraw()
     }
     
-    [bool] HandleInput([ConsoleKeyInfo]$key) {
-        if ($this.ShowCancel -and -not $this.IsCancelled) {
-            if ($key.Key -in @([ConsoleKey]::Escape, [ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-                $this.IsCancelled = $true
-                $this.RequestRedraw()
-                return $true
+    [void] RenderDialogContent() {
+        # Progress bar
+        $barY = 4
+        $barX = 4
+        $barWidth = $this.Width - 8
+        $filledWidth = [Math]::Floor($barWidth * ($this.PercentComplete / 100.0))
+        
+        # Bar background
+        Write-TuiText -Buffer $this._private_buffer -X $barX -Y $barY `
+            -Text ('─' * $barWidth) -ForegroundColor [ConsoleColor]::DarkGray
+        
+        # Filled portion
+        if ($filledWidth -gt 0) {
+            Write-TuiText -Buffer $this._private_buffer -X $barX -Y $barY `
+                -Text ('█' * $filledWidth) -ForegroundColor [ConsoleColor]::Green
+        }
+        
+        # Percentage text
+        $percentText = "$($this.PercentComplete)%"
+        $percentX = [Math]::Floor(($this.Width - $percentText.Length) / 2)
+        Write-TuiText -Buffer $this._private_buffer -X $percentX -Y ($barY + 1) `
+            -Text $percentText -ForegroundColor [ConsoleColor]::White
+        
+        # Status text
+        if ($this.StatusText) {
+            $statusY = $barY + 3
+            $maxStatusWidth = $this.Width - 8
+            if ($this.StatusText.Length -gt $maxStatusWidth) {
+                $displayStatus = $this.StatusText.Substring(0, $maxStatusWidth - 3) + "..."
+            } else {
+                $displayStatus = $this.StatusText
             }
+            $statusX = [Math]::Floor(($this.Width - $displayStatus.Length) / 2)
+            Write-TuiText -Buffer $this._private_buffer -X $statusX -Y $statusY `
+                -Text $displayStatus -ForegroundColor [ConsoleColor]::Gray
+        }
+        
+        # Cancel button if enabled
+        if ($this.ShowCancel) {
+            $buttonY = $this.Height - 2
+            $cancelLabel = "[ Cancel ]"
+            $buttonX = [Math]::Floor(($this.Width - $cancelLabel.Length) / 2)
+            Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY `
+                -Text $cancelLabel -ForegroundColor [ConsoleColor]::Yellow
+        }
+    }
+    
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($this.ShowCancel -and $key.Key -in @([ConsoleKey]::Escape, [ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            $this.IsCancelled = $true
+            $this.Close()
+            return $true
         }
         return $false
     }
 }
 
-# List Dialog
 class ListDialog : Dialog {
+    [string] $Prompt = ""
     [string[]] $Items = @()
     [int] $SelectedIndex = 0
+    [int] $ScrollOffset = 0
+    [int] $VisibleItems = 10
     [bool] $AllowMultiple = $false
-    [System.Collections.Generic.HashSet[int]] $SelectedItems
+    [System.Collections.Generic.HashSet[int]] $SelectedIndices
     [scriptblock] $OnSelectAction
     [scriptblock] $OnCancelAction
     
     ListDialog([string]$title, [string]$prompt, [string[]]$items, [scriptblock]$onSelect, [scriptblock]$onCancel) : base("ListDialog") {
         $this.Title = $title
-        $this.Message = $prompt
+        $this.Prompt = $prompt
         $this.Items = $items
         $this.OnSelectAction = $onSelect
         $this.OnCancelAction = $onCancel
-        $this.Width = 60
-        $this.Height = [Math]::Min(20, $items.Count + 8)
-        $this.SelectedItems = [System.Collections.Generic.HashSet[int]]::new()
+        $this.SelectedIndices = [System.Collections.Generic.HashSet[int]]::new()
+        
+        # Calculate dimensions
+        $maxItemWidth = ($items | Measure-Object -Property Length -Maximum).Maximum
+        $this.Width = [Math]::Min(80, [Math]::Max(40, $maxItemWidth + 10))
+        $this.VisibleItems = [Math]::Min(10, $items.Count)
+        $this.Height = $this.VisibleItems + 8
     }
     
     [void] RenderDialogContent() {
+        # Render prompt
+        if ($this.Prompt) {
+            $promptY = 2
+            $promptX = 4
+            Write-TuiText -Buffer $this._private_buffer -X $promptX -Y $promptY `
+                -Text $this.Prompt -ForegroundColor [ConsoleColor]::White
+        }
+        
+        # List area
         $listY = 4
-        $listHeight = $this.Height - 7
-        $listWidth = $this.Width - 4
+        $listX = 4
+        $listWidth = $this.Width - 8
         
-        # Calculate visible range with scrolling
-        $startIndex = [Math]::Max(0, $this.SelectedIndex - [Math]::Floor($listHeight / 2))
-        $endIndex = [Math]::Min($this.Items.Count - 1, $startIndex + $listHeight - 1)
-        
-        # Render items
-        for ($i = $startIndex; $i -le $endIndex; $i++) {
-            $itemY = $listY + ($i - $startIndex)
+        # Render visible items
+        $endIndex = [Math]::Min($this.ScrollOffset + $this.VisibleItems, $this.Items.Count)
+        for ($i = $this.ScrollOffset; $i -lt $endIndex; $i++) {
+            $relativeY = $listY + ($i - $this.ScrollOffset)
             $item = $this.Items[$i]
             $isSelected = ($i -eq $this.SelectedIndex)
-            $isChecked = $this.SelectedItems.Contains($i)
+            $isChecked = $this.SelectedIndices.Contains($i)
             
-            $prefix = if ($this.AllowMultiple) {
-                if ($isChecked) { "[X] " } else { "[ ] " }
-            } else { "" }
-            
-            $itemText = "$prefix$item"
-            if ($itemText.Length -gt $listWidth - 2) {
-                $itemText = $itemText.Substring(0, $listWidth - 5) + "..."
+            # Truncate if too long
+            if ($item.Length -gt ($listWidth - 4)) {
+                $item = $item.Substring(0, $listWidth - 7) + "..."
             }
             
-            $bgColor = if ($isSelected) { [ConsoleColor]::White } else { [ConsoleColor]::Black }
-            $fgColor = if ($isSelected) { [ConsoleColor]::Black } else { [ConsoleColor]::Gray }
-            
-            # Clear the line first
-            Write-TuiText -Buffer $this._private_buffer -X 2 -Y $itemY -Text (" " * ($listWidth - 2)) -BackgroundColor $bgColor
-            Write-TuiText -Buffer $this._private_buffer -X 2 -Y $itemY -Text $itemText -ForegroundColor $fgColor -BackgroundColor $bgColor
-        }
-        
-        # Render scrollbar if needed
-        if ($this.Items.Count -gt $listHeight) {
-            $scrollbarX = $this.Width - 2
-            $scrollbarHeight = $listHeight
-            $thumbSize = [Math]::Max(1, [Math]::Floor($scrollbarHeight * $listHeight / $this.Items.Count))
-            $thumbPos = [Math]::Floor($scrollbarHeight * $this.SelectedIndex / $this.Items.Count)
-            
-            for ($i = 0; $i -lt $scrollbarHeight; $i++) {
-                $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { "█" } else { "│" }
-                Write-TuiText -Buffer $this._private_buffer -X $scrollbarX -Y ($listY + $i) -Text $char -ForegroundColor ([ConsoleColor]::DarkGray)
+            # Format item
+            $prefix = ""
+            if ($this.AllowMultiple) {
+                $prefix = if ($isChecked) { "[x] " } else { "[ ] " }
             }
+            $displayText = "$prefix$item"
+            
+            # Colors
+            $fg = if ($isSelected) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
+            $bg = if ($isSelected) { [ConsoleColor]::DarkGray } else { [ConsoleColor]::Black }
+            
+            # Clear line and write
+            Write-TuiText -Buffer $this._private_buffer -X $listX -Y $relativeY `
+                -Text (' ' * $listWidth) -BackgroundColor $bg
+            Write-TuiText -Buffer $this._private_buffer -X $listX -Y $relativeY `
+                -Text $displayText -ForegroundColor $fg -BackgroundColor $bg
         }
         
-        # Render buttons for multi-select
-        if ($this.AllowMultiple) {
-            $buttonY = $this.Height - 2
-            $okText = "[ OK ]"
-            $cancelText = "[ Cancel ]"
-            $buttonSpacing = 15
-            $totalWidth = 30
-            $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
-            
-            Write-TuiText -Buffer $this._private_buffer -X $startX -Y $buttonY -Text $okText -ForegroundColor ([ConsoleColor]::Green)
-            Write-TuiText -Buffer $this._private_buffer -X ($startX + $buttonSpacing) -Y $buttonY -Text $cancelText -ForegroundColor ([ConsoleColor]::Gray)
+        # Scroll indicators
+        if ($this.ScrollOffset -gt 0) {
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 5) -Y $listY `
+                -Text "▲" -ForegroundColor [ConsoleColor]::DarkGray
         }
+        if ($endIndex -lt $this.Items.Count) {
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 5) -Y ($listY + $this.VisibleItems - 1) `
+                -Text "▼" -ForegroundColor [ConsoleColor]::DarkGray
+        }
+        
+        # Instructions
+        $instructY = $this.Height - 3
+        $instructions = if ($this.AllowMultiple) { 
+            "Space: Toggle, Enter: Confirm, Esc: Cancel" 
+        } else { 
+            "Enter: Select, Esc: Cancel" 
+        }
+        $instructX = [Math]::Floor(($this.Width - $instructions.Length) / 2)
+        Write-TuiText -Buffer $this._private_buffer -X $instructX -Y $instructY `
+            -Text $instructions -ForegroundColor [ConsoleColor]::DarkGray
     }
     
     [bool] HandleInput([ConsoleKeyInfo]$key) {
         switch ($key.Key) {
             ([ConsoleKey]::UpArrow) {
-                $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - 1)
-                $this.RequestRedraw()
+                if ($this.SelectedIndex -gt 0) {
+                    $this.SelectedIndex--
+                    if ($this.SelectedIndex -lt $this.ScrollOffset) {
+                        $this.ScrollOffset = $this.SelectedIndex
+                    }
+                    $this.RequestRedraw()
+                }
                 return $true
             }
             ([ConsoleKey]::DownArrow) {
-                $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + 1)
-                $this.RequestRedraw()
+                if ($this.SelectedIndex -lt ($this.Items.Count - 1)) {
+                    $this.SelectedIndex++
+                    if ($this.SelectedIndex -ge ($this.ScrollOffset + $this.VisibleItems)) {
+                        $this.ScrollOffset = $this.SelectedIndex - $this.VisibleItems + 1
+                    }
+                    $this.RequestRedraw()
+                }
                 return $true
             }
             ([ConsoleKey]::Spacebar) {
                 if ($this.AllowMultiple) {
-                    if ($this.SelectedItems.Contains($this.SelectedIndex)) {
-                        [void]$this.SelectedItems.Remove($this.SelectedIndex)
+                    if ($this.SelectedIndices.Contains($this.SelectedIndex)) {
+                        [void]$this.SelectedIndices.Remove($this.SelectedIndex)
                     } else {
-                        [void]$this.SelectedItems.Add($this.SelectedIndex)
+                        [void]$this.SelectedIndices.Add($this.SelectedIndex)
                     }
                     $this.RequestRedraw()
                 }
                 return $true
             }
             ([ConsoleKey]::Enter) {
-                $this.OnConfirm()
+                $this.OnSelect()
                 return $true
             }
             ([ConsoleKey]::Escape) {
@@ -3980,19 +3908,22 @@ class ListDialog : Dialog {
         return $false
     }
     
-    [void] OnConfirm() {
+    [void] OnSelect() {
         $this.Close()
         if ($this.OnSelectAction) {
             if ($this.AllowMultiple) {
-                $selectedValues = @($this.SelectedItems | ForEach-Object { $this.Items[$_] })
+                $selectedItems = @()
+                foreach ($index in $this.SelectedIndices) {
+                    $selectedItems += $this.Items[$index]
+                }
                 Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock {
-                    & $this.OnSelectAction -Selected $selectedValues
-                }.GetNewClosure()
+                    & $this.OnSelectAction $selectedItems
+                }
             } else {
-                $selected = $this.Items[$this.SelectedIndex]
+                $selectedItem = $this.Items[$this.SelectedIndex]
                 Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock {
-                    & $this.OnSelectAction -Selected $selected
-                }.GetNewClosure()
+                    & $this.OnSelectAction $selectedItem
+                }
             }
         }
     }
@@ -4005,144 +3936,54 @@ class ListDialog : Dialog {
     }
 }
 
-# Dialog State Management
-$script:DialogState = @{
-    CurrentDialog = $null
-    DialogStack   = [System.Collections.Stack]::new()
+# Helper function for word wrapping
+function Get-WordWrappedLines {
+    param([string]$Text, [int]$MaxWidth)
+    
+    $lines = @()
+    $words = $Text -split '\s+'
+    $currentLine = ""
+    
+    foreach ($word in $words) {
+        if ($currentLine.Length -eq 0) {
+            $currentLine = $word
+        } elseif (($currentLine.Length + 1 + $word.Length) -le $MaxWidth) {
+            $currentLine += " " + $word
+        } else {
+            $lines += $currentLine
+            $currentLine = $word
+        }
+    }
+    
+    if ($currentLine.Length -gt 0) {
+        $lines += $currentLine
+    }
+    
+    return $lines
 }
 
-# Public API Functions
+$script:DialogState = @{ CurrentDialog = $null; DialogStack = [System.Collections.Stack]::new() }
+
 function Initialize-DialogSystem {
     Invoke-WithErrorHandling -Component "DialogSystem" -Context "Initialize" -ScriptBlock {
-        # Subscribe to dialog events
-        & (Get-Module event-system) {
-            Subscribe-Event -EventName "Confirm.Request" -Handler {
-                param($EventData)
-                $params = $EventData.Data
-                & (Get-Module dialog-system-class) {
-                    Show-ConfirmDialog -Title $params.Title -Message $params.Message `
-                        -OnConfirm $params.OnConfirm -OnCancel $params.OnCancel
-                }
-            }
-            
-            Subscribe-Event -EventName "Alert.Show" -Handler {
-                param($EventData)
-                $params = $EventData.Data
-                & (Get-Module dialog-system-class) {
-                    Show-AlertDialog -Title $params.Title -Message $params.Message
-                }
-            }
-            
-            Subscribe-Event -EventName "Input.Request" -Handler {
-                param($EventData)
-                $params = $EventData.Data
-                & (Get-Module dialog-system-class) {
-                    Show-InputDialog -Title $params.Title -Prompt $params.Prompt `
-                        -DefaultValue $params.DefaultValue -OnSubmit $params.OnSubmit -OnCancel $params.OnCancel
-                }
-            }
-        }
-        
+        Subscribe-Event -EventName "Confirm.Request" -Handler { param($EventData)
+            $params = $EventData.Data; Show-ConfirmDialog @params }
+        Subscribe-Event -EventName "Alert.Show" -Handler { param($EventData)
+            $params = $EventData.Data; Show-AlertDialog @params }
+        Subscribe-Event -EventName "Input.Request" -Handler { param($EventData)
+            $params = $EventData.Data; Show-InputDialog @params }
         Write-Log -Level Info -Message "Class-based Dialog System initialized"
     }
 }
 
-function Show-AlertDialog {
-    param(
-        [string]$Title = "Alert",
-        [string]$Message
-    )
-    
-    Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowAlertDialog" -ScriptBlock {
-        $dialog = [AlertDialog]::new($Title, $Message)
-        $dialog.Show()
-    }
-}
+function Show-AlertDialog { param([string]$Title="Alert", [string]$Message); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowAlertDialog" -ScriptBlock { ([AlertDialog]::new($Title, $Message)).Show() } }
+function Show-ConfirmDialog { param([string]$Title="Confirm", [string]$Message, [scriptblock]$OnConfirm, [scriptblock]$OnCancel={}); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowConfirmDialog" -ScriptBlock { ([ConfirmDialog]::new($Title, $Message, $OnConfirm, $OnCancel)).Show() } }
+function Show-InputDialog { param([string]$Title="Input", [string]$Prompt, [string]$DefaultValue="", [scriptblock]$OnSubmit, [scriptblock]$OnCancel={}); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowInputDialog" -ScriptBlock { $d = [InputDialog]::new($Title, $Prompt, $OnSubmit, $OnCancel); if ($DefaultValue) { $d.SetDefaultValue($DefaultValue) }; $d.Show() } }
+function Show-ProgressDialog { param([string]$Title="Progress", [string]$Message="Processing...", [int]$PercentComplete=0, [switch]$ShowCancel); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowProgressDialog" -ScriptBlock { $d = [ProgressDialog]::new($Title, $Message); $d.PercentComplete = $PercentComplete; $d.ShowCancel = $ShowCancel; $d.Show(); return $d } }
+function Show-ListDialog { param([string]$Title="Select Item", [string]$Prompt="Choose an item:", [string[]]$Items, [scriptblock]$OnSelect, [scriptblock]$OnCancel={}, [switch]$AllowMultiple); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowListDialog" -ScriptBlock { $d = [ListDialog]::new($Title, $Prompt, $Items, $OnSelect, $OnCancel); $d.AllowMultiple = $AllowMultiple; $d.Show() } }
+function Close-TuiDialog { Invoke-WithErrorHandling -Component "DialogSystem" -Context "CloseDialog" -ScriptBlock { if ($script:DialogState.CurrentDialog) { $script:DialogState.CurrentDialog.Close() } } }
 
-function Show-ConfirmDialog {
-    param(
-        [string]$Title = "Confirm",
-        [string]$Message,
-        [scriptblock]$OnConfirm,
-        [scriptblock]$OnCancel = {}
-    )
-    
-    Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowConfirmDialog" -ScriptBlock {
-        $dialog = [ConfirmDialog]::new($Title, $Message, $OnConfirm, $OnCancel)
-        $dialog.Show()
-    }
-}
-
-function Show-InputDialog {
-    param(
-        [string]$Title = "Input",
-        [string]$Prompt,
-        [string]$DefaultValue = "",
-        [scriptblock]$OnSubmit,
-        [scriptblock]$OnCancel = {}
-    )
-    
-    Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowInputDialog" -ScriptBlock {
-        $dialog = [InputDialog]::new($Title, $Prompt, $OnSubmit, $OnCancel)
-        if ($DefaultValue) {
-            $dialog.SetDefaultValue($DefaultValue)
-        }
-        $dialog.Show()
-    }
-}
-
-function Show-ProgressDialog {
-    param(
-        [string]$Title = "Progress",
-        [string]$Message = "Processing...",
-        [int]$PercentComplete = 0,
-        [switch]$ShowCancel
-    )
-    
-    Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowProgressDialog" -ScriptBlock {
-        $dialog = [ProgressDialog]::new($Title, $Message)
-        $dialog.PercentComplete = $PercentComplete
-        $dialog.ShowCancel = $ShowCancel
-        $dialog.Show()
-        return $dialog
-    }
-}
-
-function Show-ListDialog {
-    param(
-        [string]$Title = "Select Item",
-        [string]$Prompt = "Choose an item:",
-        [string[]]$Items,
-        [scriptblock]$OnSelect,
-        [scriptblock]$OnCancel = {},
-        [switch]$AllowMultiple
-    )
-    
-    Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowListDialog" -ScriptBlock {
-        $dialog = [ListDialog]::new($Title, $Prompt, $Items, $OnSelect, $OnCancel)
-        $dialog.AllowMultiple = $AllowMultiple
-        $dialog.Show()
-    }
-}
-
-function Close-TuiDialog {
-    Invoke-WithErrorHandling -Component "DialogSystem" -Context "CloseDialog" -ScriptBlock {
-        if ($script:DialogState.CurrentDialog) {
-            $script:DialogState.CurrentDialog.Close()
-        }
-    }
-}
-
-Export-ModuleMember -Function @(
-    'Initialize-DialogSystem',
-    'Show-AlertDialog',
-    'Show-ConfirmDialog', 
-    'Show-InputDialog',
-    'Show-ProgressDialog',
-    'Show-ListDialog',
-    'Close-TuiDialog'
-) -Variable @()
-
+Export-ModuleMember -Function 'Initialize-DialogSystem', 'Show-AlertDialog', 'Show-ConfirmDialog', 'Show-InputDialog', 'Show-ProgressDialog', 'Show-ListDialog', 'Close-TuiDialog'
 
 
 ####\modules\dialog-system.psm1
@@ -4152,6 +3993,10 @@ Export-ModuleMember -Function @(
 ####\modules\event-system.psm1
 # Event System Module
 # Provides pub/sub event functionality for decoupled communication
+
+# AI: FIX - Corrected relative paths for all dependencies.
+using module '.\exceptions.psm1'
+using module '.\logger.psm1'
 
 $script:EventHandlers = @{}
 $script:EventHistory = [System.Collections.Generic.List[object]]::new()
@@ -4306,7 +4151,7 @@ Export-ModuleMember -Function 'Initialize-EventSystem', 'Publish-Event', 'Subscr
 # MODULE: exceptions.psm1
 # PURPOSE: Provides custom exception types and a centralized error handling wrapper
 #
-
+using module '.\logger.psm1'
 # ------------------------------------------------------------------------------
 # Module-Scoped State Variables
 # ------------------------------------------------------------------------------
@@ -4764,6 +4609,10 @@ Export-ModuleMember -Function @() -Variable @() -Cmdlet @() -Alias @()
 # PURPOSE: Provides theming and color management for the TUI.
 #
 
+using module '.\logger.psm1'
+using module '.\event-system.psm1'
+using module '.\exceptions.psm1'
+
 $script:CurrentTheme = $null
 $script:Themes = @{
     Modern = @{ Name="Modern"; Colors=@{ Background=[ConsoleColor]::Black; Foreground=[ConsoleColor]::White; Primary=[ConsoleColor]::White; Secondary=[ConsoleColor]::Gray; Accent=[ConsoleColor]::Cyan; Success=[ConsoleColor]::Green; Warning=[ConsoleColor]::Yellow; Error=[ConsoleColor]::Red; Info=[ConsoleColor]::Blue; Header=[ConsoleColor]::Cyan; Border=[ConsoleColor]::DarkGray; Selection=[ConsoleColor]::Yellow; Highlight=[ConsoleColor]::Cyan; Subtle=[ConsoleColor]::DarkGray; Keyword=[ConsoleColor]::Blue; String=[ConsoleColor]::Green; Number=[ConsoleColor]::Magenta; Comment=[ConsoleColor]::DarkGray } }
@@ -4871,7 +4720,11 @@ Export-ModuleMember -Function 'Initialize-ThemeManager', 'Set-TuiTheme', 'Get-Th
 # TUI Engine v5.1 - NCurses Compositor Edition
 # Implements NCurses-style compositor with private buffers and TuiCell rendering
 
-using module .\components\tui-primitives.psm1
+using module '..\components\tui-primitives.psm1'
+using module '.\logger.psm1'
+using module '.\event-system.psm1'
+using module '.\exceptions.psm1'
+using module '.\dialog-system-class.psm1'
 
 #region Core TUI State
 $global:TuiState = @{
@@ -4936,6 +4789,11 @@ function Initialize-TuiEngine {
         $global:TuiState.EventHandlers = @{}
         [Console]::TreatControlCAsInput = $false
         
+        # AI: FIX - Subscribe to refresh requests to decouple dialog system
+        Subscribe-Event -EventName "TUI.RefreshRequested" -Handler {
+            Request-TuiRefresh
+        } -Source "TuiEngine"
+
         Initialize-InputThread
         
         Publish-Event -EventName "System.EngineInitialized" -Data @{ Width = $Width; Height = $Height; CompositorMode = $global:TuiState.CompositorMode }
@@ -5601,6 +5459,10 @@ Export-ModuleMember -Function 'Initialize-TuiEngine', 'Start-TuiLoop', 'Stop-Tui
 ####\modules\tui-framework.psm1
 # TUI Framework Integration Module
 # Contains utility functions for interacting with the TUI engine and components.
+# AI: FIX - Added all missing dependencies.
+using module '.\exceptions.psm1'
+using module '.\logger.psm1'
+using module '.\event-system.psm1'
 
 $script:TuiAsyncJobs = @()
 
@@ -5700,6 +5562,144 @@ function Test-TuiState {
 Export-ModuleMember -Function 'Invoke-TuiMethod', 'Initialize-TuiFramework', 'Invoke-TuiAsync', 'Get-TuiAsyncResults', 'Stop-AllTuiAsyncJobs', 'Request-TuiRefresh', 'Get-TuiState', 'Test-TuiState'
 
 
+####\PMCTerminal\PMCTerminal.psm1
+# ==============================================================================
+# PMC Terminal v5 "Helios" - Root Module Script
+# ==============================================================================
+# This file is the "RootModule" specified in the manifest (PMCTerminal.psd1).
+# The manifest handles loading all nested modules, so `using module` is not needed here.
+# All classes and functions from the nested modules are available in this scope.
+# ==============================================================================
+
+# --- Script Configuration ---
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# --- Main Application Logic ---
+function Start-PMCTerminal {
+    [CmdletBinding()]
+    param()
+    
+    Invoke-WithErrorHandling -Component "Main" -Context "Main startup sequence" -ScriptBlock {
+        # --- 1. Initialize Core Systems ---
+        Write-Host "Initializing core systems..." -ForegroundColor Cyan
+        Initialize-Logger
+        Write-Log -Level Info -Message "PMC Terminal v5 'Helios' startup initiated."
+        
+        Initialize-EventSystem
+        Initialize-ThemeManager
+        Initialize-DialogSystem
+        
+        # --- 2. Initialize and Assemble Services ---
+        Write-Host "Initializing services..." -ForegroundColor Cyan
+        $services = @{
+            DataManager = Initialize-DataManager
+            Keybindings = New-KeybindingService
+        }
+        $services.Navigation = Initialize-NavigationService -Services $services
+        
+        # --- 3. CRITICAL - Register Screen Classes ---
+        Write-Host "Registering screen classes..." -ForegroundColor Cyan
+        try {
+            $services.Navigation.RegisterScreenClass("DashboardScreen", [DashboardScreen])
+            Write-Host "✓ DashboardScreen registered" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "✗ Failed to register DashboardScreen: $_" -ForegroundColor Red
+            throw
+        }
+        
+        try {
+            $services.Navigation.RegisterScreenClass("TaskListScreen", [TaskListScreen])
+            Write-Host "✓ TaskListScreen registered" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "⚠ TaskListScreen not available: $_" -ForegroundColor Yellow
+        }
+        
+        # Debug output
+        $services.Navigation.ListRegisteredScreens()
+        $services.Navigation.ListAvailableRoutes()
+        
+        $global:Services = $services
+        Write-Log -Level Info -Message "All services initialized and assembled."
+        
+        # --- 4. Initialize TUI Engine and Navigate ---
+        Write-Host "Starting TUI Engine..." -ForegroundColor Green
+        Clear-Host
+        
+        Initialize-TuiEngine
+        
+        if (-not $global:TuiState) {
+            throw "TUI Engine failed to initialize - global state is null"
+        }
+        Write-Host "✓ TUI Engine initialized: $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)" -ForegroundColor Green
+        
+        $startPath = if ($args -contains "-start" -and ($args.IndexOf("-start") + 1) -lt $args.Count) {
+            $args[$args.IndexOf("-start") + 1]
+        } else {
+            "/dashboard"
+        }
+        
+        if (-not $services.Navigation.IsValidRoute($startPath)) {
+            Write-Log -Level Warning -Message "Startup path '$startPath' is not valid. Defaulting to /dashboard."
+            $startPath = "/dashboard"
+        }
+        
+        Write-Host "Navigating to: $startPath" -ForegroundColor Cyan
+        $services.Navigation.GoTo($startPath, @{})
+        
+        if (-not $global:TuiState.CurrentScreen) {
+            throw "Failed to navigate to $startPath - no current screen set"
+        }
+        Write-Host "✓ Successfully navigated to: $startPath" -ForegroundColor Green
+        Write-Host "✓ Current screen: $($global:TuiState.CurrentScreen.Name)" -ForegroundColor Green
+        
+        # --- 5. Start the Main Loop ---
+        Write-Host "Starting main TUI loop... (Press ESC to exit)" -ForegroundColor Yellow
+        Start-TuiLoop
+        
+        Write-Log -Level Info -Message "PMC Terminal exited gracefully."
+    }
+}
+
+# --- Main Execution Block ---
+# This block runs when the module is imported directly (e.g., by the main script).
+try {
+    # The function is defined above and exported by the manifest.
+    Start-PMCTerminal
+}
+catch {
+    $errorMessage = "A fatal, unhandled exception occurred: $($_.Exception.Message)"
+    Write-Host "`n$errorMessage" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
+    
+    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+        Write-Log -Level Fatal -Message $errorMessage -Data @{ Exception = $_.Exception; Stack = $_.ScriptStackTrace } -Force
+    }
+    
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+finally {
+    if ($global:Services -and $global:Services.DataManager) {
+        try {
+            $global:Services.DataManager.SaveData()
+            if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+                Write-Log -Level Info -Message "Data saved on exit." -Force
+            }
+        }
+        catch {
+            Write-Warning "Failed to save data on exit: $_"
+        }
+    }
+    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+        Write-Log -Level Info -Message "Application shutdown complete." -Force
+    }
+}
+
+
+####\screens\dashboard\dashboard-screen.psm1
 ####\screens\dashboard\dashboard-screen.psm1
 # ==============================================================================
 # PMC Terminal v5 - NCurses Dashboard Screen
@@ -5710,8 +5710,10 @@ Export-ModuleMember -Function 'Invoke-TuiMethod', 'Initialize-TuiFramework', 'In
 using module '..\..\components\tui-primitives.psm1'
 using module '..\..\layout\panels-class.psm1'
 using module '..\..\components\navigation-class.psm1'
-using module '..\..\components\advanced-data-components.psm1'
 using module '..\..\modules\models.psm1'
+using module '..\..\components\ui-classes.psm1'
+using module '..\..\modules\logger.psm1'
+using module '..\..\modules\exceptions.psm1'
 
 class DashboardScreen : UIElement {
     # --- Core Architecture ---
@@ -5917,9 +5919,10 @@ class DashboardScreen : UIElement {
             "System Information",
             "════════════════════",
             "",
-            "PowerShell Version: $($PSVersionTable.PSVersion)",
-            "Platform:           $($PSVersionTable.Platform)",
-            "Memory Usage:       $(Get-MemoryUsage)",
+            # AI: FIX - Use $global scope for automatic variables inside class methods
+            "PowerShell Version: $($global:PSVersionTable.PSVersion)",
+            "Platform:           $($global:PSVersionTable.Platform)",
+            "Memory Usage:       $($this.GetMemoryUsage())",
             "Current Time:       $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         )
         
@@ -5942,7 +5945,8 @@ class DashboardScreen : UIElement {
 
     hidden [string] GetMemoryUsage() {
         try {
-            $process = Get-Process -Id $PID
+            # AI: FIX - Use $global scope for automatic variables inside class methods
+            $process = Get-Process -Id $global:PID
             $memoryMB = [Math]::Round($process.WorkingSet64 / 1MB, 2)
             return "$memoryMB MB"
         } catch {
@@ -6078,7 +6082,6 @@ class DashboardScreen : UIElement {
 Export-ModuleMember -Function @() -Variable @() -Cmdlet @() -Alias @()
 
 
-
 ####\screens\task-list-screen.psm1
 # ==============================================================================
 # PMC Terminal v5 - NCurses Task List Screen
@@ -6086,12 +6089,14 @@ Export-ModuleMember -Function @() -Variable @() -Cmdlet @() -Alias @()
 # ==============================================================================
 
 # AI: PHASE 3 REFACTORED - NCurses buffer-based architecture
-using module '..\..\components\tui-primitives.psm1'
-using module '..\..\layout\panels-class.psm1'
-using module '..\..\components\advanced-data-components.psm1'
-using module '..\..\components\navigation-class.psm1'
-using module '..\..\modules\dialog-system-class.psm1'
-using module '..\..\modules\models.psm1'
+using module '..\components\tui-primitives.psm1'
+using module '..\layout\panels-class.psm1'
+using module '..\components\advanced-data-components.psm1'
+using module '..\modules\dialog-system-class.psm1'
+using module '..\modules\models.psm1'
+using module '..\components\ui-classes.psm1'
+using module '..\modules\logger.psm1'
+using module '..\modules\exceptions.psm1'
 
 class TaskListScreen : UIElement {
     # --- Core Architecture ---
@@ -6289,10 +6294,10 @@ class TaskListScreen : UIElement {
         try {
             $newCompletedStatus = $task.Status -ne [TaskStatus]::Completed
             
-            $this.Services.DataManager.UpdateTask(
-                $Task = $task,
-                $Completed = $newCompletedStatus
-            )
+            $this.Services.DataManager.UpdateTask(@{
+                Task = $task
+                Completed = $newCompletedStatus
+            })
             
             $this.RefreshData()
             $this.UpdateDisplay()
@@ -6304,7 +6309,6 @@ class TaskListScreen : UIElement {
     hidden [void] ShowNewTaskDialog() {
         Write-Log -Level Info -Message "New task dialog requested"
         
-        # AI: PHASE 3 - Implement new task creation
         $dataManager = $this.Services.DataManager
         $refreshCallback = { $this.RefreshData(); $this.UpdateDisplay() }.GetNewClosure()
         
@@ -6312,7 +6316,8 @@ class TaskListScreen : UIElement {
             Show-InputDialog -Title "New Task" -Prompt "Enter task title:" -OnSubmit {
                 param($Value)
                 if (-not [string]::IsNullOrWhiteSpace($Value)) {
-                    $newTask = $dataManager.AddTask -Title $Value -Description "" -Priority "medium" -Category "General"
+                    # AI: FIX - This now uses correct method call syntax with positional arguments.
+                    $newTask = $dataManager.AddTask($Value, "", "medium", "General")
                     Write-Log -Level Info -Message "Created new task: $($newTask.Title)"
                     & $refreshCallback
                 }
@@ -6337,7 +6342,10 @@ class TaskListScreen : UIElement {
             Show-InputDialog -Title "Edit Task" -Prompt "New title:" -DefaultValue $task.Title -OnSubmit {
                 param($Value)
                 if (-not [string]::IsNullOrWhiteSpace($Value)) {
-                    $this.Services.DataManager.UpdateTask($task, $Value)
+                    $this.Services.DataManager.UpdateTask(@{
+                        Task = $task
+                        Title = $Value
+                    })
                     & $refreshCallback
                 }
             }
@@ -6396,7 +6404,7 @@ class TaskListScreen : UIElement {
         
         # AI: PHASE 3 - Render all child components
         # Call the base class's _RenderContent which handles compositing children.
-        [super]._RenderContent()
+        ([UIElement]$this)._RenderContent()
     }
     
     # --- Lifecycle Methods ---
@@ -6424,6 +6432,10 @@ Export-ModuleMember -Function @() -Variable @() -Cmdlet @() -Alias @()
 # KeybindingService - Class-Based Implementation
 # Manages application keybindings with proper error handling and validation
 # AI: Updated with sophisticated keybinding features from R2 version
+
+# AI: FIX - Corrected relative paths for all dependencies.
+using module '..\modules\logger.psm1'
+using module '..\modules\exceptions.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -6817,7 +6829,13 @@ Export-ModuleMember -Function 'New-KeybindingService'
 # Navigation Service - Class-Based Implementation
 # Manages screen navigation, routing, and history.
 
-using module ..\components\ui-classes.psm1
+
+
+# AI: FIX - Added all necessary dependencies with correct paths.
+using module '..\components\ui-classes.psm1'
+using module '..\modules\logger.psm1'
+using module '..\modules\event-system.psm1'
+using module '..\modules\exceptions.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -7016,171 +7034,245 @@ Export-ModuleMember -Function 'Initialize-NavigationService'
 
 
 ####\_CLASSY-MAIN.ps1
-# ==============================================================================
-# PMC Terminal v5 "Helios" - Modern PowerShell 7 Main Entry Point
-# ==============================================================================
+#Requires -Version 7.0
 
-# --- Declarative Module Loading ---
-# PowerShell 7+ loads all necessary modules and their classes/functions here.
-# Order is important: dependencies must be loaded before dependents.
+# ALL 'using module' statements MUST be at the top - PowerShell requirement
+# Listed in dependency order from core to application layer
 
-# Core Services (no dependencies)
-using module '.\modules\exceptions.psm1'
-using module '.\modules\logger.psm1'
-using module '.\modules\event-system.psm1'
-using module '.\modules\theme-manager.psm1'
+# Layer 1: Core (no dependencies on other modules)
+using module .\modules\logger.psm1
+using module .\modules\exceptions.psm1
+using module .\components\tui-primitives.psm1
+using module .\modules\models.psm1
+#using module .\modules\event-system.psm1
 
-# Base Classes
-using module '.\modules\models.psm1'
-using module '.\components\tui-primitives.psm1'
-using module '.\components\ui-classes.psm1'
+# Layer 2: TUI Foundation (depends on Layer 1)
+#using module .\components\tui-primitives.psm1
+using module .\components\ui-classes.psm1
+using module .\layout\panels-class.psm1
+using module .\modules\tui-engine.psm1
 
-# Components (depend on base classes)
-using module '.\layout\panels-class.psm1'
-using module '.\components\navigation-class.psm1'
-using module '.\components\advanced-data-components.psm1'
-using module '.\components\advanced-input-components.psm1'
-using module '.\components\tui-components.psm1'
+# Layer 3: Components (depends on Layer 1 & 2)
+using module .\components\navigation-class.psm1
+using module .\components\tui-components.psm1
+using module .\components\advanced-data-components.psm1
+using module .\components\advanced-input-components.psm1
 
-# Framework & Services (depend on core services and models)
-using module '.\modules\data-manager.psm1'
-using module '.\services\keybinding-service.psm1'
-using module '.\services\navigation-service-class.psm1'
-using module '.\modules\dialog-system-class.psm1'
-using module '.\modules\tui-framework.psm1'
+# Layer 4: Services & Dialogs (depends on Layer 1, 2 & 3)
+#using module .\modules\theme-manager.psm1
+using module .\modules\data-manager.psm1
+using module .\services\keybinding-service.psm1
+using module .\modules\dialog-system-class.psm1
+using module .\services\navigation-service-class.psm1
 
-# Screens (depend on services and components) - LOAD BEFORE TUI ENGINE
-using module '.\screens\dashboard\dashboard-screen.psm1'
-using module '.\screens\task-list-screen.psm1'
+# Layer 5: Screens (depends on all layers)
+using module .\screens\dashboard\dashboard-screen.psm1
+using module .\screens\task-list-screen.psm1
 
-# Engine (loaded last, depends on many utilities)
-using module '.\modules\tui-engine.psm1'
+# NOW the regular PowerShell code begins
+param(
+    [switch]$Debug,
+    [switch]$SkipLogo
+)
 
-# --- Script Configuration ---
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+Set-Location $PSScriptRoot
+$ErrorActionPreference = 'Stop'
 
-# --- Main Application Logic ---
-function Start-PMCTerminal {
-    [CmdletBinding()]
-    param()
-    
-    Invoke-WithErrorHandling -Component "Main" -Context "Main startup sequence" -ScriptBlock {
-        # --- 1. Initialize Core Systems ---
-        Write-Host "Initializing core systems..." -ForegroundColor Cyan
-        Initialize-Logger
-        Write-Log -Level Info -Message "PMC Terminal v5 'Helios' startup initiated."
-        
-        Initialize-EventSystem
-        Initialize-ThemeManager
-        Initialize-DialogSystem
-        
-        # --- 2. Initialize and Assemble Services ---
-        Write-Host "Initializing services..." -ForegroundColor Cyan
-        $services = @{
-            DataManager = Initialize-DataManager
-            Keybindings = New-KeybindingService  # AI: Using factory function for better compatibility
-        }
-        $services.Navigation = Initialize-NavigationService -Services $services  # AI: Using factory function
-        
-        # --- 3. CRITICAL FIX - Register Screen Classes ---
-        Write-Host "Registering screen classes..." -ForegroundColor Cyan
-        try {
-            $services.Navigation.RegisterScreenClass("DashboardScreen", [DashboardScreen])
-            Write-Host "✓ DashboardScreen registered" -ForegroundColor Green
-        }
-        catch {
-            Write-Host "✗ Failed to register DashboardScreen: $_" -ForegroundColor Red
-            throw
-        }
-        
-        try {
-            $services.Navigation.RegisterScreenClass("TaskListScreen", [TaskListScreen])
-            Write-Host "✓ TaskListScreen registered" -ForegroundColor Green
-        }
-        catch {
-            Write-Host "⚠ TaskListScreen not available: $_" -ForegroundColor Yellow
-        }
-        
-        # Debug output
-        $services.Navigation.ListRegisteredScreens()
-        $services.Navigation.ListAvailableRoutes()
-        
-        $global:Services = $services
-        Write-Log -Level Info -Message "All services initialized and assembled."
-        
-        # --- 4. Initialize TUI Engine and Navigate ---
-        Write-Host "Starting TUI Engine..." -ForegroundColor Green
-        Clear-Host
-        
-        Initialize-TuiEngine
-        
-        # AI: FIX - Verify TUI state before proceeding
-        if (-not $global:TuiState) {
-            throw "TUI Engine failed to initialize - global state is null"
-        }
-        Write-Host "✓ TUI Engine initialized: $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)" -ForegroundColor Green
-        
-        $startPath = if ($args -contains "-start" -and ($args.IndexOf("-start") + 1) -lt $args.Count) {
-            $args[$args.IndexOf("-start") + 1]
-        } else {
-            "/dashboard"
-        }
-        
-        if (-not $services.Navigation.IsValidRoute($startPath)) {
-            Write-Log -Level Warning -Message "Startup path '$startPath' is not valid. Defaulting to /dashboard."
-            $startPath = "/dashboard"
-        }
-        
-        Write-Host "Navigating to: $startPath" -ForegroundColor Cyan
-        $services.Navigation.GoTo($startPath, @{})
-        
-        # AI: FIX - Verify screen was created and pushed
-        if (-not $global:TuiState.CurrentScreen) {
-            throw "Failed to navigate to $startPath - no current screen set"
-        }
-        Write-Host "✓ Successfully navigated to: $startPath" -ForegroundColor Green
-        Write-Host "✓ Current screen: $($global:TuiState.CurrentScreen.Name)" -ForegroundColor Green
-        
-        # --- 5. Start the Main Loop ---
-        Write-Host "Starting main TUI loop... (Press ESC to exit)" -ForegroundColor Yellow
-        Start-TuiLoop
-        
-        Write-Log -Level Info -Message "PMC Terminal exited gracefully."
-    }
-}
-
-# --- Main Execution Block ---
 try {
-    Start-PMCTerminal
-}
-catch {
-    $errorMessage = "A fatal, unhandled exception occurred: $($_.Exception.Message)"
-    Write-Host "`n$errorMessage" -ForegroundColor Red
-    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
+    Write-Host "`n=== PMC Terminal v5 - Starting ===" -ForegroundColor Cyan
+    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
+    Write-Host "Platform: $($PSVersionTable.Platform)" -ForegroundColor DarkGray
     
-    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
-        Write-Log -Level Fatal -Message $errorMessage -Data @{ Exception = $_.Exception; Stack = $_.ScriptStackTrace } -Force
+    # All modules are already loaded via 'using module' statements above
+    # Now we just need to initialize the services
+    
+    Write-Host "`nInitializing services..." -ForegroundColor Yellow
+    
+    # Initialize core services
+    Initialize-Logger -Level $(if ($Debug) { "Debug" } else { "Info" })
+    Initialize-EventSystem
+    Initialize-ThemeManager
+    
+    # Create service container
+    $services = @{}
+    
+    # Initialize KeybindingService (from class)
+    $keybindingService = New-KeybindingService
+    $services.KeybindingService = $keybindingService
+    
+    # Initialize DataManager
+    $dataManager = Initialize-DataManager
+    $services.DataManager = $dataManager
+    
+    # Initialize NavigationService
+    $navigationService = Initialize-NavigationService -Services $services
+    $services.Navigation = $navigationService
+    
+    # Register screen classes with navigation
+    $navigationService.RegisterScreenClass("DashboardScreen", [DashboardScreen])
+    $navigationService.RegisterScreenClass("TaskListScreen", [TaskListScreen])
+    
+    # Initialize Dialog System
+    Initialize-DialogSystem
+    
+    Write-Host "All services initialized!" -ForegroundColor Green
+    
+    if (-not $SkipLogo) {
+        Write-Host @"
+    
+    ╔═══════════════════════════════════════╗
+    ║      PMC Terminal v5.0                ║
+    ║      PowerShell Management Console    ║
+    ╚═══════════════════════════════════════╝
+    
+"@ -ForegroundColor Cyan
     }
     
-    Read-Host "Press Enter to exit"
+    # Initialize TUI Engine
+    Write-Host "Starting TUI Engine..." -ForegroundColor Yellow
+    Initialize-TuiEngine
+    
+    # Create and show dashboard
+    $dashboard = [DashboardScreen]::new($services)
+    $dashboard.Initialize()
+    
+    # Start the application
+    Push-Screen -Screen $dashboard
+    Start-TuiLoop
+    
+} catch {
+    Write-Host "`n=== FATAL ERROR ===" -ForegroundColor Red
+    Write-Host "Error: $_" -ForegroundColor Red
+    Write-Host "Stack Trace:" -ForegroundColor DarkRed
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+    
+    Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
+} finally {
+    Pop-Location -ErrorAction SilentlyContinue
+    Clear-Host
 }
-finally {
-    if ($global:Services -and $global:Services.DataManager) {
-        try {
-            $global:Services.DataManager.SaveData()
-            if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
-                Write-Log -Level Info -Message "Data saved on exit." -Force
-            }
-        }
-        catch {
-            Write-Warning "Failed to save data on exit: $_"
-        }
+
+
+####\_CLASSY-MAIN(COPY).ps1
+#Requires -Version 7.0
+
+# ALL 'using module' statements MUST be at the top - PowerShell requirement
+# Listed in dependency order from core to application layer
+
+# Layer 1: Core (no dependencies on other modules)
+using module .\modules\logger.psm1
+using module .\modules\exceptions.psm1
+using module .\modules\models.psm1
+using module .\modules\event-system.psm1
+
+# Layer 2: TUI Foundation (depends on Layer 1)
+using module .\components\tui-primitives.psm1
+using module .\components\ui-classes.psm1
+using module .\layout\panels-class.psm1
+using module .\modules\tui-engine.psm1
+
+# Layer 3: Components (depends on Layer 1 & 2)
+using module .\components\navigation-class.psm1
+using module .\components\tui-components.psm1
+using module .\components\advanced-data-components.psm1
+using module .\components\advanced-input-components.psm1
+
+# Layer 4: Services & Dialogs (depends on Layer 1, 2 & 3)
+using module .\modules\theme-manager.psm1
+using module .\modules\data-manager.psm1
+using module .\services\keybinding-service.psm1
+using module .\modules\dialog-system-class.psm1
+using module .\services\navigation-service-class.psm1
+
+# Layer 5: Screens (depends on all layers)
+using module .\screens\dashboard\dashboard-screen.psm1
+using module .\screens\task-list-screen.psm1
+
+# NOW the regular PowerShell code begins
+param(
+    [switch]$Debug,
+    [switch]$SkipLogo
+)
+
+Set-Location $PSScriptRoot
+$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "`n=== PMC Terminal v5 - Starting ===" -ForegroundColor Cyan
+    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
+    Write-Host "Platform: $($PSVersionTable.Platform)" -ForegroundColor DarkGray
+    
+    # All modules are already loaded via 'using module' statements above
+    # Now we just need to initialize the services
+    
+    Write-Host "`nInitializing services..." -ForegroundColor Yellow
+    
+    # Initialize core services
+    Initialize-Logger -Level $(if ($Debug) { "Debug" } else { "Info" })
+    Initialize-EventSystem
+    Initialize-ThemeManager
+    
+    # Create service container
+    $services = @{}
+    
+    # Initialize KeybindingService (from class)
+    $keybindingService = New-KeybindingService
+    $services.KeybindingService = $keybindingService
+    
+    # Initialize DataManager
+    $dataManager = Initialize-DataManager
+    $services.DataManager = $dataManager
+    
+    # Initialize NavigationService
+    $navigationService = Initialize-NavigationService -Services $services
+    $services.Navigation = $navigationService
+    
+    # Register screen classes with navigation
+    $navigationService.RegisterScreenClass("DashboardScreen", [DashboardScreen])
+    $navigationService.RegisterScreenClass("TaskListScreen", [TaskListScreen])
+    
+    # Initialize Dialog System
+    Initialize-DialogSystem
+    
+    Write-Host "All services initialized!" -ForegroundColor Green
+    
+    if (-not $SkipLogo) {
+        Write-Host @"
+    
+    ╔═══════════════════════════════════════╗
+    ║      PMC Terminal v5.0                ║
+    ║      PowerShell Management Console    ║
+    ╚═══════════════════════════════════════╝
+    
+"@ -ForegroundColor Cyan
     }
-    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
-        Write-Log -Level Info -Message "Application shutdown complete." -Force
-    }
+    
+    # Initialize TUI Engine
+    Write-Host "Starting TUI Engine..." -ForegroundColor Yellow
+    Initialize-TuiEngine
+    
+    # Create and show dashboard
+    $dashboard = [DashboardScreen]::new($services)
+    $dashboard.Initialize()
+    
+    # Start the application
+    Push-Screen -Screen $dashboard
+    Start-TuiLoop
+    
+} catch {
+    Write-Host "`n=== FATAL ERROR ===" -ForegroundColor Red
+    Write-Host "Error: $_" -ForegroundColor Red
+    Write-Host "Stack Trace:" -ForegroundColor DarkRed
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+    
+    Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+} finally {
+    Pop-Location -ErrorAction SilentlyContinue
+    Clear-Host
 }
 
 
@@ -7291,5 +7383,232 @@ if ($scriptFiles.Count -eq 0) {
 }
 
 Write-Host "All operations complete. Concatenated content saved to '$outputFileName'."
+
+
+####\test1.ps1
+#Requires -Version 7.0
+<#
+.SYNOPSIS
+    Analyzes and resolves module dependencies for PMC Terminal v5
+.DESCRIPTION
+    Scans all modules to build a dependency graph and determine correct loading order
+#>
+
+param(
+    [string]$ProjectRoot = $PSScriptRoot
+)
+
+class ModuleInfo {
+    [string]$Path
+    [string]$Name
+    [string[]]$Dependencies = @()
+    [string[]]$ExportedClasses = @()
+    [bool]$HasClasses = $false
+    [string]$LoadType = "Import"  # Import or Using
+    [int]$LoadOrder = -1
+}
+
+function Get-ModuleDependencies {
+    param([string]$ModulePath)
+    
+    $dependencies = @()
+    if (Test-Path $ModulePath) {
+        $content = Get-Content $ModulePath -Raw
+        
+        # Find using module statements
+        $usingPattern = 'using\s+module\s+["\']?([^"\']+)["\']?'
+        $matches = [regex]::Matches($content, $usingPattern)
+        foreach ($match in $matches) {
+            $dep = $match.Groups[1].Value
+            # Normalize path
+            $dep = $dep -replace '^\.[\\/]', '' -replace '[\\/]', '/'
+            $dependencies += $dep
+        }
+        
+        # Find Import-Module statements
+        $importPattern = 'Import-Module\s+["\']?([^"\'\s]+)["\']?'
+        $matches = [regex]::Matches($content, $importPattern)
+        foreach ($match in $matches) {
+            $dep = $match.Groups[1].Value
+            if ($dep -notmatch '^\$') {  # Ignore variable imports
+                $dep = $dep -replace '^\.[\\/]', '' -replace '[\\/]', '/'
+                $dependencies += $dep
+            }
+        }
+    }
+    
+    return $dependencies | Select-Object -Unique
+}
+
+function Get-ExportedClasses {
+    param([string]$ModulePath)
+    
+    $classes = @()
+    if (Test-Path $ModulePath) {
+        $content = Get-Content $ModulePath -Raw
+        
+        # Find class definitions
+        $classPattern = 'class\s+(\w+)'
+        $matches = [regex]::Matches($content, $classPattern)
+        foreach ($match in $matches) {
+            $classes += $match.Groups[1].Value
+        }
+    }
+    
+    return $classes
+}
+
+# Scan all modules
+Push-Location $ProjectRoot
+
+Write-Host "=== Module Dependency Analyzer ===" -ForegroundColor Cyan
+Write-Host "Scanning project for PowerShell modules...`n" -ForegroundColor Yellow
+
+$allModules = @()
+$modulePatterns = @("*.psm1", "*.psd1")
+$searchPaths = @(".", "modules", "components", "layout", "screens", "services")
+
+foreach ($path in $searchPaths) {
+    foreach ($pattern in $modulePatterns) {
+        Get-ChildItem -Path $path -Filter $pattern -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath($ProjectRoot, $_.FullName) -replace '\\', '/'
+            
+            $moduleInfo = [ModuleInfo]::new()
+            $moduleInfo.Path = $relativePath
+            $moduleInfo.Name = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+            $moduleInfo.Dependencies = Get-ModuleDependencies $_.FullName
+            $moduleInfo.ExportedClasses = Get-ExportedClasses $_.FullName
+            $moduleInfo.HasClasses = $moduleInfo.ExportedClasses.Count -gt 0
+            
+            # Determine load type
+            if ($moduleInfo.HasClasses) {
+                $moduleInfo.LoadType = "Using"
+            }
+            
+            $allModules += $moduleInfo
+        }
+    }
+}
+
+Write-Host "Found $($allModules.Count) modules`n" -ForegroundColor Green
+
+# Build dependency graph
+Write-Host "=== Dependency Analysis ===" -ForegroundColor Cyan
+
+# Topological sort to determine load order
+function Get-LoadOrder {
+    param($Modules)
+    
+    $sorted = @()
+    $visited = @{}
+    $visiting = @{}
+    
+    function Visit($module) {
+        if ($visiting[$module.Path]) {
+            Write-Warning "Circular dependency detected involving: $($module.Path)"
+            return
+        }
+        
+        if ($visited[$module.Path]) {
+            return
+        }
+        
+        $visiting[$module.Path] = $true
+        
+        # Visit dependencies first
+        foreach ($dep in $module.Dependencies) {
+            $depModule = $Modules | Where-Object { $_.Path -like "*$dep*" } | Select-Object -First 1
+            if ($depModule) {
+                Visit $depModule
+            }
+        }
+        
+        $visiting[$module.Path] = $false
+        $visited[$module.Path] = $true
+        $sorted += $module
+    }
+    
+    foreach ($module in $Modules) {
+        Visit $module
+    }
+    
+    return $sorted
+}
+
+$sortedModules = Get-LoadOrder $allModules
+
+# Assign load order
+for ($i = 0; $i -lt $sortedModules.Count; $i++) {
+    $sortedModules[$i].LoadOrder = $i + 1
+}
+
+# Display results
+Write-Host "`nRecommended Loading Order:" -ForegroundColor Green
+$sortedModules | ForEach-Object {
+    Write-Host "$($_.LoadOrder.ToString().PadLeft(2)). $($_.Path) " -NoNewline
+    Write-Host "($($_.LoadType))" -ForegroundColor DarkGray
+    
+    if ($_.Dependencies.Count -gt 0) {
+        Write-Host "    Dependencies: $($_.Dependencies -join ', ')" -ForegroundColor DarkCyan
+    }
+    
+    if ($_.ExportedClasses.Count -gt 0) {
+        Write-Host "    Exports: $($_.ExportedClasses -join ', ')" -ForegroundColor DarkYellow
+    }
+}
+
+# Generate loading script
+Write-Host "`n=== Generating Loading Script ===" -ForegroundColor Cyan
+
+$loadingScript = @"
+#Requires -Version 7.0
+# Auto-generated module loading script
+# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+
+Set-Location `$PSScriptRoot
+
+# Clear any previously loaded modules
+Get-Module -Name @('tui-*', 'pmc-*', 'event-system', 'data-manager', 'theme-manager') | Remove-Module -Force -ErrorAction SilentlyContinue
+
+`$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "Loading PMC Terminal v5 modules..." -ForegroundColor Cyan
+    
+"@
+
+foreach ($module in $sortedModules) {
+    if ($module.LoadType -eq "Using") {
+        $loadingScript += @"
+    # Load $($module.Name) (contains classes)
+    using module .\$($module.Path)
+    
+"@
+    } else {
+        $loadingScript += @"
+    # Load $($module.Name)
+    Import-Module ".\$($module.Path)" -Force
+    
+"@
+    }
+}
+
+$loadingScript += @"
+    
+    Write-Host "All modules loaded successfully!" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to load modules: `$_"
+    throw
+}
+"@
+
+# Save the loading script
+$outputPath = Join-Path $ProjectRoot "Load-AllModules.ps1"
+$loadingScript | Out-File $outputPath -Encoding UTF8
+
+Write-Host "`nGenerated loading script: $outputPath" -ForegroundColor Green
+Write-Host "Use this script to test the complete loading sequence" -ForegroundColor Yellow
+
+Pop-Location
 
 

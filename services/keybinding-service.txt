@@ -2,6 +2,10 @@
 # Manages application keybindings with proper error handling and validation
 # AI: Updated with sophisticated keybinding features from R2 version
 
+# AI: FIX - Corrected relative paths for all dependencies.
+using module '..\modules\logger.psm1'
+using module '..\modules\exceptions.psm1'
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 

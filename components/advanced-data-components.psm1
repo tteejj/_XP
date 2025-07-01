@@ -1,12 +1,11 @@
 # Advanced Data Components Module for PMC Terminal v5
 # Phase 1 Migration Complete - Enhanced data display with proper UIElement inheritance
 
-using namespace System.Text
-using namespace System.Management.Automation
-using module ..\components\tui-primitives.psm1
-using module ..\components\ui-classes.psm1
-using module ..\modules\logger.psm1
-using module ..\layout\panels-class.psm1
+#using namespace System.Text
+#using namespace System.Management.Automation
+#using module '.\components\tui-primitives.psm1'
+#using module '.\components\ui-classes.psm1'
+#using module '..\modules\logger.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

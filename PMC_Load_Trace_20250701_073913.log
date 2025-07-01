@@ -1,0 +1,28 @@
+07:39:13.495 [INFO] Clearing PowerShell module cache
+07:39:13.496 [SUCCESS] Module analysis cache cleared
+07:39:13.497 [INFO] Testing PMC Terminal environment
+07:39:13.498 [SUCCESS] Environment validation passed
+07:39:13.502 [INFO] Validating main manifest: PMCTerminal.psd1
+07:39:13.513 [SUCCESS] Manifest validated: PMCTerminal.psd1
+07:39:13.516 [INFO] Main manifest dependencies:
+07:39:13.517 [SUCCESS] Manifest validated: PMCTerminal.psd1
+07:39:13.518 [INFO] Found dependency: modules\tui-engine for PMCTerminal.psd1
+07:39:13.519 [INFO] Found dependency: screens\dashboard-screen for PMCTerminal.psd1
+07:39:13.521 [INFO] Found dependency: screens\tasks-screen for PMCTerminal.psd1
+07:39:13.521 [INFO] Found dependency: services\navigation-service-class for PMCTerminal.psd1
+07:39:13.522 [INFO] Found dependency: modules\data-manager for PMCTerminal.psd1
+07:39:13.523 [INFO]   -> modules\tui-engine
+07:39:13.524 [INFO]   -> screens\dashboard-screen
+07:39:13.525 [INFO]   -> screens\tasks-screen
+07:39:13.526 [INFO]   -> services\navigation-service-class
+07:39:13.526 [INFO]   -> modules\data-manager
+07:39:13.527 [INFO] Importing main PMC Terminal module
+07:39:13.528 [INFO] Attempting to import: PMCTerminal.psd1
+07:39:13.534 [ERROR] FAILED to import: PMCTerminal.psd1
+07:39:13.535 [ERROR] Error: The specified module 'PMCTerminal.psd1' was not loaded because no valid module file was found in any module directory.
+07:39:13.536 [ERROR] Stack trace: at Import-PMCModuleWithDebugging, C:\Users\jhnhe\Documents\GitHub\_XP\axiom.ps1: line 123
+at <ScriptBlock>, C:\Users\jhnhe\Documents\GitHub\_XP\axiom.ps1: line 246
+at <ScriptBlock>, <No file>: line 1
+07:39:13.537 [ERROR] CRITICAL ERROR: The specified module 'PMCTerminal.psd1' was not loaded because no valid module file was found in any module directory.
+07:39:13.538 [ERROR] Full exception details:
+07:39:13.538 [ERROR] System.IO.FileNotFoundException: The specified module 'PMCTerminal.psd1' was not loaded because no valid module file was found in any module directory.

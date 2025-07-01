@@ -1,27 +1,120 @@
-using module '.\PMCTerminal\PMCTerminal.psd1'
-# ==============================================================================
-# PMC Terminal v5 "Helios" - Main Entry Point
-# ==============================================================================
+#Requires -Version 7.0
 
-# Set strict mode and error preference for the entry script
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+# ALL 'using module' statements MUST be at the top - PowerShell requirement
+# Listed in dependency order from core to application layer
 
-# The manifest in PMCTerminal.psd1 handles loading all other files.
-# This single line replaces the entire previous list of `using module`.
-# It loads the entire application as a single, coherent module.
+# Layer 0: Core Primitives & Models (No internal dependencies)
+using module '.\modules\logger.psm1'
+using module '.\modules\exceptions.psm1'
+using module '.\modules\models.psm1'
+using module '.\components\tui-primitives.psm1' # Defines TuiCell, TuiBuffer
 
+# Layer 1: Foundational Systems (Depend on Layer 0)
+using module '.\modules\event-system.psm1'
+using module '.\components\ui-classes.psm1'       # Defines UIElement, Component, Screen
+using module '.\modules\theme-manager.psm1'
 
-# The execution logic (Start-PMCTerminal and the final try/catch block)
-# has been moved into the root module file (PMCTerminal.psm1).
-# When this script runs, it imports the module, which in turn automatically
-# executes the logic contained within its .psm1 file.
+# Layer 2: Layout & Core Components (Depend on Layer 1)
+using module '.\layout\panels-class.psm1'             # Defines Panel, depends on ui-classes
+using module '.\components\navigation-class.psm1'     # Defines NavigationMenu, depends on ui-classes
+using module '.\components\tui-components.psm1'       # Defines Button, Label etc., depends on ui-classes
 
-# To run the application from an interactive console, you would now type:
-#
-# C:\> Import-Module .\PMCTerminal\PMCTerminal.psd1
-# C:\> Start-PMCTerminal
-#
-# This file simply automates that process.
+# Layer 3: Advanced Components & Services (Depend on previous layers)
+using module '.\components\advanced-data-components.psm1' # Defines Table, depends on ui-classes
+using module '.\components\advanced-input-components.psm1' # Defines TextBox etc., depends on ui-classes
+using module '.\modules\data-manager.psm1'
+using module '.\services\keybinding-service.psm1'
+using module '.\modules\dialog-system-class.psm1'         # Defines Dialogs, depends on ui-classes
+using module '.\services\navigation-service-class.psm1'   # Depends on ui-classes (Screen)
 
-Write-Host "PMC Terminal module loaded. Execution is handled by the module itself." -ForegroundColor DarkGray
+# Layer 4: TUI Engine (Depends on almost everything, especially dialogs and ui-classes)
+using module '.\modules\tui-engine.psm1'
+
+# Layer 5: Application Screens (The final layer, depends on all others)
+using module '.\screens\dashboard\dashboard-screen.psm1'
+using module '.\screens\task-list-screen.psm1'
+
+# NOW the regular PowerShell code begins
+param(
+    [switch]$Debug,
+    [switch]$SkipLogo
+)
+
+Set-Location $PSScriptRoot
+$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "`n=== PMC Terminal v5 - Starting ===" -ForegroundColor Cyan
+    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
+    Write-Host "Platform: $($PSVersionTable.Platform)" -ForegroundColor DarkGray
+    
+    # All modules are already loaded via 'using module' statements above
+    # Now we just need to initialize the services
+    
+    Write-Host "`nInitializing services..." -ForegroundColor Yellow
+    
+    # Initialize core services
+    Initialize-Logger -Level $(if ($Debug) { "Debug" } else { "Info" })
+    Initialize-EventSystem
+    Initialize-ThemeManager
+    
+    # Create service container
+    $services = @{}
+    
+    # Initialize KeybindingService (from class)
+    $keybindingService = New-KeybindingService
+    $services.KeybindingService = $keybindingService
+    
+    # Initialize DataManager
+    $dataManager = Initialize-DataManager
+    $services.DataManager = $dataManager
+    
+    # Initialize NavigationService
+    $navigationService = Initialize-NavigationService -Services $services
+    $services.Navigation = $navigationService
+    
+    # Register screen classes with navigation
+    $navigationService.RegisterScreenClass("DashboardScreen", [DashboardScreen])
+    $navigationService.RegisterScreenClass("TaskListScreen", [TaskListScreen])
+    
+    # Initialize Dialog System
+    Initialize-DialogSystem
+    
+    Write-Host "All services initialized!" -ForegroundColor Green
+    
+    if (-not $SkipLogo) {
+        Write-Host @"
+    
+    ╔═══════════════════════════════════════╗
+    ║      PMC Terminal v5.0                ║
+    ║      PowerShell Management Console    ║
+    ╚═══════════════════════════════════════╝
+    
+"@ -ForegroundColor Cyan
+    }
+    
+    # Initialize TUI Engine
+    Write-Host "Starting TUI Engine..." -ForegroundColor Yellow
+    Initialize-TuiEngine
+    
+    # Create and show dashboard
+    $dashboard = [DashboardScreen]::new($services)
+    $dashboard.Initialize()
+    
+    # Start the application
+    Push-Screen -Screen $dashboard
+    Start-TuiLoop
+    
+} catch {
+    Write-Host "`n=== FATAL ERROR ===" -ForegroundColor Red
+    Write-Host "Error: $_" -ForegroundColor Red
+    Write-Host "Stack Trace:" -ForegroundColor DarkRed
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+    
+    Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+} finally {
+    Pop-Location -ErrorAction SilentlyContinue
+    Clear-Host
+}

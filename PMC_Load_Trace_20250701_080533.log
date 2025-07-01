@@ -1,0 +1,14 @@
+08:05:33.496 [INFO] Clearing PowerShell module cache
+08:05:33.498 [SUCCESS] Module analysis cache cleared
+08:05:33.498 [INFO] Testing PMC Terminal environment
+08:05:33.499 [SUCCESS] Environment validation passed
+08:05:33.500 [INFO] Reading main manifest: PMCTerminal.psd1
+08:05:33.501 [INFO] Loading required modules manually...
+08:05:33.502 [INFO] Loading dependency: .\modules\tui-engine.psd1
+08:05:33.503 [SUCCESS] Successfully loaded: .\modules\tui-engine.psd1
+08:05:33.504 [INFO] Loading dependency: .\screens\dashboard-screen.psd1
+08:05:33.514 [ERROR] Manifest validation failed:  - Cannot validate argument on parameter 'Path'. The argument is null, empty, or an element of the argument collection contains a null value. Supply a collection that does not contain any null values and then try the command again.
+08:05:33.515 [ERROR] Failed to load dependency: .\screens\dashboard-screen.psd1 - The required module 'C:\Users\jhnhe\Documents\GitHub\_XP\components\ui-classes.psd1' is not loaded. Load the module or remove the module from 'RequiredModules' in the file 'C:\Users\jhnhe\Documents\GitHub\_XP\screens\dashboard-screen.psd1'.
+08:05:33.516 [ERROR] CRITICAL ERROR: The required module 'C:\Users\jhnhe\Documents\GitHub\_XP\components\ui-classes.psd1' is not loaded. Load the module or remove the module from 'RequiredModules' in the file 'C:\Users\jhnhe\Documents\GitHub\_XP\screens\dashboard-screen.psd1'.
+08:05:33.517 [ERROR] Full exception details:
+08:05:33.518 [ERROR] System.MissingMemberException: The required module 'C:\Users\jhnhe\Documents\GitHub\_XP\components\ui-classes.psd1' is not loaded. Load the module or remove the module from 'RequiredModules' in the file 'C:\Users\jhnhe\Documents\GitHub\_XP\screens\dashboard-screen.psd1'.

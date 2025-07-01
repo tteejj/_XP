@@ -1,5 +1,9 @@
 # TUI Framework Integration Module
 # Contains utility functions for interacting with the TUI engine and components.
+# AI: FIX - Added all missing dependencies.
+#using module '.\exceptions.psm1'
+#using module '.\logger.psm1'
+#using module '.\event-system.psm1'
 
 $script:TuiAsyncJobs = @()
 

@@ -1,8 +1,8 @@
 # TUI Primitives v5.0 - NCurses Compositor Foundation
 # Provides core TuiCell class and primitive drawing operations
 
-using namespace System
-using namespace System.Management.Automation
+#using namespace System
+#using namespace System.Management.Automation
 
 #region TuiCell Class - Core Compositor Unit
 class TuiCell {

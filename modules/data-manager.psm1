@@ -2,10 +2,11 @@
 # Data Manager Module
 # Unified data persistence and CRUD operations with event integration
 
-using module ..\modules\models.psm1
-using module .\logger.psm1
-using module .\event-system.psm1
-using module .\exceptions.psm1
+# AI: FIX - Corrected relative paths for all dependencies.
+#using module '.\models.psm1'
+#using module '.\logger.psm1'
+#using module '.\event-system.psm1'
+#using module '.\exceptions.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

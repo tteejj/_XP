@@ -2,10 +2,10 @@
 # Provides Panel base class for layout management
 
 # Import TUI primitives and base classes
-using namespace System
-using namespace System.Management.Automation
-using module ..\components\tui-primitives.psm1
-using module ..\components\ui-classes.psm1
+#using namespace System
+#using namespace System.Management.Automation
+#using module '..\components\tui-primitives.psm1'
+#using module '..\components\ui-classes.psm1'
 
 #region Panel Class - Basic Layout Container
 class Panel : UIElement {

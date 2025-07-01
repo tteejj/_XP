@@ -1,0 +1,13 @@
+08:00:31.872 [INFO] Clearing PowerShell module cache
+08:00:31.873 [SUCCESS] Module analysis cache cleared
+08:00:31.873 [INFO] Testing PMC Terminal environment
+08:00:31.874 [SUCCESS] Environment validation passed
+08:00:31.875 [INFO] Reading main manifest: PMCTerminal.psd1
+08:00:31.877 [INFO] Loading required modules manually...
+08:00:31.877 [INFO] Loading dependency: .\modules\tui-engine.psd1
+08:00:31.879 [SUCCESS] Successfully loaded: .\modules\tui-engine.psd1
+08:00:31.879 [INFO] Loading dependency: .\screens\dashboard-screen.psd1
+08:00:31.888 [ERROR] Failed to load dependency: .\screens\dashboard-screen.psd1 - The 'RequiredModules' member is not valid in the module manifest file 'C:\Users\jhnhe\Documents\GitHub\_XP\screens\dashboard-screen.psd1': Cannot convert value "System.Collections.Hashtable" to type "Microsoft.PowerShell.Commands.ModuleSpecification". Error: "The parameters ModuleVersion and RequiredVersion cannot be used together. Please specify only one parameter."
+08:00:31.890 [ERROR] CRITICAL ERROR: The 'RequiredModules' member is not valid in the module manifest file 'C:\Users\jhnhe\Documents\GitHub\_XP\screens\dashboard-screen.psd1': Cannot convert value "System.Collections.Hashtable" to type "Microsoft.PowerShell.Commands.ModuleSpecification". Error: "The parameters ModuleVersion and RequiredVersion cannot be used together. Please specify only one parameter."
+08:00:31.891 [ERROR] Full exception details:
+08:00:31.892 [ERROR] System.ArgumentException: The 'RequiredModules' member is not valid in the module manifest file 'C:\Users\jhnhe\Documents\GitHub\_XP\screens\dashboard-screen.psd1': Cannot convert value "System.Collections.Hashtable" to type "Microsoft.PowerShell.Commands.ModuleSpecification". Error: "The parameters ModuleVersion and RequiredVersion cannot be used together. Please specify only one parameter."

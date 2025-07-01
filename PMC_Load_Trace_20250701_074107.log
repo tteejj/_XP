@@ -1,0 +1,28 @@
+07:41:07.169 [INFO] Clearing PowerShell module cache
+07:41:07.170 [SUCCESS] Module analysis cache cleared
+07:41:07.171 [INFO] Testing PMC Terminal environment
+07:41:07.172 [SUCCESS] Environment validation passed
+07:41:07.173 [INFO] Validating main manifest: PMCTerminal.psd1
+07:41:07.174 [SUCCESS] Manifest validated: PMCTerminal.psd1
+07:41:07.175 [INFO] Main manifest dependencies:
+07:41:07.177 [SUCCESS] Manifest validated: PMCTerminal.psd1
+07:41:07.178 [INFO] Found dependency: modules\tui-engine for PMCTerminal.psd1
+07:41:07.178 [INFO] Found dependency: screens\dashboard-screen for PMCTerminal.psd1
+07:41:07.179 [INFO] Found dependency: screens\tasks-screen for PMCTerminal.psd1
+07:41:07.180 [INFO] Found dependency: services\navigation-service-class for PMCTerminal.psd1
+07:41:07.181 [INFO] Found dependency: modules\data-manager for PMCTerminal.psd1
+07:41:07.181 [INFO]   -> modules\tui-engine
+07:41:07.182 [INFO]   -> screens\dashboard-screen
+07:41:07.183 [INFO]   -> screens\tasks-screen
+07:41:07.184 [INFO]   -> services\navigation-service-class
+07:41:07.185 [INFO]   -> modules\data-manager
+07:41:07.185 [INFO] Importing main PMC Terminal module
+07:41:07.189 [INFO] Attempting to import: .\PMCTerminal.psd1
+07:41:07.195 [ERROR] FAILED to import: .\PMCTerminal.psd1
+07:41:07.196 [ERROR] Error: The required module 'C:\Users\jhnhe\Documents\GitHub\_XP\modules\tui-engine' is not loaded. Load the module or remove the module from 'RequiredModules' in the file 'C:\Users\jhnhe\Documents\GitHub\_XP\PMCTerminal.psd1'.
+07:41:07.196 [ERROR] Stack trace: at Import-PMCModuleWithDebugging, C:\Users\jhnhe\Documents\GitHub\_XP\axiom.ps1: line 123
+at <ScriptBlock>, C:\Users\jhnhe\Documents\GitHub\_XP\axiom.ps1: line 246
+at <ScriptBlock>, <No file>: line 1
+07:41:07.198 [ERROR] CRITICAL ERROR: The required module 'C:\Users\jhnhe\Documents\GitHub\_XP\modules\tui-engine' is not loaded. Load the module or remove the module from 'RequiredModules' in the file 'C:\Users\jhnhe\Documents\GitHub\_XP\PMCTerminal.psd1'.
+07:41:07.198 [ERROR] Full exception details:
+07:41:07.201 [ERROR] System.MissingMemberException: The required module 'C:\Users\jhnhe\Documents\GitHub\_XP\modules\tui-engine' is not loaded. Load the module or remove the module from 'RequiredModules' in the file 'C:\Users\jhnhe\Documents\GitHub\_XP\PMCTerminal.psd1'.

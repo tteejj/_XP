@@ -1,0 +1,7 @@
+07:26:47.125 [INFO] Clearing PowerShell module cache
+07:26:47.147 [SUCCESS] Module analysis cache cleared
+07:26:47.148 [INFO] Testing PMC Terminal environment
+07:26:47.151 [ERROR] ERROR: Missing expected file: PMCTerminal.psd1
+07:26:47.152 [ERROR] CRITICAL ERROR: Environment validation failed. Check the trace above for details.
+07:26:47.152 [ERROR] Full exception details:
+07:26:47.154 [ERROR] System.Management.Automation.RuntimeException: Environment validation failed. Check the trace above for details.

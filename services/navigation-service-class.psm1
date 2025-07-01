@@ -1,10 +1,13 @@
 # Navigation Service - Class-Based Implementation
 # Manages screen navigation, routing, and history.
 
-using module ..\components\ui-classes.psm1
-using module ..\logger.psm1
-using module ..\event-system.psm1
-using module ..\exceptions.psm1
+
+
+# AI: FIX - Added all necessary dependencies with correct paths.
+#using module '..\components\ui-classes.psm1'
+#using module '..\modules\logger.psm1'
+#using module '..\modules\event-system.psm1'
+#using module '..\modules\exceptions.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

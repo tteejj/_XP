@@ -2,11 +2,10 @@
 # TUI Component Library - Phase 1 Migration Complete
 # All components now inherit from UIElement and use buffer-based rendering
 
-using module '.\tui-primitives.psm1' # AI: FIX - Added missing dependency for TuiCell and drawing primitives
-using module .\ui-classes.psm1
-using module ..\layout\panels-class.psm1
-using module ..\modules\exceptions.psm1
-using module ..\modules\logger.psm1
+#using module '.\tui-primitives.psm1'
+#using module '.\ui-classes.psm1'
+#using module '..\modules\exceptions.psm1'
+#using module '..\modules\logger.psm1'
 
 #region Core UI Components
 

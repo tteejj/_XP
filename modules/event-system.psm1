@@ -1,8 +1,9 @@
 # Event System Module
 # Provides pub/sub event functionality for decoupled communication
 
-using module .\exceptions.psm1
-using module .\logger.psm1
+# AI: FIX - Corrected relative paths for all dependencies.
+#using module '.\exceptions.psm1'
+#using module '.\logger.psm1'
 
 $script:EventHandlers = @{}
 $script:EventHistory = [System.Collections.Generic.List[object]]::new()

@@ -4,15 +4,14 @@
 # ==============================================================================
 
 # AI: PHASE 3 REFACTORED - NCurses buffer-based architecture
-using module '..\components\tui-primitives.psm1'
-using module '..\layout\panels-class.psm1'
-using module '..\components\advanced-data-components.psm1'
-using module '..\components\navigation-class.psm1'
-using module '..\modules\dialog-system-class.psm1'
-using module '..\modules\models.psm1'
-using module '..\components\ui-classes.psm1'
-using module '..\modules\logger.psm1'
-using module '..\modules\exceptions.psm1'
+#using module '..\components\tui-primitives.psm1'
+#using module '..\layout\panels-class.psm1'
+#using module '..\components\advanced-data-components.psm1'
+#using module '..\modules\dialog-system-class.psm1'
+#using module '..\modules\models.psm1'
+#using module '..\components\ui-classes.psm1'
+#using module '..\modules\logger.psm1'
+#using module '..\modules\exceptions.psm1'
 
 class TaskListScreen : UIElement {
     # --- Core Architecture ---

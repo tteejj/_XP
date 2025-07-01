@@ -1,0 +1,224 @@
+#Requires -Version 7.0
+<#
+.SYNOPSIS
+    Analyzes and resolves module dependencies for PMC Terminal v5
+.DESCRIPTION
+    Scans all modules to build a dependency graph and determine correct loading order
+#>
+
+param(
+    [string]$ProjectRoot = $PSScriptRoot
+)
+
+class ModuleInfo {
+    [string]$Path
+    [string]$Name
+    [string[]]$Dependencies = @()
+    [string[]]$ExportedClasses = @()
+    [bool]$HasClasses = $false
+    [string]$LoadType = "Import"  # Import or Using
+    [int]$LoadOrder = -1
+}
+
+function Get-ModuleDependencies {
+    param([string]$ModulePath)
+    
+    $dependencies = @()
+    if (Test-Path $ModulePath) {
+        $content = Get-Content $ModulePath -Raw
+        
+        # Find using module statements
+        $usingPattern = 'using\s+module\s+["\']?([^"\']+)["\']?'
+        $matches = [regex]::Matches($content, $usingPattern)
+        foreach ($match in $matches) {
+            $dep = $match.Groups[1].Value
+            # Normalize path
+            $dep = $dep -replace '^\.[\\/]', '' -replace '[\\/]', '/'
+            $dependencies += $dep
+        }
+        
+        # Find Import-Module statements
+        $importPattern = 'Import-Module\s+["\']?([^"\'\s]+)["\']?'
+        $matches = [regex]::Matches($content, $importPattern)
+        foreach ($match in $matches) {
+            $dep = $match.Groups[1].Value
+            if ($dep -notmatch '^\$') {  # Ignore variable imports
+                $dep = $dep -replace '^\.[\\/]', '' -replace '[\\/]', '/'
+                $dependencies += $dep
+            }
+        }
+    }
+    
+    return $dependencies | Select-Object -Unique
+}
+
+function Get-ExportedClasses {
+    param([string]$ModulePath)
+    
+    $classes = @()
+    if (Test-Path $ModulePath) {
+        $content = Get-Content $ModulePath -Raw
+        
+        # Find class definitions
+        $classPattern = 'class\s+(\w+)'
+        $matches = [regex]::Matches($content, $classPattern)
+        foreach ($match in $matches) {
+            $classes += $match.Groups[1].Value
+        }
+    }
+    
+    return $classes
+}
+
+# Scan all modules
+Push-Location $ProjectRoot
+
+Write-Host "=== Module Dependency Analyzer ===" -ForegroundColor Cyan
+Write-Host "Scanning project for PowerShell modules...`n" -ForegroundColor Yellow
+
+$allModules = @()
+$modulePatterns = @("*.psm1", "*.psd1")
+$searchPaths = @(".", "modules", "components", "layout", "screens", "services")
+
+foreach ($path in $searchPaths) {
+    foreach ($pattern in $modulePatterns) {
+        Get-ChildItem -Path $path -Filter $pattern -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath($ProjectRoot, $_.FullName) -replace '\\', '/'
+            
+            $moduleInfo = [ModuleInfo]::new()
+            $moduleInfo.Path = $relativePath
+            $moduleInfo.Name = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+            $moduleInfo.Dependencies = Get-ModuleDependencies $_.FullName
+            $moduleInfo.ExportedClasses = Get-ExportedClasses $_.FullName
+            $moduleInfo.HasClasses = $moduleInfo.ExportedClasses.Count -gt 0
+            
+            # Determine load type
+            if ($moduleInfo.HasClasses) {
+                $moduleInfo.LoadType = "Using"
+            }
+            
+            $allModules += $moduleInfo
+        }
+    }
+}
+
+Write-Host "Found $($allModules.Count) modules`n" -ForegroundColor Green
+
+# Build dependency graph
+Write-Host "=== Dependency Analysis ===" -ForegroundColor Cyan
+
+# Topological sort to determine load order
+function Get-LoadOrder {
+    param($Modules)
+    
+    $sorted = @()
+    $visited = @{}
+    $visiting = @{}
+    
+    function Visit($module) {
+        if ($visiting[$module.Path]) {
+            Write-Warning "Circular dependency detected involving: $($module.Path)"
+            return
+        }
+        
+        if ($visited[$module.Path]) {
+            return
+        }
+        
+        $visiting[$module.Path] = $true
+        
+        # Visit dependencies first
+        foreach ($dep in $module.Dependencies) {
+            $depModule = $Modules | Where-Object { $_.Path -like "*$dep*" } | Select-Object -First 1
+            if ($depModule) {
+                Visit $depModule
+            }
+        }
+        
+        $visiting[$module.Path] = $false
+        $visited[$module.Path] = $true
+        $sorted += $module
+    }
+    
+    foreach ($module in $Modules) {
+        Visit $module
+    }
+    
+    return $sorted
+}
+
+$sortedModules = Get-LoadOrder $allModules
+
+# Assign load order
+for ($i = 0; $i -lt $sortedModules.Count; $i++) {
+    $sortedModules[$i].LoadOrder = $i + 1
+}
+
+# Display results
+Write-Host "`nRecommended Loading Order:" -ForegroundColor Green
+$sortedModules | ForEach-Object {
+    Write-Host "$($_.LoadOrder.ToString().PadLeft(2)). $($_.Path) " -NoNewline
+    Write-Host "($($_.LoadType))" -ForegroundColor DarkGray
+    
+    if ($_.Dependencies.Count -gt 0) {
+        Write-Host "    Dependencies: $($_.Dependencies -join ', ')" -ForegroundColor DarkCyan
+    }
+    
+    if ($_.ExportedClasses.Count -gt 0) {
+        Write-Host "    Exports: $($_.ExportedClasses -join ', ')" -ForegroundColor DarkYellow
+    }
+}
+
+# Generate loading script
+Write-Host "`n=== Generating Loading Script ===" -ForegroundColor Cyan
+
+$loadingScript = @"
+#Requires -Version 7.0
+# Auto-generated module loading script
+# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+
+Set-Location `$PSScriptRoot
+
+# Clear any previously loaded modules
+Get-Module -Name @('tui-*', 'pmc-*', 'event-system', 'data-manager', 'theme-manager') | Remove-Module -Force -ErrorAction SilentlyContinue
+
+`$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "Loading PMC Terminal v5 modules..." -ForegroundColor Cyan
+    
+"@
+
+foreach ($module in $sortedModules) {
+    if ($module.LoadType -eq "Using") {
+        $loadingScript += @"
+    # Load $($module.Name) (contains classes)
+    using module .\$($module.Path)
+    
+"@
+    } else {
+        $loadingScript += @"
+    # Load $($module.Name)
+    Import-Module ".\$($module.Path)" -Force
+    
+"@
+    }
+}
+
+$loadingScript += @"
+    
+    Write-Host "All modules loaded successfully!" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to load modules: `$_"
+    throw
+}
+"@
+
+# Save the loading script
+$outputPath = Join-Path $ProjectRoot "Load-AllModules.ps1"
+$loadingScript | Out-File $outputPath -Encoding UTF8
+
+Write-Host "`nGenerated loading script: $outputPath" -ForegroundColor Green
+Write-Host "Use this script to test the complete loading sequence" -ForegroundColor Yellow
+
+Pop-Location

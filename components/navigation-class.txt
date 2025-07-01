@@ -2,11 +2,10 @@
 # Phase 1 Migration Complete - Proper UIElement inheritance and Panel integration
 
 using namespace System.Management.Automation
-using module .\tui-primitives.psm1
-using module .\ui-classes.psm1
-using module ..\modules\exceptions.psm1
-using module ..\modules\logger.psm1
-using module ..\layout\panels-class.psm1
+using module '.\tui-primitives.psm1'
+using module '.\ui-classes.psm1'
+using module '..\modules\exceptions.psm1'
+using module '..\modules\logger.psm1'
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"

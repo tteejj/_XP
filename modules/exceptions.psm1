@@ -2,7 +2,7 @@
 # MODULE: exceptions.psm1
 # PURPOSE: Provides custom exception types and a centralized error handling wrapper
 #
-
+#using module '.\logger.psm1'
 # ------------------------------------------------------------------------------
 # Module-Scoped State Variables
 # ------------------------------------------------------------------------------
