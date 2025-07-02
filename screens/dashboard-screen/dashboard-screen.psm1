@@ -100,18 +100,23 @@ class DashboardScreen : UIElement {
     # --- Menu Building ---
     hidden [void] BuildMainMenu() {
         try {
-            $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", { 
-                $this.Services.Navigation.GoTo("/tasks", @{}) 
+            # FIX: Use the $local: scope specifier to create a local variable
+            # inside a class method. This prevents a ParserError and allows the
+            # scriptblocks to correctly capture the services object via closure.
+            $local:services = $this.Services
+
+            $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", {
+                $services.Navigation.GoTo("/tasks", @{})
             }))
-            $this.MainMenu.AddItem([NavigationItem]::new("2", "Project Management", { 
-                $this.Services.Navigation.GoTo("/projects", @{}) 
+            $this.MainMenu.AddItem([NavigationItem]::new("2", "Project Management", {
+                $services.Navigation.GoTo("/projects", @{})
             }))
-            $this.MainMenu.AddItem([NavigationItem]::new("3", "Settings", { 
-                $this.Services.Navigation.GoTo("/settings", @{}) 
+            $this.MainMenu.AddItem([NavigationItem]::new("3", "Settings", {
+                $services.Navigation.GoTo("/settings", @{})
             }))
             $this.MainMenu.AddSeparator()
-            $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", { 
-                $this.Services.Navigation.RequestExit() 
+            $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", {
+                $services.Navigation.RequestExit()
             }))
             
             Write-Log -Level Debug -Message "Main menu built with $($this.MainMenu.Items.Count) items"
@@ -135,8 +140,8 @@ class DashboardScreen : UIElement {
             }
             
             try {
-                $taskData = $this.Services.DataManager.GetTasks()
-                $this.Tasks = if ($null -eq $taskData) { @() } else { @($taskData) }
+                 # This ensures $this.Tasks is always an array, even if GetTasks() returns null or a single object.
+                $this.Tasks = @($this.Services.DataManager.GetTasks())
                 
                 # AI: PHASE 3 - Calculate statistics
                 $this.TotalTasks = $this.Tasks.Count

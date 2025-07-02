@@ -86,10 +86,7 @@ function Stop-AllTuiAsyncJobs {
     }
 }
 
-function Request-TuiRefresh {
-    if ($global:TuiState.RequestRefresh) { & $global:TuiState.RequestRefresh }
-    else { Publish-Event -EventName "TUI.RefreshRequested" }
-}
+
 
 function Get-TuiState { return $global:TuiState }
 

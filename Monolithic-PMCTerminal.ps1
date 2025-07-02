@@ -1698,7 +1698,7 @@ class Panel : UIElement {
     [void] OnRender() {
         if ($null -eq $this._private_buffer) { return }
 
-        # Clear entire buffer
+        # Clear entire buffer with the panel's background color
         $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
         $this._private_buffer.Clear($bgCell)
 
@@ -1707,9 +1707,7 @@ class Panel : UIElement {
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
                 -BorderStyle $this.BorderStyle -BorderColor $this.BorderColor -BackgroundColor $this.BackgroundColor -Title $this.Title
         }
-
-        # Fill content area
-        $this.ClearContent()
+        # The component using this panel is responsible for drawing content. Do not clear it here.
     }
 
     # Handle focus for focusable panels
@@ -2905,7 +2903,12 @@ class Table : UIElement {
                     if ($row -is [hashtable] -and $row.ContainsKey($col.Key)) {
                         $cellValue = $row[$col.Key]?.ToString() ?? ""
                     } elseif ($row.PSObject.Properties[$col.Key]) {
-                        $cellValue = $row.($col.Key)?.ToString() ?? ""
+                        $propValue = $row.($col.Key)
+                        if ($col.Key -eq 'DueDate' -and $propValue -is [DateTime]) {
+                            $cellValue = $propValue.ToString('yyyy-MM-dd')
+                        } else {
+                            $cellValue = $propValue?.ToString() ?? ""
+                        }
                     }
                     
                     $cellText = $cellValue.PadRight($col.Width).Substring(0, [Math]::Min($cellValue.Length, $col.Width))
@@ -4807,7 +4810,6 @@ function Close-TuiDialog { Invoke-WithErrorHandling -Component "DialogSystem" -C
 
 class DashboardScreen : Screen {
     # --- Core Architecture ---
-    [hashtable] $Services
     [Panel] $MainPanel
     [Panel] $SummaryPanel
     [Panel] $MenuPanel
@@ -4824,7 +4826,6 @@ class DashboardScreen : Screen {
     # --- Constructor ---
     DashboardScreen([hashtable]$services) : base("DashboardScreen", $services) {
         $this.Name = "DashboardScreen"
-        $this.Services = $services
         $this.Components = [System.Collections.Generic.List[UIElement]]::new()
         $this.IsFocusable = $true
         $this.Enabled = $true
@@ -4837,6 +4838,15 @@ class DashboardScreen : Screen {
     # --- Initialization ---
     [void] Initialize() {
         Invoke-WithErrorHandling -Component "DashboardScreen" -Context "Initialize" -ScriptBlock {
+            # AI: PHASE 3 - Set screen dimensions from console
+            $this.Width = $global:TuiState.BufferWidth
+            $this.Height = $global:TuiState.BufferHeight
+            
+            # Resize the private buffer to match
+            if ($null -ne $this._private_buffer) {
+                $this._private_buffer.Resize($this.Width, $this.Height)
+            }
+            
             # AI: PHASE 3 - Create main panel structure
             $this.MainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "PMC Terminal v5 - Dashboard")
             $this.MainPanel.HasBorder = $true
@@ -4848,7 +4858,8 @@ class DashboardScreen : Screen {
             $this.AddChild($this.MainPanel)
             
             # AI: PHASE 3 - Summary panel (left side)
-            $this.SummaryPanel = [Panel]::new(2, 2, 45, 12, "Task Summary")
+            $summaryWidth = [Math]::Floor($this.Width * 0.4)
+            $this.SummaryPanel = [Panel]::new(2, 2, $summaryWidth, 12, "Task Summary")
             $this.SummaryPanel.HasBorder = $true
             $this.SummaryPanel.BorderStyle = "Single"
             $this.SummaryPanel.BorderColor = [ConsoleColor]::Green
@@ -4857,7 +4868,9 @@ class DashboardScreen : Screen {
             $this.MainPanel.AddChild($this.SummaryPanel)
             
             # AI: PHASE 3 - Menu panel (right side)
-            $this.MenuPanel = [Panel]::new(49, 2, 50, 15, "Main Menu")
+            $menuX = $summaryWidth + 4
+            $menuWidth = $this.Width - $menuX - 2
+            $this.MenuPanel = [Panel]::new($menuX, 2, $menuWidth, 15, "Main Menu")
             $this.MenuPanel.HasBorder = $true
             $this.MenuPanel.BorderStyle = "Single"
             $this.MenuPanel.BorderColor = [ConsoleColor]::Yellow
@@ -4866,7 +4879,7 @@ class DashboardScreen : Screen {
             $this.MainPanel.AddChild($this.MenuPanel)
             
             # AI: PHASE 3 - Status panel (bottom)
-            $this.StatusPanel = [Panel]::new(2, 19, 116, 8, "System Status")
+            $this.StatusPanel = [Panel]::new(2, 19, $this.Width - 4, $this.Height - 21, "System Status")
             $this.StatusPanel.HasBorder = $true
             $this.StatusPanel.BorderStyle = "Single"
             $this.StatusPanel.BorderColor = [ConsoleColor]::Magenta
@@ -4875,15 +4888,19 @@ class DashboardScreen : Screen {
             $this.MainPanel.AddChild($this.StatusPanel)
             
             # AI: PHASE 3 - Create navigation menu
-            $this.MainMenu = [NavigationMenu]::new("MainMenu", $this.Services)
+            $this.MainMenu = [NavigationMenu]::new("MainMenu")
             $this.MainMenu.Move(1, 1)  # Inside menu panel
-            $this.MainMenu.Resize(48, 13)
+            $this.MainMenu.Resize($this.MenuPanel.ContentWidth, $this.MenuPanel.ContentHeight)
             $this.BuildMainMenu()
             $this.MenuPanel.AddChild($this.MainMenu)
             
             # AI: PHASE 3 - Load initial data and update display
             $this.RefreshData()
             $this.UpdateDisplay()
+            
+            # Force initial render
+            $this.RequestRedraw()
+            $this.Render()
             
             Write-Log -Level Info -Message "DashboardScreen initialized with NCurses architecture"
         }
@@ -4892,18 +4909,23 @@ class DashboardScreen : Screen {
     # --- Menu Building ---
     hidden [void] BuildMainMenu() {
         try {
-            $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", { 
-                $this.Services.Navigation.GoTo("/tasks", @{}) 
+            # FIX: Use the $local: scope specifier to create a local variable
+            # inside a class method. This prevents a ParserError and allows the
+            # scriptblocks to correctly capture the services object via closure.
+            $local:services = $this.Services
+
+            $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", {
+                $services.Navigation.GoTo("/tasks", @{})
             }))
-            $this.MainMenu.AddItem([NavigationItem]::new("2", "Project Management", { 
-                $this.Services.Navigation.GoTo("/projects", @{}) 
+            $this.MainMenu.AddItem([NavigationItem]::new("2", "Project Management", {
+                $services.Navigation.GoTo("/projects", @{})
             }))
-            $this.MainMenu.AddItem([NavigationItem]::new("3", "Settings", { 
-                $this.Services.Navigation.GoTo("/settings", @{}) 
+            $this.MainMenu.AddItem([NavigationItem]::new("3", "Settings", {
+                $services.Navigation.GoTo("/settings", @{})
             }))
             $this.MainMenu.AddSeparator()
-            $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", { 
-                $this.Services.Navigation.RequestExit() 
+            $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", {
+                $services.Navigation.RequestExit()
             }))
             
             Write-Log -Level Debug -Message "Main menu built with $($this.MainMenu.Items.Count) items"
@@ -4927,8 +4949,8 @@ class DashboardScreen : Screen {
             }
             
             try {
-                $taskData = $this.Services.DataManager.GetTasks()
-                $this.Tasks = if ($null -eq $taskData) { @() } else { @($taskData) }
+                 # This ensures $this.Tasks is always an array, even if GetTasks() returns null or a single object.
+                $this.Tasks = @($this.Services.DataManager.GetTasks())
                 
                 # AI: PHASE 3 - Calculate statistics
                 $this.TotalTasks = $this.Tasks.Count
@@ -4963,9 +4985,14 @@ class DashboardScreen : Screen {
         Invoke-WithErrorHandling -Component "DashboardScreen" -Context "UpdateDisplay" -ScriptBlock {
             # AI: PHASE 3 - Update summary panel
             $this.UpdateSummaryPanel()
+            $this.SummaryPanel.RequestRedraw()
             
             # AI: PHASE 3 - Update status panel
             $this.UpdateStatusPanel()
+            $this.StatusPanel.RequestRedraw()
+            
+            # AI: PHASE 3 - Update menu panel
+            $this.MenuPanel.RequestRedraw()
             
             $this.RequestRedraw()
         }
@@ -4996,6 +5023,8 @@ class DashboardScreen : Screen {
             $color = if ($i -eq 0) { [ConsoleColor]::White } elseif ($i -eq 1) { [ConsoleColor]::Gray } else { [ConsoleColor]::Cyan }
             $this.WriteTextToPanel($this.SummaryPanel, $summaryLines[$i], 1, $i, $color)
         }
+        
+        $this.SummaryPanel.RequestRedraw()
     }
 
     hidden [void] UpdateStatusPanel() {
@@ -5020,6 +5049,8 @@ class DashboardScreen : Screen {
             $color = if ($i -eq 0) { [ConsoleColor]::White } elseif ($i -eq 1) { [ConsoleColor]::Gray } else { [ConsoleColor]::Green }
             $this.WriteTextToPanel($this.StatusPanel, $statusLines[$i], 1, $i, $color)
         }
+        
+        $this.StatusPanel.RequestRedraw()
     }
 
     # --- Helper Methods ---
@@ -5130,6 +5161,19 @@ class DashboardScreen : Screen {
     }
 
     # --- NCurses Rendering ---
+    [void] OnRender() {
+        # AI: PHASE 3 - Ensure buffer exists and is properly sized
+        if ($null -eq $this._private_buffer) {
+            $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "DashboardScreen.Buffer")
+        }
+        
+        # Clear buffer with background color
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+        $this._private_buffer.Clear($bgCell)
+        
+        # The base Render() method will handle rendering children
+    }
+    
     [void] _RenderContent() {
         # AI: PHASE 3 - Buffer-based rendering
         if ($null -eq $this._private_buffer) { return }
@@ -5189,7 +5233,6 @@ class DashboardScreen : Screen {
 
 class TaskListScreen : Screen {
     # --- Core Architecture ---
-    [hashtable] $Services
     [Panel] $MainPanel
     [Panel] $HeaderPanel
     [Panel] $TablePanel
@@ -5206,7 +5249,6 @@ class TaskListScreen : Screen {
     # --- Constructor ---
     TaskListScreen([hashtable]$services) : base("TaskListScreen", $services) {
         $this.Name = "TaskListScreen"
-        $this.Services = $services
         $this.Components = [System.Collections.Generic.List[UIElement]]::new()
         $this.IsFocusable = $true
         $this.Enabled = $true
@@ -5216,6 +5258,15 @@ class TaskListScreen : Screen {
     # --- Initialization ---
     [void] Initialize() {
         Invoke-WithErrorHandling -Component "TaskListScreen" -Context "Initialize" -ScriptBlock {
+            # AI: PHASE 3 - Set screen dimensions from console
+            $this.Width = $global:TuiState.BufferWidth
+            $this.Height = $global:TuiState.BufferHeight
+            
+            # Resize the private buffer to match
+            if ($null -ne $this._private_buffer) {
+                $this._private_buffer.Resize($this.Width, $this.Height)
+            }
+            
             # AI: PHASE 3 - Create main panel structure
             $this.MainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "Task List")
             $this.MainPanel.HasBorder = $true
@@ -5226,14 +5277,14 @@ class TaskListScreen : Screen {
             $this.AddChild($this.MainPanel)
             
             # AI: PHASE 3 - Header panel for title and filter info
-            $this.HeaderPanel = [Panel]::new(1, 1, 118, 3, "")
+            $this.HeaderPanel = [Panel]::new(1, 1, $this.Width - 2, 3, "")
             $this.HeaderPanel.HasBorder = $false
             $this.HeaderPanel.BackgroundColor = [ConsoleColor]::Black
             $this.HeaderPanel.Name = "HeaderPanel"
             $this.MainPanel.AddChild($this.HeaderPanel)
             
             # AI: PHASE 3 - Table panel for task data
-            $this.TablePanel = [Panel]::new(1, 4, 118, 22, "")
+            $this.TablePanel = [Panel]::new(1, 4, $this.Width - 2, $this.Height - 8, "")
             $this.TablePanel.HasBorder = $true
             $this.TablePanel.BorderStyle = "Single"
             $this.TablePanel.BorderColor = [ConsoleColor]::DarkGray
@@ -5242,7 +5293,7 @@ class TaskListScreen : Screen {
             $this.MainPanel.AddChild($this.TablePanel)
             
             # AI: PHASE 3 - Footer panel for navigation help
-            $this.FooterPanel = [Panel]::new(1, 26, 118, 3, "")
+            $this.FooterPanel = [Panel]::new(1, $this.Height - 4, $this.Width - 2, 3, "")
             $this.FooterPanel.HasBorder = $false
             $this.FooterPanel.BackgroundColor = [ConsoleColor]::Black
             $this.FooterPanel.Name = "FooterPanel"
@@ -5251,14 +5302,14 @@ class TaskListScreen : Screen {
             # AI: PHASE 3 - Create task table component
             $this.TaskTable = [Table]::new("TaskTable")
             $this.TaskTable.Move(1, 1)  # Inside table panel
-            $this.TaskTable.Resize(116, 20)
+            $this.TaskTable.Resize($this.TablePanel.ContentWidth, $this.TablePanel.ContentHeight)
 
             # AI: FIX - Use proper TableColumn class instances
             $columns = @(
                 [TableColumn]::new('Title', 'Task Title', 50),
                 [TableColumn]::new('Status', 'Status', 15),
                 [TableColumn]::new('Priority', 'Priority', 12),
-                [TableColumn]::new('GetDueDateString', 'Due Date', 15) # Use method for display
+                [TableColumn]::new('DueDate', 'Due Date', 15)
             )
             $this.TaskTable.SetColumns($columns)
             
@@ -5267,6 +5318,10 @@ class TaskListScreen : Screen {
             # AI: PHASE 3 - Load initial data
             $this.RefreshData()
             $this.UpdateDisplay()
+            
+            # Force initial render
+            $this.RequestRedraw()
+            $this.Render()
             
             Write-Log -Level Info -Message "TaskListScreen initialized with NCurses architecture"
         }
@@ -5279,23 +5334,28 @@ class TaskListScreen : Screen {
             try {
                 $this.AllTasks = @($this.Services.DataManager.GetTasks())
                 if ($null -eq $this.AllTasks) { $this.AllTasks = @() }
+                Write-Log -Level Debug -Message "Loaded $($this.AllTasks.Count) tasks from DataManager"
             } catch {
                 Write-Log -Level Warning -Message "Failed to load tasks: $_"
                 $this.AllTasks = @()
             }
             
             # AI: PHASE 3 - Apply current filter
-            $this.FilteredTasks = switch ($this.FilterStatus) {
+            $filterResult = switch ($this.FilterStatus) {
                 "Active" { @($this.AllTasks | Where-Object { $_.Status -ne [TaskStatus]::Completed }) }
                 "Completed" { @($this.AllTasks | Where-Object { $_.Status -eq [TaskStatus]::Completed }) }
                 default { $this.AllTasks }
             }
+            # Ensure FilteredTasks is never null
+            $this.FilteredTasks = if ($null -eq $filterResult) { @() } else { @($filterResult) }
+            
+            Write-Log -Level Debug -Message "Filtered to $($this.FilteredTasks.Count) tasks with filter: $($this.FilterStatus)"
             
             # AI: PHASE 3 - Update table data
             $this.TaskTable.SetData($this.FilteredTasks)
             
             # AI: PHASE 3 - Adjust selection if needed
-            if ($this.SelectedIndex -ge $this.FilteredTasks.Count) {
+            if ($null -ne $this.FilteredTasks -and $this.SelectedIndex -ge $this.FilteredTasks.Count) {
                 $this.SelectedIndex = [Math]::Max(0, $this.FilteredTasks.Count - 1)
             }
             
@@ -5306,12 +5366,15 @@ class TaskListScreen : Screen {
     hidden [void] UpdateDisplay() {
         Invoke-WithErrorHandling -Component "TaskListScreen" -Context "UpdateDisplay" -ScriptBlock {
             # AI: PHASE 3 - Update header text
-            $headerText = "Filter: $($this.FilterStatus) | Total: $($this.FilteredTasks.Count) tasks"
+            $taskCount = if ($null -ne $this.FilteredTasks) { $this.FilteredTasks.Count } else { 0 }
+            $headerText = "Filter: $($this.FilterStatus) | Total: $taskCount tasks"
             $this.WriteTextToPanel($this.HeaderPanel, $headerText, 0, 0, [ConsoleColor]::White)
+            $this.HeaderPanel.RequestRedraw()
             
             # AI: PHASE 3 - Update footer navigation text
             $footerText = "[↑↓]Navigate [Space]Toggle [N]ew [E]dit [D]elete [F]ilter [Esc]Back"
             $this.WriteTextToPanel($this.FooterPanel, $footerText, 0, 0, [ConsoleColor]::Yellow)
+            $this.FooterPanel.RequestRedraw()
             
             # AI: PHASE 3 - Update table selection
             $this.TaskTable.SelectedIndex = $this.SelectedIndex
@@ -5417,7 +5480,7 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] EditSelectedTask() {
-        if ($this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
+        if ($null -eq $this.FilteredTasks -or $this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
             return
         }
         
@@ -5444,7 +5507,7 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] DeleteSelectedTask() {
-        if ($this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
+        if ($null -eq $this.FilteredTasks -or $this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
             return
         }
         
@@ -5483,6 +5546,19 @@ class TaskListScreen : Screen {
     }
 
     # --- NCurses Rendering ---
+    [void] OnRender() {
+        # AI: PHASE 3 - Ensure buffer exists and is properly sized
+        if ($null -eq $this._private_buffer) {
+            $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "TaskListScreen.Buffer")
+        }
+        
+        # Clear buffer with background color
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+        $this._private_buffer.Clear($bgCell)
+        
+        # The base Render() method will handle rendering children
+    }
+    
     [void] _RenderContent() {
         # AI: PHASE 3 - Buffer-based rendering
         if ($null -eq $this._private_buffer) { return }
@@ -5782,12 +5858,15 @@ function Load-UnifiedData {
                         $script:Data.Tasks.Clear()
                         foreach ($taskData in $loadedData.Tasks) {
                             if ($taskData -is [hashtable]) { 
-                                $task = [PSCustomObject]$taskData
-                                $task.PSObject.TypeNames.Insert(0, 'PmcTask')
-                                $script:Data.Tasks.Add($task) | Out-Null
+                                try {
+                                    $task = [PmcTask]::FromLegacyFormat($taskData)
+                                    $script:Data.Tasks.Add($task) | Out-Null
+                                } catch {
+                                    Write-Log -Level Warning -Message "Failed to load task: $_"
+                                }
                             }
                         }
-                        Write-Log -Level Debug -Message "Re-hydrated $($script:Data.Tasks.Count) tasks as PmcTask objects"
+                        Write-Log -Level Debug -Message "Loaded $($script:Data.Tasks.Count) tasks as PmcTask objects"
                     }
                     
                     if ($loadedData.Projects -is [hashtable]) {
@@ -5814,8 +5893,28 @@ function Load-UnifiedData {
                 $global:Data = $script:Data
             }
         } else {
-            Write-Log -Level Info -Message "No existing data file found, using defaults"
+            Write-Log -Level Info -Message "No existing data file found, creating sample data"
+            
+            # Create default project
+            $defaultProject = [PmcProject]::new("GENERAL", "General Tasks")
+            $script:Data.Projects.Add($defaultProject)
+            
+            # Create some sample tasks
+            $sampleTasks = @(
+                [PmcTask]::new("Welcome to PMC Terminal!", "This is your task management system", [TaskPriority]::High, "GENERAL"),
+                [PmcTask]::new("Review the documentation", "Check out the help files to learn more", [TaskPriority]::Medium, "GENERAL"),
+                [PmcTask]::new("Create your first project", "Use the project management features", [TaskPriority]::Low, "GENERAL")
+            )
+            
+            foreach ($task in $sampleTasks) {
+                $script:Data.Tasks.Add($task)
+            }
+            
+            Write-Log -Level Info -Message "Created $($sampleTasks.Count) sample tasks"
             $global:Data = $script:Data
+            
+            # Save the sample data
+            Save-UnifiedData
         }
         
         $script:LastSaveTime = Get-Date
@@ -6360,6 +6459,24 @@ function Render-FrameCompositor {
     }
 }
 
+function Get-AnsiColorCode {
+    param(
+        [ConsoleColor]$Color,
+        [bool]$IsBackground = $false
+    )
+    
+    $colorMap = @{
+        Black = 30; DarkBlue = 34; DarkGreen = 32; DarkCyan = 36
+        DarkRed = 31; DarkMagenta = 35; DarkYellow = 33; Gray = 37
+        DarkGray = 90; Blue = 94; Green = 92; Cyan = 96
+        Red = 91; Magenta = 95; Yellow = 93; White = 97
+    }
+    
+    $code = $colorMap[$Color.ToString()]
+    if ($IsBackground) { $code += 10 }
+    return $code
+}
+
 function Render-CompositorToConsole {
     # AI: REWRITTEN - True TuiBuffer-to-TuiBuffer diffing.
     $outputBuilder = [System.Text.StringBuilder]::new(20000)
@@ -6871,10 +6988,7 @@ function Stop-AllTuiAsyncJobs {
     }
 }
 
-function Request-TuiRefresh {
-    if ($global:TuiState.RequestRefresh) { & $global:TuiState.RequestRefresh }
-    else { Publish-Event -EventName "TUI.RefreshRequested" }
-}
+
 
 function Get-TuiState { return $global:TuiState }
 
@@ -6938,6 +7052,10 @@ try {
     
     # Push the screen to the engine and start the main loop
     Push-Screen -Screen $dashboard
+    
+    # Force an initial refresh to ensure rendering
+    $global:TuiState.IsDirty = $true
+    
     Start-TuiLoop
     
 } catch {

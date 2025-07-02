@@ -234,7 +234,7 @@ class Panel : UIElement {
     [void] OnRender() {
         if ($null -eq $this._private_buffer) { return }
 
-        # Clear entire buffer
+        # Clear entire buffer with the panel's background color
         $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
         $this._private_buffer.Clear($bgCell)
 
@@ -243,9 +243,7 @@ class Panel : UIElement {
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
                 -BorderStyle $this.BorderStyle -BorderColor $this.BorderColor -BackgroundColor $this.BackgroundColor -Title $this.Title
         }
-
-        # Fill content area
-        $this.ClearContent()
+        # The component using this panel is responsible for drawing content. Do not clear it here.
     }
 
     # Handle focus for focusable panels
