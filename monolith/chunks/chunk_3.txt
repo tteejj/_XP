@@ -1,0 +1,1988 @@
+# --- START OF ORIGINAL FILE: components\advanced-input-components\advanced-input-components.psm1 ---
+# Advanced Input Components - Phase 2 Migration Complete
+# All components now inherit from UIElement and use buffer-based rendering
+
+
+
+
+
+#region Advanced Input Classes
+
+# AI: REFACTORED - MultilineTextBox converted from functional to class-based
+class MultilineTextBoxComponent : UIElement {
+    [string[]]$Lines = @("")
+    [string]$Placeholder = "Enter text..."
+    [int]$MaxLines = 10
+    [int]$MaxLineLength = 100
+    [int]$CurrentLine = 0
+    [int]$CursorPosition = 0
+    [int]$ScrollOffsetY = 0
+    [bool]$WordWrap = $true
+    [scriptblock]$OnChange
+    
+    MultilineTextBoxComponent([string]$name) : base() {
+        $this.Name = $name
+        $this.IsFocusable = $true
+        $this.Width = 40
+        $this.Height = 10
+    }
+    
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
+            
+            # AI: Draw border
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Calculate visible area
+            $textAreaHeight = $this.Height - 2
+            $textAreaWidth = $this.Width - 2
+            $startLine = $this.ScrollOffsetY
+            $endLine = [Math]::Min($this.Lines.Count - 1, $startLine + $textAreaHeight - 1)
+            
+            # AI: Render text lines
+            for ($i = $startLine; $i -le $endLine; $i++) {
+                if ($i -ge $this.Lines.Count) { break }
+                
+                $line = $this.Lines[$i] ?? ""
+                $displayLine = $line
+                if ($displayLine.Length -gt $textAreaWidth) {
+                    $displayLine = $displayLine.Substring(0, $textAreaWidth)
+                }
+                
+                $lineY = 1 + ($i - $startLine)
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $lineY -Text $displayLine `
+                    -ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
+            }
+            
+            # AI: Show placeholder if empty and not focused
+            if ($this.Lines.Count -eq 1 -and [string]::IsNullOrEmpty($this.Lines[0]) -and -not $this.IsFocused) {
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $this.Placeholder `
+                    -ForegroundColor ([ConsoleColor]::DarkGray) -BackgroundColor ([ConsoleColor]::Black)
+            }
+            
+            # AI: Draw cursor if focused
+            if ($this.IsFocused) {
+                $cursorLine = $this.CurrentLine - $this.ScrollOffsetY
+                if ($cursorLine -ge 0 -and $cursorLine -lt $textAreaHeight) {
+                    $cursorX = 1 + $this.CursorPosition
+                    $cursorY = 1 + $cursorLine
+                    if ($cursorX -lt $this.Width - 1) {
+                        Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y $cursorY -Text "_" `
+                            -ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
+                    }
+                }
+            }
+            
+        } catch { 
+            Write-Log -Level Error -Message "MultilineTextBox render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            $currentLineText = $this.Lines[$this.CurrentLine] ?? ""
+            $originalLines = $this.Lines.Clone()
+            $handled = $true
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    if ($this.CurrentLine -gt 0) {
+                        $this.CurrentLine--
+                        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                        $this._UpdateScrolling()
+                    }
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.CurrentLine++
+                        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                        $this._UpdateScrolling()
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.CursorPosition--
+                    } elseif ($this.CurrentLine -gt 0) {
+                        $this.CurrentLine--
+                        $this.CursorPosition = $this.Lines[$this.CurrentLine].Length
+                        $this._UpdateScrolling()
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
+                        $this.CursorPosition++
+                    } elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.CurrentLine++
+                        $this.CursorPosition = 0
+                        $this._UpdateScrolling()
+                    }
+                }
+                ([ConsoleKey]::Home) { $this.CursorPosition = 0 }
+                ([ConsoleKey]::End) { $this.CursorPosition = $currentLineText.Length }
+                ([ConsoleKey]::Enter) {
+                    if ($this.Lines.Count -lt $this.MaxLines) {
+                        $beforeCursor = $currentLineText.Substring(0, $this.CursorPosition)
+                        $afterCursor = $currentLineText.Substring($this.CursorPosition)
+                        
+                        $this.Lines[$this.CurrentLine] = $beforeCursor
+                        $this.Lines = @($this.Lines[0..$this.CurrentLine]) + @($afterCursor) + @($this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)])
+                        
+                        $this.CurrentLine++
+                        $this.CursorPosition = 0
+                        $this._UpdateScrolling()
+                    }
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    } elseif ($this.CurrentLine -gt 0 -and $this.Lines.Count -gt 1) {
+                        $previousLine = $this.Lines[$this.CurrentLine - 1]
+                        $this.CursorPosition = $previousLine.Length
+                        $this.Lines[$this.CurrentLine - 1] = $previousLine + $currentLineText
+                        $this.Lines = @($this.Lines[0..($this.CurrentLine - 1)]) + @($this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)])
+                        $this.CurrentLine--
+                        $this._UpdateScrolling()
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition, 1)
+                    } elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $nextLine = $this.Lines[$this.CurrentLine + 1]
+                        $this.Lines[$this.CurrentLine] = $currentLineText + $nextLine
+                        $this.Lines = @($this.Lines[0..$this.CurrentLine]) + @($this.Lines[($this.CurrentLine + 2)..($this.Lines.Count - 1)])
+                    }
+                }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentLineText.Length -lt $this.MaxLineLength) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Insert($this.CursorPosition, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled -and $this.OnChange -and -not $this._ArraysEqual($originalLines, $this.Lines)) {
+                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock { 
+                    & $this.OnChange -NewValue $this.Lines 
+                }
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        } catch { 
+            Write-Log -Level Error -Message "MultilineTextBox input error for '$($this.Name)': $_"
+            return $false 
+        }
+    }
+    
+    hidden [void] _UpdateScrolling() {
+        $textAreaHeight = $this.Height - 2
+        if ($this.CurrentLine -lt $this.ScrollOffsetY) {
+            $this.ScrollOffsetY = $this.CurrentLine
+        } elseif ($this.CurrentLine -ge ($this.ScrollOffsetY + $textAreaHeight)) {
+            $this.ScrollOffsetY = $this.CurrentLine - $textAreaHeight + 1
+        }
+    }
+    
+    hidden [bool] _ArraysEqual([string[]]$array1, [string[]]$array2) {
+        if ($array1.Count -ne $array2.Count) { return $false }
+        for ($i = 0; $i -lt $array1.Count; $i++) {
+            if ($array1[$i] -ne $array2[$i]) { return $false }
+        }
+        return $true
+    }
+    
+    [string] GetText() {
+        return $this.Lines -join "`n"
+    }
+    
+    [void] SetText([string]$text) {
+        $this.Lines = if ([string]::IsNullOrEmpty($text)) { @("") } else { $text -split "`n" }
+        $this.CurrentLine = 0
+        $this.CursorPosition = 0
+        $this.ScrollOffsetY = 0
+        $this.RequestRedraw()
+    }
+}
+
+# AI: REFACTORED - NumericInput converted from functional to class-based
+class NumericInputComponent : UIElement {
+    [double]$Value = 0
+    [double]$Min = [double]::MinValue
+    [double]$Max = [double]::MaxValue
+    [double]$Step = 1
+    [int]$DecimalPlaces = 0
+    [string]$TextValue = "0"
+    [int]$CursorPosition = 0
+    [string]$Suffix = ""
+    [scriptblock]$OnChange
+    
+    NumericInputComponent([string]$name) : base() {
+        $this.Name = $name
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 3
+        $this.TextValue = $this.Value.ToString("F$($this.DecimalPlaces)")
+    }
+    
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
+            
+            # AI: Draw border
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Display value with suffix
+            $displayText = $this.TextValue + $this.Suffix
+            $maxDisplayLength = $this.Width - 6
+            if ($displayText.Length -gt $maxDisplayLength) {
+                $displayText = $displayText.Substring(0, $maxDisplayLength)
+            }
+            
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+                -ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Draw spinner arrows
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 0 -Text "▲" `
+                -ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 2 -Text "▼" `
+                -ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Draw cursor if focused
+            if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt $this.Width - 4) {
+                    Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" `
+                        -ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
+                }
+            }
+            
+        } catch { 
+            Write-Log -Level Error -Message "NumericInput render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            $handled = $true
+            $originalValue = $this.Value
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    $this._IncrementValue()
+                }
+                ([ConsoleKey]::DownArrow) {
+                    $this._DecrementValue()
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) { 
+                        $this.CursorPosition-- 
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) { 
+                        $this.CursorPosition++ 
+                    }
+                }
+                ([ConsoleKey]::Home) { $this.CursorPosition = 0 }
+                ([ConsoleKey]::End) { $this.CursorPosition = $this.TextValue.Length }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
+                    }
+                }
+                ([ConsoleKey]::Enter) {
+                    $this._ValidateAndUpdate()
+                }
+                default {
+                    if ($key.KeyChar -and ($key.KeyChar -match '[\d\.\-]' -or 
+                        ($key.KeyChar -eq '.' -and $this.DecimalPlaces -gt 0 -and -not $this.TextValue.Contains('.')))) {
+                        $this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled -and $this.Value -ne $originalValue -and $this.OnChange) {
+                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock { 
+                    & $this.OnChange -NewValue $this.Value 
+                }
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        } catch { 
+            Write-Log -Level Error -Message "NumericInput input error for '$($this.Name)': $_"
+            return $false 
+        }
+    }
+    
+    hidden [void] _IncrementValue() {
+        $newValue = [Math]::Min($this.Max, $this.Value + $this.Step)
+        $this._SetValue($newValue)
+    }
+    
+    hidden [void] _DecrementValue() {
+        $newValue = [Math]::Max($this.Min, $this.Value - $this.Step)
+        $this._SetValue($newValue)
+    }
+    
+    hidden [void] _SetValue([double]$value) {
+        $this.Value = $value
+        $this.TextValue = $value.ToString("F$($this.DecimalPlaces)")
+        $this.CursorPosition = $this.TextValue.Length
+    }
+    
+    hidden [bool] _ValidateAndUpdate() {
+        try {
+            $newValue = [double]$this.TextValue
+            $newValue = [Math]::Max($this.Min, [Math]::Min($this.Max, $newValue))
+            $newValue = [Math]::Round($newValue, $this.DecimalPlaces)
+            
+            $this._SetValue($newValue)
+            return $true
+        } catch {
+            $this.TextValue = $this.Value.ToString("F$($this.DecimalPlaces)")
+            Write-Log -Level Warning -Message "NumericInput validation failed for '$($this.Name)': $_"
+            return $false
+        }
+    }
+}
+
+# AI: REFACTORED - DateInput converted from functional to class-based
+class DateInputComponent : UIElement {
+    [DateTime]$Value = (Get-Date)
+    [DateTime]$MinDate = [DateTime]::MinValue
+    [DateTime]$MaxDate = [DateTime]::MaxValue
+    [string]$Format = "yyyy-MM-dd"
+    [string]$TextValue = ""
+    [int]$CursorPosition = 0
+    [bool]$ShowCalendar = $false
+    [scriptblock]$OnChange
+    
+    DateInputComponent([string]$name) : base() {
+        $this.Name = $name
+        $this.IsFocusable = $true
+        $this.Width = 25
+        $this.Height = 3
+        $this.TextValue = $this.Value.ToString($this.Format)
+    }
+    
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
+            
+            # AI: Draw border
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Display date value
+            $displayText = $this.TextValue
+            $maxDisplayLength = $this.Width - 6
+            if ($displayText.Length -gt $maxDisplayLength) {
+                $displayText = $displayText.Substring(0, $maxDisplayLength)
+            }
+            
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+                -ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Draw calendar icon
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text "📅" `
+                -ForegroundColor ([ConsoleColor]::Cyan) -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Draw cursor if focused
+            if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt $this.Width - 4) {
+                    Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" `
+                        -ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
+                }
+            }
+            
+        } catch { 
+            Write-Log -Level Error -Message "DateInput render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            $handled = $true
+            $originalValue = $this.Value
+            
+            if ($this.ShowCalendar) {
+                switch ($key.Key) {
+                    ([ConsoleKey]::Escape) { $this.ShowCalendar = $false }
+                    ([ConsoleKey]::LeftArrow) { $this.Value = $this.Value.AddDays(-1) }
+                    ([ConsoleKey]::RightArrow) { $this.Value = $this.Value.AddDays(1) }
+                    ([ConsoleKey]::UpArrow) { $this.Value = $this.Value.AddDays(-7) }
+                    ([ConsoleKey]::DownArrow) { $this.Value = $this.Value.AddDays(7) }
+                    ([ConsoleKey]::Enter) { 
+                        $this.ShowCalendar = $false
+                        $this.TextValue = $this.Value.ToString($this.Format)
+                    }
+                    default { $handled = $false }
+                }
+            } else {
+                switch ($key.Key) {
+                    ([ConsoleKey]::F4) { $this.ShowCalendar = $true }
+                    ([ConsoleKey]::UpArrow) { $this.Value = $this.Value.AddDays(1); $this.TextValue = $this.Value.ToString($this.Format) }
+                    ([ConsoleKey]::DownArrow) { $this.Value = $this.Value.AddDays(-1); $this.TextValue = $this.Value.ToString($this.Format) }
+                    ([ConsoleKey]::LeftArrow) {
+                        if ($this.CursorPosition -gt 0) { $this.CursorPosition-- }
+                    }
+                    ([ConsoleKey]::RightArrow) {
+                        if ($this.CursorPosition -lt $this.TextValue.Length) { $this.CursorPosition++ }
+                    }
+                    ([ConsoleKey]::Home) { $this.CursorPosition = 0 }
+                    ([ConsoleKey]::End) { $this.CursorPosition = $this.TextValue.Length }
+                    ([ConsoleKey]::Backspace) {
+                        if ($this.CursorPosition -gt 0) {
+                            $this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
+                            $this.CursorPosition--
+                        }
+                    }
+                    ([ConsoleKey]::Delete) {
+                        if ($this.CursorPosition -lt $this.TextValue.Length) {
+                            $this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
+                        }
+                    }
+                    ([ConsoleKey]::Enter) {
+                        $this._ValidateAndUpdate()
+                    }
+                    default {
+                        if ($key.KeyChar -and ($key.KeyChar -match '[\d\-\/]')) {
+                            $this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
+                            $this.CursorPosition++
+                        } else {
+                            $handled = $false
+                        }
+                    }
+                }
+            }
+            
+            if ($handled -and $this.Value -ne $originalValue -and $this.OnChange) {
+                Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock { 
+                    & $this.OnChange -NewValue $this.Value 
+                }
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        } catch { 
+            Write-Log -Level Error -Message "DateInput input error for '$($this.Name)': $_"
+            return $false 
+        }
+    }
+    
+    hidden [bool] _ValidateAndUpdate() {
+        try {
+            $newDate = [DateTime]::ParseExact($this.TextValue, $this.Format, $null)
+            if ($newDate -ge $this.MinDate -and $newDate -le $this.MaxDate) {
+                $this.Value = $newDate
+                $this.TextValue = $newDate.ToString($this.Format)
+                return $true
+            }
+        } catch {
+            # Reset to current value on parse error
+            $this.TextValue = $this.Value.ToString($this.Format)
+            Write-Log -Level Warning -Message "DateInput validation failed for '$($this.Name)': $_"
+        }
+        return $false
+    }
+}
+
+# AI: REFACTORED - ComboBox converted from functional to class-based
+class ComboBoxComponent : UIElement {
+    [object[]]$Items = @()
+    [object]$SelectedItem = $null
+    [int]$SelectedIndex = -1
+    [string]$DisplayMember = "Display"
+    [string]$ValueMember = "Value"
+    [string]$Placeholder = "Select an item..."
+    [bool]$IsDropDownOpen = $false
+    [int]$MaxDropDownHeight = 6
+    [int]$ScrollOffset = 0
+    [scriptblock]$OnSelectionChanged
+    
+    ComboBoxComponent([string]$name) : base() {
+        $this.Name = $name
+        $this.IsFocusable = $true
+        $this.Width = 30
+        $this.Height = 3
+    }
+    
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+#```
+        
+        try {
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
+            
+            # AI: Draw main combobox
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Display selected item or placeholder
+            $displayText = ""
+            if ($this.SelectedItem) {
+                if ($this.SelectedItem -is [string]) {
+                    $displayText = $this.SelectedItem
+                } elseif ($this.SelectedItem -is [hashtable] -and $this.SelectedItem.ContainsKey($this.DisplayMember)) {
+                    $displayText = $this.SelectedItem[$this.DisplayMember]
+                } else {
+                    $displayText = $this.SelectedItem.ToString()
+                }
+            } else {
+                $displayText = $this.Placeholder
+            }
+            
+            $maxDisplayLength = $this.Width - 6
+            if ($displayText.Length -gt $maxDisplayLength) {
+                $displayText = $displayText.Substring(0, $maxDisplayLength - 3) + "..."
+            }
+            
+            $textColor = $this.SelectedItem ? [ConsoleColor]::White : [ConsoleColor]::DarkGray
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+                -ForegroundColor $textColor -BackgroundColor ([ConsoleColor]::Black)
+            
+            # AI: Draw dropdown arrow
+            $arrow = $this.IsDropDownOpen ? "▲" : "▼"
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text $arrow `
+                -ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+            
+        } catch { 
+            Write-Log -Level Error -Message "ComboBox render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            $handled = $true
+            $originalSelection = $this.SelectedItem
+            
+            if ($this.IsDropDownOpen) {
+                switch ($key.Key) {
+                    ([ConsoleKey]::Escape) {
+                        $this.IsDropDownOpen = $false
+                    }
+                    ([ConsoleKey]::Enter) {
+                        if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.Items.Count) {
+                            $this.SelectedItem = $this.Items[$this.SelectedIndex]
+                        }
+                        $this.IsDropDownOpen = $false
+                    }
+                    ([ConsoleKey]::UpArrow) {
+                        if ($this.SelectedIndex -gt 0) {
+                            $this.SelectedIndex--
+                            $this._UpdateScrolling()
+                        }
+                    }
+                    ([ConsoleKey]::DownArrow) {
+                        if ($this.SelectedIndex -lt ($this.Items.Count - 1)) {
+                            $this.SelectedIndex++
+                            $this._UpdateScrolling()
+                        }
+                    }
+                    default { $handled = $false }
+                }
+            } else {
+                switch ($key.Key) {
+                    ([ConsoleKey]::Enter) { $this._OpenDropDown() }
+                    ([ConsoleKey]::Spacebar) { $this._OpenDropDown() }
+                    ([ConsoleKey]::DownArrow) { $this._OpenDropDown() }
+                    ([ConsoleKey]::UpArrow) { $this._OpenDropDown() }
+                    ([ConsoleKey]::F4) { $this._OpenDropDown() }
+                    default { $handled = $false }
+                }
+            }
+            
+            if ($handled -and $this.SelectedItem -ne $originalSelection -and $this.OnSelectionChanged) {
+                Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -Context "Selection Change" -ScriptBlock { 
+                    & $this.OnSelectionChanged -SelectedItem $this.SelectedItem 
+                }
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        } catch { 
+            Write-Log -Level Error -Message "ComboBox input error for '$($this.Name)': $_"
+            return $false 
+        }
+    }
+    
+    hidden [void] _OpenDropDown() {
+        if ($this.Items.Count -gt 0) {
+            $this.IsDropDownOpen = $true
+            $this._FindCurrentSelection()
+        }
+    }
+    
+    hidden [void] _FindCurrentSelection() {
+        $this.SelectedIndex = -1
+        if ($this.SelectedItem) {
+            for ($i = 0; $i -lt $this.Items.Count; $i++) {
+                if ($this._ItemsEqual($this.Items[$i], $this.SelectedItem)) {
+                    $this.SelectedIndex = $i
+                    break
+                }
+            }
+        }
+        if ($this.SelectedIndex -eq -1) { $this.SelectedIndex = 0 }
+        $this._UpdateScrolling()
+    }
+    
+    hidden [void] _UpdateScrolling() {
+        if ($this.SelectedIndex -lt $this.ScrollOffset) {
+            $this.ScrollOffset = $this.SelectedIndex
+        } elseif ($this.SelectedIndex -ge ($this.ScrollOffset + $this.MaxDropDownHeight)) {
+            $this.ScrollOffset = $this.SelectedIndex - $this.MaxDropDownHeight + 1
+        }
+    }
+    
+    hidden [bool] _ItemsEqual([object]$item1, [object]$item2) {
+        if ($item1 -is [string] -and $item2 -is [string]) {
+            return $item1 -eq $item2
+        } elseif ($item1 -is [hashtable] -and $item2 -is [hashtable]) {
+            return $item1[$this.ValueMember] -eq $item2[$this.ValueMember]
+        } else {
+            return $item1 -eq $item2
+        }
+    }
+    
+    [void] SetItems([object[]]$items) {
+        $this.Items = $items
+        $this.SelectedItem = $null
+        $this.SelectedIndex = -1
+        $this.ScrollOffset = 0
+        $this.IsDropDownOpen = $false
+        $this.RequestRedraw()
+    }
+    
+    [object] GetSelectedValue() {
+        if ($this.SelectedItem -is [hashtable] -and $this.SelectedItem.ContainsKey($this.ValueMember)) {
+            return $this.SelectedItem[$this.ValueMember]
+        }
+        return $this.SelectedItem
+    }
+}
+
+#endregion
+
+#region Factory Functions
+
+# AI: Updated factories to return class instances
+
+function New-TuiMultilineTextBox {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "MultilineTextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $textBox = [MultilineTextBoxComponent]::new($name)
+    
+    $textBox.X = $Props.X ?? $textBox.X
+    $textBox.Y = $Props.Y ?? $textBox.Y
+    $textBox.Width = $Props.Width ?? $textBox.Width
+    $textBox.Height = $Props.Height ?? $textBox.Height
+    $textBox.Visible = $Props.Visible ?? $textBox.Visible
+    $textBox.ZIndex = $Props.ZIndex ?? $textBox.ZIndex
+    $textBox.Placeholder = $Props.Placeholder ?? $textBox.Placeholder
+    $textBox.MaxLines = $Props.MaxLines ?? $textBox.MaxLines
+    $textBox.MaxLineLength = $Props.MaxLineLength ?? $textBox.MaxLineLength
+    $textBox.WordWrap = $Props.WordWrap ?? $textBox.WordWrap
+    $textBox.OnChange = $Props.OnChange ?? $textBox.OnChange
+    
+    if ($Props.Text) {
+        $textBox.SetText($Props.Text)
+    }
+    
+    return $textBox
+}
+
+function New-TuiNumericInput {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "NumericInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $numericInput = [NumericInputComponent]::new($name)
+    
+    $numericInput.X = $Props.X ?? $numericInput.X
+    $numericInput.Y = $Props.Y ?? $numericInput.Y
+    $numericInput.Width = $Props.Width ?? $numericInput.Width
+    $numericInput.Height = $Props.Height ?? $numericInput.Height
+    $numericInput.Visible = $Props.Visible ?? $numericInput.Visible
+    $numericInput.ZIndex = $Props.ZIndex ?? $numericInput.ZIndex
+    $numericInput.Value = $Props.Value ?? $numericInput.Value
+    $numericInput.Min = $Props.Min ?? $numericInput.Min
+    $numericInput.Max = $Props.Max ?? $numericInput.Max
+    $numericInput.Step = $Props.Step ?? $numericInput.Step
+    $numericInput.DecimalPlaces = $Props.DecimalPlaces ?? $numericInput.DecimalPlaces
+    $numericInput.Suffix = $Props.Suffix ?? $numericInput.Suffix
+    $numericInput.OnChange = $Props.OnChange ?? $numericInput.OnChange
+    
+    # Update text value based on initial value
+    $numericInput.TextValue = $numericInput.Value.ToString("F$($numericInput.DecimalPlaces)")
+    
+    return $numericInput
+}
+
+function New-TuiDateInput {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "DateInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $dateInput = [DateInputComponent]::new($name)
+    
+    $dateInput.X = $Props.X ?? $dateInput.X
+    $dateInput.Y = $Props.Y ?? $dateInput.Y
+    $dateInput.Width = $Props.Width ?? $dateInput.Width
+    $dateInput.Height = $Props.Height ?? $dateInput.Height
+    $dateInput.Visible = $Props.Visible ?? $dateInput.Visible
+    $dateInput.ZIndex = $Props.ZIndex ?? $dateInput.ZIndex
+    $dateInput.Value = $Props.Value ?? $dateInput.Value
+    $dateInput.MinDate = $Props.MinDate ?? $dateInput.MinDate
+    $dateInput.MaxDate = $Props.MaxDate ?? $dateInput.MaxDate
+    $dateInput.Format = $Props.Format ?? $dateInput.Format
+    $dateInput.OnChange = $Props.OnChange ?? $dateInput.OnChange
+    
+    # Update text value based on initial value
+    $dateInput.TextValue = $dateInput.Value.ToString($dateInput.Format)
+    
+    return $dateInput
+}
+
+function New-TuiComboBox {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "ComboBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $comboBox = [ComboBoxComponent]::new($name)
+    
+    $comboBox.X = $Props.X ?? $comboBox.X
+    $comboBox.Y = $Props.Y ?? $comboBox.Y
+    $comboBox.Width = $Props.Width ?? $comboBox.Width
+    $comboBox.Height = $Props.Height ?? $comboBox.Height
+    $comboBox.Visible = $Props.Visible ?? $comboBox.Visible
+    $comboBox.ZIndex = $Props.ZIndex ?? $comboBox.ZIndex
+    $comboBox.DisplayMember = $Props.DisplayMember ?? $comboBox.DisplayMember
+    $comboBox.ValueMember = $Props.ValueMember ?? $comboBox.ValueMember
+    $comboBox.Placeholder = $Props.Placeholder ?? $comboBox.Placeholder
+    $comboBox.MaxDropDownHeight = $Props.MaxDropDownHeight ?? $comboBox.MaxDropDownHeight
+    $comboBox.OnSelectionChanged = $Props.OnSelectionChanged ?? $comboBox.OnSelectionChanged
+    
+    if ($Props.Items) {
+        $comboBox.SetItems($Props.Items)
+    }
+    
+    if ($Props.SelectedItem) {
+        $comboBox.SelectedItem = $Props.SelectedItem
+    }
+    
+    return $comboBox
+}
+
+#endregion
+# --- END OF ORIGINAL FILE: components\advanced-input-components\advanced-input-components.psm1 ---
+
+
+# --- START OF ORIGINAL FILE: modules\data-manager-class\data-manager-class.psm1 ---
+# DELETED - This file's contents have been merged into modules\data-manager\data-manager.psm1
+# --- END OF ORIGINAL FILE: modules\data-manager-class\data-manager-class.psm1 ---
+
+
+# --- START OF ORIGINAL FILE: services\keybinding-service-class\keybinding-service-class.psm1 ---
+# keybinding-service-class.psm1
+# Contains only the KeybindingService class definition.
+
+
+
+class KeybindingService {
+    [hashtable] $KeyMap = @{}
+    [hashtable] $GlobalHandlers = @{}
+    [System.Collections.Generic.List[string]] $ContextStack
+    [bool] $EnableChords = $false
+    
+    KeybindingService() {
+        $this.ContextStack = [System.Collections.Generic.List[string]]::new()
+        $this.InitializeDefaultBindings()
+        
+        Write-Log -Level Info -Message "KeybindingService initialized"
+    }
+    
+    KeybindingService([bool]$enableChords) {
+        $this.ContextStack = [System.Collections.Generic.List[string]]::new()
+        $this.EnableChords = $enableChords
+        $this.InitializeDefaultBindings()
+        
+        Write-Log -Level Info -Message "KeybindingService initialized with chords: $enableChords"
+    }
+    
+    hidden [void] InitializeDefaultBindings() {
+        # AI: Standard application keybindings
+        $this.KeyMap = @{
+            "app.exit" = @{ Key = "Q"; Modifiers = @("Ctrl") }
+            "app.help" = @{ Key = [System.ConsoleKey]::F1; Modifiers = @() }
+            "nav.back" = @{ Key = [System.ConsoleKey]::Escape; Modifiers = @() }
+            "nav.up" = @{ Key = [System.ConsoleKey]::UpArrow; Modifiers = @() }
+            "nav.down" = @{ Key = [System.ConsoleKey]::DownArrow; Modifiers = @() }
+            "nav.left" = @{ Key = [System.ConsoleKey]::LeftArrow; Modifiers = @() }
+            "nav.right" = @{ Key = [System.ConsoleKey]::RightArrow; Modifiers = @() }
+            "nav.select" = @{ Key = [System.ConsoleKey]::Enter; Modifiers = @() }
+            "nav.pageup" = @{ Key = [System.ConsoleKey]::PageUp; Modifiers = @() }
+            "nav.pagedown" = @{ Key = [System.ConsoleKey]::PageDown; Modifiers = @() }
+            "nav.home" = @{ Key = [System.ConsoleKey]::Home; Modifiers = @() }
+            "nav.end" = @{ Key = [System.ConsoleKey]::End; Modifiers = @() }
+            "nav.tab" = @{ Key = [System.ConsoleKey]::Tab; Modifiers = @() }
+            "nav.shifttab" = @{ Key = [System.ConsoleKey]::Tab; Modifiers = @("Shift") }
+            "edit.delete" = @{ Key = [System.ConsoleKey]::Delete; Modifiers = @() }
+            "edit.backspace" = @{ Key = [System.ConsoleKey]::Backspace; Modifiers = @() }
+            "edit.new" = @{ Key = "n"; Modifiers = @() }
+            "edit.save" = @{ Key = "s"; Modifiers = @("Ctrl") }
+            "app.refresh" = @{ Key = [System.ConsoleKey]::F5; Modifiers = @() }
+        }
+    }
+    
+    [void] SetBinding([string]$actionName, [System.ConsoleKey]$key, [string[]]$modifiers) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "SetBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName")
+            }
+            
+            $this.KeyMap[$actionName.ToLower()] = @{
+                Key = $key
+                Modifiers = if ($modifiers) { @($modifiers) } else { @() }
+            }
+            
+            Write-Log -Level Debug -Message "Set keybinding: $actionName -> $key"
+        }
+    }
+    
+    [void] SetBinding([string]$actionName, [char]$key, [string[]]$modifiers) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "SetBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName")
+            }
+            
+            $this.KeyMap[$actionName.ToLower()] = @{
+                Key = $key
+                Modifiers = if ($modifiers) { @($modifiers) } else { @() }
+            }
+            
+            Write-Log -Level Debug -Message "Set keybinding: $actionName -> $key"
+        }
+    }
+    
+    [void] SetBinding([string]$actionName, [System.ConsoleKeyInfo]$keyInfo) {
+        if ([string]::IsNullOrWhiteSpace($actionName)) {
+            throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName")
+        }
+        
+        $modifiers = @()
+        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Control) { $modifiers += "Ctrl" }
+        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Alt) { $modifiers += "Alt" }
+        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Shift) { $modifiers += "Shift" }
+
+        $this.KeyMap[$actionName.ToLower()] = @{
+            Key = $keyInfo.Key
+            KeyChar = $keyInfo.KeyChar
+            Modifiers = $modifiers
+        }
+        Write-Log -Level Debug -Message "Set keybinding for '$actionName': $($this.GetBindingDescription($actionName))"
+    }
+    
+    [void] RemoveBinding([string]$actionName) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "RemoveBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                return
+            }
+            
+            $normalizedName = $actionName.ToLower()
+            if ($this.KeyMap.ContainsKey($normalizedName)) {
+                $this.KeyMap.Remove($normalizedName)
+                Write-Log -Level Debug -Message "Removed keybinding: $actionName"
+            }
+        }
+    }
+    
+    [bool] IsAction([string]$actionName, [System.ConsoleKeyInfo]$keyInfo) {
+        return $this.IsAction($actionName, $keyInfo, $null)
+    }
+    
+    [bool] IsAction([string]$actionName, [System.ConsoleKeyInfo]$keyInfo, [string]$context) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "IsAction:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                return $false
+            }
+            
+            $normalizedName = $actionName.ToLower()
+            if (-not $this.KeyMap.ContainsKey($normalizedName)) {
+                return $false
+            }
+            
+            $binding = $this.KeyMap[$normalizedName]
+            
+            # Check if the key matches
+            $keyMatches = $false
+            if ($binding.Key -is [System.ConsoleKey]) {
+                $keyMatches = ($keyInfo.Key -eq $binding.Key)
+            }
+            elseif ($binding.Key -is [char]) {
+                $keyMatches = ($keyInfo.KeyChar -eq $binding.Key)
+            }
+            elseif ($binding.ContainsKey('KeyChar') -and $binding.KeyChar -ne [char]0) {
+                # Character-based binding (case-insensitive)
+                $keyMatches = $keyInfo.KeyChar.ToString().Equals($binding.KeyChar.ToString(), [System.StringComparison]::OrdinalIgnoreCase)
+            }
+            else {
+                # Try string comparison for backward compatibility
+                $keyString = $binding.Key.ToString()
+                if ($keyString.Length -eq 1) {
+                    $keyMatches = ($keyInfo.KeyChar.ToString().ToUpper() -eq $keyString.ToUpper())
+                }
+                else {
+                    # Try to match against ConsoleKey enum
+                    try {
+                        $consoleKey = [System.ConsoleKey]::Parse([System.ConsoleKey], $keyString, $true)
+                        $keyMatches = ($keyInfo.Key -eq $consoleKey)
+                    }
+                    catch {
+                        $keyMatches = $false
+                    }
+                }
+            }
+            
+            if (-not $keyMatches) {
+                return $false
+            }
+            
+            # Check modifiers
+            $hasCtrl = ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Control) -ne 0
+            $hasAlt = ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Alt) -ne 0
+            $hasShift = ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Shift) -ne 0
+            
+            $expectedCtrl = $binding.Modifiers -contains "Ctrl"
+            $expectedAlt = $binding.Modifiers -contains "Alt"
+            $expectedShift = $binding.Modifiers -contains "Shift"
+            
+            return ($hasCtrl -eq $expectedCtrl) -and ($hasAlt -eq $expectedAlt) -and ($hasShift -eq $expectedShift)
+        }
+    }
+    
+    [string] GetAction([System.ConsoleKeyInfo]$keyInfo) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "GetAction" -ScriptBlock {
+            foreach ($actionName in $this.KeyMap.Keys) {
+                if ($this.IsAction($actionName, $keyInfo)) {
+                    return $actionName
+                }
+            }
+            return $null
+        }
+    }
+    
+    [void] RegisterGlobalHandler([string]$actionName, [scriptblock]$handler) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "RegisterGlobalHandler:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName")
+            }
+            if ($null -eq $handler) {
+                throw [System.ArgumentNullException]::new("handler", "Handler cannot be null")
+            }
+            
+            $this.GlobalHandlers[$actionName.ToLower()] = $handler
+            Write-Log -Level Debug -Message "Registered global handler: $actionName"
+        }
+    }
+    
+    [object] HandleKey([System.ConsoleKeyInfo]$keyInfo) {
+        return $this.HandleKey($keyInfo, $null)
+    }
+    
+    [object] HandleKey([System.ConsoleKeyInfo]$keyInfo, [string]$context) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "HandleKey" -ScriptBlock {
+            # Check all registered actions
+            foreach ($action in $this.KeyMap.Keys) {
+                if ($this.IsAction($action, $keyInfo, $context)) {
+                    # Execute global handler if registered
+                    if ($this.GlobalHandlers.ContainsKey($action)) {
+                        Write-Log -Level Debug -Message "Executing global handler: $action"
+                        try {
+                            return & $this.GlobalHandlers[$action] -KeyInfo $keyInfo -Context $context
+                        }
+                        catch {
+                            Write-Log -Level Error -Message "Global handler failed for '$action': $_"
+                            return $null
+                        }
+                    }
+                    
+                    # Return the action name for the caller to handle
+                    return $action
+                }
+            }
+            
+            return $null
+        }
+    }
+    
+    [void] PushContext([string]$context) {
+        if (-not [string]::IsNullOrWhiteSpace($context)) {
+            $this.ContextStack.Add($context)
+            Write-Log -Level Debug -Message "Pushed keybinding context: $context (Stack depth: $($this.ContextStack.Count))"
+        }
+    }
+    
+    [string] PopContext() {
+        if ($this.ContextStack.Count -gt 0) {
+            $context = $this.ContextStack[-1]
+            $this.ContextStack.RemoveAt($this.ContextStack.Count - 1)
+            Write-Log -Level Debug -Message "Popped keybinding context: $context (Stack depth: $($this.ContextStack.Count))"
+            return $context
+        }
+        return $null
+    }
+    
+    [string] GetCurrentContext() {
+        if ($this.ContextStack.Count -gt 0) {
+            return $this.ContextStack[-1]
+        }
+        return "global"
+    }
+    
+    [string] GetBindingDescription([string]$actionName) {
+        if ([string]::IsNullOrWhiteSpace($actionName)) {
+            return $null
+        }
+        
+        $normalizedName = $actionName.ToLower()
+        if (-not $this.KeyMap.ContainsKey($normalizedName)) {
+            return "Unbound"
+        }
+        
+        $binding = $this.KeyMap[$normalizedName]
+        $keyStr = if ($binding.ContainsKey('KeyChar') -and $binding.KeyChar -ne [char]0) {
+            $binding.KeyChar.ToString().ToUpper()
+        } elseif ($binding.Key -is [System.ConsoleKey]) {
+            $binding.Key.ToString()
+        } else {
+            $binding.Key.ToString().ToUpper()
+        }
+        
+        if ($binding.Modifiers.Count -gt 0) {
+            return "$($binding.Modifiers -join '+') + $keyStr"
+        }
+        
+        return $keyStr
+    }
+    
+    [hashtable] GetAllBindings() {
+        return $this.GetAllBindings($false)
+    }
+    
+    [hashtable] GetAllBindings([bool]$groupByCategory) {
+        if (-not $groupByCategory) {
+            return $this.KeyMap.Clone()
+        }
+        
+        # Group by category (part before the dot)
+        $grouped = @{}
+        foreach ($action in $this.KeyMap.Keys) {
+            $parts = $action.Split('.')
+            $category = if ($parts.Count -gt 1) { $parts[0] } else { "General" }
+            if (-not $grouped.ContainsKey($category)) {
+                $grouped[$category] = @{}
+            }
+            $grouped[$category][$action] = $this.KeyMap[$action]
+        }
+        
+        return $grouped
+    }
+    
+    [void] ExportBindings([string]$path) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "ExportBindings" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) {
+                throw [System.ArgumentException]::new("Path cannot be null or empty", "path")
+            }
+            
+            $this.KeyMap | ConvertTo-Json -Depth 3 | Out-File -FilePath $path -Encoding UTF8
+            Write-Log -Level Info -Message "Exported keybindings to: $path"
+        }
+    }
+    
+    [void] ImportBindings([string]$path) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "ImportBindings" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) {
+                throw [System.ArgumentException]::new("Path cannot be null or empty", "path")
+            }
+            
+            if (-not (Test-Path $path)) {
+                Write-Log -Level Warning -Message "Keybindings file not found: $path"
+                return
+            }
+            
+            try {
+                $imported = Get-Content $path -Raw | ConvertFrom-Json
+                foreach ($prop in $imported.PSObject.Properties) {
+                    $bindingData = @{
+                        Key = $prop.Value.Key
+                        Modifiers = $prop.Value.Modifiers
+                    }
+                    if ($prop.Value.PSObject.Properties.Name -contains 'KeyChar') {
+                        $bindingData['KeyChar'] = $prop.Value.KeyChar
+                    }
+                    $this.KeyMap[$prop.Name] = $bindingData
+                }
+                Write-Log -Level Info -Message "Imported keybindings from: $path"
+            }
+            catch {
+                Write-Log -Level Error -Message "Failed to import keybindings from '$path': $_"
+                throw
+            }
+        }
+    }
+}
+# --- END OF ORIGINAL FILE: services\keybinding-service-class\keybinding-service-class.psm1 ---
+
+
+# --- START OF FULL REPLACEMENT for modules\dialog-system-class\dialog-system-class.psm1 ---
+# ==============================================================================
+# PMC Terminal v5 - Class-Based Dialog System
+# Implements dialogs as proper UIElement classes following the unified architecture
+# ==============================================================================
+
+# A UIElement designed to be displayed modally over other content using the
+# TUI Engine's overlay system. It handles its own rendering and input,
+# and uses Show-TuiOverlay/Close-TopTuiOverlay to manage its lifecycle.
+class Dialog : UIElement {
+    [string] $Title = "Dialog"
+    [string] $Message = ""
+    [ConsoleColor] $BorderColor = [ConsoleColor]::Cyan
+    [ConsoleColor] $TitleColor = [ConsoleColor]::White
+    [ConsoleColor] $MessageColor = [ConsoleColor]::Gray
+    
+    Dialog([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 50
+        $this.Height = 10
+    }
+    
+    [void] Show() {
+        $this.X = [Math]::Floor(($global:TuiState.BufferWidth - $this.Width) / 2)
+        $this.Y = [Math]::Floor(($global:TuiState.BufferHeight - $this.Height) / 2)
+        if ($null -eq $this.{_private_buffer} -or $this.{_private_buffer}.Width -ne $this.Width -or $this.{_private_buffer}.Height -ne $this.Height) {
+            $this.{_private_buffer} = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        }
+        Show-TuiOverlay -Element $this
+    }
+    
+    [void] Close() {
+        Close-TopTuiOverlay
+    }
+    
+    [void] OnRender() {
+        if ($null -eq $this.{_private_buffer}) { return }
+        $this.{_private_buffer}.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+        Write-TuiBox -Buffer $this.{_private_buffer} -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -BorderStyle "Single" -BorderColor $this.BorderColor -BackgroundColor [ConsoleColor]::Black -Title $this.Title
+        if (-not [string]::IsNullOrWhiteSpace($this.Message)) { $this.RenderMessage() }
+        $this.RenderDialogContent()
+    }
+    
+    hidden [void] RenderMessage() {
+        $messageY = 2; $messageX = 2; $maxWidth = $this.Width - 4
+        $wrappedLines = Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth
+        foreach ($line in $wrappedLines) {
+            if ($messageY -ge ($this.Height - 3)) { break }
+            Write-TuiText -Buffer $this.{_private_buffer} -X $messageX -Y $messageY -Text $line -ForegroundColor $this.MessageColor
+            $messageY++
+        }
+    }
+    
+    [void] RenderDialogContent() { }
+    
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($key.Key -eq [ConsoleKey]::Escape) { $this.OnCancel(); return $true }
+        return $false
+    }
+    
+    [void] OnConfirm() { $this.Close() }
+    [void] OnCancel() { $this.Close() }
+}
+
+class AlertDialog : Dialog {
+    [string] $ButtonText = "OK"
+    AlertDialog([string]$title, [string]$message) : base("AlertDialog") {
+        $this.Title = $title; $this.Message = $message; $this.Height = 10
+        $this.Width = [Math]::Min(80, [Math]::Max(40, $message.Length + 10))
+    }
+    [void] RenderDialogContent() {
+        $buttonY = $this.Height - 2; $buttonLabel = "[ $($this.ButtonText) ]"
+        $buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
+        Write-TuiText -Buffer $this.{_private_buffer} -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor ([ConsoleColor]::Yellow)
+    }
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) { $this.OnConfirm(); return $true }
+        return ([Dialog]$this).HandleInput($key)
+    }
+}
+
+class ConfirmDialog : Dialog {
+    [scriptblock] $OnConfirmAction; [scriptblock] $OnCancelAction
+    [string[]] $Buttons = @("Yes", "No"); [int] $SelectedButton = 0
+    ConfirmDialog([string]$title, [string]$message, [scriptblock]$onConfirm, [scriptblock]$onCancel) : base("ConfirmDialog") {
+        $this.Title = $title; $this.Message = $message; $this.OnConfirmAction = $onConfirm; $this.OnCancelAction = $onCancel
+        $this.Width = [Math]::Min(80, [Math]::Max(50, $message.Length + 10)); $this.Height = 10
+    }
+    [void] RenderDialogContent() {
+        $buttonY = $this.Height - 3; $totalButtonWidth = ($this.Buttons.Count * 12) + (($this.Buttons.Count - 1) * 2)
+        $buttonX = [Math]::Floor(($this.Width - $totalButtonWidth) / 2)
+        for ($i = 0; $i -lt $this.Buttons.Count; $i++) {
+            $isSelected = ($i -eq $this.SelectedButton)
+            $buttonLabel = if ($isSelected) { "[ $($this.Buttons[$i]) ]" } else { "  $($this.Buttons[$i])  " }
+            $color = if ($isSelected) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
+            Write-TuiText -Buffer $this.{_private_buffer} -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor $color
+            $buttonX += 14
+        }
+    }
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        switch ($key.Key) {
+            ([ConsoleKey]::LeftArrow) { $this.SelectedButton = [Math]::Max(0, $this.SelectedButton - 1); $this.RequestRedraw(); return $true }
+            ([ConsoleKey]::RightArrow) { $this.SelectedButton = [Math]::Min($this.Buttons.Count - 1, $this.SelectedButton + 1); $this.RequestRedraw(); return $true }
+            ([ConsoleKey]::Tab) { $this.SelectedButton = ($this.SelectedButton + 1) % $this.Buttons.Count; $this.RequestRedraw(); return $true }
+            ([ConsoleKey]::Enter) { if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }; return $true }
+            ([ConsoleKey]::Spacebar) { if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }; return $true }
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
+    [void] OnConfirm() { $this.Close(); if ($this.OnConfirmAction) { Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnConfirm" -ScriptBlock $this.OnConfirmAction } }
+    [void] OnCancel() { $this.Close(); if ($this.OnCancelAction) { Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction } }
+}
+
+class InputDialog : Dialog {
+    [string] $Prompt = ""
+    [string] $InputValue = ""
+    [int] $CursorPosition = 0
+    [scriptblock] $OnSubmitAction
+    [scriptblock] $OnCancelAction
+    
+    InputDialog([string]$title, [string]$prompt, [scriptblock]$onSubmit, [scriptblock]$onCancel) : base("InputDialog") {
+        $this.Title = $title
+        $this.Prompt = $prompt
+        $this.OnSubmitAction = $onSubmit
+        $this.OnCancelAction = $onCancel
+        $this.Width = [Math]::Min(80, [Math]::Max(50, $prompt.Length + 20))
+        $this.Height = 12
+    }
+    
+    [void] SetDefaultValue([string]$value) {
+        $this.InputValue = $value
+        $this.CursorPosition = $value.Length
+    }
+    
+    [void] RenderDialogContent() {
+        $promptY = 3; $promptX = 4
+        Write-TuiText -Buffer $this.{_private_buffer} -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor [ConsoleColor]::White
+        
+        $inputY = 5; $inputX = 4; $inputWidth = $this.Width - 8
+        Write-TuiBox -Buffer $this.{_private_buffer} -X $inputX -Y $inputY -Width $inputWidth -Height 3 -BorderStyle "Single" -BorderColor [ConsoleColor]::DarkGray
+        
+        $displayValue = $this.InputValue
+        if ($displayValue.Length -gt ($inputWidth - 3)) {
+            $displayValue = $displayValue.Substring($displayValue.Length - ($inputWidth - 3))
+        }
+        Write-TuiText -Buffer $this.{_private_buffer} -X ($inputX + 1) -Y ($inputY + 1) -Text $displayValue -ForegroundColor [ConsoleColor]::Yellow
+        
+        $buttonY = $this.Height - 3; $okLabel = "[ OK ]"; $cancelLabel = "[ Cancel ]"
+        $totalWidth = $okLabel.Length + $cancelLabel.Length + 4
+        $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
+        Write-TuiText -Buffer $this.{_private_buffer} -X $startX -Y $buttonY -Text $okLabel -ForegroundColor [ConsoleColor]::Green
+        Write-TuiText -Buffer $this.{_private_buffer} -X ($startX + $okLabel.Length + 4) -Y $buttonY -Text $cancelLabel -ForegroundColor [ConsoleColor]::Gray
+    }
+    
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        switch ($key.Key) {
+            ([ConsoleKey]::Enter) { $this.OnSubmit(); return $true }
+            ([ConsoleKey]::Escape) { $this.OnCancel(); return $true }
+            ([ConsoleKey]::Backspace) { if ($this.CursorPosition -gt 0) { $this.InputValue = $this.InputValue.Remove($this.CursorPosition - 1, 1); $this.CursorPosition--; $this.RequestRedraw() }; return $true }
+            ([ConsoleKey]::Delete) { if ($this.CursorPosition -lt $this.InputValue.Length) { $this.InputValue = $this.InputValue.Remove($this.CursorPosition, 1); $this.RequestRedraw() }; return $true }
+            ([ConsoleKey]::LeftArrow) { if ($this.CursorPosition -gt 0) { $this.CursorPosition--; $this.RequestRedraw() }; return $true }
+            ([ConsoleKey]::RightArrow) { if ($this.CursorPosition -lt $this.InputValue.Length) { $this.CursorPosition++; $this.RequestRedraw() }; return $true }
+            ([ConsoleKey]::Home) { $this.CursorPosition = 0; $this.RequestRedraw(); return $true }
+            ([ConsoleKey]::End) { $this.CursorPosition = $this.InputValue.Length; $this.RequestRedraw(); return $true }
+            default {
+                if ($key.KeyChar -and [char]::IsLetterOrDigit($key.KeyChar) -or $key.KeyChar -in @(' ', '.', '-', '_', '@', '!', '?', ',', ';', ':', '/', '\', '(', ')', '[', ']', '{', '}')) {
+                    $this.InputValue = $this.InputValue.Insert($this.CursorPosition, $key.KeyChar)
+                    $this.CursorPosition++
+                    $this.RequestRedraw()
+                    return $true
+                }
+            }
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
+    
+    [void] OnSubmit() {
+        $this.Close()
+        if ($this.OnSubmitAction) {
+            Invoke-WithErrorHandling -Component "InputDialog" -Context "OnSubmit" -ScriptBlock { & $this.OnSubmitAction $this.InputValue }
+        }
+    }
+    
+    [void] OnCancel() {
+        $this.Close()
+        if ($this.OnCancelAction) {
+            Invoke-WithErrorHandling -Component "InputDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction
+        }
+    }
+}
+
+class ProgressDialog : Dialog {
+    [int] $PercentComplete = 0
+    [string] $StatusText = ""
+    [bool] $ShowCancel = $false
+    [bool] $IsCancelled = $false
+    
+    ProgressDialog([string]$title, [string]$message) : base("ProgressDialog") {
+        $this.Title = $title; $this.Message = $message; $this.Width = 60; $this.Height = 10
+    }
+    
+    [void] UpdateProgress([int]$percent, [string]$status = "") {
+        $this.PercentComplete = [Math]::Max(0, [Math]::Min(100, $percent))
+        if ($status) { $this.StatusText = $status }
+        $this.RequestRedraw()
+    }
+    
+    [void] RenderDialogContent() {
+        $barY = 4; $barX = 4; $barWidth = $this.Width - 8
+        $filledWidth = [Math]::Floor($barWidth * ($this.PercentComplete / 100.0))
+        Write-TuiText -Buffer $this.{_private_buffer} -X $barX -Y $barY -Text ('─' * $barWidth) -ForegroundColor [ConsoleColor]::DarkGray
+        if ($filledWidth -gt 0) { Write-TuiText -Buffer $this.{_private_buffer} -X $barX -Y $barY -Text ('█' * $filledWidth) -ForegroundColor [ConsoleColor]::Green }
+        
+        $percentText = "$($this.PercentComplete)%"; $percentX = [Math]::Floor(($this.Width - $percentText.Length) / 2)
+        Write-TuiText -Buffer $this.{_private_buffer} -X $percentX -Y ($barY + 1) -Text $percentText -ForegroundColor [ConsoleColor]::White
+        
+        if ($this.StatusText) {
+            $statusY = $barY + 3; $maxStatusWidth = $this.Width - 8
+            $displayStatus = if ($this.StatusText.Length -gt $maxStatusWidth) { $this.StatusText.Substring(0, $maxStatusWidth - 3) + "..." } else { $this.StatusText }
+            $statusX = [Math]::Floor(($this.Width - $displayStatus.Length) / 2)
+            Write-TuiText -Buffer $this.{_private_buffer} -X $statusX -Y $statusY -Text $displayStatus -ForegroundColor [ConsoleColor]::Gray
+        }
+        
+        if ($this.ShowCancel) {
+            $buttonY = $this.Height - 2; $cancelLabel = "[ Cancel ]"; $buttonX = [Math]::Floor(($this.Width - $cancelLabel.Length) / 2)
+            Write-TuiText -Buffer $this.{_private_buffer} -X $buttonX -Y $buttonY -Text $cancelLabel -ForegroundColor [ConsoleColor]::Yellow
+        }
+    }
+    
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($this.ShowCancel -and $key.Key -in @([ConsoleKey]::Escape, [ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            $this.IsCancelled = $true
+            $this.Close()
+            return $true
+        }
+        return $false
+    }
+}
+
+class ListDialog : Dialog {
+    [string] $Prompt = ""; [string[]] $Items = @(); [int] $SelectedIndex = 0; [int] $ScrollOffset = 0; [int] $VisibleItems = 10; [bool] $AllowMultiple = $false; [System.Collections.Generic.HashSet[int]] $SelectedIndices; [scriptblock] $OnSelectAction; [scriptblock] $OnCancelAction
+    
+    ListDialog([string]$title, [string]$prompt, [string[]]$items, [scriptblock]$onSelect, [scriptblock]$onCancel) : base("ListDialog") {
+        $this.Title = $title; $this.Prompt = $prompt; $this.Items = $items; $this.OnSelectAction = $onSelect; $this.OnCancelAction = $onCancel
+        $this.SelectedIndices = [System.Collections.Generic.HashSet[int]]::new()
+        $maxItemWidth = ($items | Measure-Object -Property Length -Maximum).Maximum
+        $this.Width = [Math]::Min(80, [Math]::Max(40, $maxItemWidth + 10))
+        $this.VisibleItems = [Math]::Min(10, $items.Count)
+        $this.Height = $this.VisibleItems + 8
+    }
+    
+    [void] RenderDialogContent() {
+        if ($this.Prompt) { $promptY = 2; $promptX = 4; Write-TuiText -Buffer $this.{_private_buffer} -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor [ConsoleColor]::White }
+        
+        $listY = 4; $listX = 4; $listWidth = $this.Width - 8
+        $endIndex = [Math]::Min($this.ScrollOffset + $this.VisibleItems, $this.Items.Count)
+        for ($i = $this.ScrollOffset; $i -lt $endIndex; $i++) {
+            $relativeY = $listY + ($i - $this.ScrollOffset); $item = $this.Items[$i]; $isSelected = ($i -eq $this.SelectedIndex); $isChecked = $this.SelectedIndices.Contains($i)
+            if ($item.Length -gt ($listWidth - 4)) { $item = $item.Substring(0, $listWidth - 7) + "..." }
+            $prefix = if ($this.AllowMultiple) { if ($isChecked) { "[x] " } else { "[ ] " } } else { "" }
+            $displayText = "$prefix$item"
+            $fg = if ($isSelected) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }; $bg = if ($isSelected) { [ConsoleColor]::DarkGray } else { [ConsoleColor]::Black }
+            Write-TuiText -Buffer $this.{_private_buffer} -X $listX -Y $relativeY -Text (' ' * $listWidth) -BackgroundColor $bg
+            Write-TuiText -Buffer $this.{_private_buffer} -X $listX -Y $relativeY -Text $displayText -ForegroundColor $fg -BackgroundColor $bg
+        }
+        
+        if ($this.ScrollOffset -gt 0) { Write-TuiText -Buffer $this.{_private_buffer} -X ($this.Width - 5) -Y $listY -Text "▲" -ForegroundColor [ConsoleColor]::DarkGray }
+        if ($endIndex -lt $this.Items.Count) { Write-TuiText -Buffer $this.{_private_buffer} -X ($this.Width - 5) -Y ($listY + $this.VisibleItems - 1) -Text "▼" -ForegroundColor [ConsoleColor]::DarkGray }
+        
+        $instructY = $this.Height - 3; $instructions = if ($this.AllowMultiple) { "Space: Toggle, Enter: Confirm, Esc: Cancel" } else { "Enter: Select, Esc: Cancel" }; $instructX = [Math]::Floor(($this.Width - $instructions.Length) / 2)
+        Write-TuiText -Buffer $this.{_private_buffer} -X $instructX -Y $instructY -Text $instructions -ForegroundColor [ConsoleColor]::DarkGray
+    }
+    
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        switch ($key.Key) {
+            ([ConsoleKey]::UpArrow) { if ($this.SelectedIndex -gt 0) { $this.SelectedIndex--; if ($this.SelectedIndex -lt $this.ScrollOffset) { $this.ScrollOffset = $this.SelectedIndex }; $this.RequestRedraw() }; return $true }
+            ([ConsoleKey]::DownArrow) { if ($this.SelectedIndex -lt ($this.Items.Count - 1)) { $this.SelectedIndex++; if ($this.SelectedIndex -ge ($this.ScrollOffset + $this.VisibleItems)) { $this.ScrollOffset = $this.SelectedIndex - $this.VisibleItems + 1 }; $this.RequestRedraw() }; return $true }
+            ([ConsoleKey]::Spacebar) { if ($this.AllowMultiple) { if ($this.SelectedIndices.Contains($this.SelectedIndex)) { [void]$this.SelectedIndices.Remove($this.SelectedIndex) } else { [void]$this.SelectedIndices.Add($this.SelectedIndex) }; $this.RequestRedraw() }; return $true }
+            ([ConsoleKey]::Enter) { $this.OnSelect(); return $true }
+            ([ConsoleKey]::Escape) { $this.OnCancel(); return $true }
+        }
+        return $false
+    }
+    
+    [void] OnSelect() {
+        $this.Close()
+        if ($this.OnSelectAction) {
+            if ($this.AllowMultiple) {
+                $selectedItems = @(); foreach ($index in $this.SelectedIndices) { $selectedItems += $this.Items[$index] }
+                Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock { & $this.OnSelectAction $selectedItems }
+            } else {
+                $selectedItem = $this.Items[$this.SelectedIndex]
+                Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock { & $this.OnSelectAction $selectedItem }
+            }
+        }
+    }
+    
+    [void] OnCancel() {
+        $this.Close()
+        if ($this.OnCancelAction) {
+            Invoke-WithErrorHandling -Component "ListDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction
+        }
+    }
+}
+
+function Get-WordWrappedLines {
+    param([string]$Text, [int]$MaxWidth)
+    $lines = @(); $words = $Text -split '\s+'; $currentLine = ""
+    foreach ($word in $words) {
+        if ($currentLine.Length -eq 0) { $currentLine = $word } 
+        elseif (($currentLine.Length + 1 + $word.Length) -le $MaxWidth) { $currentLine += " " + $word } 
+        else { $lines += $currentLine; $currentLine = $word }
+    }
+    if ($currentLine.Length -gt 0) { $lines += $currentLine }
+    return $lines
+}
+
+function Initialize-DialogSystem {
+    Invoke-WithErrorHandling -Component "DialogSystem" -Context "Initialize" -ScriptBlock {
+        Subscribe-Event -EventName "Confirm.Request" -Handler { param($EventData) $params = $EventData.Data; Show-ConfirmDialog @params }
+        Subscribe-Event -EventName "Alert.Show" -Handler { param($EventData) $params = $EventData.Data; Show-AlertDialog @params }
+        Subscribe-Event -EventName "Input.Request" -Handler { param($EventData) $params = $EventData.Data; Show-InputDialog @params }
+        Write-Log -Level Info -Message "Class-based Dialog System initialized"
+    }
+}
+
+function Show-AlertDialog { param([string]$Title="Alert", [string]$Message); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowAlertDialog" -ScriptBlock { ([AlertDialog]::new($Title, $Message)).Show() } }
+function Show-ConfirmDialog { param([string]$Title="Confirm", [string]$Message, [scriptblock]$OnConfirm, [scriptblock]$OnCancel={}); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowConfirmDialog" -ScriptBlock { ([ConfirmDialog]::new($Title, $Message, $OnConfirm, $OnCancel)).Show() } }
+function Show-InputDialog { param([string]$Title="Input", [string]$Prompt, [string]$DefaultValue="", [scriptblock]$OnSubmit, [scriptblock]$OnCancel={}); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowInputDialog" -ScriptBlock { $d = [InputDialog]::new($Title, $Prompt, $OnSubmit, $OnCancel); if ($DefaultValue) { $d.SetDefaultValue($DefaultValue) }; $d.Show() } }
+function Show-ProgressDialog { param([string]$Title="Progress", [string]$Message="Processing...", [int]$PercentComplete=0, [switch]$ShowCancel); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowProgressDialog" -ScriptBlock { $d = [ProgressDialog]::new($Title, $Message); $d.PercentComplete = $PercentComplete; $d.ShowCancel = $ShowCancel; $d.Show(); return $d } }
+function Show-ListDialog { param([string]$Title="Select Item", [string]$Prompt="Choose an item:", [string[]]$Items, [scriptblock]$OnSelect, [scriptblock]$OnCancel={}, [switch]$AllowMultiple); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowListDialog" -ScriptBlock { $d = [ListDialog]::new($Title, $Prompt, $Items, $OnSelect, $OnCancel); $d.AllowMultiple = $AllowMultiple; $d.Show() } }
+function Close-TuiDialog { Invoke-WithErrorHandling -Component "DialogSystem" -Context "CloseDialog" -ScriptBlock { Close-TopTuiOverlay } }
+
+# --- END OF FULL REPLACEMENT for modules\dialog-system-class\dialog-system-class.psm1 ---
+
+
+
+# --- START OF FULL REPLACEMENT for screens\task-list-screen\task-list-screen.psm1 ---
+
+# ==============================================================================
+# PMC Terminal v5 - NCurses Task List Screen
+# Displays and manages tasks with buffer-based rendering
+# CORRECTED (v2): Fixed $this scoping issue in scriptblocks for dialogs/input.
+#
+# ARCHITECTURAL NOTE:
+# This class is a "Screen" and acts as a top-level container. It does not
+# perform any rendering itself. Instead, it orchestrates child "Panel"
+# components, which are responsible for their own rendering. The TUI Engine
+# composites the final view from the buffers of these child components.
+# ==============================================================================
+class TaskListScreen : Screen {
+    # --- Core Architecture ---
+    [Panel] $MainPanel
+    [Panel] $HeaderPanel
+    [Panel] $TablePanel
+    [Panel] $FooterPanel
+    [Table] $TaskTable
+    [System.Collections.Generic.List[UIElement]] $Components
+
+    # --- State Management ---
+    [string] $FilterStatus = "All"
+    [object[]] $AllTasks = @()
+    [System.Collections.ArrayList] $FilteredTasks = [System.Collections.ArrayList]::new()
+    [int] $SelectedIndex = 0
+
+    # --- Constructor ---
+    TaskListScreen([hashtable]$services) : base("TaskListScreen", $services) {
+        $this.Name = "TaskListScreen"
+        $this.Components = [System.Collections.Generic.List[UIElement]]::new()
+        $this.IsFocusable = $true
+        $this.Enabled = $true
+        $this.Visible = $true
+    }
+
+    # --- Initialization ---
+    [void] Initialize() {
+        Invoke-WithErrorHandling -Component "TaskListScreen" -Context "Initialize" -ScriptBlock {
+            $this.Width = $global:TuiState.BufferWidth
+            $this.Height = $global:TuiState.BufferHeight
+            
+            if ($null -ne $this.{_private_buffer}) {
+                $this.{_private_buffer}.Resize($this.Width, $this.Height)
+            }
+            
+            $this.MainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "Task List")
+            $this.MainPanel.HasBorder = $true
+            $this.MainPanel.BorderStyle = "Double"
+            $this.MainPanel.BorderColor = [ConsoleColor]::Gray
+            $this.MainPanel.BackgroundColor = [ConsoleColor]::Black
+            $this.MainPanel.Name = "MainTaskPanel"
+            $this.AddChild($this.MainPanel)
+            
+            $this.HeaderPanel = [Panel]::new(1, 1, $this.Width - 2, 3, "")
+            $this.HeaderPanel.HasBorder = $false
+            $this.HeaderPanel.BackgroundColor = [ConsoleColor]::Black
+            $this.HeaderPanel.Name = "HeaderPanel"
+            $this.MainPanel.AddChild($this.HeaderPanel)
+            
+            $this.TablePanel = [Panel]::new(1, 4, $this.Width - 2, $this.Height - 8, "")
+            $this.TablePanel.HasBorder = $true
+            $this.TablePanel.BorderStyle = "Single"
+            $this.TablePanel.BorderColor = [ConsoleColor]::DarkGray
+            $this.TablePanel.BackgroundColor = [ConsoleColor]::Black
+            $this.TablePanel.Name = "TablePanel"
+            $this.MainPanel.AddChild($this.TablePanel)
+            
+            $this.FooterPanel = [Panel]::new(1, $this.Height - 4, $this.Width - 2, 3, "")
+            $this.FooterPanel.HasBorder = $false
+            $this.FooterPanel.BackgroundColor = [ConsoleColor]::Black
+            $this.FooterPanel.Name = "FooterPanel"
+            $this.MainPanel.AddChild($this.FooterPanel)
+            
+            $this.TaskTable = [Table]::new("TaskTable")
+            $this.TaskTable.Move(0, 0)
+            $this.TaskTable.Resize($this.TablePanel.ContentWidth, $this.TablePanel.ContentHeight)
+            $this.TaskTable.ShowBorder = $false
+
+            $columns = @(
+                [TableColumn]::new('Title', 'Task Title', 50),
+                [TableColumn]::new('Status', 'Status', 15),
+                [TableColumn]::new('Priority', 'Priority', 12),
+                [TableColumn]::new('DueDate', 'Due Date', 15)
+            )
+            $this.TaskTable.SetColumns($columns)
+            
+            $this.TablePanel.AddChild($this.TaskTable)
+            
+            $this.RefreshData()
+            $this.UpdateDisplay()
+            
+            $this.RequestRedraw()
+            $this.Render()
+        }
+    }
+
+    # --- Data Management ---
+    hidden [void] RefreshData() {
+        Invoke-WithErrorHandling -Component "TaskListScreen" -Context "RefreshData" -ScriptBlock {
+            try {
+                $this.AllTasks = @($this.Services.DataManager.GetTasks())
+                if ($null -eq $this.AllTasks) { $this.AllTasks = @() }
+            } catch {
+                Write-Log -Level Warning -Message "Failed to load tasks: $_"
+                $this.AllTasks = @()
+            }
+            
+            $filterResult = switch ($this.FilterStatus) {
+                "Active" { $this.AllTasks | Where-Object { $_.Status -ne [TaskStatus]::Completed } }
+                "Completed" { $this.AllTasks | Where-Object { $_.Status -eq [TaskStatus]::Completed } }
+                default { $this.AllTasks }
+            }
+            
+            $this.FilteredTasks = [System.Collections.ArrayList]::new()
+            if ($null -ne $filterResult) {
+                if ($filterResult -is [array]) {
+                    foreach ($item in $filterResult) { $this.FilteredTasks.Add($item) | Out-Null }
+                } else {
+                    $this.FilteredTasks.Add($filterResult) | Out-Null
+                }
+            }
+            
+            $this.TaskTable.SetData($this.FilteredTasks)
+            
+            if ($null -ne $this.FilteredTasks -and $this.SelectedIndex -ge $this.FilteredTasks.Count) {
+                $this.SelectedIndex = [Math]::Max(0, $this.FilteredTasks.Count - 1)
+            }
+            
+            $this.RequestRedraw()
+        }
+    }
+
+    hidden [void] UpdateDisplay() {
+        Invoke-WithErrorHandling -Component "TaskListScreen" -Context "UpdateDisplay" -ScriptBlock {
+            $taskCount = if ($null -ne $this.FilteredTasks) { $this.FilteredTasks.Count } else { 0 }
+            $headerText = "Filter: $($this.FilterStatus) | Total: $taskCount tasks"
+            $this.WriteTextToPanel($this.HeaderPanel, $headerText, 0, 0, [ConsoleColor]::White)
+            $this.HeaderPanel.RequestRedraw()
+            
+            $footerText = "[↑↓]Navigate [Space]Toggle [N]ew [E]dit [D]elete [F]ilter [Esc]Back"
+            $this.WriteTextToPanel($this.FooterPanel, $footerText, 0, 0, [ConsoleColor]::Yellow)
+            $this.FooterPanel.RequestRedraw()
+            
+            $this.TaskTable.SelectedIndex = $this.SelectedIndex
+            
+            $this.RequestRedraw()
+        }
+    }
+
+    # --- Helper Methods ---
+    hidden [void] WriteTextToPanel([Panel]$panel, [string]$text, [int]$x, [int]$y, [ConsoleColor]$color) {
+        if ($null -eq $panel -or $null -eq $panel.{_private_buffer}) { return }
+        $chars = $text.ToCharArray()
+        for ($i = 0; $i -lt $chars.Length -and ($x + $i) -lt $panel.ContentWidth; $i++) {
+            $cell = [TuiCell]::new($chars[$i], $color, $panel.BackgroundColor)
+            $panel.{_private_buffer}.SetCell($panel.ContentX + $x + $i, $panel.ContentY + $y, $cell)
+        }
+    }
+
+    # --- Input Handling ---
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Capture the screen instance ($this) into a local variable so the
+        # scriptblock passed to Invoke-WithErrorHandling can access it.
+        $self = $this
+        Invoke-WithErrorHandling -Component "TaskListScreen" -Context "HandleInput" -ScriptBlock {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    if ($self.SelectedIndex -gt 0) {
+                        $self.SelectedIndex--
+                        $self.UpdateDisplay()
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($self.SelectedIndex -lt ($self.FilteredTasks.Count - 1) -and $self.FilteredTasks.Count -gt 0) {
+                        $self.SelectedIndex++
+                        $self.UpdateDisplay()
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::Spacebar) {
+                    $self.ToggleSelectedTask()
+                    return $true
+                }
+                ([ConsoleKey]::Escape) {
+                    $self.NavigateBack()
+                    return $true
+                }
+                default {
+                    $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
+                    switch ($keyChar) {
+                        'N' { $self.ShowNewTaskDialog(); return $true }
+                        'E' { $self.EditSelectedTask(); return $true }
+                        'D' { $self.DeleteSelectedTask(); return $true }
+                        'F' { $self.CycleFilter(); return $true }
+                    }
+                }
+            }
+        }
+        return $false
+    }
+
+    # --- Task Actions ---
+    hidden [void] ToggleSelectedTask() {
+        if ($this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) { return }
+        $task = $this.FilteredTasks[$this.SelectedIndex]
+        if ($null -eq $task) { return }
+        $newCompletedStatus = $task.Status -ne [TaskStatus]::Completed
+        $this.Services.DataManager.UpdateTask(@{ Task = $task; Completed = $newCompletedStatus })
+        $this.RefreshData()
+        $this.UpdateDisplay()
+    }
+
+    hidden [void] ShowNewTaskDialog() {
+        # Capture necessary context for the dialog's callback scriptblock.
+        $dataManager = $this.Services.DataManager
+        $screen = $this
+        Show-InputDialog -Title "New Task" -Prompt "Enter task title:" -OnSubmit {
+            param($Value)
+            if (-not [string]::IsNullOrWhiteSpace($Value)) {
+                $dataManager.AddTask($Value, "", "medium", "General")
+                $screen.RefreshData()
+                $screen.UpdateDisplay()
+            }
+        }
+    }
+
+    hidden [void] EditSelectedTask() {
+        if ($null -eq $this.FilteredTasks -or $this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) { return }
+        $task = $this.FilteredTasks[$this.SelectedIndex]
+        if ($null -eq $task) { return }
+        # Capture necessary context for the dialog's callback scriptblock.
+        $dataManager = $this.Services.DataManager
+        $screen = $this
+        Show-InputDialog -Title "Edit Task" -Prompt "New title:" -DefaultValue $task.Title -OnSubmit {
+            param($Value)
+            if (-not [string]::IsNullOrWhiteSpace($Value)) {
+                $dataManager.UpdateTask(@{ Task = $task; Title = $Value })
+                $screen.RefreshData()
+                $screen.UpdateDisplay()
+            }
+        }
+    }
+
+    hidden [void] DeleteSelectedTask() {
+        if ($null -eq $this.FilteredTasks -or $this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) { return }
+        $task = $this.FilteredTasks[$this.SelectedIndex]
+        if ($null -eq $task) { return }
+        # Capture necessary context for the dialog's callback scriptblock.
+        $dataManager = $this.Services.DataManager
+        $screen = $this
+        Show-ConfirmDialog -Title "Delete Task" -Message "Are you sure you want to delete `"$($task.Title)`"?" -OnConfirm {
+            $dataManager.RemoveTask($task)
+            $screen.RefreshData()
+            $screen.UpdateDisplay()
+        }
+    }
+
+    hidden [void] CycleFilter() {
+        $this.FilterStatus = switch ($this.FilterStatus) {
+            "All" { "Active" }
+            "Active" { "Completed" }
+            default { "All" }
+        }
+        $this.RefreshData()
+        $this.UpdateDisplay()
+    }
+
+    hidden [void] NavigateBack() {
+        $this.Services.Navigation.PopScreen()
+    }
+    
+    # --- Lifecycle Methods ---
+    [void] OnEnter() {
+        $this.RefreshData()
+        $this.UpdateDisplay()
+    }
+
+    [void] OnExit() { }
+
+    [void] Cleanup() {
+        $this.Components.Clear()
+        $this.Children.Clear()
+    }
+}
+
+# --- END OF FULL REPLACEMENT for screens\task-list-screen\task-list-screen.psm1 ---
+
+# --- START OF ORIGINAL FILE: services\navigation-service-class\navigation-service-class.psm1 ---
+# navigation-service-class.psm1
+# Contains only the NavigationService and ScreenFactory class definitions.
+
+
+
+class ScreenFactory {
+    hidden [hashtable] $Services
+    hidden [hashtable] $ScreenTypes = @{}
+    
+    ScreenFactory([hashtable]$services) {
+        $this.Services = $services ?? (throw [System.ArgumentNullException]::new("services"))
+        Write-Log -Level Debug -Message "ScreenFactory initialized"
+    }
+    
+    [void] RegisterScreen([string]$name, [type]$screenType) {
+        if (-not ($screenType -eq [Screen] -or $screenType.IsSubclassOf([Screen]))) { 
+            throw "Screen type '$($screenType.Name)' must inherit from the Screen class." 
+        }
+        $this.ScreenTypes[$name] = $screenType
+        Write-Log -Level Info -Message "Registered screen factory: $name -> $($screenType.Name)"
+    }
+    
+    [Screen] CreateScreen([string]$screenName, [hashtable]$parameters) {
+        $screenType = $this.ScreenTypes[$screenName]
+        if (-not $screenType) {
+            throw "Unknown screen type: '$screenName'. Available screens: $($this.ScreenTypes.Keys -join ', ')"
+        }
+        
+        try {
+            $screen = $screenType::new($this.Services)
+            if ($parameters) {
+                foreach ($key in $parameters.Keys) { 
+                    $screen.State[$key] = $parameters[$key] 
+                }
+            }
+            Write-Log -Level Info -Message "Created screen: $screenName"
+            return $screen
+        } catch {
+            Write-Log -Level Error -Message "Failed to create screen '$screenName': $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    [string[]] GetRegisteredScreens() {
+        return @($this.ScreenTypes.Keys)
+    }
+}
+
+class NavigationService {
+    [System.Collections.Generic.Stack[Screen]] $ScreenStack
+    [ScreenFactory] $ScreenFactory
+    [Screen] $CurrentScreen
+    [hashtable] $Services
+    [hashtable] $RouteMap = @{}
+    
+    NavigationService([hashtable]$services) {
+        $this.Services = $services ?? (throw [System.ArgumentNullException]::new("services"))
+        $this.ScreenStack = [System.Collections.Generic.Stack[Screen]]::new()
+        $this.ScreenFactory = [ScreenFactory]::new($services)
+        $this.InitializeRoutes()
+        Write-Log -Level Info -Message "NavigationService initialized"
+    }
+    
+    hidden [void] InitializeRoutes() {
+        $this.RouteMap = @{
+            "/" = "DashboardScreen"
+            "/dashboard" = "DashboardScreen"
+            "/tasks" = "TaskListScreen"
+        }
+        Write-Log -Level Debug -Message "Routes initialized: $($this.RouteMap.Keys -join ', ')"
+    }
+    
+    [void] RegisterScreenClass([string]$name, [type]$screenType) {
+        $this.ScreenFactory.RegisterScreen($name, $screenType)
+    }
+    
+    [void] GoTo([string]$path, [hashtable]$parameters = @{}) {
+        Invoke-WithErrorHandling -Component "NavigationService" -Context "GoTo:$path" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) { 
+                throw [System.ArgumentException]::new("Path cannot be empty.") 
+            }
+            if ($path -eq "/exit") { 
+                $this.RequestExit()
+                return 
+            }
+            
+            $screenName = $this.RouteMap[$path]
+            if (-not $screenName) {
+                $availableRoutes = $this.RouteMap.Keys -join ', '
+                throw "Unknown route: '$path'. Available routes: $availableRoutes"
+            }
+            
+            Write-Log -Level Info -Message "Navigating to: $path -> $screenName"
+            $this.PushScreen($screenName, $parameters)
+        }
+    }
+    
+    [void] PushScreen([string]$screenName, [hashtable]$parameters = @{}) {
+        Invoke-WithErrorHandling -Component "NavigationService" -Context "PushScreen:$screenName" -ScriptBlock {
+            Write-Log -Level Info -Message "Pushing screen: $screenName"
+            
+            if ($this.CurrentScreen) {
+                Write-Log -Level Debug -Message "Exiting current screen: $($this.CurrentScreen.Name)"
+                $this.CurrentScreen.OnExit()
+                $this.ScreenStack.Push($this.CurrentScreen)
+            }
+            
+            Write-Log -Level Debug -Message "Creating new screen: $screenName"
+            $newScreen = $this.ScreenFactory.CreateScreen($screenName, $parameters)
+            $this.CurrentScreen = $newScreen
+            
+            Write-Log -Level Debug -Message "Initializing screen: $screenName"
+            $newScreen.Initialize()
+            $newScreen.OnEnter()
+            
+            if (Get-Command "Push-Screen" -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Pushing screen to TUI engine"
+                Push-Screen -Screen $newScreen
+            } else {
+                if ($global:TuiState) {
+                    $global:TuiState.CurrentScreen = $newScreen
+                    Request-TuiRefresh
+                }
+            }
+            
+            Publish-Event -EventName "Navigation.ScreenChanged" -Data @{ Screen = $screenName; Action = "Push" }
+            Write-Log -Level Info -Message "Successfully pushed screen: $screenName"
+        }
+    }
+    
+    [bool] PopScreen() {
+        return Invoke-WithErrorHandling -Component "NavigationService" -Context "PopScreen" -ScriptBlock {
+            if ($this.ScreenStack.Count -eq 0) { 
+                Write-Log -Level Warning -Message "Cannot pop screen: stack is empty"
+                return $false 
+            }
+            
+            Write-Log -Level Info -Message "Popping screen"
+            $this.CurrentScreen?.OnExit()
+            $this.CurrentScreen = $this.ScreenStack.Pop()
+            $this.CurrentScreen?.OnResume()
+            
+            if (Get-Command "Pop-Screen" -ErrorAction SilentlyContinue) {
+                Pop-Screen
+            } else {
+                if ($global:TuiState) {
+                    $global:TuiState.CurrentScreen = $this.CurrentScreen
+                    Request-TuiRefresh
+                }
+            }
+            
+            Publish-Event -EventName "Navigation.ScreenPopped" -Data @{ Screen = $this.CurrentScreen.Name }
+            return $true
+        }
+    }
+    
+    [void] RequestExit() {
+        Write-Log -Level Info -Message "Exit requested"
+        while ($this.PopScreen()) {} # Pop all screens
+        $this.CurrentScreen?.OnExit()
+        if (Get-Command "Stop-TuiEngine" -ErrorAction SilentlyContinue) {
+            Stop-TuiEngine
+        }
+        Publish-Event -EventName "Application.Exit"
+    }
+    
+    [Screen] GetCurrentScreen() { return $this.CurrentScreen }
+    [bool] IsValidRoute([string]$path) { return $this.RouteMap.ContainsKey($path) }
+    
+    [void] ListRegisteredScreens() {
+        $screens = $this.ScreenFactory.GetRegisteredScreens()
+        Write-Log -Level Info -Message "Registered screens: $($screens -join ', ')"
+        Write-Host "Registered screens: $($screens -join ', ')" -ForegroundColor Green
+    }
+    
+    [void] ListAvailableRoutes() {
+        $routes = $this.RouteMap.Keys
+        Write-Log -Level Info -Message "Available routes: $($routes -join ', ')"
+        Write-Host "Available routes: $($routes -join ', ')" -ForegroundColor Green
+    }
+}
+# --- END OF ORIGINAL FILE: services\navigation-service-class\navigation-service-class.psm1 ---
+
+

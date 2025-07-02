@@ -1397,6 +1397,7 @@ class Screen : UIElement {
     [hashtable]$Services
     [System.Collections.Generic.Dictionary[string, object]]$State
     [System.Collections.Generic.List[UIElement]]$Panels
+    [UIElement]$LastFocusedComponent # <<< ADD THIS LINE
     hidden [System.Collections.Generic.Dictionary[string, string]]$EventSubscriptions
 
     Screen([string]$name, [hashtable]$services) : base($name) {
@@ -4394,15 +4395,13 @@ function Close-TuiDialog { Invoke-WithErrorHandling -Component "DialogSystem" -C
 
 # --- END OF FULL REPLACEMENT for modules\dialog-system-class\dialog-system-class.psm1 ---
 
-
-# --- START OF FULL REPLACEMENT for screens\dashboard-screen\dashboard-screen.psm1 ---
-
-# --- START OF FULL REPLACEMENT for screens\dashboard-screen\dashboard-screen.psm1 ---
+# --- START OF ORIGINAL FILE for screens\dashboard-screen\dashboard-screen.psm1 ---
 
 # ==============================================================================
 # PMC Terminal v5 - NCurses Dashboard Screen
 # Main entry screen with buffer-based rendering
-# CORRECTED (v2): Fixed $this scoping issue in scriptblocks for actions/input.
+# CORRECTED (v3): Fixed variable scoping in menu actions and implemented proper
+#                 component focus management for navigation.
 #
 # ARCHITECTURAL NOTE:
 # This class is a "Screen" and acts as a top-level container. It does not
@@ -4500,25 +4499,26 @@ class DashboardScreen : Screen {
     }
 
     # --- Menu Building ---
-    hidden [void] BuildMainMenu() {
+        hidden [void] BuildMainMenu() {
         try {
-            # Capture the navigation service in a local variable. The scriptblocks
-            # for the menu items will "close over" this variable, allowing them
-            # to access the service when they are executed later.
-            $local:navService = $this.Services.Navigation
+            # Capture the screen instance ($this) into a local variable. The scriptblocks
+            # below will form a closure over this variable, giving them access to the screen's services.
+            $screen_this = $this
             
             $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", {
-                $local:navService.GoTo("/tasks", @{})
+                $screen_this.Services.Navigation.GoTo("/tasks", @{})
             }))
             $this.MainMenu.AddItem([NavigationItem]::new("2", "Project Management", {
-                $local:navService.GoTo("/projects", @{})
+                # This action is not yet implemented, so we'll show a dialog.
+                Show-AlertDialog -Title "Not Implemented" -Message "Project Management screen is coming soon!"
             }))
             $this.MainMenu.AddItem([NavigationItem]::new("3", "Settings", {
-                $local:navService.GoTo("/settings", @{})
+                # This action is not yet implemented, so we'll show a dialog.
+                Show-AlertDialog -Title "Not Implemented" -Message "Settings screen is coming soon!"
             }))
             $this.MainMenu.AddSeparator()
             $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", {
-                $local:navService.RequestExit()
+                $screen_this.Services.Navigation.RequestExit()
             }))
             
             Write-Log -Level Debug -Message "Main menu built with $($this.MainMenu.Items.Count) items"
@@ -4667,49 +4667,33 @@ class DashboardScreen : Screen {
 
     # --- Input Handling ---
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Capture the screen instance ($this) into a local variable so the
-        # scriptblock passed to Invoke-WithErrorHandling can access it.
-        $local:self = $this
+        # This handler is now simplified. The TUI engine will automatically
+        # route arrow keys/enter to the focused component (the MainMenu).
+        # This handler only needs to process screen-specific shortcuts.
+        $self = $this
         Invoke-WithErrorHandling -Component "DashboardScreen" -Context "HandleInput" -ScriptBlock {
             $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
+            
+            # Screen-level shortcuts for convenience
             if ($keyChar -match '^[123Q]$') {
-                $local:self.MainMenu.ExecuteAction($keyChar)
+                $self.MainMenu.ExecuteAction($keyChar)
                 return $true
             }
             
             switch ($keyInfo.Key) {
-                ([ConsoleKey]::UpArrow) {
-                    if ($local:self.MainMenu.SelectedIndex -gt 0) {
-                        $local:self.MainMenu.SelectedIndex--
-                        $local:self.RequestRedraw()
-                        return $true
-                    }
-                }
-                ([ConsoleKey]::DownArrow) {
-                    if ($local:self.MainMenu.SelectedIndex -lt ($local:self.MainMenu.Items.Count - 1)) {
-                        $local:self.MainMenu.SelectedIndex++
-                        $local:self.RequestRedraw()
-                        return $true
-                    }
-                }
-                ([ConsoleKey]::Enter) {
-                    $selectedItem = $local:self.MainMenu.Items[$local:self.MainMenu.SelectedIndex]
-                    if ($selectedItem -and $selectedItem.Enabled) {
-                        $selectedItem.Execute()
-                        return $true
-                    }
-                }
                 ([ConsoleKey]::Escape) {
-                    $local:self.Services.Navigation.RequestExit()
+                    $self.Services.Navigation.RequestExit()
                     return $true
                 }
                 ([ConsoleKey]::F5) {
-                    $local:self.RefreshData()
-                    $local:self.UpdateDisplay()
+                    $self.RefreshData()
+                    $self.UpdateDisplay()
                     return $true
                 }
             }
         }
+        # Return $false because this screen-level handler did not consume the key.
+        # This allows the TUI engine to know the key is available for other layers if needed.
         return $false
     }
 
@@ -4717,6 +4701,10 @@ class DashboardScreen : Screen {
     [void] OnEnter() {
         $this.RefreshData()
         $this.UpdateDisplay()
+        
+        # Set the initial focus to the MainMenu. This is critical for
+        # allowing the menu to receive and handle arrow key/enter input.
+        Set-ComponentFocus -Component $this.MainMenu
     }
 
     [void] OnExit() { }
@@ -4731,10 +4719,9 @@ class DashboardScreen : Screen {
     }
 }
 
-# --- END OF FULL REPLACEMENT for screens\dashboard-screen\dashboard-screen.psm1 ---
+# --- END OF ORIGINAL FILE for screens\dashboard-screen\dashboard-screen.psm1 ---
 
-
-# --- START OF FULL REPLACEMENT for screens\task-list-screen\task-list-screen.psm1 ---
+# --- START OF ORIGINAL FILE for screens\task-list-screen\task-list-screen.psm1 ---
 
 # ==============================================================================
 # PMC Terminal v5 - NCurses Task List Screen
@@ -4899,38 +4886,38 @@ class TaskListScreen : Screen {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         # Capture the screen instance ($this) into a local variable so the
         # scriptblock passed to Invoke-WithErrorHandling can access it.
-        $local:self = $this
+        $self = $this
         Invoke-WithErrorHandling -Component "TaskListScreen" -Context "HandleInput" -ScriptBlock {
             switch ($keyInfo.Key) {
                 ([ConsoleKey]::UpArrow) {
-                    if ($local:self.SelectedIndex -gt 0) {
-                        $local:self.SelectedIndex--
-                        $local:self.UpdateDisplay()
+                    if ($self.SelectedIndex -gt 0) {
+                        $self.SelectedIndex--
+                        $self.UpdateDisplay()
                         return $true
                     }
                 }
                 ([ConsoleKey]::DownArrow) {
-                    if ($local:self.SelectedIndex -lt ($local:self.FilteredTasks.Count - 1) -and $local:self.FilteredTasks.Count -gt 0) {
-                        $local:self.SelectedIndex++
-                        $local:self.UpdateDisplay()
+                    if ($self.SelectedIndex -lt ($self.FilteredTasks.Count - 1) -and $self.FilteredTasks.Count -gt 0) {
+                        $self.SelectedIndex++
+                        $self.UpdateDisplay()
                         return $true
                     }
                 }
                 ([ConsoleKey]::Spacebar) {
-                    $local:self.ToggleSelectedTask()
+                    $self.ToggleSelectedTask()
                     return $true
                 }
                 ([ConsoleKey]::Escape) {
-                    $local:self.NavigateBack()
+                    $self.NavigateBack()
                     return $true
                 }
                 default {
                     $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
                     switch ($keyChar) {
-                        'N' { $local:self.ShowNewTaskDialog(); return $true }
-                        'E' { $local:self.EditSelectedTask(); return $true }
-                        'D' { $local:self.DeleteSelectedTask(); return $true }
-                        'F' { $local:self.CycleFilter(); return $true }
+                        'N' { $self.ShowNewTaskDialog(); return $true }
+                        'E' { $self.EditSelectedTask(); return $true }
+                        'D' { $self.DeleteSelectedTask(); return $true }
+                        'F' { $self.CycleFilter(); return $true }
                     }
                 }
             }
@@ -4951,14 +4938,14 @@ class TaskListScreen : Screen {
 
     hidden [void] ShowNewTaskDialog() {
         # Capture necessary context for the dialog's callback scriptblock.
-        $local:dataManager = $this.Services.DataManager
-        $local:screen = $this
+        $dataManager = $this.Services.DataManager
+        $screen = $this
         Show-InputDialog -Title "New Task" -Prompt "Enter task title:" -OnSubmit {
             param($Value)
             if (-not [string]::IsNullOrWhiteSpace($Value)) {
-                $local:dataManager.AddTask($Value, "", "medium", "General")
-                $local:screen.RefreshData()
-                $local:screen.UpdateDisplay()
+                $dataManager.AddTask($Value, "", "medium", "General")
+                $screen.RefreshData()
+                $screen.UpdateDisplay()
             }
         }
     }
@@ -4968,14 +4955,14 @@ class TaskListScreen : Screen {
         $task = $this.FilteredTasks[$this.SelectedIndex]
         if ($null -eq $task) { return }
         # Capture necessary context for the dialog's callback scriptblock.
-        $local:dataManager = $this.Services.DataManager
-        $local:screen = $this
+        $dataManager = $this.Services.DataManager
+        $screen = $this
         Show-InputDialog -Title "Edit Task" -Prompt "New title:" -DefaultValue $task.Title -OnSubmit {
             param($Value)
             if (-not [string]::IsNullOrWhiteSpace($Value)) {
-                $local:dataManager.UpdateTask(@{ Task = $task; Title = $Value })
-                $local:screen.RefreshData()
-                $local:screen.UpdateDisplay()
+                $dataManager.UpdateTask(@{ Task = $task; Title = $Value })
+                $screen.RefreshData()
+                $screen.UpdateDisplay()
             }
         }
     }
@@ -4985,12 +4972,12 @@ class TaskListScreen : Screen {
         $task = $this.FilteredTasks[$this.SelectedIndex]
         if ($null -eq $task) { return }
         # Capture necessary context for the dialog's callback scriptblock.
-        $local:dataManager = $this.Services.DataManager
-        $local:screen = $this
+        $dataManager = $this.Services.DataManager
+        $screen = $this
         Show-ConfirmDialog -Title "Delete Task" -Message "Are you sure you want to delete `"$($task.Title)`"?" -OnConfirm {
-            $local:dataManager.RemoveTask($task)
-            $local:screen.RefreshData()
-            $local:screen.UpdateDisplay()
+            $dataManager.RemoveTask($task)
+            $screen.RefreshData()
+            $screen.UpdateDisplay()
         }
     }
 
@@ -5022,7 +5009,7 @@ class TaskListScreen : Screen {
     }
 }
 
-# --- END OF FULL REPLACEMENT for screens\task-list-screen\task-list-screen.psm1 ---
+# --- END OF ORIGINAL FILE for screens\task-list-screen\task-list-screen.psm1 ---
 
 # --- START OF ORIGINAL FILE: services\navigation-service-class\navigation-service-class.psm1 ---
 # navigation-service-class.psm1
@@ -5445,9 +5432,10 @@ class DataManager {
 
     [bool] RemoveTask([PmcTask]$Task) {
         return Invoke-WithErrorHandling -Component "DataManager.RemoveTask" -Context "Removing task" -ScriptBlock {
-            $taskToRemove = $this.{_dataStore}.Tasks.Find({$_.Id -eq $Task.Id})
+            $taskToRemove = $this.{_dataStore}.Tasks.Find({param($t) $t.Id -eq $Task.Id})
             if ($taskToRemove) {
-                $this.{_dataStore}.Tasks.Remove($taskToRemove) | Out-Null; $this.{_dataModified} = $true
+                [void]$this.{_dataStore}.Tasks.Remove($taskToRemove)
+                $this.{_dataModified} = $true
                 Write-Log -Level Info -Message "Deleted task $($Task.Id)"
                 if ($this.{_dataStore}.Settings.AutoSave) { $this.SaveData() }
                 Publish-Event -EventName "Tasks.Changed" -Data @{ Action = "Deleted"; TaskId = $Task.Id; Task = $Task }
@@ -5457,10 +5445,10 @@ class DataManager {
         }
     }
 
-    [PmcTask[]] GetTasks([bool]$Completed, [string]$Priority, [string]$Category) {
+        [PmcTask[]] GetTasks([bool]$Completed = $null, [string]$Priority = $null, [string]$Category = $null) {
         return Invoke-WithErrorHandling -Component "DataManager.GetTasks" -Context "Retrieving tasks" -ScriptBlock {
             $tasks = $this.{_dataStore}.Tasks
-            if ($PSBoundParameters.ContainsKey('Completed')) { $tasks = $tasks | Where-Object { $_.Completed -eq $Completed } }
+                        if ($null -ne $Completed) { $tasks = $tasks | Where-Object { $_.Completed -eq $Completed } }
             if ($Priority) { $priorityEnum = [TaskPriority]::$Priority; $tasks = $tasks | Where-Object { $_.Priority -eq $priorityEnum } }
             if ($Category) { $tasks = $tasks | Where-Object { $_.ProjectKey -eq $Category -or $_.Category -eq $Category } }
             return @($tasks)
@@ -5855,6 +5843,12 @@ function Push-Screen {
         if ($Screen.Width -eq 10 -and $Screen.Height -eq 3) { # Default size
             $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
         }
+        
+        # Call OnEnter lifecycle method
+        if ($Screen -is [Screen] -or $Screen.GetType().GetMethod("OnEnter")) {
+            $Screen.OnEnter()
+        }
+        
         $Screen.RequestRedraw()
         
         Request-TuiRefresh
@@ -5948,6 +5942,7 @@ function Stop-AllTuiAsyncJobs { Write-Log -Level Debug -Message "Stopping all TU
 #region Utilities
 function Get-AnsiColorCode { param([ConsoleColor]$Color, [bool]$IsBackground); $map = @{ Black=30;DarkBlue=34;DarkGreen=32;DarkCyan=36;DarkRed=31;DarkMagenta=35;DarkYellow=33;Gray=37;DarkGray=90;Blue=94;Green=92;Cyan=96;Red=91;Magenta=95;Yellow=93;White=97 }; $code = $map[$Color.ToString()]; return $IsBackground ? $code + 10 : $code }
 function Stop-TuiEngine { Write-Log -Level Info -Message "Stop-TuiEngine called"; $global:TuiState.Running = $false; $global:TuiState.CancellationTokenSource?.Cancel(); Publish-Event -EventName "System.Shutdown" }
+function Stop-TuiLoop { Stop-TuiEngine }
 #endregion
 # --- END OF ORIGINAL FILE: modules\tui-engine\tui-engine.psm1 ---
 
@@ -6051,61 +6046,39 @@ function Test-TuiState {
     if (-not $isValid -and $ThrowOnError) { throw "TUI state is not properly initialized. Call Initialize-TuiEngine first." }
     return $isValid
 }
-# --- END OF ORIGINAL FILE: modules\tui-framework\tui-framework.psm1 ---
 
-
-# --- START OF MAIN EXECUTION LOGIC (from _CLASSY-MAIN.ps1) ---
 try {
-    Write-Host "`n=== PMC Terminal v5 - Starting (Classy Loader) ===" -ForegroundColor Cyan
+    Write-Host "`n=== PMC Terminal v5 - Starting Up ===" -ForegroundColor Cyan
     Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
     
-    # Initialize core services that have no dependencies
+    # 1. Initialize core services that have no dependencies
     Write-Host "`nInitializing services..." -ForegroundColor Yellow
     Initialize-Logger -Level $(if ($Debug) { "Debug" } else { "Info" })
     Initialize-EventSystem
     Initialize-ThemeManager
+    Initialize-DialogSystem
     
-    # Create the service container
+    # 2. Create the service container
     $services = @{}
     
-    # Initialize services that depend on others, passing the container
+    # 3. Initialize services that depend on others, passing the container
     $services.KeybindingService = New-KeybindingService
     $services.DataManager = Initialize-DataManager
     
-    # Create sample tasks for testing
-    Write-Host "Creating sample tasks..." -ForegroundColor Yellow
-    try {
-        $sampleTasks = @(
-            @{Title = "Review project documentation"; Description = "Review and update project documentation"; Priority = "High"; Project = "ProjectA"},
-            @{Title = "Fix critical bug in login system"; Description = "Address authentication issues"; Priority = "Medium"; Project = "ProjectB"},
-            @{Title = "Implement new feature"; Description = "Add user profile management"; Priority = "Medium"; Project = "ProjectA"},
-            @{Title = "Update dependencies"; Description = "Update all NPM packages"; Priority = "Low"; Project = "ProjectC"},
-            @{Title = "Write unit tests"; Description = "Increase test coverage"; Priority = "Medium"; Project = "ProjectB"}
-        )
-        
-        foreach ($taskData in $sampleTasks) {
-            $services.DataManager.AddTask($taskData.Title, $taskData.Description, $taskData.Priority, $taskData.Project)
-        }
-        Write-Host "Sample tasks created successfully!" -ForegroundColor Green
-    } catch {
-        Write-Host "Warning: Could not create sample tasks: $_" -ForegroundColor Yellow
-    }
-    
-    # NavigationService needs the $services container to pass to screens
+    # 4. NavigationService needs the $services container to pass to screens
     $services.Navigation = Initialize-NavigationService -Services $services
     
-    # Register screen classes with the navigation service
+    # 5. Register the screen classes with the navigation service's factory
+    #    This tells the navigation service how to create each screen when requested.
     $services.Navigation.RegisterScreenClass("DashboardScreen", [DashboardScreen])
     $services.Navigation.RegisterScreenClass("TaskListScreen", [TaskListScreen])
     
-    # Initialize the dialog system
-    Initialize-DialogSystem
-    
     Write-Host "All services initialized!" -ForegroundColor Green
     
+    # 6. Display the application logo (optional)
     if (-not $SkipLogo) {
         Write-Host @"
-    
+
     ╔═══════════════════════════════════════╗
     ║      PMC Terminal v5.0                ║
     ║      PowerShell Management Console    ║
@@ -6114,27 +6087,20 @@ try {
 "@ -ForegroundColor Cyan
     }
     
-    # Initialize the TUI Engine which orchestrates the UI
+    # 7. Initialize the TUI Engine which orchestrates the UI
     Write-Host "Starting TUI Engine..." -ForegroundColor Yellow
     Initialize-TuiEngine
     Write-Host "TUI Engine initialized successfully" -ForegroundColor Green
     
-    # Create and initialize the first screen
-    Write-Host "Creating DashboardScreen..." -ForegroundColor Yellow
-    $dashboard = [DashboardScreen]::new($services)
-    Write-Host "DashboardScreen created, initializing..." -ForegroundColor Yellow
-    $dashboard.Initialize()
-    Write-Host "DashboardScreen initialized successfully" -ForegroundColor Green
+    # 8. Create the very first screen instance to show.
+    Write-Host "Creating initial dashboard screen..." -ForegroundColor Yellow
+    $initialScreen = $services.Navigation.ScreenFactory.CreateScreen("DashboardScreen", @{})
+    $initialScreen.Initialize()
+    Write-Host "Dashboard screen created successfully" -ForegroundColor Green
     
-    # Push the screen to the engine and start the main loop
-    Write-Host "Pushing screen to TUI engine..." -ForegroundColor Yellow
-    Push-Screen -Screen $dashboard
-    Write-Host "Screen pushed, starting main loop..." -ForegroundColor Yellow
-    
-    # Force an initial refresh to ensure rendering
-    $global:TuiState.IsDirty = $true
-    
-    Start-TuiLoop
+    # 9. Push the initial screen to the engine and start the main loop.
+    Write-Host "Starting main application loop..." -ForegroundColor Yellow
+    Start-TuiLoop -InitialScreen $initialScreen
     
 } catch {
     Write-Host "`n=== FATAL ERROR ===" -ForegroundColor Red
@@ -6150,7 +6116,7 @@ try {
     exit 1
 } finally {
     # Cleanup logic if needed
-    Pop-Location -ErrorAction SilentlyContinue
-   
+    Write-Host "Application has exited. Cleaning up..."
+    Cleanup-TuiEngine
 }
 # --- END OF MAIN EXECUTION LOGIC ---

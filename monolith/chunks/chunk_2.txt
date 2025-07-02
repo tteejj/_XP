@@ -1,0 +1,1821 @@
+# --- START OF ORIGINAL FILE: modules\theme-manager\theme-manager.psm1 ---
+# FILE: modules/theme-manager.psm1
+# PURPOSE: Provides theming and color management for the TUI.
+#
+
+
+
+
+$script:CurrentTheme = $null
+$script:Themes = @{
+    Modern = @{ Name="Modern"; Colors=@{ Background=[ConsoleColor]::Black; Foreground=[ConsoleColor]::White; Primary=[ConsoleColor]::White; Secondary=[ConsoleColor]::Gray; Accent=[ConsoleColor]::Cyan; Success=[ConsoleColor]::Green; Warning=[ConsoleColor]::Yellow; Error=[ConsoleColor]::Red; Info=[ConsoleColor]::Blue; Header=[ConsoleColor]::Cyan; Border=[ConsoleColor]::DarkGray; Selection=[ConsoleColor]::Yellow; Highlight=[ConsoleColor]::Cyan; Subtle=[ConsoleColor]::DarkGray; Keyword=[ConsoleColor]::Blue; String=[ConsoleColor]::Green; Number=[ConsoleColor]::Magenta; Comment=[ConsoleColor]::DarkGray } }
+    Dark   = @{ Name="Dark"; Colors=@{ Background=[ConsoleColor]::Black; Foreground=[ConsoleColor]::Gray; Primary=[ConsoleColor]::Gray; Secondary=[ConsoleColor]::DarkGray; Accent=[ConsoleColor]::DarkCyan; Success=[ConsoleColor]::DarkGreen; Warning=[ConsoleColor]::DarkYellow; Error=[ConsoleColor]::DarkRed; Info=[ConsoleColor]::DarkBlue; Header=[ConsoleColor]::DarkCyan; Border=[ConsoleColor]::DarkGray; Selection=[ConsoleColor]::Yellow; Highlight=[ConsoleColor]::Cyan; Subtle=[ConsoleColor]::DarkGray; Keyword=[ConsoleColor]::DarkBlue; String=[ConsoleColor]::DarkGreen; Number=[ConsoleColor]::DarkMagenta; Comment=[ConsoleColor]::DarkGray } }
+    Light  = @{ Name="Light"; Colors=@{ Background=[ConsoleColor]::White; Foreground=[ConsoleColor]::Black; Primary=[ConsoleColor]::Black; Secondary=[ConsoleColor]::DarkGray; Accent=[ConsoleColor]::Blue; Success=[ConsoleColor]::Green; Warning=[ConsoleColor]::DarkYellow; Error=[ConsoleColor]::Red; Info=[ConsoleColor]::Blue; Header=[ConsoleColor]::Blue; Border=[ConsoleColor]::Gray; Selection=[ConsoleColor]::Cyan; Highlight=[ConsoleColor]::Yellow; Subtle=[ConsoleColor]::Gray; Keyword=[ConsoleColor]::Blue; String=[ConsoleColor]::Green; Number=[ConsoleColor]::Magenta; Comment=[ConsoleColor]::Gray } }
+    Retro  = @{ Name="Retro"; Colors=@{ Background=[ConsoleColor]::Black; Foreground=[ConsoleColor]::Green; Primary=[ConsoleColor]::Green; Secondary=[ConsoleColor]::DarkGreen; Accent=[ConsoleColor]::Yellow; Success=[ConsoleColor]::Green; Warning=[ConsoleColor]::Yellow; Error=[ConsoleColor]::Red; Info=[ConsoleColor]::Cyan; Header=[ConsoleColor]::Yellow; Border=[ConsoleColor]::DarkGreen; Selection=[ConsoleColor]::Yellow; Highlight=[ConsoleColor]::White; Subtle=[ConsoleColor]::DarkGreen; Keyword=[ConsoleColor]::Yellow; String=[ConsoleColor]::Cyan; Number=[ConsoleColor]::White; Comment=[ConsoleColor]::DarkGreen } }
+}
+
+function Initialize-ThemeManager {
+    Invoke-WithErrorHandling -Component "ThemeManager.Initialize" -Context "Initializing theme service" -ScriptBlock {
+        Set-TuiTheme -ThemeName "Modern"
+        Write-Log -Level Info -Message "Theme manager initialized."
+    }
+}
+
+function Set-TuiTheme {
+    param([Parameter(Mandatory)] [string]$ThemeName)
+    Invoke-WithErrorHandling -Component "ThemeManager.SetTheme" -Context "Setting active TUI theme" -AdditionalData @{ ThemeName = $ThemeName } -ScriptBlock {
+        if ($script:Themes.ContainsKey($ThemeName)) {
+            $script:CurrentTheme = $script:Themes[$ThemeName]
+            if ($Host.UI.RawUI) {
+                $Host.UI.RawUI.BackgroundColor = $script:CurrentTheme.Colors.Background
+                $Host.UI.RawUI.ForegroundColor = $script:CurrentTheme.Colors.Foreground
+            }
+            Write-Log -Level Debug -Message "Theme set to: $ThemeName"
+            Publish-Event -EventName "Theme.Changed" -Data @{ ThemeName = $ThemeName; Theme = $script:CurrentTheme }
+        } else {
+            Write-Log -Level Warning -Message "Theme not found: $ThemeName"
+        }
+    }
+}
+
+function Get-ThemeColor {
+    param([Parameter(Mandatory)] [string]$ColorName, [ConsoleColor]$Default = [ConsoleColor]::Gray)
+    try {
+        return $script:CurrentTheme.Colors[$ColorName] ?? $Default
+    } catch {
+        Write-Log -Level Warning -Message "Error in Get-ThemeColor for '$ColorName'. Returning default. Error: $_"
+        return $Default
+    }
+}
+
+function Get-TuiTheme {
+    Invoke-WithErrorHandling -Component "ThemeManager.GetTheme" -Context "Retrieving current theme" -ScriptBlock {
+        return $script:CurrentTheme
+    }
+}
+
+function Get-AvailableThemes {
+    Invoke-WithErrorHandling -Component "ThemeManager.GetAvailableThemes" -Context "Retrieving available themes" -ScriptBlock {
+        return $script:Themes.Keys | Sort-Object
+    }
+}
+
+function New-TuiTheme {
+    param([Parameter(Mandatory)] [string]$Name, [string]$BaseTheme = "Modern", [hashtable]$Colors = @{})
+    Invoke-WithErrorHandling -Component "ThemeManager.NewTheme" -Context "Creating new theme" -AdditionalData @{ ThemeName = $Name } -ScriptBlock {
+        $newTheme = @{ Name = $Name; Colors = @{} }
+        if ($script:Themes.ContainsKey($BaseTheme)) { $newTheme.Colors = $script:Themes[$BaseTheme].Colors.Clone() }
+        foreach ($colorKey in $Colors.Keys) { $newTheme.Colors[$colorKey] = $Colors[$colorKey] }
+        $script:Themes[$Name] = $newTheme
+        Write-Log -Level Info -Message "Created new theme: $Name"
+        return $newTheme
+    }
+}
+
+function Export-TuiTheme {
+    param([Parameter(Mandatory)] [string]$ThemeName, [Parameter(Mandatory)] [string]$Path)
+    Invoke-WithErrorHandling -Component "ThemeManager.ExportTheme" -Context "Exporting theme to JSON" -AdditionalData @{ ThemeName = $ThemeName; FilePath = $Path } -ScriptBlock {
+        if ($script:Themes.ContainsKey($ThemeName)) {
+            $theme = $script:Themes[$ThemeName]
+            $exportTheme = @{ Name = $theme.Name; Colors = @{} }
+            foreach ($colorKey in $theme.Colors.Keys) { $exportTheme.Colors[$colorKey] = $theme.Colors[$colorKey].ToString() }
+            $exportTheme | ConvertTo-Json -Depth 3 | Set-Content -Path $Path
+            Write-Log -Level Info -Message "Exported theme '$ThemeName' to: $Path"
+        } else {
+            Write-Log -Level Warning -Message "Cannot export theme. Theme not found: $ThemeName"
+        }
+    }
+}
+
+function Import-TuiTheme {
+    param([Parameter(Mandatory)] [string]$Path)
+    Invoke-WithErrorHandling -Component "ThemeManager.ImportTheme" -Context "Importing theme from JSON" -AdditionalData @{ FilePath = $Path } -ScriptBlock {
+        if (Test-Path $Path) {
+            $importedTheme = Get-Content $Path -Raw | ConvertFrom-Json -AsHashtable
+            $theme = @{ Name = $importedTheme.Name; Colors = @{} }
+            foreach ($colorKey in $importedTheme.Colors.Keys) {
+                $theme.Colors[$colorKey] = [System.Enum]::Parse([System.ConsoleColor], $importedTheme.Colors[$colorKey], $true)
+            }
+            $script:Themes[$theme.Name] = $theme
+            Write-Log -Level Info -Message "Imported theme: $($theme.Name)"
+            return $theme
+        } else {
+            Write-Log -Level Warning -Message "Cannot import theme. File not found: $Path"
+            return $null
+        }
+    }
+}
+# --- END OF ORIGINAL FILE: modules\theme-manager\theme-manager.psm1 ---
+
+
+# --- START OF FULL REPLACEMENT for components\ui-classes\ui-classes.psm1 ---
+# ==============================================================================
+# PMC Terminal v5 - Base UI Class Hierarchy
+# Provides the foundational classes for all UI components with NCurses compositor support.
+# ==============================================================================
+
+# --- Enhanced UI Element with Buffer Management ---
+class UIElement {
+    [string] $Name = ""
+    [int] $X = 0
+    [int] $Y = 0
+    [int] $Width = 10
+    [int] $Height = 3
+    [bool] $Visible = $true
+    [bool] $Enabled = $true
+    [bool] $IsFocusable = $false
+    [bool] $IsFocused = $false
+    [int] $TabIndex = 0
+    [int] $ZIndex = 0
+    [UIElement] $Parent = $null
+    [System.Collections.Generic.List[UIElement]] $Children
+    [TuiBuffer] $_private_buffer = $null
+    [bool] $_needs_redraw = $true
+    [hashtable] $Metadata = @{}
+
+    # Constructor
+    UIElement() {
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this.{_private_buffer} = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+    }
+
+    # Constructor with name
+    UIElement([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            throw [ArgumentException]::new("UIElement name cannot be null or empty.")
+        }
+        $this.Name = $name
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this.{_private_buffer} = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+    }
+
+    # Constructor with position and size
+    UIElement([int]$x, [int]$y, [int]$width, [int]$height) {
+        $this.X = $x
+        $this.Y = $y
+        $this.Width = $width
+        $this.Height = $height
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this.{_private_buffer} = [TuiBuffer]::new($width, $height, "$($this.Name).Buffer")
+    }
+
+    # Get absolute screen position
+    [hashtable] GetAbsolutePosition() {
+        $absX = $this.X
+        $absY = $this.Y
+        $current = $this.Parent
+        
+        while ($null -ne $current) {
+            $absX += $current.X
+            $absY += $current.Y
+            $current = $current.Parent
+        }
+        
+        return @{ X = $absX; Y = $absY }
+    }
+
+    # Add child component
+    [void] AddChild([UIElement]$child) {
+        if ($null -ne $child) {
+            $child.Parent = $this
+            $this.Children.Add($child)
+            $this.RequestRedraw()
+        }
+    }
+
+    # Remove child component
+    [void] RemoveChild([UIElement]$child) {
+        if ($null -ne $child) {
+            $child.Parent = $null
+            [void]$this.Children.Remove($child)
+            $this.RequestRedraw()
+        }
+    }
+
+    # Request redraw for this component and parents
+    [void] RequestRedraw() {
+        $this.{_needs_redraw} = $true
+        if ($null -ne $this.Parent) {
+            $this.Parent.RequestRedraw()
+        }
+    }
+
+    # Resize the component and its buffer
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        if ($newWidth -le 0 -or $newHeight -le 0) { return }
+        
+        $this.Width = $newWidth
+        $this.Height = $newHeight
+        
+        if ($null -ne $this.{_private_buffer}) {
+            $this.{_private_buffer}.Resize($newWidth, $newHeight)
+        }
+        
+        $this.RequestRedraw()
+        $this.OnResize($newWidth, $newHeight)
+    }
+
+    # Move the component
+    [void] Move([int]$newX, [int]$newY) {
+        $this.X = $newX
+        $this.Y = $newY
+        $this.RequestRedraw()
+        $this.OnMove($newX, $newY)
+    }
+
+    # Check if point is within component bounds
+    [bool] ContainsPoint([int]$x, [int]$y) {
+        return ($x -ge $this.X -and $x -lt ($this.X + $this.Width) -and 
+                $y -ge $this.Y -and $y -lt ($this.Y + $this.Height))
+    }
+
+    # Get child at specific point (relative to this component)
+    [UIElement] GetChildAtPoint([int]$x, [int]$y) {
+        for ($i = $this.Children.Count - 1; $i -ge 0; $i--) {
+            $child = $this.Children[$i]
+            if ($child.Visible -and $child.ContainsPoint($x - $this.X, $y - $this.Y)) {
+                return $child
+            }
+        }
+        return $null
+    }
+
+    # Virtual methods for subclasses to override
+    [void] OnRender() {
+        # Default implementation - clear buffer
+        if ($null -ne $this.{_private_buffer}) {
+            $this.{_private_buffer}.Clear()
+        }
+    }
+
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        # Override in subclasses
+    }
+
+    [void] OnMove([int]$newX, [int]$newY) {
+        # Override in subclasses
+    }
+
+    [void] OnFocus() {
+        # Override in subclasses
+    }
+
+    [void] OnBlur() {
+        # Override in subclasses
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Override in subclasses - return true if input was handled
+        return $false
+    }
+
+    # Main render method with error handling - calls _RenderContent and renders children
+    [void] Render() {
+        Invoke-WithErrorHandling -Component $this.Name -Context "Render" -ScriptBlock {
+            if (-not $this.Visible) { return }
+            $this._RenderContent()
+        } -AdditionalData @{ ComponentType = $this.GetType().Name }
+    }
+
+    # Protected render implementation - can be overridden by subclasses
+    hidden [void] _RenderContent() {
+        if (-not $this.Visible) { return }
+
+        # Render this component to its private buffer
+        if ($this.{_needs_redraw} -or ($null -eq $this.{_private_buffer})) {
+            if ($null -eq $this.{_private_buffer}) {
+                $this.{_private_buffer} = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+            }
+            
+            $this.OnRender()
+            $this.{_needs_redraw} = $false
+        }
+
+        # Render children to their buffers, then composite onto parent
+        foreach ($child in $this.Children) {
+            if ($child.Visible) {
+                $child.Render()
+                
+                # Composite child's buffer onto this component's buffer
+                if ($null -ne $child.{_private_buffer}) {
+                    $this.{_private_buffer}.BlendBuffer($child.{_private_buffer}, $child.X, $child.Y)
+                }
+            }
+        }
+    }
+
+    # Get the final rendered buffer
+    [TuiBuffer] GetBuffer() {
+        return $this.{_private_buffer}
+    }
+    
+    [string] ToString() {
+        return "$($this.GetType().Name): $($this.Name)"
+    }
+}
+
+# --- Base Component (can contain children) ---
+class Component : UIElement {
+    Component([string]$name) : base($name) {
+    }
+
+    # AI: Default implementation renders all visible children to buffer
+    hidden [void] _RenderContent() {
+        # Call parent implementation for buffer management
+        ([UIElement]$this)._RenderContent()
+    }
+}
+
+# Note: Panel class is now defined in layout\panels-class.psm1
+
+# --- Base Screen (top-level container) ---
+class Screen : UIElement {
+    [hashtable]$Services
+    [System.Collections.Generic.Dictionary[string, object]]$State
+    [System.Collections.Generic.List[UIElement]]$Panels
+    hidden [System.Collections.Generic.Dictionary[string, string]]$EventSubscriptions
+
+    Screen([string]$name, [hashtable]$services) : base($name) {
+        if (-not $services) { throw [ArgumentNullException]::new("services") }
+        
+        $this.Services = $services
+        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
+        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+    }
+    
+    [void] Initialize() { }
+    [void] OnEnter() { }
+    [void] OnExit() { }
+    [void] OnResume() { }
+    [void] HandleInput([System.ConsoleKeyInfo]$key) { }
+
+    [void] Cleanup() {
+        foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
+            try {
+                Unsubscribe-Event -EventName $kvp.Key -SubscriberId $kvp.Value
+            }
+            catch {
+                Write-Log -Level Warning -Message "Failed to unregister event '$($kvp.Key)' for screen '$($this.Name)'."
+            }
+        }
+        $this.EventSubscriptions.Clear()
+        $this.Panels.Clear()
+        Write-Log -Level Debug -Message "Cleaned up screen: $($this.Name)"
+    }
+    
+    [void] AddPanel([UIElement]$panel) {
+        if (-not $panel) { throw [ArgumentNullException]::new("panel") }
+        $this.Panels.Add($panel)
+    }
+
+    [void] SubscribeToEvent([string]$eventName, [scriptblock]$action) {
+        if ([string]::IsNullOrWhiteSpace($eventName)) { throw [ArgumentException]::new("Event name cannot be null or empty.") }
+        if (-not $action) { throw [ArgumentNullException]::new("action") }
+        
+        # AI: Fixed parameter name from -Action to -Handler to match event-system.psm1 function signature
+        $subscriptionId = Subscribe-Event -EventName $eventName -Handler $action -Source $this.Name
+        $this.EventSubscriptions[$eventName] = $subscriptionId
+    }
+    
+    # AI: Override _RenderContent to render all panels to buffer
+    hidden [void] _RenderContent() {
+        # Call base implementation for buffer management
+        ([UIElement]$this)._RenderContent()
+        
+        # Render all panels in the screen to the back-buffer
+        foreach ($panel in $this.Panels) {
+            if ($panel.Visible) {
+                $panel.Render()
+            }
+        }
+    }
+}
+# --- END OF FULL REPLACEMENT for components\ui-classes\ui-classes.psm1 ---
+
+
+# --- START OF FULL REPLACEMENT for layout\panels-class\panels-class.psm1 ---
+# Panel Classes v5.1 - NCurses Compositor Foundation
+# Provides Panel base class for layout management
+
+# Panel Class - A specialized UIElement that acts as a container.
+# It can draw a border and title, and it intelligently manages child elements,
+# positioning them correctly within its bordered "content area".
+class Panel : UIElement {
+    [string] $Title = ""
+    [string] $BorderStyle = "Single"
+    [ConsoleColor] $BorderColor = [ConsoleColor]::Gray
+    [ConsoleColor] $BackgroundColor = [ConsoleColor]::Black
+    [ConsoleColor] $TitleColor = [ConsoleColor]::White
+    [bool] $HasBorder = $true
+    [bool] $CanFocus = $false
+    [int] $ContentX = 0
+    [int] $ContentY = 0
+    [int] $ContentWidth = 0
+    [int] $ContentHeight = 0
+    [string] $LayoutType = "Manual"  # Manual, Vertical, Horizontal, Grid
+
+    # Constructor
+    Panel() : base() {
+        $this.Name = "Panel"
+        $this.IsFocusable = $false
+        $this.UpdateContentBounds()
+    }
+
+    # Constructor with position and size
+    Panel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) {
+        $this.Name = "Panel"
+        $this.IsFocusable = $false
+        $this.UpdateContentBounds()
+    }
+
+    # Constructor with title
+    Panel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height) {
+        $this.Name = "Panel"
+        $this.Title = $title
+        $this.IsFocusable = $false
+        $this.UpdateContentBounds()
+    }
+
+    # Update content bounds based on border settings
+    [void] UpdateContentBounds() {
+        if ($this.HasBorder) {
+            $this.ContentX = 1
+            $this.ContentY = 1
+            $this.ContentWidth = [Math]::Max(0, $this.Width - 2)
+            $this.ContentHeight = [Math]::Max(0, $this.Height - 2)
+        } else {
+            $this.ContentX = 0
+            $this.ContentY = 0
+            $this.ContentWidth = $this.Width
+            $this.ContentHeight = $this.Height
+        }
+    }
+
+    # Override resize to update content bounds
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        $this.UpdateContentBounds()
+        $this.PerformLayout()
+    }
+
+    # Perform automatic layout based on LayoutType
+    [void] PerformLayout() {
+        if ($this.Children.Count -eq 0) { return }
+
+        switch ($this.LayoutType) {
+            "Vertical" { $this.LayoutVertical() }
+            "Horizontal" { $this.LayoutHorizontal() }
+            "Grid" { $this.LayoutGrid() }
+            # "Manual" - no automatic layout
+        }
+    }
+
+    # Vertical layout - stack children top to bottom
+    [void] LayoutVertical() {
+        $currentY = $this.ContentY
+        $childWidth = $this.ContentWidth
+        $availableHeight = $this.ContentHeight
+        $childHeight = [Math]::Max(1, [Math]::Floor($availableHeight / $this.Children.Count))
+
+        for ($i = 0; $i -lt $this.Children.Count; $i++) {
+            $child = $this.Children[$i]
+            $child.X = $this.ContentX
+            $child.Y = $currentY
+            
+            if ($i -eq ($this.Children.Count - 1)) {
+                $remainingHeight = $this.ContentY + $this.ContentHeight - $currentY
+                $child.Resize($childWidth, $remainingHeight)
+            } else {
+                $child.Resize($childWidth, $childHeight)
+            }
+            
+            $currentY += $childHeight
+        }
+    }
+
+    # Horizontal layout - arrange children side by side
+    [void] LayoutHorizontal() {
+        $currentX = $this.ContentX
+        $childHeight = $this.ContentHeight
+        $availableWidth = $this.ContentWidth
+        $childWidth = [Math]::Max(1, [Math]::Floor($availableWidth / $this.Children.Count))
+
+        for ($i = 0; $i -lt $this.Children.Count; $i++) {
+            $child = $this.Children[$i]
+            $child.X = $currentX
+            $child.Y = $this.ContentY
+            
+            if ($i -eq ($this.Children.Count - 1)) {
+                $remainingWidth = $this.ContentX + $this.ContentWidth - $currentX
+                $child.Resize($remainingWidth, $childHeight)
+            } else {
+                $child.Resize($childWidth, $childHeight)
+            }
+            
+            $currentX += $childWidth
+        }
+    }
+
+    # Grid layout - arrange children in a grid
+    [void] LayoutGrid() {
+        if ($this.Children.Count -eq 0) { return }
+
+        $childCount = $this.Children.Count
+        $cols = [Math]::Ceiling([Math]::Sqrt($childCount))
+        $rows = [Math]::Ceiling($childCount / $cols)
+        
+        $cellWidth = [Math]::Max(1, [Math]::Floor($this.ContentWidth / $cols))
+        $cellHeight = [Math]::Max(1, [Math]::Floor($this.ContentHeight / $rows))
+
+        for ($i = 0; $i -lt $this.Children.Count; $i++) {
+            $child = $this.Children[$i]
+            $row = [Math]::Floor($i / $cols)
+            $col = $i % $cols
+            
+            $x = $this.ContentX + ($col * $cellWidth)
+            $y = $this.ContentY + ($row * $cellHeight)
+            
+            $width = if ($col -eq ($cols - 1)) { $this.ContentX + $this.ContentWidth - $x } else { $cellWidth }
+            $height = if ($row -eq ($rows - 1)) { $this.ContentY + $this.ContentHeight - $y } else { $cellHeight }
+            
+            $child.Move($x, $y)
+            $child.Resize($width, $height)
+        }
+    }
+
+    [void] SetBorderStyle([string]$style, [ConsoleColor]$color) {
+        $this.BorderStyle = $style
+        $this.BorderColor = $color
+        $this.RequestRedraw()
+    }
+
+    [void] SetBorder([bool]$hasBorder) {
+        $this.HasBorder = $hasBorder
+        $this.UpdateContentBounds()
+        $this.PerformLayout()
+        $this.RequestRedraw()
+    }
+
+    [void] SetTitle([string]$title) {
+        $this.Title = $title
+        $this.RequestRedraw()
+    }
+
+    [bool] ContainsContentPoint([int]$x, [int]$y) {
+        return ($x -ge $this.ContentX -and $x -lt ($this.ContentX + $this.ContentWidth) -and 
+                $y -ge $this.ContentY -and $y -lt ($this.ContentY + $this.ContentHeight))
+    }
+
+    [hashtable] GetContentBounds() {
+        return @{ X = $this.ContentX; Y = $this.ContentY; Width = $this.ContentWidth; Height = $this.ContentHeight }
+    }
+    
+    [hashtable] GetContentArea() {
+        return $this.GetContentBounds()
+    }
+    
+    [void] WriteToBuffer([int]$x, [int]$y, [string]$text, [ConsoleColor]$fg, [ConsoleColor]$bg) {
+        if ($null -eq $this.{_private_buffer}) { return }
+        Write-TuiText -Buffer $this.{_private_buffer} -X $x -Y $y -Text $text -ForegroundColor $fg -BackgroundColor $bg
+    }
+    
+    [void] DrawBoxToBuffer([int]$x, [int]$y, [int]$width, [int]$height, [ConsoleColor]$borderColor, [ConsoleColor]$bgColor) {
+        if ($null -eq $this.{_private_buffer}) { return }
+        Write-TuiBox -Buffer $this.{_private_buffer} -X $x -Y $y -Width $width -Height $height `
+            -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+    }
+
+    [void] ClearContent() {
+        if ($null -eq $this.{_private_buffer}) { return }
+        $clearCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
+        for ($y = $this.ContentY; $y -lt ($this.ContentY + $this.ContentHeight); $y++) {
+            for ($x = $this.ContentX; $x -lt ($this.ContentX + $this.ContentWidth); $x++) {
+                $this.{_private_buffer}.SetCell($x, $y, $clearCell)
+            }
+        }
+    }
+
+    [void] OnRender() {
+        if ($null -eq $this.{_private_buffer}) { return }
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
+        $this.{_private_buffer}.Clear($bgCell)
+        if ($this.HasBorder) {
+            Write-TuiBox -Buffer $this.{_private_buffer} -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle $this.BorderStyle -BorderColor $this.BorderColor -BackgroundColor $this.BackgroundColor -Title $this.Title
+        }
+    }
+
+    hidden [void] _RenderContent() {
+        $this.OnRender()
+        foreach ($child in $this.Children) {
+            if ($child.Visible) {
+                $child.Render()
+                if ($null -ne $child.{_private_buffer}) {
+                    $this.{_private_buffer}.BlendBuffer($child.{_private_buffer}, ($child.X + $this.ContentX), ($child.Y + $this.ContentY))
+                }
+            }
+        }
+    }
+
+    [void] OnFocus() {
+        if ($this.CanFocus) {
+            $this.BorderColor = [ConsoleColor]::Cyan
+            $this.RequestRedraw()
+        }
+    }
+
+    [void] OnBlur() {
+        if ($this.CanFocus) {
+            $this.BorderColor = [ConsoleColor]::Gray
+            $this.RequestRedraw()
+        }
+    }
+
+    [UIElement] GetFirstFocusableChild() {
+        foreach ($child in $this.Children) {
+            if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
+                return $child
+            }
+            if ($child -is [Panel]) {
+                $nestedChild = $child.GetFirstFocusableChild()
+                if ($null -ne $nestedChild) {
+                    return $nestedChild
+                }
+            }
+        }
+        return $null
+    }
+
+    [System.Collections.Generic.List[UIElement]] GetFocusableChildren() {
+        $focusable = [System.Collections.Generic.List[UIElement]]::new()
+        foreach ($child in $this.Children) {
+            if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
+                $focusable.Add($child)
+            }
+            if ($child -is [Panel]) {
+                $nestedFocusable = $child.GetFocusableChildren()
+                $focusable.AddRange($nestedFocusable)
+            }
+        }
+        return $focusable
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($this.CanFocus -and $this.IsFocused) {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Tab) {
+                    $firstChild = $this.GetFirstFocusableChild()
+                    if ($null -ne $firstChild) {
+                        $firstChild.IsFocused = $true
+                        $this.IsFocused = $false
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::Enter) {
+                    $firstChild = $this.GetFirstFocusableChild()
+                    if ($null -ne $firstChild) {
+                        $firstChild.IsFocused = $true
+                        $this.IsFocused = $false
+                        return $true
+                    }
+                }
+            }
+        }
+        foreach ($child in $this.Children) {
+            if ($child.Visible -and $child.Enabled -and $child.HandleInput($keyInfo)) {
+                return $true
+            }
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "Panel($($this.Name), $($this.X),$($this.Y), $($this.Width)x$($this.Height), Children=$($this.Children.Count))"
+    }
+}
+
+#region Specialized Panel Types
+
+class ScrollablePanel : Panel {
+    [int] $ScrollX = 0
+    [int] $ScrollY = 0
+    [int] $VirtualWidth = 0
+    [int] $VirtualHeight = 0
+    [bool] $ShowScrollbars = $true
+    [TuiBuffer] $_virtual_buffer = $null
+
+    ScrollablePanel() : base() {
+        $this.Name = "ScrollablePanel"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+    }
+
+    ScrollablePanel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) {
+        $this.Name = "ScrollablePanel"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+    }
+
+    [void] SetVirtualSize([int]$width, [int]$height) {
+        $this.VirtualWidth = $width
+        $this.VirtualHeight = $height
+        if ($width -gt 0 -and $height -gt 0) {
+            $this.{_virtual_buffer} = [TuiBuffer]::new($width, $height, "$($this.Name).Virtual")
+        }
+        $this.RequestRedraw()
+    }
+
+    [void] ScrollTo([int]$x, [int]$y) {
+        $maxScrollX = [Math]::Max(0, $this.VirtualWidth - $this.ContentWidth)
+        $maxScrollY = [Math]::Max(0, $this.VirtualHeight - $this.ContentHeight)
+        $this.ScrollX = [Math]::Max(0, [Math]::Min($x, $maxScrollX))
+        $this.ScrollY = [Math]::Max(0, [Math]::Min($y, $maxScrollY))
+        $this.RequestRedraw()
+    }
+
+    [void] ScrollBy([int]$deltaX, [int]$deltaY) {
+        $this.ScrollTo($this.ScrollX + $deltaX, $this.ScrollY + $deltaY)
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($this.IsFocused) {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) { $this.ScrollBy(0, -1); return $true }
+                ([ConsoleKey]::DownArrow) { $this.ScrollBy(0, 1); return $true }
+                ([ConsoleKey]::LeftArrow) { $this.ScrollBy(-1, 0); return $true }
+                ([ConsoleKey]::RightArrow) { $this.ScrollBy(1, 0); return $true }
+                ([ConsoleKey]::PageUp) { $this.ScrollBy(0, -$this.ContentHeight); return $true }
+                ([ConsoleKey]::PageDown) { $this.ScrollBy(0, $this.ContentHeight); return $true }
+                ([ConsoleKey]::Home) { $this.ScrollTo(0, 0); return $true }
+                ([ConsoleKey]::End) { $this.ScrollTo(0, $this.VirtualHeight); return $true }
+            }
+        }
+        return ([Panel]$this).HandleInput($keyInfo)
+    }
+
+    [void] OnRender() {
+        ([Panel]$this).OnRender()
+        if ($null -ne $this.{_virtual_buffer}) {
+            $visibleBuffer = $this.{_virtual_buffer}.GetSubBuffer($this.ScrollX, $this.ScrollY, $this.ContentWidth, $this.ContentHeight)
+            $this.{_private_buffer}.BlendBuffer($visibleBuffer, $this.ContentX, $this.ContentY)
+        }
+        if ($this.ShowScrollbars -and $this.HasBorder) {
+            $this.DrawScrollbars()
+        }
+    }
+
+    [void] DrawScrollbars() {
+        if ($null -eq $this.{_private_buffer}) { return }
+        if ($this.VirtualHeight -gt $this.ContentHeight) {
+            $scrollbarX = $this.Width - 1
+            $scrollbarHeight = $this.Height - 2
+            $thumbPosition = [Math]::Floor(($this.ScrollY / [Math]::Max(1, $this.VirtualHeight - $this.ContentHeight)) * ($scrollbarHeight - 1))
+            for ($y = 1; $y -lt ($this.Height - 1); $y++) {
+                $char = if ($y -eq ($thumbPosition + 1)) { '█' } else { '▒' }
+                $cell = [TuiCell]::new($char, [ConsoleColor]::Gray, $this.BackgroundColor)
+                $this.{_private_buffer}.SetCell($scrollbarX, $y, $cell)
+            }
+        }
+        if ($this.VirtualWidth -gt $this.ContentWidth) {
+            $scrollbarY = $this.Height - 1
+            $scrollbarWidth = $this.Width - 2
+            $thumbPosition = [Math]::Floor(($this.ScrollX / [Math]::Max(1, $this.VirtualWidth - $this.ContentWidth)) * ($scrollbarWidth - 1))
+            for ($x = 1; $x -lt ($this.Width - 1); $x++) {
+                $char = if ($x -eq ($thumbPosition + 1)) { '█' } else { '▒' }
+                $cell = [TuiCell]::new($char, [ConsoleColor]::Gray, $this.BackgroundColor)
+                $this.{_private_buffer}.SetCell($x, $scrollbarY, $cell)
+            }
+        }
+    }
+
+    [TuiBuffer] GetVirtualBuffer() {
+        return $this.{_virtual_buffer}
+    }
+}
+
+class GroupPanel : Panel {
+    [bool] $IsCollapsed = $false
+    [int] $ExpandedHeight = 0
+    [int] $HeaderHeight = 1
+    [ConsoleColor] $HeaderColor = [ConsoleColor]::DarkBlue
+    [string] $CollapseChar = "▼"
+    [string] $ExpandChar = "▶"
+
+    GroupPanel() : base() {
+        $this.Name = "GroupPanel"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+        $this.ExpandedHeight = $this.Height
+    }
+
+    GroupPanel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height, $title) {
+        $this.Name = "GroupPanel"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+        $this.ExpandedHeight = $height
+    }
+
+    [void] ToggleCollapsed() {
+        $this.IsCollapsed = -not $this.IsCollapsed
+        if ($this.IsCollapsed) {
+            $this.ExpandedHeight = $this.Height
+            $this.Resize($this.Width, $this.HeaderHeight + 2)
+        } else {
+            $this.Resize($this.Width, $this.ExpandedHeight)
+        }
+        foreach ($child in $this.Children) {
+            $child.Visible = -not $this.IsCollapsed
+        }
+        $this.RequestRedraw()
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($this.IsFocused) {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Enter) { $this.ToggleCollapsed(); return $true }
+                ([ConsoleKey]::Spacebar) { $this.ToggleCollapsed(); return $true }
+            }
+        }
+        if (-not $this.IsCollapsed) {
+            return ([Panel]$this).HandleInput($keyInfo)
+        }
+        return $false
+    }
+
+    [void] OnRender() {
+        ([Panel]$this).OnRender()
+        if ($this.HasBorder -and -not [string]::IsNullOrEmpty($this.Title)) {
+            $indicator = if ($this.IsCollapsed) { $this.ExpandChar } else { $this.CollapseChar }
+            $indicatorCell = [TuiCell]::new($indicator, $this.TitleColor, $this.BackgroundColor)
+            $this.{_private_buffer}.SetCell(2, 0, $indicatorCell)
+        }
+    }
+}
+#endregion
+
+# --- END OF FULL REPLACEMENT for layout\panels-class\panels-class.psm1 ---
+
+
+# --- START OF ORIGINAL FILE: components\navigation-class\navigation-class.psm1 ---
+# Navigation Component Classes Module for PMC Terminal v5
+# Phase 1 Migration Complete - Proper UIElement inheritance and Panel integration
+# CORRECTED (v2): Removed unused and confusing `BuildContextMenu` method.
+
+# NavigationItem - Represents a single menu item
+class NavigationItem {
+    [string] $Key
+    [string] $Label
+    [scriptblock] $Action
+    [bool] $Enabled = $true
+    [bool] $Visible = $true
+    [string] $Description = ""
+    [ConsoleColor] $KeyColor = [ConsoleColor]::Yellow
+    [ConsoleColor] $LabelColor = [ConsoleColor]::White
+    
+    NavigationItem([string]$key, [string]$label, [scriptblock]$action) {
+        if ([string]::IsNullOrWhiteSpace($key))   { throw [ArgumentException]::new("Navigation key cannot be null or empty") }
+        if ([string]::IsNullOrWhiteSpace($label)) { throw [ArgumentException]::new("Navigation label cannot be null or empty") }
+        if ($null -eq $action)                    { throw [ArgumentNullException]::new("action", "Navigation action cannot be null") }
+        
+        $this.Key = $key.ToUpper()
+        $this.Label = $label
+        $this.Action = $action
+    }
+    
+    [void] Execute() {
+        if (-not $this.Enabled) {
+            Write-Log -Level Warning -Message "Attempted to execute disabled navigation item: $($this.Key)"
+            return
+        }
+        
+        try {
+            Write-Log -Level Debug -Message "Executing navigation item: $($this.Key) - $($this.Label)"
+            & $this.Action
+        }
+        catch {
+            Write-Log -Level Error -Message "Navigation action failed for item '$($this.Key)': $_"
+            throw
+        }
+    }
+    
+    [string] FormatDisplay([bool]$showDescription = $false) {
+        $display = "[$($this.Key)] "
+        
+        if ($this.Enabled) {
+            $display += $this.Label
+        }
+        else {
+            $display += "$($this.Label) (Disabled)"
+        }
+        
+        if ($showDescription -and -not [string]::IsNullOrWhiteSpace($this.Description)) {
+            $display += " - $($this.Description)"
+        }
+        
+        return $display
+    }
+}
+
+# AI: REFACTORED - NavigationMenu now properly inherits from UIElement
+class NavigationMenu : UIElement {
+    [System.Collections.Generic.List[NavigationItem]] $Items
+    [hashtable] $Services
+    [string] $Orientation = "Vertical"
+    [string] $Separator = "  |  "
+    [bool] $ShowDescriptions = $false
+    [ConsoleColor] $SeparatorColor = [ConsoleColor]::DarkGray
+    [int] $SelectedIndex = 0
+    [bool] $IsFocused = $false
+    
+    NavigationMenu([string]$name) : base() {
+        $this.Name = $name
+        $this.Items = [System.Collections.Generic.List[NavigationItem]]::new()
+        $this.IsFocusable = $true
+        $this.SelectedIndex = 0
+        $this.Width = 30
+        $this.Height = 10
+    }
+    
+    NavigationMenu([string]$name, [hashtable]$services) : base() {
+        if ($null -eq $services) { throw [ArgumentNullException]::new("services") }
+        $this.Name = $name
+        $this.Services = $services
+        $this.Items = [System.Collections.Generic.List[NavigationItem]]::new()
+        $this.IsFocusable = $true
+        $this.SelectedIndex = 0
+        $this.Width = 30
+        $this.Height = 10
+    }
+    
+    [void] AddItem([NavigationItem]$item) {
+        if (-not $item) { throw [ArgumentNullException]::new("item") }
+        if ($this.Items.Exists({param($x) $x.Key -eq $item.Key})) { 
+            throw [InvalidOperationException]::new("Item with key '$($item.Key)' already exists") 
+        }
+        $this.Items.Add($item)
+        $this.RequestRedraw()
+    }
+    
+    [void] RemoveItem([string]$key) {
+        $item = $this.GetItem($key)
+        if ($item) { 
+            [void]$this.Items.Remove($item)
+            $this.RequestRedraw()
+        }
+    }
+    
+    [NavigationItem] GetItem([string]$key) {
+        return $this.Items.Find({param($x) $x.Key -eq $key.ToUpper()})
+    }
+
+    [void] ExecuteAction([string]$key) {
+        $item = $this.GetItem($key)
+        if ($item -and $item.Visible) {
+            Invoke-WithErrorHandling -Component "NavigationMenu" -Context "ExecuteAction:$key" -ScriptBlock { 
+                $item.Execute() 
+            }
+        }
+    }
+
+    [void] AddSeparator() {
+        $separatorItem = [NavigationItem]::new("-", "---", {})
+        $separatorItem.Enabled = $false
+        $this.Items.Add($separatorItem)
+        $this.RequestRedraw()
+    }
+    
+    # AI: REFACTORED - Now uses Panel buffer integration
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Clear our buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            # Get visible items
+            $visibleItems = @($this.Items | Where-Object { $null -ne $_ -and $_.Visible })
+            if ($visibleItems.Count -eq 0) { return }
+            
+            if ($this.Orientation -eq "Horizontal") { 
+                $this.RenderHorizontal($visibleItems) 
+            }
+            else { 
+                $this.RenderVertical($visibleItems) 
+            }
+            
+        } catch { 
+            Write-Log -Level Error -Message "NavigationMenu render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    hidden [void] RenderHorizontal([object[]]$items) {
+        if ($null -eq $items -or $items.Count -eq 0) { return }
+        
+        $menuText = ""
+        $isFirst = $true
+        foreach ($item in $items) {
+            if ($null -eq $item) { continue }
+            
+            if (-not $isFirst) {
+                $menuText += $this.Separator
+            }
+            $menuText += "[$($item.Key)] $($item.Label)"
+            $isFirst = $false
+        }
+        
+        # Write to our private buffer
+        $this._private_buffer.WriteString(0, 0, $menuText, [ConsoleColor]::White, [ConsoleColor]::Black)
+    }
+    
+    hidden [void] RenderVertical([object[]]$items) {
+        if ($null -eq $items -or $items.Count -eq 0) { return }
+        
+        # Ensure SelectedIndex is within bounds
+        if ($this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $items.Count) {
+            $this.SelectedIndex = 0
+        }
+        
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            $item = $items[$i]
+            if ($null -eq $item) { continue }
+            
+            $prefix = if ($i -eq $this.SelectedIndex -and $item.Key -ne "-") { " > " } else { "   " }
+            $menuText = "$prefix[$($item.Key)] $($item.Label)"
+            
+            # Pad text to clear the full line width
+            if ($menuText.Length -lt $this.Width) {
+                $menuText = $menuText.PadRight($this.Width)
+            }
+            
+            $fg = if ($i -eq $this.SelectedIndex -and $item.Key -ne "-") { 
+                [ConsoleColor]::Black 
+            } else { 
+                [ConsoleColor]::White 
+            }
+            $bg = if ($i -eq $this.SelectedIndex -and $item.Key -ne "-") { 
+                [ConsoleColor]::White 
+            } else { 
+                [ConsoleColor]::Black 
+            }
+            
+            # Write to our private buffer
+            $this._private_buffer.WriteString(0, $i, $menuText, $fg, $bg)
+        }
+    }
+    
+    # AI: REFACTORED - Updated input handling for new architecture
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        try {
+            $visibleItems = @($this.Items | Where-Object { $null -ne $_ -and $_.Visible })
+            if ($visibleItems.Count -eq 0) { return $false }
+            
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    if ($this.SelectedIndex -gt 0) {
+                        $this.SelectedIndex--
+                        $this.RequestRedraw()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this.SelectedIndex -lt ($visibleItems.Count - 1)) {
+                        $this.SelectedIndex++
+                        $this.RequestRedraw()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $visibleItems.Count) {
+                        $selectedItem = $visibleItems[$this.SelectedIndex]
+                        if ($selectedItem.Enabled -and $selectedItem.Key -ne "-") {
+                            $selectedItem.Execute()
+                        }
+                    }
+                    return $true
+                }
+                default {
+                    # Check for direct key matches
+                    $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
+                    $matchingItem = $this.Items.Find({param($x) $x.Key -eq $keyChar})
+                    if ($matchingItem -and $matchingItem.Enabled -and $matchingItem.Visible) {
+                        $matchingItem.Execute()
+                        return $true
+                    }
+                }
+            }
+            
+        } catch { 
+            Write-Log -Level Error -Message "NavigationMenu input error for '$($this.Name)': $_" 
+        }
+        
+        return $false
+    }
+    
+    # AI: NEW - Focus management
+    [void] OnFocus() {
+        $this.IsFocused = $true
+        $this.RequestRedraw()
+    }
+    
+    [void] OnBlur() {
+        $this.IsFocused = $false
+        $this.RequestRedraw()
+    }
+}
+# --- END OF ORIGINAL FILE: components\navigation-class\navigation-class.psm1 ---
+
+# --- START OF ORIGINAL FILE: components\tui-components\tui-components.psm1 ---
+####\components\tui-components.psm1
+# TUI Component Library - Phase 1 Migration Complete
+# All components now inherit from UIElement and use buffer-based rendering
+
+
+
+
+
+#region Core UI Components
+
+# AI: REFACTORED - LabelComponent now properly inherits from UIElement
+class LabelComponent : UIElement {
+    [string]$Text = ""
+    [object]$ForegroundColor
+    
+    LabelComponent([string]$name) : base($name) {
+        $this.IsFocusable = $false
+        $this.Width = 10
+        $this.Height = 1
+    }
+    
+    [void] OnRender() {
+        # AI: REFACTORED - Renders to its own private buffer.
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear()
+            $fg = $this.ForegroundColor ?? [ConsoleColor]::White
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -ForegroundColor $fg
+
+        } catch { 
+            Write-Log -Level Error -Message "Label render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        return $false # Labels don't handle input
+    }
+}
+
+# AI: REFACTORED - ButtonComponent updated for buffer-based rendering
+class ButtonComponent : UIElement {
+    [string]$Text = "Button"
+    [bool]$IsPressed = $false
+    [scriptblock]$OnClick
+    
+    ButtonComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 10
+        $this.Height = 3
+        $this.Text = "Button"
+    }
+    
+    [void] OnRender() {
+        # AI: REFACTORED - Renders to its own private buffer, not the parent's.
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+
+            $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
+            $bgColor = $this.IsPressed ? [ConsoleColor]::Yellow : [ConsoleColor]::Black
+            $fgColor = $this.IsPressed ? [ConsoleColor]::Black : $borderColor
+            
+            # Render border to own buffer
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Render text centered in own buffer
+            $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
+            $textY = [Math]::Floor(($this.Height - 1) / 2)
+            Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -ForegroundColor $fgColor -BackgroundColor $bgColor
+
+        } catch { 
+            Write-Log -Level Error -Message "Button render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+                $this.IsPressed = $true
+                $this.RequestRedraw()
+                
+                if ($this.OnClick) { 
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnClick" -ScriptBlock { & $this.OnClick }
+                }
+                
+                Start-Sleep -Milliseconds 50 # Visual feedback for press
+                $this.IsPressed = $false
+                $this.RequestRedraw()
+                return $true
+            }
+        } catch { 
+            Write-Log -Level Error -Message "Button input error for '$($this.Name)': $_" 
+        }
+        return $false
+    }
+}
+
+# AI: REFACTORED - TextBoxComponent with buffer-based rendering
+class TextBoxComponent : UIElement {
+    [string]$Text = ""
+    [string]$Placeholder = ""
+    [int]$MaxLength = 100
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+    
+    TextBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 3
+        $this.MaxLength = 100
+    }
+    
+    [void] OnRender() {
+        # AI: REFACTORED - Renders to its own private buffer.
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            $borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
+            
+            # Draw border
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
+
+            # Display text or placeholder
+            $displayText = $this.Text ?? ""
+            $textColor = [ConsoleColor]::White
+            if ([string]::IsNullOrEmpty($displayText) -and -not $this.IsFocused) { 
+                $displayText = $this.Placeholder ?? "" 
+                $textColor = [ConsoleColor]::DarkGray
+            }
+            
+            $maxDisplayLength = $this.Width - 2
+            if ($displayText.Length > $maxDisplayLength) { 
+                $displayText = $displayText.Substring(0, $maxDisplayLength) 
+            }
+            
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayText -ForegroundColor $textColor
+            
+            # Draw cursor if focused
+            if ($this.IsFocused -and ($this.CursorPosition -le $displayText.Length)) {
+                $cursorX = 1 + $this.CursorPosition
+                # Only draw cursor if it's within the visible area
+                # AI: FIX - Changed '<' to '-lt' to avoid PowerShell parser ambiguity
+                if ($cursorX -lt ($this.Width - 1)) {
+                    Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" -ForegroundColor [ConsoleColor]::Yellow
+                }
+            }
+            
+        } catch { 
+            Write-Log -Level Error -Message "TextBox render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            $currentText = $this.Text ?? ""
+            $cursorPos = $this.CursorPosition ?? 0
+            $originalText = $currentText
+            $handled = $true
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::Backspace) { 
+                    if ($cursorPos -gt 0) { 
+                        $currentText = $currentText.Remove($cursorPos - 1, 1)
+                        $cursorPos-- 
+                    } 
+                }
+                ([ConsoleKey]::Delete) { 
+                    if ($cursorPos -lt $currentText.Length) { 
+                        $currentText = $currentText.Remove($cursorPos, 1) 
+                    } 
+                }
+                ([ConsoleKey]::LeftArrow) { 
+                    if ($cursorPos -gt 0) { $cursorPos-- } 
+                }
+                ([ConsoleKey]::RightArrow) { 
+                    if ($cursorPos -lt $currentText.Length) { $cursorPos++ } 
+                }
+                ([ConsoleKey]::Home) { $cursorPos = 0 }
+                ([ConsoleKey]::End) { $cursorPos = $currentText.Length }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentText.Length -lt $this.MaxLength) { 
+                        $currentText = $currentText.Insert($cursorPos, $key.KeyChar)
+                        $cursorPos++ 
+                    } else { 
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                if ($currentText -ne $originalText -or $cursorPos -ne $this.CursorPosition) {
+                    $this.Text = $currentText
+                    $this.CursorPosition = $cursorPos
+                    if ($this.OnChange) { 
+                        Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
+                            & $this.OnChange -NewValue $currentText 
+                        }
+                    }
+                    $this.RequestRedraw()
+                }
+            }
+            return $handled
+        } catch { 
+            Write-Log -Level Error -Message "TextBox input error for '$($this.Name)': $_"
+            return $false 
+        }
+    }
+}
+
+# AI: NEW - CheckBoxComponent converted from functional to class-based
+class CheckBoxComponent : UIElement {
+    [string]$Text = "Checkbox"
+    [bool]$Checked = $false
+    [scriptblock]$OnChange
+    
+    CheckBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+    }
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            $fg = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::White
+            $checkbox = $this.Checked ? "[X]" : "[ ]"
+            $displayText = "$checkbox $($this.Text)"
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg
+            
+        } catch { 
+            Write-Log -Level Error -Message "CheckBox render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+                $this.Checked = -not $this.Checked
+                if ($this.OnChange) { 
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
+                        & $this.OnChange -NewValue $this.Checked 
+                    } 
+                }
+                $this.RequestRedraw()
+                return $true
+            }
+        } catch { 
+            Write-Log -Level Error -Message "CheckBox input error for '$($this.Name)': $_" 
+        }
+        return $false
+    }
+}
+
+# AI: NEW - RadioButtonComponent converted from functional to class-based
+class RadioButtonComponent : UIElement {
+    [string]$Text = "Option"
+    [bool]$Selected = $false
+    [string]$GroupName = ""
+    [scriptblock]$OnChange
+    
+    RadioButtonComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+    }
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            $fg = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::White
+            $radio = $this.Selected ? "(●)" : "( )"
+            $displayText = "$radio $($this.Text)"
+
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg
+
+        } catch { 
+            Write-Log -Level Error -Message "RadioButton render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        try {
+            if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+                if (-not $this.Selected) {
+                    # AI: Unselect other radio buttons in the same group
+                    if ($this.Parent -and $this.GroupName) {
+                        $siblingRadios = $this.Parent.Children | Where-Object { 
+                            $_ -is [RadioButtonComponent] -and $_.GroupName -eq $this.GroupName -and $_ -ne $this 
+                        }
+                        foreach ($radio in $siblingRadios) {
+                            $radio.Selected = $false
+                        }
+                    }
+                    
+                    $this.Selected = $true
+                    if ($this.OnChange) { 
+                        Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock { 
+                            & $this.OnChange -NewValue $this.Selected 
+                        } 
+                    }
+                    $this.Parent.RequestRedraw()
+                }
+                return $true
+            }
+        } catch { 
+            Write-Log -Level Error -Message "RadioButton input error for '$($this.Name)': $_" 
+        }
+        return $false
+    }
+}
+
+#endregion
+
+#region Factory Functions
+
+# AI: Updated factories to return class instances
+
+function New-TuiLabel {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "Label_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $label = [LabelComponent]::new($name)
+    
+    $label.X = $Props.X ?? $label.X
+    $label.Y = $Props.Y ?? $label.Y
+    $label.Width = $Props.Width ?? $label.Width
+    $label.Height = $Props.Height ?? $label.Height
+    $label.Visible = $Props.Visible ?? $label.Visible
+    $label.ZIndex = $Props.ZIndex ?? $label.ZIndex
+    $label.Text = $Props.Text ?? $label.Text
+    $label.ForegroundColor = $Props.ForegroundColor ?? $label.ForegroundColor
+    
+    return $label
+}
+
+function New-TuiButton {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "Button_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $button = [ButtonComponent]::new($name)
+    
+    $button.X = $Props.X ?? $button.X
+    $button.Y = $Props.Y ?? $button.Y
+    $button.Width = $Props.Width ?? $button.Width
+    $button.Height = $Props.Height ?? $button.Height
+    $button.Visible = $Props.Visible ?? $button.Visible
+    $button.ZIndex = $Props.ZIndex ?? $button.ZIndex
+    $button.Text = $Props.Text ?? $button.Text
+    $button.OnClick = $Props.OnClick ?? $button.OnClick
+    
+    return $button
+}
+
+function New-TuiTextBox {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "TextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $textBox = [TextBoxComponent]::new($name)
+    
+    $textBox.X = $Props.X ?? $textBox.X
+    $textBox.Y = $Props.Y ?? $textBox.Y
+    $textBox.Width = $Props.Width ?? $textBox.Width
+    $textBox.Height = $Props.Height ?? $textBox.Height
+    $textBox.Visible = $Props.Visible ?? $textBox.Visible
+    $textBox.ZIndex = $Props.ZIndex ?? $textBox.ZIndex
+    $textBox.Text = $Props.Text ?? $textBox.Text
+    $textBox.Placeholder = $Props.Placeholder ?? $textBox.Placeholder
+    $textBox.MaxLength = $Props.MaxLength ?? $textBox.MaxLength
+    $textBox.CursorPosition = $Props.CursorPosition ?? $textBox.CursorPosition
+    $textBox.OnChange = $Props.OnChange ?? $textBox.OnChange
+    
+    return $textBox
+}
+
+function New-TuiCheckBox {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "CheckBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $checkBox = [CheckBoxComponent]::new($name)
+    
+    $checkBox.X = $Props.X ?? $checkBox.X
+    $checkBox.Y = $Props.Y ?? $checkBox.Y
+    $checkBox.Width = $Props.Width ?? $checkBox.Width
+    $checkBox.Height = $Props.Height ?? $checkBox.Height
+    $checkBox.Visible = $Props.Visible ?? $checkBox.Visible
+    $checkBox.ZIndex = $Props.ZIndex ?? $checkBox.ZIndex
+    $checkBox.Text = $Props.Text ?? $checkBox.Text
+    $checkBox.Checked = $Props.Checked ?? $checkBox.Checked
+    $checkBox.OnChange = $Props.OnChange ?? $checkBox.OnChange
+    
+    return $checkBox
+}
+
+function New-TuiRadioButton {
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "RadioButton_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $radioButton = [RadioButtonComponent]::new($name)
+    
+    $radioButton.X = $Props.X ?? $radioButton.X
+    $radioButton.Y = $Props.Y ?? $radioButton.Y
+    $radioButton.Width = $Props.Width ?? $radioButton.Width
+    $radioButton.Height = $Props.Height ?? $radioButton.Height
+    $radioButton.Visible = $Props.Visible ?? $radioButton.Visible
+    $radioButton.ZIndex = $Props.ZIndex ?? $radioButton.ZIndex
+    $radioButton.Text = $Props.Text ?? $radioButton.Text
+    $radioButton.Selected = $Props.Selected ?? $radioButton.Selected
+    $radioButton.GroupName = $Props.GroupName ?? $radioButton.GroupName
+    $radioButton.OnChange = $Props.OnChange ?? $radioButton.OnChange
+    
+    return $radioButton
+}
+
+#endregion
+# --- END OF ORIGINAL FILE: components\tui-components\tui-components.psm1 ---
+
+
+# --- START OF ORIGINAL FILE: components\advanced-data-components\advanced-data-components.psm1 ---
+# Advanced Data Components Module for PMC Terminal v5
+# Phase 1 Migration Complete - Enhanced data display with proper UIElement inheritance
+
+
+
+
+
+
+
+
+#region Table Classes
+
+class TableColumn {
+    [string]$Key
+    [string]$Header
+    [int]$Width
+    [string]$Alignment = "Left"
+    
+    TableColumn([string]$key, [string]$header, [int]$width) {
+        $this.Key = $key
+        $this.Header = $header
+        $this.Width = $width
+    }
+}
+
+# AI: REFACTORED - Table now properly inherits from UIElement
+class Table : UIElement {
+    [System.Collections.Generic.List[TableColumn]]$Columns
+    [object[]]$Data = @()
+    [int]$SelectedIndex = 0
+    [bool]$ShowBorder = $true
+    [bool]$ShowHeader = $true
+    [bool]$IsFocused = $false
+    
+    Table([string]$name) : base() {
+        $this.Name = $name
+        $this.Columns = [System.Collections.Generic.List[TableColumn]]::new()
+        $this.Data = @()
+        $this.SelectedIndex = 0
+        $this.IsFocusable = $true
+        $this.Width = 60
+        $this.Height = 15
+    }
+    
+    [void] SetColumns([TableColumn[]]$columns) {
+        $this.Columns.Clear()
+        foreach ($col in $columns) {
+            $this.Columns.Add($col)
+        }
+        $this.RequestRedraw()
+    }
+    
+    [void] SetData([object[]]$data) {
+        $this.Data = if ($null -eq $data) { @() } else { @($data) }
+        $dataCount = if ($this.Data -is [array]) { $this.Data.Count } else { 1 }
+        if ($this.SelectedIndex -ge $dataCount) {
+            $this.SelectedIndex = [Math]::Max(0, $dataCount - 1)
+        }
+        $this.RequestRedraw()
+    }
+    
+    [void] SelectNext() {
+        $dataCount = if ($null -eq $this.Data) { 0 } elseif ($this.Data -is [array]) { $this.Data.Count } else { 1 }
+        if ($this.SelectedIndex -lt ($dataCount - 1)) {
+            $this.SelectedIndex++
+            $this.RequestRedraw()
+        }
+    }
+    
+    [void] SelectPrevious() {
+        if ($this.SelectedIndex -gt 0) {
+            $this.SelectedIndex--
+            $this.RequestRedraw()
+        }
+    }
+    
+    [object] GetSelectedItem() {
+        if ($null -eq $this.Data) { return $null }
+        
+        $dataCount = if ($this.Data -is [array]) { $this.Data.Count } else { 1 }
+        
+        if ($dataCount -gt 0 -and $this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $dataCount) {
+            return if ($this.Data -is [array]) { $this.Data[$this.SelectedIndex] } else { $this.Data }
+        }
+        return $null
+    }
+    
+    # AI: REFACTORED - Now uses UIElement buffer system
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
+            
+            # Draw border if enabled
+            if ($this.ShowBorder) {
+                Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                    -BorderStyle "Single" -BorderColor ([ConsoleColor]::Gray) -BackgroundColor ([ConsoleColor]::Black)
+            }
+            
+            $currentY = if ($this.ShowBorder) { 1 } else { 0 }
+            $contentWidth = if ($this.ShowBorder) { $this.Width - 2 } else { $this.Width }
+            $renderX = if ($this.ShowBorder) { 1 } else { 0 }
+            
+            # Header
+            if ($this.ShowHeader -and $this.Columns.Count -gt 0) {
+                $headerLine = ""
+                foreach ($col in $this.Columns) {
+                    $headerText = $col.Header.PadRight($col.Width).Substring(0, [Math]::Min($col.Header.Length, $col.Width))
+                    $headerLine += $headerText + " "
+                }
+                
+                if ($headerLine.TrimEnd().Length -gt $contentWidth) {
+                    $headerLine = $headerLine.Substring(0, $contentWidth)
+                }
+                
+                Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text $headerLine.TrimEnd() `
+                    -ForegroundColor ([ConsoleColor]::Cyan) -BackgroundColor ([ConsoleColor]::Black)
+                $currentY++
+                
+                Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY `
+                    -Text ("-" * [Math]::Min($headerLine.TrimEnd().Length, $contentWidth)) `
+                    -ForegroundColor ([ConsoleColor]::DarkGray) -BackgroundColor ([ConsoleColor]::Black)
+                $currentY++
+            }
+            
+            # Data rows
+            $dataToRender = @()
+            if ($null -ne $this.Data) {
+                $dataToRender = if ($this.Data -is [array]) { $this.Data } else { @($this.Data) }
+            }
+            
+            for ($i = 0; $i -lt $dataToRender.Count; $i++) {
+                $row = $dataToRender[$i]
+                if ($null -eq $row) { continue }
+                
+                $rowLine = ""
+                $isSelected = ($i -eq $this.SelectedIndex)
+                
+                foreach ($col in $this.Columns) {
+                    $cellValue = ""
+                    if ($row -is [hashtable] -and $row.ContainsKey($col.Key)) {
+                        $cellValue = $row[$col.Key]?.ToString() ?? ""
+                    } elseif ($row.PSObject.Properties[$col.Key]) {
+                        $propValue = $row.($col.Key)
+                        if ($col.Key -eq 'DueDate' -and $propValue -is [DateTime]) {
+                            $cellValue = $propValue.ToString('yyyy-MM-dd')
+                        } else {
+                            $cellValue = if ($null -ne $propValue) { $propValue.ToString() } else { "" }
+                        }
+                    }
+                    
+                    $cellText = $cellValue.PadRight($col.Width).Substring(0, [Math]::Min($cellValue.Length, $col.Width))
+                    $rowLine += $cellText + " "
+                }
+                
+                $finalLine = $rowLine.TrimEnd()
+                if ($isSelected) {
+                    $finalLine = "> $finalLine"
+                } else {
+                    $finalLine = "  $finalLine"
+                }
+                
+                $fg = if ($isSelected) { [ConsoleColor]::Black } else { [ConsoleColor]::White }
+                $bg = if ($isSelected) { [ConsoleColor]::White } else { [ConsoleColor]::Black }
+                
+                if ($finalLine.Length -gt $contentWidth) {
+                    $finalLine = $finalLine.Substring(0, $contentWidth)
+                }
+                
+                Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text $finalLine `
+                    -ForegroundColor $fg -BackgroundColor $bg
+                $currentY++
+                
+                # Don't exceed available space
+                if ($currentY -ge ($this.Height - 1)) { break }
+            }
+            
+            if ($dataToRender.Count -eq 0) {
+                Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text "  No data to display" `
+                    -ForegroundColor ([ConsoleColor]::DarkGray) -BackgroundColor ([ConsoleColor]::Black)
+            }
+            
+        } catch { 
+            Write-Log -Level Error -Message "Table render error for '$($this.Name)': $_" 
+        }
+    }
+    
+    # AI: REFACTORED - Updated input handling
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        try {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    $this.SelectPrevious()
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) {
+                    $this.SelectNext()
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    $selectedItem = $this.GetSelectedItem()
+                    if ($null -ne $selectedItem) {
+                        # Trigger selection event or action
+                        Write-Log -Level Debug -Message "Table item selected: $($selectedItem)"
+                    }
+                    return $true
+                }
+            }
+        } catch { 
+            Write-Log -Level Error -Message "Table input error for '$($this.Name)': $_" 
+        }
+        
+        return $false
+    }
+    
+    [void] OnFocus() {
+        $this.IsFocused = $true
+        $this.RequestRedraw()
+    }
+    
+    [void] OnBlur() {
+        $this.IsFocused = $false
+        $this.RequestRedraw()
+    }
+}
+
+# AI: DELETED - Obsolete DataTableComponent class was here and has been removed.
+
+#endregion
+
+#region Factory Functions
+
+function New-TuiTable {
+    # AI: REFACTORED - Creates a proper Table instance
+    param([hashtable]$Props = @{})
+    
+    $name = $Props.Name ?? "Table_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+    $table = [Table]::new($name)
+    
+    if ($Props.Columns) {
+        $table.SetColumns($Props.Columns)
+    }
+    if ($Props.Data) {
+        $table.SetData($Props.Data)
+    }
+
+    $table.X = $Props.X ?? $table.X
+    $table.Y = $Props.Y ?? $table.Y
+    $table.Width = $Props.Width ?? $table.Width
+    $table.Height = $Props.Height ?? $table.Height
+    $table.ShowBorder = $Props.ShowBorder ?? $table.ShowBorder
+    $table.ShowHeader = $Props.ShowHeader ?? $table.ShowHeader
+    $table.Visible = $Props.Visible ?? $table.Visible
+    
+    return $table
+}
+
+#endregion
+# --- END OF ORIGINAL FILE: components\advanced-data-components\advanced-data-components.psm1 ---
+
+
