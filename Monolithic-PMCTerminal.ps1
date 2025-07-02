@@ -2907,7 +2907,7 @@ class Table : UIElement {
                         if ($col.Key -eq 'DueDate' -and $propValue -is [DateTime]) {
                             $cellValue = $propValue.ToString('yyyy-MM-dd')
                         } else {
-                            $cellValue = $propValue?.ToString() ?? ""
+                            $cellValue = if ($null -ne $propValue) { $propValue.ToString() } else { "" }
                         }
                     }
                     

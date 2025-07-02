@@ -2903,7 +2903,12 @@ class Table : UIElement {
                     if ($row -is [hashtable] -and $row.ContainsKey($col.Key)) {
                         $cellValue = $row[$col.Key]?.ToString() ?? ""
                     } elseif ($row.PSObject.Properties[$col.Key]) {
-                        $cellValue = $row.($col.Key)?.ToString() ?? ""
+                        $propValue = $row.($col.Key)
+                        if ($col.Key -eq 'DueDate' -and $propValue -is [DateTime]) {
+                            $cellValue = $propValue.ToString('yyyy-MM-dd')
+                        } else {
+                            $cellValue = if ($null -ne $propValue) { $propValue.ToString() } else { "" }
+                        }
                     }
                     
                     $cellText = $cellValue.PadRight($col.Width).Substring(0, [Math]::Min($cellValue.Length, $col.Width))
@@ -4805,7 +4810,6 @@ function Close-TuiDialog { Invoke-WithErrorHandling -Component "DialogSystem" -C
 
 class DashboardScreen : Screen {
     # --- Core Architecture ---
-    [hashtable] $Services
     [Panel] $MainPanel
     [Panel] $SummaryPanel
     [Panel] $MenuPanel
@@ -4822,7 +4826,6 @@ class DashboardScreen : Screen {
     # --- Constructor ---
     DashboardScreen([hashtable]$services) : base("DashboardScreen", $services) {
         $this.Name = "DashboardScreen"
-        $this.Services = $services
         $this.Components = [System.Collections.Generic.List[UIElement]]::new()
         $this.IsFocusable = $true
         $this.Enabled = $true
@@ -4894,6 +4897,10 @@ class DashboardScreen : Screen {
             # AI: PHASE 3 - Load initial data and update display
             $this.RefreshData()
             $this.UpdateDisplay()
+            
+            # Force initial render
+            $this.RequestRedraw()
+            $this.Render()
             
             Write-Log -Level Info -Message "DashboardScreen initialized with NCurses architecture"
         }
@@ -4978,9 +4985,14 @@ class DashboardScreen : Screen {
         Invoke-WithErrorHandling -Component "DashboardScreen" -Context "UpdateDisplay" -ScriptBlock {
             # AI: PHASE 3 - Update summary panel
             $this.UpdateSummaryPanel()
+            $this.SummaryPanel.RequestRedraw()
             
             # AI: PHASE 3 - Update status panel
             $this.UpdateStatusPanel()
+            $this.StatusPanel.RequestRedraw()
+            
+            # AI: PHASE 3 - Update menu panel
+            $this.MenuPanel.RequestRedraw()
             
             $this.RequestRedraw()
         }
@@ -5011,6 +5023,8 @@ class DashboardScreen : Screen {
             $color = if ($i -eq 0) { [ConsoleColor]::White } elseif ($i -eq 1) { [ConsoleColor]::Gray } else { [ConsoleColor]::Cyan }
             $this.WriteTextToPanel($this.SummaryPanel, $summaryLines[$i], 1, $i, $color)
         }
+        
+        $this.SummaryPanel.RequestRedraw()
     }
 
     hidden [void] UpdateStatusPanel() {
@@ -5035,6 +5049,8 @@ class DashboardScreen : Screen {
             $color = if ($i -eq 0) { [ConsoleColor]::White } elseif ($i -eq 1) { [ConsoleColor]::Gray } else { [ConsoleColor]::Green }
             $this.WriteTextToPanel($this.StatusPanel, $statusLines[$i], 1, $i, $color)
         }
+        
+        $this.StatusPanel.RequestRedraw()
     }
 
     # --- Helper Methods ---
@@ -5145,6 +5161,19 @@ class DashboardScreen : Screen {
     }
 
     # --- NCurses Rendering ---
+    [void] OnRender() {
+        # AI: PHASE 3 - Ensure buffer exists and is properly sized
+        if ($null -eq $this._private_buffer) {
+            $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "DashboardScreen.Buffer")
+        }
+        
+        # Clear buffer with background color
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+        $this._private_buffer.Clear($bgCell)
+        
+        # The base Render() method will handle rendering children
+    }
+    
     [void] _RenderContent() {
         # AI: PHASE 3 - Buffer-based rendering
         if ($null -eq $this._private_buffer) { return }
@@ -5204,7 +5233,6 @@ class DashboardScreen : Screen {
 
 class TaskListScreen : Screen {
     # --- Core Architecture ---
-    [hashtable] $Services
     [Panel] $MainPanel
     [Panel] $HeaderPanel
     [Panel] $TablePanel
@@ -5221,7 +5249,6 @@ class TaskListScreen : Screen {
     # --- Constructor ---
     TaskListScreen([hashtable]$services) : base("TaskListScreen", $services) {
         $this.Name = "TaskListScreen"
-        $this.Services = $services
         $this.Components = [System.Collections.Generic.List[UIElement]]::new()
         $this.IsFocusable = $true
         $this.Enabled = $true
@@ -5282,7 +5309,7 @@ class TaskListScreen : Screen {
                 [TableColumn]::new('Title', 'Task Title', 50),
                 [TableColumn]::new('Status', 'Status', 15),
                 [TableColumn]::new('Priority', 'Priority', 12),
-                [TableColumn]::new('GetDueDateString', 'Due Date', 15) # Use method for display
+                [TableColumn]::new('DueDate', 'Due Date', 15)
             )
             $this.TaskTable.SetColumns($columns)
             
@@ -5291,6 +5318,10 @@ class TaskListScreen : Screen {
             # AI: PHASE 3 - Load initial data
             $this.RefreshData()
             $this.UpdateDisplay()
+            
+            # Force initial render
+            $this.RequestRedraw()
+            $this.Render()
             
             Write-Log -Level Info -Message "TaskListScreen initialized with NCurses architecture"
         }
@@ -5303,6 +5334,7 @@ class TaskListScreen : Screen {
             try {
                 $this.AllTasks = @($this.Services.DataManager.GetTasks())
                 if ($null -eq $this.AllTasks) { $this.AllTasks = @() }
+                Write-Log -Level Debug -Message "Loaded $($this.AllTasks.Count) tasks from DataManager"
             } catch {
                 Write-Log -Level Warning -Message "Failed to load tasks: $_"
                 $this.AllTasks = @()
@@ -5316,6 +5348,8 @@ class TaskListScreen : Screen {
             }
             # Ensure FilteredTasks is never null
             $this.FilteredTasks = if ($null -eq $filterResult) { @() } else { @($filterResult) }
+            
+            Write-Log -Level Debug -Message "Filtered to $($this.FilteredTasks.Count) tasks with filter: $($this.FilterStatus)"
             
             # AI: PHASE 3 - Update table data
             $this.TaskTable.SetData($this.FilteredTasks)
@@ -5335,10 +5369,12 @@ class TaskListScreen : Screen {
             $taskCount = if ($null -ne $this.FilteredTasks) { $this.FilteredTasks.Count } else { 0 }
             $headerText = "Filter: $($this.FilterStatus) | Total: $taskCount tasks"
             $this.WriteTextToPanel($this.HeaderPanel, $headerText, 0, 0, [ConsoleColor]::White)
+            $this.HeaderPanel.RequestRedraw()
             
             # AI: PHASE 3 - Update footer navigation text
             $footerText = "[↑↓]Navigate [Space]Toggle [N]ew [E]dit [D]elete [F]ilter [Esc]Back"
             $this.WriteTextToPanel($this.FooterPanel, $footerText, 0, 0, [ConsoleColor]::Yellow)
+            $this.FooterPanel.RequestRedraw()
             
             # AI: PHASE 3 - Update table selection
             $this.TaskTable.SelectedIndex = $this.SelectedIndex
@@ -5444,7 +5480,7 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] EditSelectedTask() {
-        if ($this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
+        if ($null -eq $this.FilteredTasks -or $this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
             return
         }
         
@@ -5471,7 +5507,7 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] DeleteSelectedTask() {
-        if ($this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
+        if ($null -eq $this.FilteredTasks -or $this.FilteredTasks.Count -eq 0 -or $this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $this.FilteredTasks.Count) {
             return
         }
         
@@ -5510,6 +5546,19 @@ class TaskListScreen : Screen {
     }
 
     # --- NCurses Rendering ---
+    [void] OnRender() {
+        # AI: PHASE 3 - Ensure buffer exists and is properly sized
+        if ($null -eq $this._private_buffer) {
+            $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "TaskListScreen.Buffer")
+        }
+        
+        # Clear buffer with background color
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+        $this._private_buffer.Clear($bgCell)
+        
+        # The base Render() method will handle rendering children
+    }
+    
     [void] _RenderContent() {
         # AI: PHASE 3 - Buffer-based rendering
         if ($null -eq $this._private_buffer) { return }
@@ -5809,12 +5858,15 @@ function Load-UnifiedData {
                         $script:Data.Tasks.Clear()
                         foreach ($taskData in $loadedData.Tasks) {
                             if ($taskData -is [hashtable]) { 
-                                $task = [PSCustomObject]$taskData
-                                $task.PSObject.TypeNames.Insert(0, 'PmcTask')
-                                $script:Data.Tasks.Add($task) | Out-Null
+                                try {
+                                    $task = [PmcTask]::FromLegacyFormat($taskData)
+                                    $script:Data.Tasks.Add($task) | Out-Null
+                                } catch {
+                                    Write-Log -Level Warning -Message "Failed to load task: $_"
+                                }
                             }
                         }
-                        Write-Log -Level Debug -Message "Re-hydrated $($script:Data.Tasks.Count) tasks as PmcTask objects"
+                        Write-Log -Level Debug -Message "Loaded $($script:Data.Tasks.Count) tasks as PmcTask objects"
                     }
                     
                     if ($loadedData.Projects -is [hashtable]) {
@@ -5841,8 +5893,28 @@ function Load-UnifiedData {
                 $global:Data = $script:Data
             }
         } else {
-            Write-Log -Level Info -Message "No existing data file found, using defaults"
+            Write-Log -Level Info -Message "No existing data file found, creating sample data"
+            
+            # Create default project
+            $defaultProject = [PmcProject]::new("GENERAL", "General Tasks")
+            $script:Data.Projects.Add($defaultProject)
+            
+            # Create some sample tasks
+            $sampleTasks = @(
+                [PmcTask]::new("Welcome to PMC Terminal!", "This is your task management system", [TaskPriority]::High, "GENERAL"),
+                [PmcTask]::new("Review the documentation", "Check out the help files to learn more", [TaskPriority]::Medium, "GENERAL"),
+                [PmcTask]::new("Create your first project", "Use the project management features", [TaskPriority]::Low, "GENERAL")
+            )
+            
+            foreach ($task in $sampleTasks) {
+                $script:Data.Tasks.Add($task)
+            }
+            
+            Write-Log -Level Info -Message "Created $($sampleTasks.Count) sample tasks"
             $global:Data = $script:Data
+            
+            # Save the sample data
+            Save-UnifiedData
         }
         
         $script:LastSaveTime = Get-Date
