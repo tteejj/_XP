@@ -14,6 +14,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+
 # --- START OF ORIGINAL FILE: modules\logger\logger.psm1 ---
 # MODULE: logger.psm1
 # PURPOSE: Provides a robust, granular logging system for the PMC Terminal application.
