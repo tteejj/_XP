@@ -2140,20 +2140,23 @@ class NavigationMenu : UIElement {
     [void] BuildContextMenu([string]$context) {
         $this.Items.Clear()
         
+        # FIX: Capture the services object in a local variable for the scriptblocks to close over correctly.
+        $local:services = $this.Services
+        
         switch ($context) {
             "Dashboard" {
                 $this.AddItem([NavigationItem]::new("N", "New Task", { 
-                    $this.Services.Navigation.GoTo("/tasks", @{mode="new"}) 
+                    $local:services.Navigation.GoTo("/tasks", @{mode="new"}) 
                 }))
                 $this.AddItem([NavigationItem]::new("P", "Projects", { 
-                    $this.Services.Navigation.GoTo("/projects", @{}) 
+                    $local:services.Navigation.GoTo("/projects", @{}) 
                 }))
                 $this.AddItem([NavigationItem]::new("S", "Settings", { 
-                    $this.Services.Navigation.GoTo("/settings", @{}) 
+                    $local:services.Navigation.GoTo("/settings", @{}) 
                 }))
                 $this.AddSeparator()
                 $this.AddItem([NavigationItem]::new("Q", "Quit", { 
-                    $this.Services.Navigation.RequestExit() 
+                    $local:services.Navigation.RequestExit() 
                 }))
             }
             "TaskList" {
@@ -2171,15 +2174,15 @@ class NavigationMenu : UIElement {
                 }))
                 $this.AddSeparator()
                 $this.AddItem([NavigationItem]::new("B", "Back", { 
-                    $this.Services.Navigation.PopScreen() 
+                    $local:services.Navigation.PopScreen() 
                 }))
             }
             default {
                 $this.AddItem([NavigationItem]::new("B", "Back", { 
-                    $this.Services.Navigation.PopScreen() 
+                    $local:services.Navigation.PopScreen() 
                 }))
                 $this.AddItem([NavigationItem]::new("H", "Home", { 
-                    $this.Services.Navigation.GoTo("/dashboard", @{}) 
+                    $local:services.Navigation.GoTo("/dashboard", @{}) 
                 }))
             }
         }
@@ -5171,6 +5174,53 @@ class DashboardScreen : Screen {
         $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
         $this._private_buffer.Clear($bgCell)
         
+        # BYPASS TUI: Force immediate console output to show dashboard
+        try {
+            [Console]::SetCursorPosition(0, 0)
+            [Console]::Clear()
+            
+            # Header
+            [Console]::ForegroundColor = [ConsoleColor]::Cyan
+            [Console]::WriteLine("╔═══════════════════════════════════════════════════════════════════════════════════════╗")
+            [Console]::WriteLine("║                           PMC Terminal v5 - Dashboard                                ║")
+            [Console]::WriteLine("╚═══════════════════════════════════════════════════════════════════════════════════════╝")
+            
+            [Console]::WriteLine("")
+            [Console]::ForegroundColor = [ConsoleColor]::Green
+            [Console]::WriteLine("╔═══════════════════════════════╗    ╔═══════════════════════════════════════╗")
+            [Console]::WriteLine("║         Task Summary          ║    ║              Main Menu                ║")
+            [Console]::WriteLine("╠═══════════════════════════════╣    ╠═══════════════════════════════════════╣")
+            [Console]::ForegroundColor = [ConsoleColor]::White
+            [Console]::WriteLine("║ Total Tasks:    $($this.TotalTasks.ToString().PadLeft(11)) ║    ║ [1] Task Management                   ║")
+            [Console]::WriteLine("║ Completed:      $($this.CompletedTasks.ToString().PadLeft(11)) ║    ║ [2] Project Management                ║")
+            [Console]::WriteLine("║ Pending:        $($this.PendingTasks.ToString().PadLeft(11)) ║    ║ [3] Settings                          ║")
+            [Console]::WriteLine("║ Progress: $($this.GetProgressBar().PadRight(17)) ║    ║                                       ║")
+            [Console]::ForegroundColor = [ConsoleColor]::Green
+            [Console]::WriteLine("╚═══════════════════════════════╝    ║ [Q] Quit Application                  ║")
+            [Console]::WriteLine("                                     ╚═══════════════════════════════════════╝")
+            
+            [Console]::WriteLine("")
+            [Console]::ForegroundColor = [ConsoleColor]::Yellow
+            [Console]::WriteLine("╔═══════════════════════════════════════════════════════════════════════════════════════╗")
+            [Console]::WriteLine("║                                System Status                                          ║")
+            [Console]::WriteLine("╠═══════════════════════════════════════════════════════════════════════════════════════╣")
+            [Console]::ForegroundColor = [ConsoleColor]::Gray
+            [Console]::WriteLine("║ PowerShell Version: $($global:PSVersionTable.PSVersion)".PadRight(89) + "║")
+            [Console]::WriteLine("║ Platform:           $($global:PSVersionTable.Platform)".PadRight(89) + "║")
+            [Console]::WriteLine("║ Memory Usage:       $($this.GetMemoryUsage())".PadRight(89) + "║")
+            [Console]::WriteLine("║ Current Time:       $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')".PadRight(89) + "║")
+            [Console]::ForegroundColor = [ConsoleColor]::Yellow
+            [Console]::WriteLine("╚═══════════════════════════════════════════════════════════════════════════════════════╝")
+            
+            [Console]::WriteLine("")
+            [Console]::ForegroundColor = [ConsoleColor]::Cyan
+            [Console]::WriteLine("Use number keys [1-3] or arrow keys + Enter to navigate. Press [Q] to quit.")
+            [Console]::ResetColor()
+            
+        } catch {
+            Write-Log -Level Error -Message "Dashboard direct rendering failed: $_"
+        }
+        
         # The base Render() method will handle rendering children
     }
     
@@ -5243,7 +5293,7 @@ class TaskListScreen : Screen {
     # --- State Management ---
     [string] $FilterStatus = "All"
     [object[]] $AllTasks = @()
-    [object[]] $FilteredTasks = @()
+    [System.Collections.ArrayList] $FilteredTasks = [System.Collections.ArrayList]::new()
     [int] $SelectedIndex = 0
 
     # --- Constructor ---
@@ -5342,12 +5392,23 @@ class TaskListScreen : Screen {
             
             # AI: PHASE 3 - Apply current filter
             $filterResult = switch ($this.FilterStatus) {
-                "Active" { @($this.AllTasks | Where-Object { $_.Status -ne [TaskStatus]::Completed }) }
-                "Completed" { @($this.AllTasks | Where-Object { $_.Status -eq [TaskStatus]::Completed }) }
+                "Active" { $this.AllTasks | Where-Object { $_.Status -ne [TaskStatus]::Completed } }
+                "Completed" { $this.AllTasks | Where-Object { $_.Status -eq [TaskStatus]::Completed } }
                 default { $this.AllTasks }
             }
-            # Ensure FilteredTasks is never null
-            $this.FilteredTasks = if ($null -eq $filterResult) { @() } else { @($filterResult) }
+            # Ensure FilteredTasks is always a proper array with Count property
+            if ($null -eq $filterResult) {
+                $this.FilteredTasks = [System.Collections.ArrayList]::new()
+            } else {
+                $this.FilteredTasks = [System.Collections.ArrayList]::new()
+                if ($filterResult -is [array]) {
+                    foreach ($item in $filterResult) {
+                        $this.FilteredTasks.Add($item) | Out-Null
+                    }
+                } else {
+                    $this.FilteredTasks.Add($filterResult) | Out-Null
+                }
+            }
             
             Write-Log -Level Debug -Message "Filtered to $($this.FilteredTasks.Count) tasks with filter: $($this.FilterStatus)"
             
@@ -5555,6 +5616,27 @@ class TaskListScreen : Screen {
         # Clear buffer with background color
         $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
         $this._private_buffer.Clear($bgCell)
+        
+        # SHOW INSTRUCTIONS: Force immediate console output to show controls
+        try {
+            $taskCount = if ($null -ne $this.FilteredTasks) { $this.FilteredTasks.Count } else { 0 }
+            
+            # Show instructions at the top of the screen
+            [Console]::SetCursorPosition(0, 0)
+            [Console]::ForegroundColor = [ConsoleColor]::Yellow
+            [Console]::WriteLine("╔══════════════════════════════════════════════════════════════════════════════════════════════════╗")
+            [Console]::WriteLine("║                                    TASK LIST CONTROLS                                               ║")
+            [Console]::WriteLine("╠══════════════════════════════════════════════════════════════════════════════════════════════════╣")
+            [Console]::ForegroundColor = [ConsoleColor]::White
+            [Console]::WriteLine("║ [↑↓] Navigate  [Space] Toggle Complete  [N] New Task  [E] Edit  [D] Delete  [F] Filter  [Esc] Back ║")
+            [Console]::WriteLine("║ Filter: $($this.FilterStatus)  |  Tasks: $taskCount  |  Selected: $($this.SelectedIndex + 1)".PadRight(98) + "║")
+            [Console]::ForegroundColor = [ConsoleColor]::Yellow
+            [Console]::WriteLine("╚══════════════════════════════════════════════════════════════════════════════════════════════════╝")
+            [Console]::ResetColor()
+            
+        } catch {
+            Write-Log -Level Error -Message "TaskListScreen instruction rendering failed: $_"
+        }
         
         # The base Render() method will handle rendering children
     }
@@ -7019,6 +7101,25 @@ try {
     $services.KeybindingService = New-KeybindingService
     $services.DataManager = Initialize-DataManager
     
+    # Create sample tasks for testing
+    Write-Host "Creating sample tasks..." -ForegroundColor Yellow
+    try {
+        $sampleTasks = @(
+            @{Title = "Review project documentation"; Description = "Review and update project documentation"; Priority = "High"; Project = "ProjectA"},
+            @{Title = "Fix critical bug in login system"; Description = "Address authentication issues"; Priority = "Critical"; Project = "ProjectB"},
+            @{Title = "Implement new feature"; Description = "Add user profile management"; Priority = "Medium"; Project = "ProjectA"},
+            @{Title = "Update dependencies"; Description = "Update all NPM packages"; Priority = "Low"; Project = "ProjectC"},
+            @{Title = "Write unit tests"; Description = "Increase test coverage"; Priority = "Medium"; Project = "ProjectB"}
+        )
+        
+        foreach ($taskData in $sampleTasks) {
+            $services.DataManager.AddTask($taskData.Title, $taskData.Description, $taskData.Priority, $taskData.Project)
+        }
+        Write-Host "Sample tasks created successfully!" -ForegroundColor Green
+    } catch {
+        Write-Host "Warning: Could not create sample tasks: $_" -ForegroundColor Yellow
+    }
+    
     # NavigationService needs the $services container to pass to screens
     $services.Navigation = Initialize-NavigationService -Services $services
     
@@ -7045,13 +7146,19 @@ try {
     # Initialize the TUI Engine which orchestrates the UI
     Write-Host "Starting TUI Engine..." -ForegroundColor Yellow
     Initialize-TuiEngine
+    Write-Host "TUI Engine initialized successfully" -ForegroundColor Green
     
     # Create and initialize the first screen
+    Write-Host "Creating DashboardScreen..." -ForegroundColor Yellow
     $dashboard = [DashboardScreen]::new($services)
+    Write-Host "DashboardScreen created, initializing..." -ForegroundColor Yellow
     $dashboard.Initialize()
+    Write-Host "DashboardScreen initialized successfully" -ForegroundColor Green
     
     # Push the screen to the engine and start the main loop
+    Write-Host "Pushing screen to TUI engine..." -ForegroundColor Yellow
     Push-Screen -Screen $dashboard
+    Write-Host "Screen pushed, starting main loop..." -ForegroundColor Yellow
     
     # Force an initial refresh to ensure rendering
     $global:TuiState.IsDirty = $true
