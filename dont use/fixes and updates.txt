@@ -1,0 +1,1490 @@
+```ERROR: PS C:\Users\jhnhe\Documents\GitHub\_XP> ./axiommv2.ps1
+ParserError: C:\Users\jhnhe\Documents\GitHub\_XP\axiommv2.ps1:4500
+Line |
+4500 |  …             $using:screen_this.Services.Navigation.GoTo("/tasks", @{} …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Expression is not allowed in a Using expression.
+PS C:\Users\jhnhe\Documents\GitHub\_XP>
+
+```FIX: The Real Problem (Why the Previous Fixes Failed)
+The core issue is more complex than I initially diagnosed. It's a subtle PowerShell scoping problem when a scriptblock is created inside a class method and then executed later from a different object's method.
+Creation vs. Execution: The action scriptblock ({...}) is created inside the DashboardScreen's BuildMainMenu method. At that moment, it knows about $this and $screen_this.
+Loss of Context: However, the scriptblock is executed much later, when you press Enter. The call chain is: NavigationMenu.HandleInput() -> NavigationItem.Execute() -> & $this.Action. By the time NavigationItem calls the scriptblock, it's in a different scope and has lost the original context of the DashboardScreen instance. The $screen_this variable is gone.
+My previous attempts tried to fix this with closure tricks that weren't robust enough for this scenario.
+The Definitive Solution
+We will stop relying on "magic" scope capturing and make the data flow explicit. We will modify the system to pass the $services object directly to the action scriptblock when it is executed. This is a much more stable design.
+This requires three small, targeted changes.
+Change 1: Update NavigationItem to Accept Services
+Modify the Execute method to accept the $services container as a parameter and pass it to the action scriptblock.
+File: axiom.txt
+Location: In the NavigationItem class (around line 1950).
+Find this method:
+Generated powershell
+[void] Execute() {
+        if (-not $this.Enabled) {
+            Write-Log -Level Warning -Message "Attempted to execute disabled navigation item: $($this.Key)"
+            return
+        }
+        
+        try {
+            Write-Log -Level Debug -Message "Executing navigation item: $($this.Key) - $($this.Label)"
+            & $this.Action
+        }
+        catch {
+            Write-Log -Level Error -Message "Navigation action failed for item '$($this.Key)': $_"
+            throw
+        }
+    }
+Use code with caution.
+Powershell
+Replace it with this corrected version:
+Generated powershell
+[void] Execute([hashtable]$services) {
+        if (-not $this.Enabled) {
+            Write-Log -Level Warning -Message "Attempted to execute disabled navigation item: $($this.Key)"
+            return
+        }
+        
+        try {
+            Write-Log -Level Debug -Message "Executing navigation item: $($this.Key) - $($this.Label)"
+            & $this.Action $services
+        }
+        catch {
+            Write-Log -Level Error -Message "Navigation action failed for item '$($this.Key)': $_"
+            throw
+        }
+    }
+Use code with caution.
+Powershell
+Change 2: Update NavigationMenu to Provide Services
+Modify the NavigationMenu to pass its own $this.Services collection when it tells an item to execute.
+File: axiom.txt
+Location: In the NavigationMenu class, in both ExecuteAction and HandleInput methods (around lines 2011 and 2154).
+Find the ExecuteAction method and change this line:
+Generated powershell
+$item.Execute()
+Use code with caution.
+Powershell
+To this:
+Generated powershell
+$item.Execute($this.Services)
+Use code with caution.
+Powershell
+Next, find the HandleInput method and change these two lines:
+Generated powershell
+if ($selectedItem.Enabled -and $selectedItem.Key -ne "-") {
+                            $selectedItem.Execute()
+                        }
+...
+                    if ($matchingItem -and $matchingItem.Enabled -and $matchingItem.Visible) {
+                        $matchingItem.Execute()
+                        return $true
+                    }
+Use code with caution.
+Powershell
+To this:
+Generated powershell
+if ($selectedItem.Enabled -and $selectedItem.Key -ne "-") {
+                            $selectedItem.Execute($this.Services)
+                        }
+...
+                    if ($matchingItem -and $matchingItem.Enabled -and $matchingItem.Visible) {
+                        $matchingItem.Execute($this.Services)
+                        return $true
+                    }
+Use code with caution.
+Powershell
+Change 3: Update DashboardScreen Menu Actions
+Finally, modify the action scriptblocks in DashboardScreen to accept the $services parameter they are now being given.
+File: axiom.txt
+Location: In the DashboardScreen class, in the BuildMainMenu method (around line 4496).
+Find this block:
+Generated powershell
+$screen_this = $this
+            
+            $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", {
+                $screen_this.Services.Navigation.GoTo("/tasks", @{})
+            }))
+...
+            $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", {
+                 $screen_this.Services.Navigation.RequestExit()
+            }))
+Use code with caution.
+Powershell
+Replace it with this definitive, correct version:
+Generated powershell
+# The action scriptblocks now define a param block to explicitly receive the services container.
+            
+            $this.MainMenu.AddItem([NavigationItem]::new("1", "Task Management", {
+                param($services)
+                $services.Navigation.GoTo("/tasks", @{})
+            }))
+            $this.MainMenu.AddItem([NavigationItem]::new("2", "Project Management", {
+                # This action is not yet implemented, so we'll show a dialog.
+                Show-AlertDialog -Title "Not Implemented" -Message "Project Management screen is coming soon!"
+            }))
+            $this.MainMenu.AddItem([NavigationItem]::new("3", "Settings", {
+                # This action is not yet implemented, so we'll show a dialog.
+                Show-AlertDialog -Title "Not Implemented" -Message "Settings screen is coming soon!"
+            }))
+            $this.MainMenu.AddSeparator()
+            $this.MainMenu.AddItem([NavigationItem]::new("Q", "Quit Application", {
+                 param($services)
+                 $services.Navigation.RequestExit()
+            }))
+#########################################################################################
+# Terminal File Browser for PowerShell
+
+#region State Variables
+$script:FB_CurrentPath = $null
+$script:FB_SelectedItems = @{}
+$script:FB_Clipboard = @{ Items = @(); Action = "Copy" }
+$script:FB_SortBy = "Name"
+$script:FB_ShowHidden = $false
+$script:FB_ViewMode = "Details"
+$script:FB_SelectedIndex = 0
+#endregion
+
+#region Main Entry Points
+
+function global:Start-TerminalFileBrowser {
+    [CmdletBinding()]
+    param(
+        [string]$Path = (Get-Location).Path,
+        [switch]$SelectFileMode,
+        [switch]$SelectFolderMode
+    )
+    
+    $script:FB_CurrentPath = Get-Item -LiteralPath $Path
+    $script:FB_SelectedItems = @{}
+    $script:FB_SelectedIndex = 0
+
+    $originalTitle = $Host.UI.RawUI.WindowTitle
+    $Host.UI.RawUI.WindowTitle = "File Browser: $($script:FB_CurrentPath.FullName)"
+    
+    $result = $null
+    try {
+        if ($SelectFileMode -or $SelectFolderMode) {
+            $result = FB_MainLoop -SelectFileMode:$SelectFileMode -SelectFolderMode:$SelectFolderMode
+        } else {
+            FB_MainLoop
+        }
+    }
+    finally {
+        $Host.UI.RawUI.WindowTitle = $originalTitle
+    }
+    return $result
+}
+
+function FB_MainLoop {
+    param($SelectFileMode, $SelectFolderMode)
+
+    while ($true) {
+        $items = Get-ChildItem -LiteralPath $script:FB_CurrentPath.FullName -Force:$script:FB_ShowHidden -ErrorAction SilentlyContinue | FB_SortItems
+        
+        Clear-Host
+        FB_ShowHeader -SelectMode:($SelectFileMode -or $SelectFolderMode)
+        FB_ShowFileList -Items $items
+        FB_ShowStatusBar -Items $items
+
+        $action = FB_GetAction
+        
+        switch ($action.Type) {
+            "Exit" { return $null }
+            "Refresh" { continue }
+            "Navigate" { $script:FB_CurrentPath = Get-Item -LiteralPath $action.Path; $script:FB_SelectedItems = @{}; $script:FB_SelectedIndex = 0 }
+            "Open" {
+                if ($SelectFileMode -and -not $action.Item.PSIsContainer) { return $action.Item.FullName }
+                if ($SelectFolderMode -and $action.Item.PSIsContainer) { return $action.Item.FullName }
+                if ($action.Item.PSIsContainer) { $script:FB_CurrentPath = $action.Item; $script:FB_SelectedItems = @{}; $script:FB_SelectedIndex = 0 }
+                else { try { Start-Process -FilePath $action.Item.FullName } catch { Write-Warning "Could not open file: $_" } }
+            }
+            "ReturnPath" { return $action.Path }
+            "Invoke" { & $action.Action; Start-Sleep -Milliseconds 500 } # Pause after action
+        }
+    }
+}
+#endregion
+
+#region UI Display Functions
+
+function FB_ShowHeader {
+    param($SelectMode)
+    $pathColor = Get-ThemeProperty 'Palette.WarningFG'
+    Write-Header "File Browser"
+    Write-Host " 📍 Path: " -ForegroundColor $pathColor -NoNewline
+    Write-Host $script:FB_CurrentPath.FullName -ForegroundColor White
+    if($SelectMode) { Write-Host "`n 🎯 SELECTION MODE: Press Enter on a file/folder to select and exit." -ForegroundColor (Get-ThemeProperty 'Palette.InfoFG')}
+}
+
+function FB_ShowFileList {
+    param($Items)
+    switch ($script:FB_ViewMode) {
+        "Details" { FB_ShowDetailView -Items $Items }
+        default { FB_ShowDetailView -Items $Items }
+    }
+}
+
+function FB_ShowDetailView {
+    param ($Items)
+    $headers = @(
+        @{ T = " "; W = 1 }, # Selection
+        @{ T = " "; W = 1 }, # Icon
+        @{ T = "Name"; W = ($Host.UI.RawUI.WindowSize.Width - 48); Align = "Left" },
+        @{ T = "Size"; W = 12; Align = "Right" },
+        @{ T = "Modified"; W = 19; Align = "Left" }
+    )
+    $headerString = ""
+    foreach ($h in $headers) { $headerString += "{0,-$($h.W)} " -f $h.T }
+    Write-Host "`n$headerString" -ForegroundColor (Get-ThemeProperty 'Palette.HeaderFG')
+    
+    # Parent directory
+    if ($script:FB_CurrentPath.Parent) {
+        if ($script:FB_SelectedIndex -eq -1) { Write-Host ">" -ForegroundColor (Get-ThemeProperty 'Palette.WarningFG') -NoNewline } else { Write-Host " " -NoNewline }
+        Write-Host " 📁 .. " -ForegroundColor (Get-ThemeProperty 'Palette.AccentFG')
+    }
+
+    for ($i = 0; $i -lt $Items.Count; $i++) {
+        $item = $Items[$i]
+        $isSelected = $script:FB_SelectedItems.ContainsKey($item.FullName)
+        $isCurrent = ($i -eq $script:FB_SelectedIndex)
+
+        # Selection Indicator
+        if ($isCurrent) { Write-Host ">" -ForegroundColor (Get-ThemeProperty 'Palette.WarningFG') -NoNewline } else { Write-Host " " -NoNewline }
+        # Checkbox
+        if ($isSelected) { Write-Host "[✓] " -ForegroundColor (Get-ThemeProperty 'Palette.SuccessFG') -NoNewline } else { Write-Host "[ ] " -NoNewline }
+        
+        # Icon and Name
+        $nameColor = if ($item.PSIsContainer) { Get-ThemeProperty 'Palette.InfoFG' } else { "White" }
+        $icon = Get-FileIcon $item.Extension
+        Write-Host "$icon " -NoNewline
+        $name = if ($item.Name.Length -gt $headers[2].W - 3) { $item.Name.Substring(0, $headers[2].W - 3) + "..." } else { $item.Name }
+        Write-Host ("{0,-$($headers[2].W - 2)}" -f $name) -ForegroundColor $nameColor -NoNewline
+        
+        # Size
+        $size = if ($item.PSIsContainer) { "<DIR>" } else { Format-FileSize $item.Length }
+        Write-Host ("{0,12}" -f $size) -ForegroundColor (Get-ThemeProperty 'Palette.SubtleFG') -NoNewline
+
+        # Date
+        Write-Host "  $($item.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))" -ForegroundColor (Get-ThemeProperty 'Palette.SubtleFG')
+    }
+}
+
+function FB_ShowStatusBar {
+    param ($Items)
+    $width = $Host.UI.RawUI.WindowSize.Width
+    Write-Host ("`n" + ("-" * $width)) -ForegroundColor (Get-ThemeProperty 'Palette.SubtleFG')
+    $status = " Items: $($Items.Count) | Selected: $($script:FB_SelectedItems.Count) | Clipboard: $($script:FB_Clipboard.Items.Count) | Sort: $($script:FB_SortBy) | Hidden: $($script:FB_ShowHidden)"
+    Write-Host $status -ForegroundColor (Get-ThemeProperty 'Palette.SubtleFG')
+    Write-Host "[?] Help" -ForegroundColor (Get-ThemeProperty 'Palette.WarningFG')
+}
+
+#endregion
+
+#region Actions and Logic
+
+function FB_GetAction {
+    $items = Get-ChildItem -LiteralPath $script:FB_CurrentPath.FullName -Force:$script:FB_ShowHidden -ErrorAction SilentlyContinue | FB_SortItems
+    $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+    switch ($key.VirtualKeyCode) {
+        # Navigation
+        38 { # Up
+            if ($script:FB_SelectedIndex -gt 0) { $script:FB_SelectedIndex-- }
+            elseif ($script:FB_CurrentPath.Parent) { $script:FB_SelectedIndex = -1 }
+            return @{ Type = "Refresh" }
+        }
+        40 { # Down
+            if ($script:FB_SelectedIndex -lt ($items.Count - 1)) { $script:FB_SelectedIndex++ }
+            return @{ Type = "Refresh" }
+        }
+        37 { # Left
+            if ($script:FB_CurrentPath.Parent) { return @{ Type = "Navigate"; Path = $script:FB_CurrentPath.Parent.FullName } }
+            return @{ Type = "Refresh" }
+        }
+        13 { # Enter
+            if ($script:FB_SelectedIndex -eq -1 -and $script:FB_CurrentPath.Parent) { return @{ Type = "Navigate"; Path = $script:FB_CurrentPath.Parent.FullName } }
+            if ($script:FB_SelectedIndex -ge 0 -and $script:FB_SelectedIndex -lt $items.Count) { return @{ Type = "Open"; Item = $items[$script:FB_SelectedIndex] } }
+            return @{ Type = "Refresh" }
+        }
+        # Selection
+        32 { # Space
+            if ($script:FB_SelectedIndex -ge 0 -and $script:FB_SelectedIndex -lt $items.Count) {
+                $item = $items[$script:FB_SelectedIndex]; if ($script:FB_SelectedItems.ContainsKey($item.FullName)) { $script:FB_SelectedItems.Remove($item.FullName) } else { $script:FB_SelectedItems[$item.FullName] = $item }
+            }
+            if ($script:FB_SelectedIndex -lt ($items.Count - 1)) { $script:FB_SelectedIndex++ } # Move down after selection
+            return @{ Type = "Refresh" }
+        }
+    }
+
+    switch ($key.Character.ToString().ToLower()) {
+        "q" { return @{ Type = "Exit" } }
+        "?" { return @{ Type = "Invoke"; Action = { FB_ShowHelp } } }
+        "c" { return @{ Type = "Invoke"; Action = { FB_CopyItems -Items $items } } }
+        "v" { return @{ Type = "Invoke"; Action = { FB_PasteItems } } }
+        "n" { return @{ Type = "Invoke"; Action = { FB_NewItem } } }
+        "d" { return @{ Type = "Invoke"; Action = { FB_DeleteItems -Items $items } } }
+        "r" { return @{ Type = "Invoke"; Action = { FB_RenameItem -Items $items } } }
+        "a" { return @{ Type = "Invoke"; Action = { foreach($item in $items) { $script:FB_SelectedItems[$item.FullName] = $item } } } }
+        "s" { return @{ Type = "Invoke"; Action = { FB_ToggleSort } } }
+        "h" { $script:FB_ShowHidden = -not $script:FB_ShowHidden; return @{ Type = "Refresh" } }
+    }
+    return @{ Type = "Refresh" }
+}
+
+function FB_CopyItems {
+    param($Items)
+    $selected = $script:FB_SelectedItems.Values
+    if ($selected.Count -eq 0 -and $script:FB_SelectedIndex -ge 0) { $selected = @($Items[$script:FB_SelectedIndex]) }
+    if ($selected.Count -gt 0) { $script:FB_Clipboard.Items = @($selected.FullName); Write-Info "Copied $($selected.Count) items." }
+}
+
+function FB_PasteItems {
+    if ($script:FB_Clipboard.Items.Count -eq 0) { Write-Warning "Clipboard is empty."; return }
+    foreach ($source in $script:FB_Clipboard.Items) {
+        $dest = Join-Path $script:FB_CurrentPath.FullName (Split-Path $source -Leaf)
+        try { Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force; Write-Success "Pasted: $(Split-Path $source -Leaf)" }
+        catch { Write-Error "Failed to paste $(Split-Path $source -Leaf): $_" }
+    }
+}
+
+function FB_DeleteItems {
+    param($Items)
+    $selected = $script:FB_SelectedItems.Values
+    if ($selected.Count -eq 0 -and $script:FB_SelectedIndex -ge 0) { $selected = @($Items[$script:FB_SelectedIndex]) }
+    if ($selected.Count -gt 0) {
+        Write-Warning "Permanently delete $($selected.Count) items?"; if ((Read-Host "Type 'yes' to confirm").ToLower() -eq 'yes') {
+            foreach ($item in $selected) {
+                try { Remove-Item -LiteralPath $item.FullName -Recurse -Force; Write-Success "Deleted: $($item.Name)" }
+                catch { Write-Error "Failed to delete $($item.Name): $_" }
+            }
+            $script:FB_SelectedItems.Clear()
+        }
+    }
+}
+
+function FB_RenameItem {
+    param($Items)
+    if ($script:FB_SelectedIndex -ge 0) {
+        $item = $Items[$script:FB_SelectedIndex]
+        $newName = Read-Host "Rename '$($item.Name)' to"
+        if (-not [string]::IsNullOrWhiteSpace($newName)) {
+            try { Rename-Item -LiteralPath $item.FullName -NewName $newName; Write-Success "Renamed." } catch { Write-Error "Rename failed: $_" }
+        }
+    }
+}
+
+function FB_NewItem {
+    $type = Read-Host "[F]ile or [D]irectory?"
+    $name = Read-Host "Name?"
+    if ([string]::IsNullOrWhiteSpace($name)) { return }
+    $path = Join-Path $script:FB_CurrentPath.FullName $name
+    $itemType = if ($type.ToLower() -eq 'd') { "Directory" } else { "File" }
+    try { New-Item -Path $path -ItemType $itemType | Out-Null; Write-Success "Created $itemType '$name'." } catch { Write-Error "Failed to create: $_" }
+}
+
+function FB_ToggleSort {
+    $sortOptions = @("Name", "Date", "Size", "Type")
+    $current = $sortOptions.IndexOf($script:FB_SortBy)
+    $next = ($current + 1) % $sortOptions.Count
+    $script:FB_SortBy = $sortOptions[$next]
+}
+
+function FB_SortItems {
+    param([object[]]$Items)
+    switch ($script:FB_SortBy) {
+        "Name" { 
+            $sorted = $Items | Sort-Object PSIsContainer -Descending
+            return $sorted | Sort-Object Name
+        }
+        "Date" { 
+            $sorted = $Items | Sort-Object PSIsContainer -Descending
+            return $sorted | Sort-Object LastWriteTime -Descending
+        }
+        "Size" { 
+            $sorted = $Items | Sort-Object PSIsContainer -Descending
+            return $sorted | Sort-Object Length -Descending
+        }
+        "Type" { 
+            $sorted = $Items | Sort-Object PSIsContainer -Descending
+            $sorted = $sorted | Sort-Object Extension
+            return $sorted | Sort-Object Name
+        }
+    }
+}
+
+function FB_ShowHelp {
+    Write-Header "File Browser Help"
+    Write-Host @"
+Key          Action
+---          ------
+↑/↓          Navigate files and folders
+←            Go to parent directory
+Enter        Open file or enter directory
+Space        Select/Deselect the current item
+a            Select all items in the current folder
+c            Copy selected items to clipboard
+v            Paste items from clipboard
+d            Delete selected items (with confirmation)
+r            Rename the current item
+n            Create a new file or directory
+s            Cycle through sort modes (Name, Date, Size, Type)
+h            Toggle visibility of hidden files and folders
+?            Show this help screen
+q            Quit the file browser
+"@
+    Read-Host "`nPress Enter to continue..." | Out-Null
+}
+
+#endregion
+##############################################################################
+# Fuzzy Text File Parser for PowerShell
+# Advanced fuzzy string matching with file browser integration
+
+# Fuzzy matching algorithm (Levenshtein distance)
+function Get-LevenshteinDistance {
+    param(
+        [string]$String1,
+        [string]$String2,
+        [switch]$CaseSensitive
+    )
+    
+    if (-not $CaseSensitive) {
+        $String1 = $String1.ToLower()
+        $String2 = $String2.ToLower()
+    }
+    
+    $len1 = $String1.Length
+    $len2 = $String2.Length
+    
+    # Create matrix
+    $matrix = New-Object 'int[,]' ($len1 + 1), ($len2 + 1)
+    
+    # Initialize first column and row
+    for ($i = 0; $i -le $len1; $i++) { $matrix[$i, 0] = $i }
+    for ($j = 0; $j -le $len2; $j++) { $matrix[0, $j] = $j }
+    
+    # Fill matrix
+    for ($i = 1; $i -le $len1; $i++) {
+        for ($j = 1; $j -le $len2; $j++) {
+            $cost = if ($String1[$i-1] -eq $String2[$j-1]) { 0 } else { 1 }
+            
+            $matrix[$i, $j] = [Math]::Min(
+                [Math]::Min(
+                    $matrix[$i-1, $j] + 1,      # deletion
+                    $matrix[$i, $j-1] + 1       # insertion
+                ),
+                $matrix[$i-1, $j-1] + $cost     # substitution
+            )
+        }
+    }
+    
+    return $matrix[$len1, $len2]
+}
+
+# Calculate similarity percentage
+function Get-FuzzySimilarity {
+    param(
+        [string]$String1,
+        [string]$String2,
+        [switch]$CaseSensitive
+    )
+    
+    $distance = Get-LevenshteinDistance -String1 $String1 -String2 $String2 -CaseSensitive:$CaseSensitive
+    $maxLen = [Math]::Max($String1.Length, $String2.Length)
+    
+    if ($maxLen -eq 0) { return 100 }
+    
+    $similarity = (1 - ($distance / $maxLen)) * 100
+    return [Math]::Round($similarity, 2)
+}
+
+# Main fuzzy search function
+function Search-FuzzyText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position=0)]
+        [string]$SearchTerm,
+        
+        [Parameter(Position=1)]
+        [string]$Path,
+        
+        [int]$MinSimilarity = 60,
+        [int]$ContextLines = 2,
+        [switch]$CaseSensitive,
+        [switch]$Interactive,
+        [switch]$AllFiles,
+        [switch]$UseBrowser,
+        [string]$Pattern = "*.txt",
+        [int]$MaxResults = 50
+    )
+    
+    # Use file browser to select file if requested
+    if ($UseBrowser -or -not $Path) {
+        Write-Host "`n🔍 Select a file to search in:" -ForegroundColor Cyan
+        
+        # Check if file browser is loaded
+        if (Get-Command Start-TerminalFileBrowser -ErrorAction SilentlyContinue) {
+            Write-Host "Starting file browser... (select a file and press Q to continue)" -ForegroundColor Yellow
+            # This would integrate with the file browser
+            # For now, we'll use a simpler approach
+        }
+        
+        # Simple file selection
+        $files = Get-ChildItem -Path (Get-Location) -Filter $Pattern -File
+        if ($files.Count -eq 0) {
+            Write-Host "❌ No $Pattern files found in current directory" -ForegroundColor Red
+            return
+        }
+        
+        Write-Host "`nAvailable files:" -ForegroundColor Yellow
+        for ($i = 0; $i -lt $files.Count; $i++) {
+            Write-Host "$($i+1). $($files[$i].Name)" -ForegroundColor White
+        }
+        
+        $selection = Read-Host "`nSelect file number"
+        if ($selection -match '^\d+$' -and [int]$selection -gt 0 -and [int]$selection -le $files.Count) {
+            $Path = $files[[int]$selection - 1].FullName
+        } else {
+            Write-Host "❌ Invalid selection" -ForegroundColor Red
+            return
+        }
+    }
+    
+    # If no search term provided, ask for it
+    if (-not $SearchTerm) {
+        Write-Host "`n🔍 FUZZY TEXT SEARCH" -ForegroundColor Cyan
+        Write-Host "File: $(Split-Path $Path -Leaf)" -ForegroundColor Yellow
+        $SearchTerm = Read-Host "`nEnter search term"
+        if (-not $SearchTerm) { return }
+    }
+    
+    # Perform search
+    if ($AllFiles) {
+        # Search in multiple files
+        $filesToSearch = Get-ChildItem -Path (Split-Path $Path -Parent) -Filter $Pattern -File
+        $allMatches = @()
+        
+        foreach ($file in $filesToSearch) {
+            Write-Host "`nSearching in: $($file.Name)..." -ForegroundColor DarkGray
+            $matches = Find-FuzzyMatches -FilePath $file.FullName -SearchTerm $SearchTerm `
+                                       -MinSimilarity $MinSimilarity -ContextLines $ContextLines `
+                                       -CaseSensitive:$CaseSensitive -MaxResults $MaxResults
+            
+            foreach ($match in $matches) {
+                $match | Add-Member -NotePropertyName FileName -NotePropertyValue $file.Name
+                $allMatches += $match
+            }
+        }
+        
+        $matches = $allMatches | Sort-Object Similarity -Descending | Select-Object -First $MaxResults
+    } else {
+        # Search in single file
+        $matches = Find-FuzzyMatches -FilePath $Path -SearchTerm $SearchTerm `
+                                   -MinSimilarity $MinSimilarity -ContextLines $ContextLines `
+                                   -CaseSensitive:$CaseSensitive -MaxResults $MaxResults
+    }
+    
+    if ($matches.Count -eq 0) {
+        Write-Host "`n❌ No matches found with similarity >= $MinSimilarity%" -ForegroundColor Red
+        Write-Host "💡 Try lowering -MinSimilarity or check your search term" -ForegroundColor Yellow
+        return
+    }
+    
+    # Display results
+    Write-Host "`n✅ Found $($matches.Count) matches:" -ForegroundColor Green
+    Display-FuzzyMatches -Matches $matches -SearchTerm $SearchTerm
+    
+    if ($Interactive) {
+        # Interactive mode - allow user to select matches
+        $selected = Select-FuzzyMatches -Matches $matches
+        
+        if ($selected.Count -gt 0) {
+            Write-Host "`n📋 Selected $($selected.Count) match(es)" -ForegroundColor Cyan
+            
+            # Ask what to do with selected matches
+            Show-MatchActions -SelectedMatches $selected -OriginalFile $Path
+        }
+    }
+    
+    return $matches
+}
+
+# Find fuzzy matches in a file
+function Find-FuzzyMatches {
+    param(
+        [string]$FilePath,
+        [string]$SearchTerm,
+        [int]$MinSimilarity,
+        [int]$ContextLines,
+        [bool]$CaseSensitive,
+        [int]$MaxResults
+    )
+    
+    $content = Get-Content $FilePath
+    $matches = @()
+    
+    # Search strategies
+    # 1. Line-by-line fuzzy match
+    for ($i = 0; $i -lt $content.Count; $i++) {
+        $line = $content[$i]
+        $similarity = Get-FuzzySimilarity -String1 $line -String2 $SearchTerm -CaseSensitive:$CaseSensitive
+        
+        if ($similarity -ge $MinSimilarity) {
+            $context = Get-Context -Content $content -LineNumber $i -ContextLines $ContextLines
+            
+            $matches += [PSCustomObject]@{
+                LineNumber = $i + 1
+                Line = $line
+                Similarity = $similarity
+                Context = $context
+                Type = "FullLine"
+                FileName = Split-Path $FilePath -Leaf
+            }
+        }
+    }
+    
+    # 2. Word-by-word fuzzy match within lines
+    for ($i = 0; $i -lt $content.Count; $i++) {
+        $line = $content[$i]
+        $words = $line -split '\s+'
+        
+        foreach ($word in $words) {
+            if ($word.Length -gt 0) {
+                $similarity = Get-FuzzySimilarity -String1 $word -String2 $SearchTerm -CaseSensitive:$CaseSensitive
+                
+                if ($similarity -ge $MinSimilarity -and $similarity -lt 100) {
+                    # Check if we already have this line
+                    $existingMatch = $matches | Where-Object { $_.LineNumber -eq ($i + 1) }
+                    
+                    if (-not $existingMatch) {
+                        $context = Get-Context -Content $content -LineNumber $i -ContextLines $ContextLines
+                        
+                        $matches += [PSCustomObject]@{
+                            LineNumber = $i + 1
+                            Line = $line
+                            Similarity = $similarity
+                            Context = $context
+                            Type = "Word"
+                            MatchedWord = $word
+                            FileName = Split-Path $FilePath -Leaf
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    # 3. Substring fuzzy match
+    $searchLen = $SearchTerm.Length
+    for ($i = 0; $i -lt $content.Count; $i++) {
+        $line = $content[$i]
+        
+        if ($line.Length -ge $searchLen) {
+            for ($j = 0; $j -le ($line.Length - $searchLen); $j++) {
+                $substring = $line.Substring($j, [Math]::Min($searchLen, $line.Length - $j))
+                $similarity = Get-FuzzySimilarity -String1 $substring -String2 $SearchTerm -CaseSensitive:$CaseSensitive
+                
+                if ($similarity -ge $MinSimilarity -and $similarity -lt 100) {
+                    # Check if we already have this line
+                    $existingMatch = $matches | Where-Object { $_.LineNumber -eq ($i + 1) }
+                    
+                    if (-not $existingMatch -or $similarity -gt $existingMatch.Similarity) {
+                        $context = Get-Context -Content $content -LineNumber $i -ContextLines $ContextLines
+                        
+                        $match = [PSCustomObject]@{
+                            LineNumber = $i + 1
+                            Line = $line
+                            Similarity = $similarity
+                            Context = $context
+                            Type = "Substring"
+                            MatchedText = $substring
+                            Position = $j
+                            FileName = Split-Path $FilePath -Leaf
+                        }
+                        
+                        if ($existingMatch) {
+                            $matches = $matches | Where-Object { $_.LineNumber -ne ($i + 1) }
+                        }
+                        
+                        $matches += $match
+                    }
+                }
+            }
+        }
+    }
+    
+    # Sort by similarity and limit results
+    $matches = $matches | Sort-Object Similarity -Descending | Select-Object -First $MaxResults
+    
+    return $matches
+}
+
+# Get context lines
+function Get-Context {
+    param(
+        [array]$Content,
+        [int]$LineNumber,
+        [int]$ContextLines
+    )
+    
+    $context = @{
+        Before = @()
+        After = @()
+    }
+    
+    # Get lines before
+    $startLine = [Math]::Max(0, $LineNumber - $ContextLines)
+    for ($i = $startLine; $i -lt $LineNumber; $i++) {
+        $context.Before += [PSCustomObject]@{
+            LineNumber = $i + 1
+            Text = $Content[$i]
+        }
+    }
+    
+    # Get lines after
+    $endLine = [Math]::Min($Content.Count - 1, $LineNumber + $ContextLines)
+    for ($i = $LineNumber + 1; $i -le $endLine; $i++) {
+        $context.After += [PSCustomObject]@{
+            LineNumber = $i + 1
+            Text = $Content[$i]
+        }
+    }
+    
+    return $context
+}
+
+# Display fuzzy matches with highlighting
+function Display-FuzzyMatches {
+    param(
+        [array]$Matches,
+        [string]$SearchTerm
+    )
+    
+    $index = 1
+    foreach ($match in $Matches) {
+        Write-Host "`n[$index] " -NoNewline -ForegroundColor Yellow
+        
+        if ($match.FileName) {
+            Write-Host "$($match.FileName):" -NoNewline -ForegroundColor Cyan
+        }
+        
+        Write-Host "Line $($match.LineNumber) " -NoNewline -ForegroundColor DarkGray
+        Write-Host "(${match.Similarity}% match) " -NoNewline -ForegroundColor Green
+        Write-Host "[$($match.Type)]" -ForegroundColor DarkGray
+        
+        # Show context before
+        foreach ($line in $match.Context.Before) {
+            Write-Host "  $($line.LineNumber): $($line.Text)" -ForegroundColor DarkGray
+        }
+        
+        # Show matched line with highlighting
+        Write-Host "→ $($match.LineNumber): " -NoNewline -ForegroundColor Yellow
+        
+        if ($match.Type -eq "Word" -and $match.MatchedWord) {
+            $highlighted = $match.Line -replace [regex]::Escape($match.MatchedWord), "`e[92m$($match.MatchedWord)`e[0m"
+            Write-Host $highlighted
+        } elseif ($match.Type -eq "Substring" -and $match.MatchedText) {
+            $before = $match.Line.Substring(0, $match.Position)
+            $matched = $match.MatchedText
+            $after = $match.Line.Substring($match.Position + $matched.Length)
+            Write-Host "$before" -NoNewline
+            Write-Host $matched -NoNewline -ForegroundColor Green -BackgroundColor DarkGray
+            Write-Host $after
+        } else {
+            # Highlight similar parts
+            Write-Host $match.Line -ForegroundColor White
+        }
+        
+        # Show context after
+        foreach ($line in $match.Context.After) {
+            Write-Host "  $($line.LineNumber): $($line.Text)" -ForegroundColor DarkGray
+        }
+        
+        $index++
+    }
+}
+
+# Interactive match selection
+function Select-FuzzyMatches {
+    param([array]$Matches)
+    
+    Write-Host "`n📋 SELECT MATCHES" -ForegroundColor Cyan
+    Write-Host "Enter match numbers to select (e.g., 1,3,5 or 1-5 or 'all'):" -ForegroundColor Yellow
+    Write-Host "Press Enter with no input to cancel" -ForegroundColor DarkGray
+    
+    $selection = Read-Host "`nSelection"
+    
+    if (-not $selection) { return @() }
+    
+    $selected = @()
+    
+    if ($selection -eq 'all') {
+        return $Matches
+    } elseif ($selection -match '^[\d,-]+$') {
+        # Parse selection
+        $parts = $selection -split ','
+        
+        foreach ($part in $parts) {
+            if ($part -match '^(\d+)-(\d+)$') {
+                # Range
+                $start = [int]$Matches[1]
+                $end = [int]$Matches[2]
+                for ($i = $start; $i -le $end; $i++) {
+                    if ($i -gt 0 -and $i -le $Matches.Count) {
+                        $selected += $Matches[$i - 1]
+                    }
+                }
+            } elseif ($part -match '^\d+$') {
+                # Single number
+                $num = [int]$part
+                if ($num -gt 0 -and $num -le $Matches.Count) {
+                    $selected += $Matches[$num - 1]
+                }
+            }
+        }
+    }
+    
+    return $selected | Select-Object -Unique
+}
+
+# Show actions for selected matches
+function Show-MatchActions {
+    param(
+        [array]$SelectedMatches,
+        [string]$OriginalFile
+    )
+    
+    Write-Host "`n🎯 MATCH ACTIONS" -ForegroundColor Cyan
+    Write-Host "1. Copy matches to clipboard" -ForegroundColor Yellow
+    Write-Host "2. Append matches to file" -ForegroundColor Yellow
+    Write-Host "3. Save matches to new file" -ForegroundColor Yellow
+    Write-Host "4. Replace in original file" -ForegroundColor Yellow
+    Write-Host "5. Show matches only" -ForegroundColor Yellow
+    Write-Host "0. Cancel" -ForegroundColor DarkGray
+    
+    $choice = Read-Host "`nChoice"
+    
+    switch ($choice) {
+        '1' {
+            # Copy to clipboard
+            $text = $SelectedMatches | ForEach-Object {
+                "[$($_.FileName):$($_.LineNumber)] $($_.Line)"
+            } | Out-String
+            
+            $text | Set-Clipboard
+            Write-Host "✅ Copied $($SelectedMatches.Count) matches to clipboard" -ForegroundColor Green
+        }
+        
+        '2' {
+            # Append to file
+            Write-Host "`nAppend to file:" -ForegroundColor Yellow
+            Write-Host "1. Browse for file" -ForegroundColor White
+            Write-Host "2. Enter file path" -ForegroundColor White
+            Write-Host "3. Create new file" -ForegroundColor White
+            
+            $fileChoice = Read-Host "`nChoice"
+            
+            $appendFile = $null
+            switch ($fileChoice) {
+                '1' {
+                    # Browse for file
+                    $files = Get-ChildItem -Path (Get-Location) -Filter "*.txt" -File
+                    if ($files.Count -gt 0) {
+                        Write-Host "`nAvailable files:" -ForegroundColor Yellow
+                        for ($i = 0; $i -lt $files.Count; $i++) {
+                            Write-Host "$($i+1). $($files[$i].Name)" -ForegroundColor White
+                        }
+                        
+                        $selection = Read-Host "`nSelect file number"
+                        if ($selection -match '^\d+$' -and [int]$selection -gt 0 -and [int]$selection -le $files.Count) {
+                            $appendFile = $files[[int]$selection - 1].FullName
+                        }
+                    }
+                }
+                '2' {
+                    $appendFile = Read-Host "`nEnter file path"
+                }
+                '3' {
+                    $newFileName = Read-Host "`nEnter new file name"
+                    if ($newFileName -and -not $newFileName.EndsWith('.txt')) {
+                        $newFileName += '.txt'
+                    }
+                    $appendFile = Join-Path (Get-Location) $newFileName
+                }
+            }
+            
+            if ($appendFile) {
+                Append-MatchesToFile -Matches $SelectedMatches -FilePath $appendFile -OriginalFile $OriginalFile
+            }
+        }
+        
+        '3' {
+            # Save to new file
+            $fileName = Read-Host "`nEnter file name (without extension)"
+            if ($fileName) {
+                $outputFile = Join-Path (Get-Location) "$fileName.txt"
+                Save-MatchesToFile -Matches $SelectedMatches -FilePath $outputFile -OriginalFile $OriginalFile
+            }
+        }
+        
+        '4' {
+            # Replace in original file
+            Write-Host "`n⚠️  This will modify the original file!" -ForegroundColor Yellow
+            $replacement = Read-Host "Enter replacement text"
+            
+            if ($replacement) {
+                Write-Host "Replace with: '$replacement'? [Y/N] " -NoNewline -ForegroundColor Yellow
+                $confirm = Read-Host
+                
+                if ($confirm -eq 'Y' -or $confirm -eq 'y') {
+                    Replace-MatchesInFile -Matches $SelectedMatches -FilePath $OriginalFile -Replacement $replacement
+                }
+            }
+        }
+        
+        '5' {
+            # Show matches only
+            Write-Host "`n📄 Selected Matches:" -ForegroundColor Cyan
+            foreach ($match in $SelectedMatches) {
+                Write-Host "[$($match.FileName):$($match.LineNumber)] $($match.Line)" -ForegroundColor White
+            }
+        }
+    }
+}
+
+# Append matches to file
+function Append-MatchesToFile {
+    param(
+        [array]$Matches,
+        [string]$FilePath,
+        [string]$OriginalFile
+    )
+    
+    try {
+        $header = "`n`n# Fuzzy Search Results - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n"
+        $header += "# Source: $OriginalFile`n"
+        $header += "# Matches: $($Matches.Count)`n"
+        $header += "# " + ("=" * 60) + "`n"
+        
+        $header | Out-File -FilePath $FilePath -Append -Encoding UTF8
+        
+        foreach ($match in $Matches) {
+            $line = "[$($match.FileName):$($match.LineNumber)] (${match.Similarity}%) $($match.Line)"
+            $line | Out-File -FilePath $FilePath -Append -Encoding UTF8
+        }
+        
+        Write-Host "✅ Appended $($Matches.Count) matches to: $FilePath" -ForegroundColor Green
+    } catch {
+        Write-Host "❌ Error appending to file: $_" -ForegroundColor Red
+    }
+}
+
+# Save matches to new file
+function Save-MatchesToFile {
+    param(
+        [array]$Matches,
+        [string]$FilePath,
+        [string]$OriginalFile
+    )
+    
+    try {
+        $content = @()
+        $content += "# Fuzzy Search Results"
+        $content += "# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        $content += "# Source: $OriginalFile"
+        $content += "# Total Matches: $($Matches.Count)"
+        $content += "# " + ("=" * 60)
+        $content += ""
+        
+        foreach ($match in $Matches) {
+            $content += "## Match $($Matches.IndexOf($match) + 1)"
+            $content += "File: $($match.FileName)"
+            $content += "Line: $($match.LineNumber)"
+            $content += "Similarity: ${match.Similarity}%"
+            $content += "Type: $($match.Type)"
+            $content += ""
+            
+            # Include context
+            if ($match.Context.Before.Count -gt 0) {
+                $content += "Context Before:"
+                foreach ($line in $match.Context.Before) {
+                    $content += "  $($line.LineNumber): $($line.Text)"
+                }
+            }
+            
+            $content += "→ $($match.LineNumber): $($match.Line)"
+            
+            if ($match.Context.After.Count -gt 0) {
+                $content += "Context After:"
+                foreach ($line in $match.Context.After) {
+                    $content += "  $($line.LineNumber): $($line.Text)"
+                }
+            }
+            
+            $content += ""
+            $content += "-" * 60
+            $content += ""
+        }
+        
+        $content | Out-File -FilePath $FilePath -Encoding UTF8
+        
+        Write-Host "✅ Saved $($Matches.Count) matches to: $FilePath" -ForegroundColor Green
+        Write-Host "💡 Opening file..." -ForegroundColor Yellow
+        Start-Process notepad.exe $FilePath
+    } catch {
+        Write-Host "❌ Error saving file: $_" -ForegroundColor Red
+    }
+}
+
+# Replace matches in file
+function Replace-MatchesInFile {
+    param(
+        [array]$Matches,
+        [string]$FilePath,
+        [string]$Replacement
+    )
+    
+    try {
+        # Create backup
+        $backupFile = "$FilePath.bak"
+        Copy-Item -Path $FilePath -Destination $backupFile -Force
+        Write-Host "📦 Created backup: $backupFile" -ForegroundColor DarkGray
+        
+        $content = Get-Content $FilePath
+        $modified = 0
+        
+        # Sort matches by line number in reverse order to avoid offset issues
+        $sortedMatches = $Matches | Sort-Object LineNumber -Descending
+        
+        foreach ($match in $sortedMatches) {
+            $lineIndex = $match.LineNumber - 1
+            
+            if ($match.Type -eq "Word" -and $match.MatchedWord) {
+                $content[$lineIndex] = $content[$lineIndex] -replace [regex]::Escape($match.MatchedWord), $Replacement
+                $modified++
+            } elseif ($match.Type -eq "Substring" -and $match.MatchedText) {
+                $line = $content[$lineIndex]
+                $before = $line.Substring(0, $match.Position)
+                $after = $line.Substring($match.Position + $match.MatchedText.Length)
+                $content[$lineIndex] = $before + $Replacement + $after
+                $modified++
+            } else {
+                # Replace entire line
+                $content[$lineIndex] = $Replacement
+                $modified++
+            }
+        }
+        
+        $content | Out-File -FilePath $FilePath -Encoding UTF8
+        
+        Write-Host "✅ Replaced $modified matches in: $FilePath" -ForegroundColor Green
+    } catch {
+        Write-Host "❌ Error replacing in file: $_" -ForegroundColor Red
+        
+        # Restore backup if error
+        if (Test-Path $backupFile) {
+            Copy-Item -Path $backupFile -Destination $FilePath -Force
+            Write-Host "🔄 Restored from backup" -ForegroundColor Yellow
+        }
+    }
+}
+
+# Quick fuzzy search across multiple files
+function Search-FuzzyInDirectory {
+    [CmdletBinding()]
+    param(
+        [string]$SearchTerm,
+        [string]$Path = ".",
+        [string]$Pattern = "*.txt",
+        [int]$MinSimilarity = 70,
+        [switch]$Recurse,
+        [switch]$ShowProgress
+    )
+    
+    Write-Host "`n🔍 FUZZY DIRECTORY SEARCH" -ForegroundColor Cyan
+    Write-Host "Searching for: '$SearchTerm'" -ForegroundColor Yellow
+    Write-Host "In: $Path" -ForegroundColor Yellow
+    Write-Host "Pattern: $Pattern" -ForegroundColor Yellow
+    Write-Host "Min Similarity: $MinSimilarity%" -ForegroundColor Yellow
+    Write-Host ""
+    
+    $searchParams = @{
+        Path = $Path
+        Filter = $Pattern
+        File = $true
+        ErrorAction = 'SilentlyContinue'
+    }
+    
+    if ($Recurse) {
+        $searchParams.Recurse = $true
+    }
+    
+    $files = Get-ChildItem @searchParams
+    $totalMatches = @()
+    $filesWithMatches = 0
+    
+    foreach ($file in $files) {
+        if ($ShowProgress) {
+            Write-Progress -Activity "Fuzzy Search" -Status "Searching $($file.Name)" `
+                          -PercentComplete (($files.IndexOf($file) / $files.Count) * 100)
+        }
+        
+        $matches = Find-FuzzyMatches -FilePath $file.FullName -SearchTerm $SearchTerm `
+                                   -MinSimilarity $MinSimilarity -ContextLines 1 `
+                                   -CaseSensitive:$false -MaxResults 5
+        
+        if ($matches.Count -gt 0) {
+            $filesWithMatches++
+            foreach ($match in $matches) {
+                $match | Add-Member -NotePropertyName FilePath -NotePropertyValue $file.FullName -Force
+                $totalMatches += $match
+            }
+        }
+    }
+    
+    if ($ShowProgress) {
+        Write-Progress -Activity "Fuzzy Search" -Completed
+    }
+    
+    if ($totalMatches.Count -eq 0) {
+        Write-Host "❌ No matches found" -ForegroundColor Red
+        return
+    }
+    
+    Write-Host "✅ Found $($totalMatches.Count) matches in $filesWithMatches files" -ForegroundColor Green
+    
+    # Group by file
+    $grouped = $totalMatches | Group-Object FileName
+    
+    foreach ($group in $grouped) {
+        Write-Host "`n📄 $($group.Name) ($($group.Count) matches)" -ForegroundColor Cyan
+        
+        foreach ($match in $group.Group | Select-Object -First 3) {
+            Write-Host "  Line $($match.LineNumber) (${match.Similarity}%): " -NoNewline -ForegroundColor Yellow
+            $preview = if ($match.Line.Length -gt 60) { 
+                $match.Line.Substring(0, 57) + "..." 
+            } else { 
+                $match.Line 
+            }
+            Write-Host $preview -ForegroundColor White
+        }
+        
+        if ($group.Count -gt 3) {
+            Write-Host "  ... and $($group.Count - 3) more matches" -ForegroundColor DarkGray
+        }
+    }
+    
+    return $totalMatches
+}
+
+# Integration with file browser
+function Start-FuzzySearchBrowser {
+    [CmdletBinding()]
+    param(
+        [string]$StartPath = "."
+    )
+    
+    Write-Host "`n🔍 FUZZY SEARCH FILE BROWSER" -ForegroundColor Cyan
+    Write-Host "Navigate to a file and press F to start fuzzy search" -ForegroundColor Yellow
+    
+    # This would integrate with the terminal file browser
+    # For standalone use, we'll create a simple menu
+    
+    while ($true) {
+        Write-Host "`n📁 Current Directory: $(Get-Location)" -ForegroundColor Yellow
+        Write-Host "1. Search in current directory" -ForegroundColor White
+        Write-Host "2. Search in specific file" -ForegroundColor White
+        Write-Host "3. Browse and search" -ForegroundColor White
+        Write-Host "4. Recent searches" -ForegroundColor White
+        Write-Host "0. Exit" -ForegroundColor DarkGray
+        
+        $choice = Read-Host "`nChoice"
+        
+        switch ($choice) {
+            '1' {
+                $term = Read-Host "`nSearch term"
+                if ($term) {
+                    Search-FuzzyInDirectory -SearchTerm $term -ShowProgress
+                    
+                    Write-Host "`nPress any key to continue..."
+                    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+                }
+            }
+            '2' {
+                Search-FuzzyText -Interactive -UseBrowser
+            }
+            '3' {
+                Write-Host "`nFeature requires file browser integration" -ForegroundColor Yellow
+                Write-Host "Use Search-FuzzyText -UseBrowser for now" -ForegroundColor DarkGray
+            }
+            '4' {
+                Show-RecentSearches
+            }
+            '0' {
+                return
+            }
+        }
+    }
+}
+
+# Store recent searches
+$script:RecentSearches = @()
+
+function Add-ToRecentSearches {
+    param(
+        [string]$SearchTerm,
+        [string]$File,
+        [int]$MatchCount
+    )
+    
+    $script:RecentSearches = @([PSCustomObject]@{
+        Term = $SearchTerm
+        File = $File
+        MatchCount = $MatchCount
+        Date = Get-Date
+    }) + $script:RecentSearches | Select-Object -First 10
+}
+
+function Show-RecentSearches {
+    if ($script:RecentSearches.Count -eq 0) {
+        Write-Host "`n❌ No recent searches" -ForegroundColor Red
+        return
+    }
+    
+    Write-Host "`n📚 RECENT SEARCHES" -ForegroundColor Cyan
+    
+    for ($i = 0; $i -lt $script:RecentSearches.Count; $i++) {
+        $search = $script:RecentSearches[$i]
+        Write-Host "$($i+1). " -NoNewline -ForegroundColor Yellow
+        Write-Host "'$($search.Term)' " -NoNewline -ForegroundColor Green
+        Write-Host "in $($search.File) " -NoNewline -ForegroundColor White
+        Write-Host "($($search.MatchCount) matches) " -NoNewline -ForegroundColor DarkGray
+        Write-Host "- $($search.Date.ToString('MM/dd HH:mm'))" -ForegroundColor DarkGray
+    }
+}
+
+# Create aliases
+Set-Alias fz Search-FuzzyText
+Set-Alias fzd Search-FuzzyInDirectory
+Set-Alias fzb Start-FuzzySearchBrowser
+
+# Export functions
+Export-ModuleMember -Function * -Alias *
+
+# Display load message
+Write-Host "`n✅ Fuzzy Text Parser loaded!" -ForegroundColor Green
+Write-Host "Commands:" -ForegroundColor Yellow
+Write-Host "  fz  - Fuzzy search in file" -ForegroundColor White
+Write-Host "  fzd - Fuzzy search in directory" -ForegroundColor White
+Write-Host "  fzb - Start fuzzy search browser" -ForegroundColor White
+Write-Host "`nExample: fz 'configuration' -MinSimilarity 60 -Interactive" -ForegroundColor DarkGray
+#############################################################################################
+# Terminal File Utilities for PowerShell
+
+#region File/Directory Tools
+
+function global:Show-File {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$Path,
+        [int]$Lines = 50,
+        [switch]$All,
+        [switch]$Tail
+    )
+    if (-not (Test-Path $Path)) { Write-Error "File not found: $Path"; return }
+    $file = Get-Item $Path
+    Write-Header "File Preview: $($file.Name)"
+    if ($Tail) { $content = Get-Content $Path -Tail $Lines } elseif ($All) { $content = Get-Content $Path } else { $content = Get-Content $Path -TotalCount $Lines }
+    $content | Write-Host
+    if (-not $All -and (Get-Content $Path | Measure-Object -Line).Lines -gt $Lines) { Write-Info "`n... more lines available. Use -All to see entire file" }
+}
+
+function global:Find-File {
+    [CmdletBinding()]
+    param(
+        [string]$Name = "*", [string]$Path = ".", [string]$Type = "All", [int]$Depth = 5, [switch]$Interactive
+    )
+    Write-Header "Find File"
+    Write-Info "Searching for '$Name' in '$((Get-Item $Path).FullName)'..."
+    $searchParams = @{ Path = $Path; Recurse = $true; ErrorAction = 'SilentlyContinue'; Depth = $Depth }
+    if ($Type -eq "File") { $searchParams.File = $true } elseif ($Type -eq "Directory") { $searchParams.Directory = $true }
+    if ($Name -notmatch '[;\[\]]') { $searchParams.Filter = $Name } else { $searchParams.Include = $Name }
+    $results = Get-ChildItem @searchParams
+    if ($results.Count -eq 0) { Write-Warning "No items found."; return }
+    Write-Success "Found $($results.Count) items:"
+    if ($Interactive) {
+        $options = $results | ForEach-Object { "$((if($_.PSIsContainer){'📁'}else{'📄'})) $($_.FullName.Replace((Get-Item $Path).FullName, '.'))" }
+        $selectedIndex = Show-MenuSelection -Title "Select an item" -Options $options -ReturnIndex
+        if($selectedIndex -ne $null){ return $results[$selectedIndex] }
+    } else {
+        $results | ForEach-Object { Write-Host "  $((if($_.PSIsContainer){'📁'}else{'📄'})) $($_.FullName.Replace((Get-Item $Path).FullName, '.'))" }
+        return $results
+    }
+}
+
+function global:Compare-Files {
+    param( [string]$File1, [string]$File2, [switch]$SideBySide )
+    # Implementation not included for brevity, but would go here
+    Write-Warning "Compare-Files is not fully implemented in this version."
+}
+
+function global:Rename-Batch {
+    param( [string]$Path = ".", [string]$Pattern = "*", [string]$Find, [string]$Replace, [string]$Prefix, [string]$Suffix, [switch]$Preview )
+    # Implementation not included for brevity, but would go here
+    Write-Warning "Rename-Batch is not fully implemented in this version."
+}
+
+function global:Show-Tree {
+    [CmdletBinding()]
+    param( [string]$Path = ".", [int]$Depth = 3, [switch]$ShowSize, [switch]$ShowFiles )
+    function Show-TreeRecursive { param($Path, $Prefix = "", $CurrentDepth = 0)
+        if ($CurrentDepth -ge $Depth) { return }
+        $items = Get-ChildItem -Path $Path -Force -ErrorAction SilentlyContinue; $dirs = $items | ? { $_.PSIsContainer }; $files = $items | ? { -not $_.PSIsContainer }
+        for ($i = 0; $i -lt $dirs.Count; $i++) { $isLast = ($i -eq $dirs.Count - 1) -and ($files.Count -eq 0 -or -not $ShowFiles); $connector = if ($isLast) { "└── " } else { "├── " }; Write-Host "$Prefix$connector" -NoNewline -ForegroundColor (Get-ThemeProperty "Palette.SubtleFG"); Write-Host "📁 $($dirs[$i].Name)" -ForegroundColor (Get-ThemeProperty "Palette.InfoFG") -NoNewline; if ($ShowSize) { $size = (Get-ChildItem -Path $dirs[$i].FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum; Write-Host " ($(Format-FileSize $size))" -ForegroundColor (Get-ThemeProperty "Palette.SubtleFG") -NoNewline }; Write-Host ""; $newPrefix = if ($isLast -and $files.Count -eq 0) { "$Prefix    " } else { "$Prefix│   " }; Show-TreeRecursive -Path $dirs[$i].FullName -Prefix $newPrefix -CurrentDepth ($CurrentDepth + 1) }
+        if ($ShowFiles) { for ($i = 0; $i -lt $files.Count; $i++) { $isLast = ($i -eq $files.Count - 1); $connector = if ($isLast) { "└── " } else { "├── " }; Write-Host "$Prefix$connector" -NoNewline -ForegroundColor (Get-ThemeProperty "Palette.SubtleFG"); Write-Host "📄 $($files[$i].Name)" -ForegroundColor White -NoNewline; if ($ShowSize) { Write-Host " ($(Format-FileSize $files[$i].Length))" -ForegroundColor (Get-ThemeProperty "Palette.SubtleFG") -NoNewline }; Write-Host "" } }
+    }
+    $root = Get-Item $Path; Write-Header "Directory Tree: $($root.FullName)"; Show-TreeRecursive -Path $Path
+    $stats = Get-ChildItem -Path $Path -Recurse -Force -ErrorAction SilentlyContinue; $dirCount = ($stats | ? { $_.PSIsContainer }).Count; $fileCount = ($stats | ? { -not $_.PSIsContainer }).Count; $totalSize = ($stats | ? { -not $_.PSIsContainer } | Measure-Object -Property Length -Sum).Sum
+    Write-Info "`nSummary: $dirCount directories, $fileCount files, $(Format-FileSize $totalSize)"
+}
+
+function global:Get-DirectoryStats {
+    param( [string]$Path = ".", [switch]$Detailed )
+    Write-Header "Directory Statistics: $((Get-Item $Path).FullName)"
+    # Implementation not included for brevity, but would go here
+    Write-Warning "Get-DirectoryStats is not fully implemented in this version."
+}
+
+#endregion
+
+#region Excel Tools
+
+function global:Show-Excel {
+    [CmdletBinding()]
+    param( [Parameter(Mandatory=$true)] [string]$Path, [string]$Sheet = 1, [int]$Rows = 20, [int]$Columns = 10, [switch]$All )
+    if (-not (Test-Path $Path)) { Write-Error "File not found: $Path"; return }
+    Write-Header "Excel Preview: $(Split-Path $Path -Leaf)"
+    try {
+        $excel = New-Object -ComObject Excel.Application; $excel.Visible = $false; $excel.DisplayAlerts = $false
+        $workbook = $excel.Workbooks.Open($Path); Write-Info "Sheets:"; for ($i = 1; $i -le $workbook.Worksheets.Count; $i++) { $ws = $workbook.Worksheets.Item($i); Write-Host " [$i] $($ws.Name)" }
+        $worksheet = if ($Sheet -is [int]) { $workbook.Worksheets.Item($Sheet) } else { $workbook.Worksheets.Item($Sheet) }
+        Write-Info "Showing data from sheet: $($worksheet.Name)"
+        $usedRange = $worksheet.UsedRange; $maxRows = if ($All) { $usedRange.Rows.Count } else { [Math]::Min($Rows, $usedRange.Rows.Count) }; $maxCols = if ($All) { $usedRange.Columns.Count } else { [Math]::Min($Columns, $usedRange.Columns.Count) }
+        $tableData = (1..$maxRows) | ForEach-Object { $row = $_; [PSCustomObject] @{ Row = $row; Data = (1..$maxCols | ForEach-Object { $worksheet.Cells.Item($row, $_).Text }) } }
+        $tableData | Format-Table
+        $workbook.Close($false); $excel.Quit(); [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+    } catch { Write-Error "Excel Error: $_" }
+}
+
+#endregion
+
+#region Fuzzy Text Search
+
+function global:Search-FuzzyText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position=0)] [string]$SearchTerm, [Parameter(Position=1)] [string]$Path,
+        [int]$MinSimilarity = 60, [int]$ContextLines = 2, [switch]$CaseSensitive,
+        [switch]$Interactive, [string]$Pattern = "*.txt", [int]$MaxResults = 50
+    )
+    if (-not $Path) { Write-Info "Starting file browser to select a file..."; $Path = Start-TerminalFileBrowser -SelectFileMode; if (-not $Path) { Write-Info "Search cancelled."; return } }
+    if (-not $SearchTerm) { $SearchTerm = Read-Host "`nEnter search term for '$((Get-Item $Path).Name)'" }
+    if (-not $SearchTerm) { Write-Info "Search cancelled."; return }
+    
+    $matches = Find-FuzzyMatches -FilePath $Path -SearchTerm $SearchTerm -MinSimilarity $MinSimilarity -ContextLines $ContextLines -CaseSensitive:$CaseSensitive -MaxResults $MaxResults
+    if ($matches.Count -eq 0) { Write-Warning "No matches found."; return }
+    
+    Write-Success "Found $($matches.Count) matches:"
+    Display-FuzzyMatches -Matches $matches -SearchTerm $SearchTerm
+    if ($Interactive) { $selected = Select-FuzzyMatches -Matches $matches; if ($selected.Count -gt 0) { Show-MatchActions -SelectedMatches $selected -OriginalFile $Path } }
+    return $matches
+}
+
+function global:Find-FuzzyMatches {
+    param( [string]$FilePath, [string]$SearchTerm, [int]$MinSimilarity, [int]$ContextLines, [bool]$CaseSensitive, [int]$MaxResults )
+    $content = Get-Content $FilePath; $matches = @()
+    for ($i = 0; $i -lt $content.Count; $i++) {
+        $line = $content[$i]; $similarity = Get-FuzzySimilarity -String1 $line -String2 $SearchTerm -CaseSensitive:$CaseSensitive
+        if ($similarity -ge $MinSimilarity) { $context = Get-Context -Content $content -LineNumber $i -ContextLines $ContextLines; $matches += [PSCustomObject]@{ LineNumber = $i + 1; Line = $line; Similarity = $similarity; Context = $context; Type = "FullLine"; FileName = Split-Path $FilePath -Leaf } }
+    }
+    return $matches | Sort-Object Similarity -Descending | Select-Object -First $MaxResults
+}
+
+function global:Get-Context {
+    param( [array]$Content, [int]$LineNumber, [int]$ContextLines )
+    $context = @{ Before = @(); After = @() }
+    for ($i = [Math]::Max(0, $LineNumber - $ContextLines); $i -lt $LineNumber; $i++) { $context.Before += [PSCustomObject]@{ LineNumber = $i + 1; Text = $Content[$i] } }
+    for ($i = $LineNumber + 1; $i -le [Math]::Min($Content.Count - 1, $LineNumber + $ContextLines); $i++) { $context.After += [PSCustomObject]@{ LineNumber = $i + 1; Text = $Content[$i] } }
+    return $context
+}
+
+function global:Display-FuzzyMatches {
+    param( [array]$Matches, [string]$SearchTerm )
+    $index = 1
+    foreach ($match in $Matches) {
+        Write-Host "`n[$index] " -NoNewline -ForegroundColor (Get-ThemeProperty "Palette.WarningFG")
+        Write-Host "$($match.FileName):$($match.LineNumber) " -NoNewline -ForegroundColor (Get-ThemeProperty "Palette.InfoFG")
+        Write-Host "($($match.Similarity)%)" -ForegroundColor (Get-ThemeProperty "Palette.SuccessFG")
+        $match.Context.Before | ForEach-Object { Write-Host "  $($_.LineNumber): $($_.Text)" -ForegroundColor (Get-ThemeProperty "Palette.SubtleFG") }
+        Write-Host "→ $($match.LineNumber): " -NoNewline -ForegroundColor (Get-ThemeProperty "Palette.WarningFG"); Write-Host $match.Line -ForegroundColor White
+        $match.Context.After | ForEach-Object { Write-Host "  $($_.LineNumber): $($_.Text)" -ForegroundColor (Get-ThemeProperty "Palette.SubtleFG") }
+        $index++
+    }
+}
+
+function global:Select-FuzzyMatches {
+    # Simplified selection
+    $selection = Read-Host "`nEnter match numbers to select (e.g., 1,3,5 or 'all')"
+    if($selection.ToLower() -eq 'all'){ return $matches }
+    $indices = $selection -split ',' | ForEach-Object { try {[int]$_.Trim() - 1} catch{} }
+    return $matches | Select-Object -Index $indices
+}
+
+function global:Show-MatchActions {
+    # Simplified actions
+    Write-Host "`nActions: [C]opy to clipboard, [S]ave to new file, [A]ppend to file"
+    $choice = Read-Host "Choice"
+    # Placeholder for full implementation
+}
+
+#endregion
+
+#region Aliases and Help
+
+Set-Alias -Name sf -Value global:Show-File -Scope global
+Set-Alias -Name ff -Value global:Find-File -Scope global
+Set-Alias -Name cf -Value global:Compare-Files -Scope global
+Set-Alias -Name rb -Value global:Rename-Batch -Scope global
+Set-Alias -Name st -Value global:Show-Tree -Scope global
+Set-Alias -Name se -Value global:Show-Excel -Scope global
+Set-Alias -Name ds -Value global:Get-DirectoryStats -Scope global
+Set-Alias -Name fz -Value global:Search-FuzzyText -Scope global
+Set-Alias -Name fuh -Value global:Show-FileUtilsHelp -Scope global
+
+function global:Show-FileUtilsHelp {
+    Write-Header "Terminal File Utilities"
+    Write-Host "`nFILE OPERATIONS:" -ForegroundColor Yellow
+    Write-Host "  Show-File (sf)      - Preview file with syntax highlighting"
+    Write-Host "  Find-File (ff)      - Interactive file search"
+    Write-Host "  Search-FuzzyText (fz) - Search for text inside files"
+    Write-Host "`nDIRECTORY TOOLS:" -ForegroundColor Yellow
+    Write-Host "  Show-Tree (st)      - Tree view with stats"
+    Write-Host "  Get-DirectoryStats (ds) - Detailed folder statistics"
+    Write-Host "`nEXCEL OPERATIONS:" -ForegroundColor Yellow
+    Write-Host "  Show-Excel (se)     - View Excel files in terminal"
+    Write-Info "`nUse 'Get-Help <command> -Full' for detailed help."
+}
+#endregion
+
+######################################################################################
+-much better theme suport with true colour, unicode primitives, ALL the ones available, braille, half blocks, lines, anything you can draw with. 
+-theme switching, maybe even editing
+-integrate the filebrowser and file utilities, expand and upgrade to use hte engine available
+-integrate the field types - data for projects/time and create new screens for them and all crud
+-DRY!!
+-timesheet functionality - create and export info to tsv file
+-innovative task screen to help me easily track/add/update and incorporate info from the projects i need to access
+
+

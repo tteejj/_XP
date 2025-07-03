@@ -1,0 +1,1516 @@
+Alright. Let's look at the red text, and the black text. The entire plan, now with the hardening measures integrated.
+
+You've provided a comprehensive and ambitious upgrade plan. The move to a component-based, themeable, and command-driven architecture is the correct path forward for a project of this complexity. The provided code demonstrates a clear vision. My role here is not to change that vision, but to pressure-test it, identify potential points of failure, and ensure the implementation is as robust and idiomatic to PowerShell as possible, consistent with the existing patterns in Axiom.
+
+Here is my analysis, step-by-step, with the previously identified hardening measures now integrated directly into the plan.
+
+### Overall Assessment
+
+**Strengths:**
+
+*   **Architecturally Sound:** The plan correctly identifies the need to decouple rendering, theming, data, and UI logic. The use of services (`ThemeEngine`, `ActionService`) and component-based UI (`FileListComponent`, `KanbanBoardComponent`) is a massive improvement over the previous procedural style.
+*   **Modern UI Concepts:** Truecolor support, a command palette, and widget-based dashboards are standard features in modern TUIs. Adopting them is the right move.
+*   **Clear Intent:** The goals for each pillar are well-defined and build upon one another logically.
+
+**Areas for Hardening (Potential Failures) - *Now Integrated*:**
+
+My critique will focus on making the implementation "bulletproof." This means addressing edge cases, potential performance bottlenecks, and areas where the code makes assumptions that might fail under real-world conditions. These points are now woven into the steps below.
+
+---
+
+### Pillar 1: The Phoenix Rendering & Theming Engine (Upgrading the Core)
+
+This is the foundation for all visual enhancements. We will modify the core rendering pipeline for Truecolor (24-bit color) and a more powerful, file-based theming system.
+
+#### Step 1.1: Evolve `TuiCell` for Truecolor and Rich Styling
+
+**File:** `axiom.txt`
+**Location:** The `TuiCell` class definition (within `components\tui-primitives\tui-primitives.psm1`, around line 527).
+**Action:** Modify the class properties to handle string-based hex colors (e.g., `#FF8700`) instead of `[ConsoleColor]`, and add new style attributes. This is the atomic unit of the new renderer.
+
+--- CODE MODIFICATION: TuiCell Class ---
+
+```powershell
+# In components\tui-primitives\tui-primitives.psm1
+
+#region TuiCell Class - Core Compositor Unit
+class TuiCell {
+    [char] $Char = ' '
+    # MODIFIED: Changed from [ConsoleColor] to [string] to support Hex codes
+    # HARDENING: Added ValidatePattern to ensure hex color format at assignment.
+    # This prevents runtime errors deep in the rendering pipeline by failing fast.
+    [ValidatePattern('^#[0-9A-Fa-f]{6}$')]
+    [string] $ForegroundColor = "#C0C0C0" # Default: light gray
+    [ValidatePattern('^#[0-9A-Fa-f]{6}$')]
+    [string] $BackgroundColor = $null      # Default: null for transparency (compositing)
+    
+    # MODIFIED/ADDED: Explicit boolean style attributes
+    [bool] $Bold = $false
+    [bool] $Underline = $false
+    [bool] $Italic = $false
+    [bool] $Strikethrough = $false # NEW
+
+    [int] $ZIndex = 0
+    [object] $Metadata = $null
+
+    # Default constructor
+    TuiCell() { }
+
+    # Character constructor - updated for string colors
+    TuiCell([char]$char) {
+        $this.Char = $char
+    }
+
+    # Full constructor - UPDATED to accept string colors and full attributes
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold=$false, [bool]$italic=$false, [bool]$underline=$false, [bool]$strikethrough=$false) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+        $this.Italic = $italic
+        $this.Underline = $underline
+        $this.Strikethrough = $strikethrough
+    }
+    
+    # Style constructor (OBSOLETE) - Removed for clarity as the full constructor replaces it.
+
+    # Copy constructor - UPDATED to copy new properties
+    TuiCell([TuiCell]$other) {
+        if ($null -ne $other) {
+            $this.Char = $other.Char
+            $this.ForegroundColor = $other.ForegroundColor
+            $this.BackgroundColor = $other.BackgroundColor
+            $this.Bold = $other.Bold
+            $this.Underline = $other.Underline
+            $this.Italic = $other.Italic
+            $this.Strikethrough = $other.Strikethrough # NEW
+            $this.ZIndex = $other.ZIndex
+            $this.Metadata = $other.Metadata
+        }
+    }
+
+    # WithStyle and WithChar methods remain the same
+
+    # Check if this cell differs from another - UPDATED for new properties
+    [bool] DiffersFrom([TuiCell]$other) {
+        if ($null -eq $other) { return $true }
+        return ($this.Char -ne $other.Char -or 
+                $this.ForegroundColor -ne $other.ForegroundColor -or 
+                $this.BackgroundColor -ne $other.BackgroundColor -or
+                $this.Bold -ne $other.Bold -or
+                $this.Underline -ne $other.Underline -or
+                $this.Italic -ne $other.Italic -or
+                $this.Strikethrough -ne $other.Strikethrough) # NEW
+    }
+
+    # ToAnsiString() will be updated in the next step after TuiAnsiHelper is replaced.
+    [string] ToAnsiString() {
+        # This will be replaced later by the engine's renderer.
+        $attributes = @{ Bold = $this.Bold; Italic = $this.Italic; Underline = $this.Underline; Strikethrough = $this.Strikethrough }
+        $sequence = [TuiAnsiHelper]::GetAnsiSequence($this.ForegroundColor, $this.BackgroundColor, $attributes)
+        return "$sequence$($this.Char)$([TuiAnsiHelper]::Reset())"
+    }
+    
+    # ToLegacyFormat and ToString methods can remain as-is or be updated.
+}
+#endregion
+```
+
+#### Step 1.2: Completely Replace `TuiAnsiHelper`
+
+**Location:** The `TuiAnsiHelper` class definition (around line 500).
+**Action:** Delete the entire existing `TuiAnsiHelper` class and replace it with this new version that handles Truecolor conversion.
+
+--- CODE REPLACEMENT: TuiAnsiHelper Class ---
+
+```powershell
+# In components\tui-primitives\tui-primitives.psm1
+
+#region TuiAnsiHelper - ANSI Code Generation
+class TuiAnsiHelper {
+    # Helper to convert a Hex string like "#FF8700" to an RGB hashtable
+    static [hashtable] HexToRgb([string]$hexColor) {
+        if ([string]::IsNullOrEmpty($hexColor) -or -not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
+            return $null # Return null for invalid format or transparency
+        }
+        try {
+            # Use Convert with base 16 to parse hex components
+            return @{
+                R = [System.Convert]::ToInt32($hexColor.Substring(1, 2), 16)
+                G = [System.Convert]::ToInt32($hexColor.Substring(3, 2), 16)
+                B = [System.Convert]::ToInt32($hexColor.Substring(5, 2), 16)
+            }
+        } catch {
+            return $null # Return null if parsing fails
+        }
+    }
+
+    # The new core method to generate a full ANSI sequence
+    static [string] GetAnsiSequence([string]$fgHex, [string]$bgHex, [hashtable]$attributes) {
+        $sequences = [System.Collections.Generic.List[string]]::new()
+
+        # Foreground color (Truecolor)
+        if ($fgHex) {
+            $rgb = [TuiAnsiHelper]::HexToRgb($fgHex)
+            if ($rgb) {
+                $sequences.Add("38;2;$($rgb.R);$($rgb.G);$($rgb.B)")
+            }
+        }
+
+        # Background color (Truecolor)
+        if ($bgHex) {
+            $rgb = [TuiAnsiHelper]::HexToRgb($bgHex)
+            if ($rgb) {
+                $sequences.Add("48;2;$($rgb.R);$($rgb.G);$($rgb.B)")
+            }
+        }
+
+        # Style attributes
+        if ($attributes) {
+            if ($attributes.Bold) { $sequences.Add("1") }
+            if ($attributes.Italic) { $sequences.Add("3") }
+            if ($attributes.Underline) { $sequences.Add("4") }
+            if ($attributes.Strikethrough) { $sequences.Add("9") }
+        }
+
+        # If no styles, return empty string. Otherwise, build the escape sequence.
+        if ($sequences.Count -eq 0) { return "" }
+        return "`e[$($sequences -join ';')m"
+    }
+
+    # A single, universal reset sequence
+    static [string] Reset() {
+        return "`e[0m"
+    }
+}
+#endregion
+```
+
+#### Step 1.3: Replace `ThemeManager` with `ThemeEngine`
+
+**Location:** The entire `modules\theme-manager\theme-manager.psm1` section (around line 984).
+**Action:** DELETE everything from `--- START OF ORIGINAL FILE: modules\theme-manager\theme-manager.psm1 ---` to its corresponding `--- END OF ORIGINAL FILE ---` tag. REPLACE it with the following powerful, file-based theme engine.
+
+--- CODE REPLACEMENT: ThemeEngine Module ---
+
+```powershell
+# --- START OF ORIGINAL FILE: modules\theme-engine\theme-engine.psm1 ---
+# MODULE: ThemeEngine
+# PURPOSE: Loads and serves theme styles from JSON files, enabling full customization.
+
+class ThemeEngine {
+    hidden [hashtable] $_themes
+    hidden [string] $_currentThemeKey
+    hidden [hashtable] $_currentThemeObject
+
+    ThemeEngine([string]$themesDirectory) {
+        $this._themes = @{}
+        $this.LoadThemesFromDirectory($themesDirectory)
+
+        # Ensure there is at least a fallback theme in case none are found
+        if ($this._themes.Count -eq 0) {
+            $this._themes['Default'] = @{
+                Name = 'Default Fallback'
+                Palette = @{ 
+                    background = '#0d1117'; foreground = '#c9d1d9'; accent1 = '#58a6ff'; accent2 = '#f78166';
+                    border = '#30363d'; borderFocus = '#58a6ff'; success = '#3fb950'; error = '#f85149' 
+                }
+                Components = @{ 
+                    Default = @{ FG = '$Palette.foreground'; BG = '$Palette.background' }
+                    Panel = @{ BorderFG = '$Palette.border'; TitleFG = '$Palette.foreground' }
+                    PanelFocus = @{ BorderFG = '$Palette.borderFocus' }
+                    Table = @{ Header = @{ FG = '$Palette.accent1'; Bold = $true } }
+                    FileBrowser = @{
+                        Default = @{ FG = '$Palette.foreground' }
+                        Directory = @{ FG = '$Palette.accent1' }
+                        Selected = @{ BG = '#2ea043'; FG = '#ffffff' }
+                    }
+                }
+            }
+        }
+
+        # Set the first available theme as the current one
+        $this.SetTheme(($this._themes.Keys | Select-Object -First 1))
+    }
+
+    [void] LoadThemesFromDirectory([string]$dir) {
+        if (-not (Test-Path $dir)) { Write-Log -Level Warning -Message "Themes directory not found: $dir"; return }
+        $themeFiles = Get-ChildItem -Path $dir -Filter "*.theme.json" -File
+        foreach ($file in $themeFiles) {
+            try {
+                $themeKey = ($file.BaseName -replace '\.theme$', '')
+                $themeObject = Get-Content -Path $file.FullName -Raw | ConvertFrom-Json -AsHashtable
+                $this._themes[$themeKey] = $themeObject
+                Write-Log -Level Info -Message "Loaded theme '$themeKey' from $($file.Name)"
+            } catch {
+                Write-Log -Level Error -Message "Failed to load theme file '$($file.Name)': $_"
+            }
+        }
+    }
+
+    [void] SetTheme([string]$themeKey) {
+        if ($this._themes.ContainsKey($themeKey)) {
+            $this._currentThemeKey = $themeKey
+            $this._currentThemeObject = $this._themes[$themeKey]
+            Publish-Event -EventName "Theme.Changed" -Data @{ Name = $themeKey }
+            Write-Log -Level Info -Message "Theme changed to: $themeKey"
+        } else {
+            Write-Log -Level Warning -Message "Attempted to set non-existent theme: $themeKey"
+        }
+    }
+
+    # The core method for getting component styles
+    [hashtable] GetStyle([string]$componentPath) {
+        $pathSegments = $componentPath.Split('.')
+        $currentValue = $this._currentThemeObject
+        
+        # Traverse the path (e.g., Components.Table.Header)
+        foreach($segment in $pathSegments) {
+            if ($currentValue -is [hashtable] -and $currentValue.ContainsKey($segment)) {
+                $currentValue = $currentValue[$segment]
+            } else {
+                # Path not found, return an empty style to avoid errors
+                return @{}
+            }
+        }
+        
+        # Now, resolve all palette references in the retrieved style object
+        $resolvedStyle = @{}
+        if ($currentValue -is [hashtable]) {
+            foreach ($key in $currentValue.Keys) {
+                $val = $currentValue[$key]
+                $depth = 0 # HARDENING: Introduce depth counter to prevent infinite loops
+                # Recursively resolve palette variables
+                while ($val -is [string] -and $val.StartsWith('$Palette.') -and $depth -lt 10) { # Add depth check
+                    $paletteKey = $val.Substring(9)
+                    # HARDENING: Check if the palette key actually exists
+                    if ($this._currentThemeObject.Palette.ContainsKey($paletteKey)) {
+                        $val = $this._currentThemeObject.Palette[$paletteKey]
+                    } else {
+                        # Key not found, break loop and assign fallback
+                        $val = '#FF00FF' # Fallback color for error
+                        break
+                    }
+                    $depth++
+                }
+                # If it's still a variable after max depth, it's a circular reference or missing key
+                if ($val -is [string] -and $val.StartsWith('$Palette.')) {
+                    $val = '#FF00FF' # Fallback color for error
+                }
+                $resolvedStyle[$key] = $val
+            }
+        }
+        
+        return $resolvedStyle
+    }
+
+    [string[]] GetThemeKeys() {
+        return @($this._themes.Keys)
+    }
+
+    [hashtable] GetCurrentTheme() {
+        return $this._currentThemeObject
+    }
+}
+
+function Initialize-ThemeEngine {
+    param([string]$themesDirectory)
+    return [ThemeEngine]::new($themesDirectory)
+}
+# --- END OF REPLACEMENT for modules\theme-manager\theme-manager.psm1 ---
+```
+
+#### Step 1.4: Update Drawing Primitives to Use Style Objects
+
+**Location:** The `Write-TuiText` and `Write-TuiBox` functions (within `components\tui-primitives\tui-primitives.psm1`, around line 777).
+**Action:** Change their signatures to accept a single `-Style [hashtable]` parameter instead of multiple individual color/attribute parameters. This promotes a DRY, theme-driven approach.
+
+--- CODE MODIFICATION: Write-TuiText and Write-TuiBox ---
+
+```powershell
+# In components\tui-primitives\tui-primitives.psm1
+
+function Write-TuiText {
+    param(
+        [TuiBuffer]$Buffer,
+        [int]$X,
+        [int]$Y,
+        [string]$Text,
+        [hashtable]$Style = @{} # NEW: Style parameter replaces individual ones
+    )
+    
+    if ($null -eq $Buffer -or [string]::IsNullOrEmpty($Text)) { return }
+
+    # Extract properties from the style object, providing safe defaults
+    $fg = $Style.FG ?? "#C0C0C0"
+    $bg = $Style.BG ?? $null
+    $bold = [bool]($Style.Bold ?? $false)
+    $italic = [bool]($Style.Italic ?? $false)
+    $underline = [bool]($Style.Underline ?? $false)
+    $strikethrough = [bool]($Style.Strikethrough ?? $false)
+
+    $currentX = $X
+    foreach ($char in $Text.ToCharArray()) {
+        if ($currentX -ge $Buffer.Width) { break }
+        if ($currentX -ge 0) {
+            # Use the powerful new TuiCell constructor
+            $charCell = [TuiCell]::new($char, $fg, $bg, $bold, $italic, $underline, $strikethrough)
+            $Buffer.SetCell($currentX, $Y, $charCell)
+        }
+        $currentX++
+    }
+}
+
+function Write-TuiBox {
+    param(
+        [TuiBuffer]$Buffer,
+        [int]$X,
+        [int]$Y,
+        [int]$Width,
+        [int]$Height,
+        [string]$Title = "",
+        [hashtable]$Style = @{} # NEW: Style parameter
+    )
+    
+    if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) { return }
+
+    # Extract properties from the style object
+    $borderStyleName = $Style.BorderStyle ?? "Single"
+    $borderColor = $Style.BorderFG ?? "#808080" # Default border color
+    $bgColor = $Style.BG ?? $null
+    $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color if not specified
+
+    $borders = Get-TuiBorderChars -Style $borderStyleName
+    $borderStyle = @{ FG = $borderColor; BG = $bgColor }
+    $titleStyle = @{ FG = $titleColor; BG = $bgColor }
+    
+    # Top border
+    $topLine = "$($borders.TopLeft)$($borders.Horizontal * ($Width - 2))$($borders.TopRight)"
+    Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text $topLine -Style $borderStyle
+    
+    # Title if specified
+    if (-not [string]::IsNullOrEmpty($Title)) {
+        $titleText = " $Title "
+        if ($titleText.Length -lt ($Width - 2)) {
+            $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
+            Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -Style $titleStyle
+        }
+    }
+    
+    # Side borders and fill
+    for ($i = 1; $i -lt ($Height - 1); $i++) {
+        $currentY = $Y + $i
+        Write-TuiText -Buffer $Buffer -X $X -Y $currentY -Text $borders.Vertical -Style $borderStyle
+        # Fill only needs a background color
+        $fillText = ' ' * ($Width - 2)
+        Write-TuiText -Buffer $Buffer -X ($X + 1) -Y $currentY -Text $fillText -Style @{ BG = $bgColor }
+        Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y $currentY -Text $borders.Vertical -Style $borderStyle
+    }
+    
+    # Bottom border
+    if ($Height -gt 1) {
+        $bottomLine = "$($borders.BottomLeft)$($borders.Horizontal * ($Width - 2))$($borders.BottomRight)"
+        Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text $bottomLine -Style $borderStyle
+    }
+}
+```
+
+#### Step 1.5: Update the Main Engine Renderer
+
+**Location:** The `Render-CompositorToConsole` function (within `modules\tui-engine\tui-engine.psm1`, around line 5707).
+**Action:** This function must be updated to use the new `TuiCell` properties and the `TuiAnsiHelper`. The new version is highly optimized to minimize the number of ANSI escape codes sent to the terminal, which dramatically improves performance.
+
+--- CODE REPLACEMENT: Render-CompositorToConsole ---
+
+```powershell
+# In modules\tui-engine\tui-engine.psm1
+
+function Render-CompositorToConsole {
+    $outputBuilder = [System.Text.StringBuilder]::new(40000) # Increased buffer size for Truecolor
+    $currentBuffer = $global:TuiState.CompositorBuffer
+    $previousBuffer = $global:TuiState.PreviousCompositorBuffer
+    
+    # Track the last used style sequence to avoid redundant ANSI codes
+    $lastSequence = "RESET" # A unique sentinel value
+    
+    $forceFullRender = $global:TuiState.RenderStats.FrameCount -eq 1
+
+    try {
+        # Move cursor to home position once at the beginning of the render
+        [void]$outputBuilder.Append("`e[1;1H")
+
+        for ($y = 0; $y -lt $currentBuffer.Height; $y++) {
+            # Move cursor to the start of the current line
+            [void]$outputBuilder.Append("`e[$($y + 1);1H")
+
+            for ($x = 0; $x -lt $currentBuffer.Width; $x++) {
+                $newCell = $currentBuffer.GetCell($x, $y)
+                
+                # We only need to compare against the previous frame if not forcing a full render
+                if (-not $forceFullRender) {
+                    $oldCell = $previousBuffer.GetCell($x, $y)
+                    # If cells are identical, skip rendering this cell entirely
+                    if (-not $newCell.DiffersFrom($oldCell)) {
+                        # HARDENING: This optimization assumes every [char] occupies exactly one terminal column.
+                        # This is NOT true for full-width characters (e.g., CJK) or complex graphemes (emojis).
+                        # If such characters are present, this will cause misalignment.
+                        # For true Unicode support, a character width measurement function is required,
+                        # or this optimization should be conditionally disabled for non-ASCII content.
+                        [void]$outputBuilder.Append("`e[1C") # Move cursor forward one position
+                        continue
+                    }
+                }
+                
+                # Generate the full style sequence for the new cell
+                $attributes = @{ Bold=$newCell.Bold; Italic=$newCell.Italic; Underline=$newCell.Underline; Strikethrough=$newCell.Strikethrough }
+                $currentSequence = [TuiAnsiHelper]::GetAnsiSequence($newCell.ForegroundColor, $newCell.BackgroundColor, $attributes)
+
+                # Append sequence only if it's different from the last one used
+                if ($currentSequence -ne $lastSequence) {
+                    # If the new style is empty, we must reset. Otherwise, apply the new style.
+                    if ([string]::IsNullOrEmpty($currentSequence)) {
+                        [void]$outputBuilder.Append([TuiAnsiHelper]::Reset())
+                    } else {
+                        # Combine reset with the new style to ensure clean state
+                        [void]$outputBuilder.Append([TuiAnsiHelper]::Reset()).Append($currentSequence)
+                    }
+                    $lastSequence = $currentSequence
+                }
+                
+                [void]$outputBuilder.Append($newCell.Char)
+            }
+        }
+        
+        # Append a final reset to ensure the terminal is clean after rendering.
+        if ($lastSequence -ne "") { # Check against empty string now
+            [void]$outputBuilder.Append([TuiAnsiHelper]::Reset())
+        }
+        
+        # Write the entire frame's changes in one single operation
+        if ($outputBuilder.Length -gt 0) {
+            [Console]::Write($outputBuilder.ToString())
+        }
+    } catch {
+        # Log any catastrophic rendering failure
+        Write-Log -Level Fatal -Message "Compositor-to-console rendering failed: $_" -Data $_
+    }
+}
+
+# The Get-AnsiColorCode function is now obsolete and can be removed.
+# Remove this from the `modules\tui-engine\tui-engine.psm1` section.
+# function Get-AnsiColorCode { ... }
+```
+
+#### Step 1.6: Finalize the Startup Sequence
+
+**Location:** The main execution logic at the end of `axiom.txt`.
+**Action:** Replace the `Initialize-ThemeManager` call with `Initialize-ThemeEngine` and create the themes directory.
+
+--- CODE MODIFICATION: Startup Logic ---
+
+```powershell
+# ... near the end of the file ...
+try {
+    # ...
+    
+    # 1. Initialize core services that have no dependencies
+    Write-Host "`nInitializing services..." -ForegroundColor Yellow
+    Initialize-Logger -Level $(if ($Debug) { "Debug" } else { "Info" })
+    Initialize-EventSystem
+    
+    # NEW: Create themes directory if it doesn't exist and initialize ThemeEngine
+    $themesDir = Join-Path $PSScriptRoot "themes"
+    if (-not (Test-Path $themesDir)) { New-Item -Path $themesDir -ItemType Directory | Out-Null }
+    # You would create a default.theme.json file here or ship one with the script.
+    
+    $global:ThemeEngine = Initialize-ThemeEngine -themesDirectory $themesDir
+
+    Initialize-DialogSystem
+    
+    # ... (rest of the startup sequence remains the same) ...
+    
+    # 2. Create the service container
+    $services = @{}
+    $services.ThemeEngine = $global:ThemeEngine # Add to services
+    
+    # ...
+} 
+# ...
+```
+
+This completes the foundational upgrade. The application now supports Truecolor, is styled via external JSON files, and has a much more efficient rendering pipeline.
+
+---
+
+### Pillar 2: Integrating Utilities and a Command-Driven Architecture
+
+**Goal:** Transform your separate utilities (file browser, fuzzy search) into fully integrated features of the Axiom application and introduce a modern command palette for navigation, replacing the old numeric menu.
+
+#### Step 2.1: Integrate and Refactor the File Browser
+
+We will refactor your `FB_` functions into a reusable `FileListComponent` and an `ExplorerScreen` that uses it.
+
+**Action 1:** Add the new `FileListComponent` class. This component encapsulates the file browsing logic. It should be placed in the `components\advanced-data-components\advanced-data-components.psm1` section.
+
+--- NEW CODE: FileListComponent Class ---
+
+```powershell
+# In components\advanced-data-components\advanced-data-components.psm1, after the Table class
+
+class FileListComponent : UIElement {
+    [string]$Path
+    [System.IO.FileSystemInfo[]]$Items
+    [int]$SelectedIndex = 0
+    [int]$ScrollTop = 0
+    [bool]$ShowHidden = $false
+    [hashtable]$SelectedItems = @{}
+
+    FileListComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Name = $name
+    }
+
+    [void] SetPath([string]$newPath) {
+        $this.Path = (Get-Item -LiteralPath $newPath).FullName
+        $this.Refresh()
+    }
+
+    [void] Refresh() {
+        # HARDENING: The Get-ChildItem call is synchronous and can block the UI thread
+        # if browsing a large or slow directory (e.g., network share).
+        # For a truly responsive UI, this operation should be asynchronous,
+        # using Start-Job or a Runspace, and the component should display a "Loading..." state
+        # until the background operation completes.
+        
+        # Always add ".." entry if not at root
+        $parentEntry = $null
+        if ($parent = (Get-Item $this.Path).Parent) {
+            $parentEntry = [PSCustomObject]@{ Name = '..'; FullName = $parent.FullName; PSIsContainer = $true }
+        }
+
+        $childItems = @(Get-ChildItem -LiteralPath $this.Path -Force:$this.ShowHidden -ErrorAction SilentlyContinue | Sort-Object PSIsContainer -Descending, Name)
+        
+        $this.Items = if ($parentEntry) { @($parentEntry) + $childItems } else { $childItems }
+
+        if ($this.SelectedIndex -ge $this.Items.Count) {
+            $this.SelectedIndex = [Math]::Max(0, $this.Items.Count - 1)
+        }
+        $this.RequestRedraw()
+    }
+    
+    hidden [void] UpdateScrolling() {
+        if ($this.SelectedIndex < $this.ScrollTop) {
+            $this.ScrollTop = $this.SelectedIndex
+        }
+        if ($this.SelectedIndex >= ($this.ScrollTop + $this.Height)) {
+            $this.ScrollTop = $this.SelectedIndex - $this.Height + 1
+        }
+    }
+
+    [void] OnRender() {
+        if ($null -eq $this._private_buffer) { return }
+        $this._private_buffer.Clear()
+        
+        $styleDefault = $Global:ThemeEngine.GetStyle("Components.FileBrowser.Default")
+        $styleDir = $Global:ThemeEngine.GetStyle("Components.FileBrowser.Directory")
+        $styleSelected = $Global:ThemeEngine.GetStyle("Components.FileBrowser.Selected")
+
+        $visibleCount = [Math]::Min($this.Items.Count - $this.ScrollTop, $this.Height)
+        
+        for ($i = 0; $i -lt $visibleCount; $i++) {
+            $itemIndex = $this.ScrollTop + $i
+            $item = $this.Items[$itemIndex]
+            $isCurrent = ($itemIndex -eq $this.SelectedIndex)
+            
+            $icon = if ($item.PSIsContainer) { "📁" } else { "📄" }
+            $line = "$icon $($item.Name)".PadRight($this.Width)
+            
+            $currentStyle = if ($item.PSIsContainer) { $styleDir } else { $styleDefault }
+            if ($isCurrent -and $this.IsFocused) {
+                $currentStyle = $styleSelected
+            }
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y $i -Text $line -Style $currentStyle
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::UpArrow) {
+                if ($this.SelectedIndex > 0) { $this.SelectedIndex-- }
+                $this.UpdateScrolling(); $this.RequestRedraw(); return $true
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this.SelectedIndex < ($this.Items.Count - 1)) { $this.SelectedIndex++ }
+                $this.UpdateScrolling(); $this.RequestRedraw(); return $true
+            }
+            ([ConsoleKey]::PageUp) {
+                $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $this.Height)
+                $this.UpdateScrolling(); $this.RequestRedraw(); return $true
+            }
+            ([ConsoleKey]::PageDown) {
+                $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $this.Height)
+                $this.UpdateScrolling(); $this.RequestRedraw(); return $true
+            }
+        }
+        return $false
+    }
+}
+```
+
+**Action 2:** Create the `ExplorerScreen` that uses this component. This will be a new section in the monolith, replacing the old `Start-TerminalFileBrowser` functions.
+
+--- NEW SECTION: screens\explorer-screen\explorer-screen.psm1 ---
+
+```powershell
+# --- START OF ORIGINAL FILE for screens\explorer-screen\explorer-screen.psm1 ---
+class ExplorerScreen : Screen {
+    [Panel]$mainPanel
+    [FileListComponent]$fileList
+    [Panel]$previewPanel
+    [Panel]$statusBar
+
+    ExplorerScreen([hashtable]$services) : base("ExplorerScreen", $services) { }
+
+    [void] Initialize() {
+        $this.Width = $global:TuiState.BufferWidth
+        $this.Height = $global:TuiState.BufferHeight
+
+        # Layout the panels for the screen
+        $this.mainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "File Explorer")
+        $this.mainPanel.Style = $Global:ThemeEngine.GetStyle("Components.Panel")
+        $this.AddChild($this.mainPanel)
+        
+        $listWidth = [Math]::Floor($this.Width * 0.5) - 2
+        $listPanel = [Panel]::new(1, 1, $listWidth, $this.Height - 4, "Files")
+        $this.mainPanel.AddChild($listPanel)
+        
+        $this.previewPanel = [Panel]::new($listPanel.Width + 2, 1, $this.Width - $listWidth - 4, $this.Height - 4, "Preview")
+        $this.mainPanel.AddChild($this.previewPanel)
+        
+        $this.statusBar = [Panel]::new(1, $this.Height - 2, $this.Width - 2, 1, "")
+        $this.statusBar.HasBorder = $false
+        $this.mainPanel.AddChild($this.statusBar)
+
+        # Create the file list component and add it to its panel
+        $this.fileList = [FileListComponent]::new("ExplorerFileList")
+        $this.fileList.Resize($listPanel.ContentWidth, $listPanel.ContentHeight)
+        $listPanel.AddChild($this.fileList)
+    }
+
+    [void] OnEnter() {
+        # Set a starting path when the screen is entered
+        $this.fileList.SetPath((Get-Location).Path)
+        Set-ComponentFocus -Component $this.fileList
+        $this.UpdateStatusBar("Ctrl+P for commands | Enter to open")
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($keyInfo.Key -eq [ConsoleKey]::Enter) {
+            $selectedItem = $this.fileList.Items[$this.fileList.SelectedIndex]
+            if ($selectedItem.PSIsContainer) {
+                # If it's a directory, navigate into it
+                $this.fileList.SetPath($selectedItem.FullName)
+                $this.UpdateStatusBar("Path: $($this.fileList.Path)")
+            } else {
+                # If it's a file, show a preview
+                $this.ShowFilePreview($selectedItem)
+            }
+            return $true
+        }
+        # Let the focused component handle the key if we don't
+        return $false
+    }
+    
+    [void] UpdateStatusBar([string]$text) {
+        $this.statusBar.{_private_buffer}.Clear()
+        Write-TuiText -Buffer $this.statusBar.GetBuffer() -X 0 -Y 0 -Text $text -Style @{ FG = "#a0a0a0" }
+        $this.statusBar.RequestRedraw()
+    }
+    
+    [void] ShowFilePreview([System.IO.FileSystemInfo]$file) {
+        $this.previewPanel.SetTitle("Preview: $($file.Name)")
+        $this.previewPanel.ClearContent()
+        $content = Get-Content -Path $file.FullName -TotalCount $this.previewPanel.ContentHeight -ErrorAction SilentlyContinue
+        for ($i = 0; $i -lt $content.Count; $i++) {
+            Write-TuiText -Buffer $this.previewPanel.GetBuffer() -X $this.previewPanel.ContentX -Y ($this.previewPanel.ContentY + $i) -Text $content[$i] -Style @{ FG = "#D4D4D4" }
+        }
+        $this.previewPanel.RequestRedraw()
+    }
+}
+# --- END OF ORIGINAL FILE for screens\explorer-screen\explorer-screen.psm1 ---
+```
+
+#### Step 2.2: Create the CommandPalette
+
+This replaces the old menu system with a fast, searchable interface. It's a special Dialog overlay.
+
+**Action 1:** First, define a custom attribute to mark functions as "Actions" for the palette. Place this at the very top of your `axiom.txt` script, before any `using` statements.
+
+--- NEW CODE: ActionAttribute Definition ---
+
+```powershell
+Add-Type -TypeDefinition @"
+    using System;
+    // An attribute to decorate functions that should appear in the command palette.
+    [AttributeUsage(AttributeTargets.Function)]
+    public class ActionAttribute : Attribute {
+        public string Name { get; set; }
+        public string Group { get; set; }
+        public ActionAttribute(string name) { this.Name = name; }
+    }
+"@ -ErrorAction Stop
+```
+
+**Action 2:** Create the `ActionService` to discover these commands. This service will be part of the `$services` container. It can be defined in a new `services/action-service.psm1` section.
+
+--- NEW SECTION: services/action-service.psm1 ---
+
+```powershell
+# --- START OF ORIGINAL FILE for services/action-service.psm1 ---
+class ActionService {
+    [System.Collections.Generic.List[object]]$Actions
+
+    ActionService() {
+        $this.Actions = [System.Collections.Generic.List[object]]::new()
+        $this.DiscoverActions()
+    }
+
+    [void] DiscoverActions() {
+        # HARDENING: This "magic" discovery relies on functions being in the global scope
+        # and assumes no other third-party modules will use the [Action] attribute.
+        # For a more robust and explicit contract, consider an "Inversion of Control" pattern
+        # where modules explicitly *register* their actions with the ActionService.
+        # Example: $actionService.RegisterAction($functionObject)
+        
+        # Get all functions in the global scope of the current session
+        $functions = Get-Command -CommandType Function -Scope Global
+        foreach ($func in $functions) {
+            # Find functions decorated with our custom Action attribute
+            $attribute = $func.Attributes | Where-Object { $_.TypeId.Name -eq 'ActionAttribute' }
+            if ($attribute) {
+                $this.Actions.Add([PSCustomObject]@{
+                    Name = $attribute.Name
+                    Group = $attribute.Group ?? "General"
+                    Function = $func
+                })
+            }
+        }
+        $this.Actions = $this.Actions | Sort-Object Group, Name
+        Write-Log -Level Info -Message "Discovered $($this.Actions.Count) commands for the palette."
+    }
+}
+
+function Initialize-ActionService {
+    return [ActionService]::new()
+}
+# --- END OF ORIGINAL FILE for services/action-service.psm1 ---
+```
+
+**Action 3:** Implement the `CommandPalette` dialog itself. Add this class to `modules\dialog-system-class\dialog-system-class.psm1`.
+
+--- NEW CODE: CommandPalette Dialog ---
+
+```powershell
+# In modules\dialog-system-class\dialog-system-class.psm1
+
+class CommandPalette : Dialog {
+    [TextBoxComponent]$inputBox
+    [Table]$resultsTable
+    [object[]]$allActions
+    [object[]]$filteredActions
+    [int]$selectedIndex = 0
+
+    CommandPalette() : base("CommandPalette") {
+        $this.Title = "Command Palette"
+        $this.Width = [Math]::Floor($global:TuiState.BufferWidth * 0.6)
+        $this.Height = [Math]::Floor($global:TuiState.BufferHeight * 0.7)
+        $this.allActions = @($Global:Services.ActionService.Actions)
+        $this.filteredActions = $this.allActions
+        
+        $this.inputBox = New-TuiTextBox -Props @{ Name = "PaletteInput"; Width = $this.Width - 2; Height = 3 }
+        $this.AddChild($this.inputBox)
+        $this.inputBox.Move(1,1)
+        
+        $this.resultsTable = New-TuiTable -Props @{ Name = "PaletteResults"; Width = $this.Width - 2; Height = $this.Height - 4; ShowBorder = $false }
+        $this.resultsTable.SetColumns(@(
+            [TableColumn]::new('Name', 'Action', [Math]::Floor(($this.Width-4)*0.7)),
+            [TableColumn]::new('Group', 'Group', [Math]::Floor(($this.Width-4)*0.3))
+        ))
+        $this.resultsTable.SetData($this.filteredActions)
+        $this.AddChild($this.resultsTable)
+        $this.resultsTable.Move(1, 4)
+        Set-ComponentFocus -Component $this.inputBox
+    }
+
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($this.inputBox.HandleInput($key)) {
+            $this.FilterActions($this.inputBox.Text)
+            return $true
+        }
+        
+        switch ($key.Key) {
+            ([ConsoleKey]::DownArrow) { $this.resultsTable.SelectNext(); return $true }
+            ([ConsoleKey]::UpArrow) { $this.resultsTable.SelectPrevious(); return $true }
+            ([ConsoleKey]::Enter) {
+                $selectedAction = $this.resultsTable.GetSelectedItem()
+                if ($selectedAction) {
+                    $this.Close()
+                    & $selectedAction.Function.ScriptBlock
+                }
+                return $true
+            }
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
+    
+    [void] FilterActions([string]$filterText) {
+        if ([string]::IsNullOrWhiteSpace($filterText)) {
+            $this.filteredActions = $this.allActions
+        } else {
+            # Simple contains filter, can be replaced with fuzzy logic
+            $this.filteredActions = $this.allActions | Where-Object { $_.Name -like "*$filterText*" -or $_.Group -like "*$filterText*" }
+        }
+        $this.resultsTable.SetData($this.filteredActions)
+    }
+}
+```
+
+**Action 4:** Wire up the palette trigger and define some actions.
+
+--- CODE MODIFICATION: Process-SingleKeyInput in tui-engine.psm1 ---
+
+```powershell
+function Process-SingleKeyInput {
+    param($keyInfo)
+    
+    # NEW: Check for global command palette keybind
+    if (($keyInfo.Modifiers -band [ConsoleModifiers]::Control) -and $keyInfo.Key -eq 'P') {
+        $palette = [CommandPalette]::new()
+        $palette.Show()
+        return
+    }
+
+    # ... (rest of the function)
+}
+```
+
+--- NEW SECTION: commands/global-commands.psm1 ---
+
+```powershell
+# --- START OF ORIGINAL FILE for commands/global-commands.psm1 ---
+# This file contains globally available actions for the Command Palette.
+
+[Action("Application: Quit", Group="Application")]
+function Request-AppQuit {
+    $Global:Services.Navigation.RequestExit()
+}
+
+[Action("Application: Refresh UI", Group="Application")]
+function Request-UIRefresh {
+    Request-TuiRefresh
+}
+
+[Action("Navigation: Go to Dashboard", Group="Navigation")]
+function Navigate-ToDashboard {
+    $Global:Services.Navigation.GoTo("/dashboard")
+}
+
+[Action("Navigation: Go to File Explorer", Group="Navigation")]
+function Navigate-ToFileExplorer {
+    $Global:Services.Navigation.GoTo("/explorer")
+}
+
+[Action("Theme: Cycle to Next", Group="Theme")]
+function Cycle-Theme {
+    $engine = $Global:Services.ThemeEngine
+    $themes = $engine.GetThemeKeys()
+    $currentIndex = [array]::IndexOf($themes, $engine._currentThemeKey)
+    $nextIndex = ($currentIndex + 1) % $themes.Count
+    $engine.SetTheme($themes[$nextIndex])
+    Request-TuiRefresh
+}
+# --- END OF ORIGINAL FILE for commands/global-commands.psm1 ---
+```
+
+You would then ensure this `global-commands.psm1` section is included in your monolith before the main execution block.
+
+---
+
+### Pillar 3: Re-imagining the Screens
+
+**Goal:** Implement the new widget-based Dashboard and the Kanban-style Task Flow screen. This involves deleting old screens and creating new, more powerful ones from scratch.
+
+#### Step 3.1: Refactor `DashboardScreen` to be Widget-Based
+
+The old `DashboardScreen` with its static panels and menu is now obsolete. We will replace it with a dynamic screen that serves as a container for individual "widget" components.
+
+**Location:** The `screens\dashboard-screen\dashboard-screen.psm1` section.
+**Action:** DELETE the entire existing `DashboardScreen` class definition and REPLACE it with the following. This new version is much simpler, acting as a layout container for widgets.
+
+--- CODE REPLACEMENT: DashboardScreen Class ---
+
+```powershell
+# --- START OF ORIGINAL FILE for screens\dashboard-screen\dashboard-screen.psm1 ---
+# ==============================================================================
+# PMC Terminal v5 - Widget-Based Dashboard Screen
+# A modern dashboard that hosts various informational widgets.
+# ==============================================================================
+
+# First, define the new widget components. These are specialized panels.
+class UpcomingTasksWidget : Panel {
+    UpcomingTasksWidget([string]$name) : base() { $this.Name = $name; $this.Title = "Up Next" }
+
+    [void] OnRender() {
+        # First, call the base Panel's OnRender to draw our box and title
+        $this.Style = $Global:ThemeEngine.GetStyle("Components.Widget.UpNext")
+        ([Panel]$this).OnRender()
+
+        # Get data via the parent screen's services
+        $tasks = $this.Parent.Services.DataManager.GetTasks($false) # Get only pending tasks
+        $upcoming = $tasks | Sort-Object { $_.DueDate ?? [datetime]::MaxValue } | Select-Object -First ($this.ContentHeight)
+        
+        $style = $Global:ThemeEngine.GetStyle("Components.Widget.Text.Default")
+        $overdueStyle = $Global:ThemeEngine.GetStyle("Components.Widget.Text.Overdue")
+        
+        $y = 0
+        foreach($task in $upcoming) {
+            $currentStyle = $style
+            $dateText = if ($task.DueDate) { $task.DueDate.Value.ToString("yyyy-MM-dd") } else { "No Date" }
+            if ($task.DueDate -and $task.DueDate.Value.Date -lt (Get-Date).Date) {
+                $currentStyle = $overdueStyle
+                $dateText += " (OVERDUE)"
+            }
+            $line = "$($task.Title.PadRight($this.ContentWidth - 25)) [$($task.Priority.ToString().PadRight(6))] $dateText"
+            Write-TuiText -Buffer $this._private_buffer -X $this.ContentX -Y ($this.ContentY + $y) -Text $line -Style $currentStyle
+            $y++
+        }
+    }
+}
+
+class StatsWidget : Panel {
+    StatsWidget([string]$name) : base() { $this.Name = $name; $this.Title = "Project Stats" }
+
+    [void] OnRender() {
+        $this.Style = $Global:ThemeEngine.GetStyle("Components.Widget.Stats")
+        ([Panel]$this).OnRender()
+        
+        $tasks = $this.Parent.Services.DataManager.GetTasks()
+        if ($tasks.Count -eq 0) {
+            Write-TuiText -Buffer $this._private_buffer -X $this.ContentX -Y $this.ContentY -Text "No task data."
+            return
+        }
+
+        $completed = ($tasks | Where-Object { $_.Completed }).Count
+        $percentage = [Math]::Round(($completed / $tasks.Count) * 100)
+        
+        $barLength = $this.ContentWidth - 4
+        $filledLength = [Math]::Round(($percentage / 100) * $barLength)
+        $bar = ("█" * $filledLength) + ("░" * ($barLength - $filledLength))
+
+        Write-TuiText -Buffer $this._private_buffer -X ($this.ContentX + 1) -Y ($this.ContentY + 1) -Text "Overall Progress: $percentage%"
+        Write-TuiText -Buffer $this._private_buffer -X ($this.ContentX + 1) -Y ($this.ContentY + 3) -Text $bar -Style @{ FG = '#3fb950' }
+        Write-TuiText -Buffer $this._private_buffer -X ($this.ContentX + 1) -Y ($this.ContentY + 5) -Text "Total Tasks: $($tasks.Count)"
+        Write-TuiText -Buffer $this._private_buffer -X ($this.ContentX + 1) -Y ($this.ContentY + 6) -Text "Completed:   $completed"
+    }
+}
+
+# The main screen class itself is now a simple container
+class DashboardScreen : Screen {
+    [System.Collections.Generic.List[UIElement]]$Widgets
+    
+    DashboardScreen([hashtable]$services) : base("DashboardScreen", $services) { }
+
+    [void] Initialize() {
+        $this.Width = $global:TuiState.BufferWidth
+        $this.Height = $global:TuiState.BufferHeight
+        $this.Widgets = [System.Collections.Generic.List[UIElement]]::new()
+        
+        # Create and add widgets to the screen's children
+        $upNextWidget = [UpcomingTasksWidget]::new("UpNext")
+        $upNextWidget.Move(1, 1); $upNextWidget.Resize([Math]::Floor($this.Width * 0.6), 12)
+        $this.AddChild($upNextWidget)
+        $this.Widgets.Add($upNextWidget)
+        
+        $statsWidget = [StatsWidget]::new("QuickStats")
+        $statsWidget.Move($upNextWidget.Width + 2, 1); $statsWidget.Resize($this.Width - $upNextWidget.Width - 4, 12)
+        $this.AddChild($statsWidget)
+        $this.Widgets.Add($statsWidget)
+        
+        # Add other widgets here...
+    }
+    
+    [void] OnEnter() {
+        # Widgets automatically pull data on render, so OnEnter is simple.
+        # We can request a redraw to ensure they update when the screen becomes active.
+        $this.RequestRedraw()
+    }
+
+    # Input is now handled by the command palette, so this method is often empty.
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) { return $false }
+}
+# --- END OF ORIGINAL FILE for screens\dashboard-screen\dashboard-screen.psm1 ---
+```
+
+#### Step 3.2: Implement the `TaskFlowScreen` and `KanbanBoardComponent`
+
+This is a completely new feature, replacing the old `TaskListScreen`.
+
+**Action:** DELETE the entire existing `screens\task-list-screen\task-list-screen.psm1` section. ADD the following new file section to the monolith.
+
+--- NEW SECTION: screens\task-flow-screen\task-flow-screen.psm1 ---
+
+```powershell
+# --- START OF ORIGINAL FILE for screens\task-flow-screen\task-flow-screen.psm1 ---
+# ==============================================================================
+# PMC Terminal v5 - Task Flow (Kanban) Screen
+# Visual, interactive task board for managing workflow.
+# ==============================================================================
+
+# Define simple data models for the board structure
+class KanbanCard { [string]$Id; [string]$Title; [string]$Priority; [object]$Data }
+class KanbanColumn { [string]$Title; [System.Collections.Generic.List[KanbanCard]]$Cards }
+
+class KanbanBoardComponent : ScrollablePanel {
+    [KanbanColumn[]]$Columns
+    [int]$SelectedColumn = 0
+    [int]$SelectedCard = 0
+
+    KanbanBoardComponent([string]$name) : base() {
+        $this.Name = $name
+        $this.Columns = @()
+    }
+
+    [void] SetColumns([KanbanColumn[]]$columns) {
+        $this.Columns = $columns
+        $this.VirtualWidth = $columns.Count * 31 # 30 for column, 1 for margin
+        $this.VirtualHeight = 30 # Arbitrary large height
+        $this.RequestRedraw()
+    }
+    
+    [void] OnRender() {
+        # Use the ScrollablePanel's virtual buffer
+        $buffer = $this.GetVirtualBuffer()
+        if ($null -eq $buffer) { return }
+        $buffer.Clear()
+        
+        $colStyle = $Global:ThemeEngine.GetStyle("Components.Kanban.Column")
+        $cardStyle = $Global:ThemeEngine.GetStyle("Components.Kanban.Card")
+        $cardSelectedStyle = $Global:ThemeEngine.GetStyle("Components.Kanban.CardSelected")
+
+        $xOffset = 0
+        for ($c = 0; $c -lt $this.Columns.Count; $c++) {
+            $column = $this.Columns[$c]
+            Write-TuiBox -Buffer $buffer -X $xOffset -Y 0 -Width 30 -Height $this.VirtualHeight -Title $column.Title -Style $colStyle
+
+            $yOffset = 1
+            for ($r = 0; $r -lt $column.Cards.Count; $r++) {
+                $card = $column.Cards[$r]
+                $styleToUse = if($c -eq $this.SelectedColumn -and $r -eq $this.SelectedCard -and $this.IsFocused) { $cardSelectedStyle } else { $cardStyle }
+                $cardTitle = "$($card.Title) [$($card.Priority)]"
+                Write-TuiBox -Buffer $buffer -X ($xOffset+1) -Y $yOffset -Width 28 -Height 3 -Title $cardTitle -Style $styleToUse
+                $yOffset += 4
+            }
+            $xOffset += 31
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        $colCount = $this.Columns.Count
+        if ($colCount -eq 0) { return $false }
+        $cardCount = $this.Columns[$this.SelectedColumn].Cards.Count
+        
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::RightArrow) {
+                if ($this.SelectedColumn < $colCount - 1) { $this.SelectedColumn++; $this.SelectedCard = 0; $this.RequestRedraw(); return $true }
+            }
+            ([ConsoleKey]::LeftArrow) {
+                if ($this.SelectedColumn > 0) { $this.SelectedColumn--; $this.SelectedCard = 0; $this.RequestRedraw(); return $true }
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($cardCount > 0 -and $this.SelectedCard < $cardCount - 1) { $this.SelectedCard++; $this.RequestRedraw(); return $true }
+            }
+            ([ConsoleKey]::UpArrow) {
+                if ($cardCount > 0 -and $this.SelectedCard > 0) { $this.SelectedCard--; $this.RequestRedraw(); return $true }
+            }
+        }
+        return ([ScrollablePanel]$this).HandleInput($keyInfo) # Pass to parent for scrolling
+    }
+}
+
+class TaskFlowScreen : Screen {
+    [KanbanBoardComponent]$kanbanBoard
+
+    TaskFlowScreen([hashtable]$services) : base("TaskFlowScreen", $services) { }
+
+    [void] Initialize() {
+        $this.kanbanBoard = [KanbanBoardComponent]::new("TaskKanban")
+        $this.AddChild($this.kanbanBoard)
+        $this.kanbanBoard.Resize($this.Width, $this.Height)
+        $this.kanbanBoard.HasBorder = $false
+    }
+    
+    [void] OnEnter() {
+        $tasks = $this.Services.DataManager.GetTasks()
+        
+        $columns = @{
+            "Pending" = [System.Collections.Generic.List[KanbanCard]]::new();
+            "InProgress" = [System.Collections.Generic.List[KanbanCard]]::new();
+            "Completed" = [System.Collections.Generic.List[KanbanCard]]::new();
+        }
+
+        foreach ($task in $tasks) {
+            $card = [KanbanCard]@{ Id = $task.Id; Title = $task.Title; Priority = $task.Priority.ToString(); Data = $task }
+            $columns[$task.Status.ToString()].Add($card)
+        }
+
+        $kanbanColumns = @(
+            [KanbanColumn]@{ Title="Pending"; Cards = $columns.Pending };
+            [KanbanColumn]@{ Title="In Progress"; Cards = $columns.InProgress };
+            [KanbanColumn]@{ Title="Completed"; Cards = $columns.Completed };
+        )
+
+        $this.kanbanBoard.SetColumns($kanbanColumns)
+        Set-ComponentFocus -Component $this.kanbanBoard
+    }
+}
+# --- END OF ORIGINAL FILE for screens\task-flow-screen\task-flow-screen.psm1 ---
+```
+
+---
+
+### Pillar 4: Decoupled Backend Services
+
+**Goal:** Create services for business logic that have no UI awareness, and build screens that consume them. This makes the logic reusable and easier to test.
+
+#### Step 4.1: Create the `TimeSheetService`
+
+**Action:** Add a new file section for the `TimeSheetService`, which will handle all time-tracking logic.
+
+--- NEW SECTION: services/timesheet-service.psm1 ---
+
+```powershell
+# --- START OF ORIGINAL FILE for services/timesheet-service.psm1 ---
+class TimeSheetService {
+    hidden [DataManager]$dataManager
+
+    TimeSheetService([DataManager]$dm) {
+        $this.dataManager = $dm
+    }
+
+    [void] StartTimer([PmcTask]$task) {
+        if (-not $task) { throw "Task cannot be null." }
+        $activeTimers = $this.dataManager._dataStore.ActiveTimers
+        if ($activeTimers.ContainsKey($task.Id)) {
+            Write-Log -Level Warning -Message "Timer for task $($task.Id) is already running."
+            return
+        }
+        $activeTimers[$task.Id] = @{ StartTime = [datetime]::Now; ProjectKey = $task.ProjectKey }
+        Write-Log -Level Info -Message "Started timer for task: $($task.Title)"
+        Publish-Event -EventName "Timers.Changed"
+    }
+
+    [void] StopTimer([PmcTask]$task) {
+        if (-not $task) { throw "Task cannot be null." }
+        $activeTimers = $this.dataManager._dataStore.ActiveTimers
+        if (-not $activeTimers.ContainsKey($task.Id)) { return }
+        
+        $timerData = $activeTimers[$task.Id]
+        $endTime = [datetime]::Now
+        $duration = ($endTime - $timerData.StartTime).TotalSeconds
+        
+        $this.dataManager._dataStore.time_entries.Add(@{
+            TaskId = $task.Id
+            ProjectKey = $timerData.ProjectKey
+            StartTime = $timerData.StartTime
+            EndTime = $endTime
+            DurationSeconds = $duration
+        })
+        
+        [void]$activeTimers.Remove($task.Id)
+        Write-Log -Level Info -Message "Stopped timer for task: $($task.Title). Duration: $duration seconds."
+        Publish-Event -EventName "Timers.Changed"
+    }
+
+    [object] GetWeeklySummary() {
+        $entries = $this.dataManager._dataStore.time_entries | Where-Object { $_.StartTime -ge (Get-Date).Date.AddDays(-7) }
+        $summary = $entries | Group-Object ProjectKey | ForEach-Object {
+            [PSCustomObject]@{
+                Project = $_.Name
+                TotalHours = [Math]::Round(($_.Group | Measure-Object DurationSeconds -Sum).Sum / 3600, 2)
+            }
+        }
+        return $summary
+    }
+
+    [string] ExportToTsv([object[]]$summaryData) {
+        # HARDENING: This method couples the service (business logic) to filesystem interaction.
+        # For better separation of concerns and reusability, the service should ideally
+        # return the TSV content as a string, and the UI-level action (Export-WeeklyTimeSheet)
+        # would then be responsible for writing that string to a temporary file.
+        $tempPath = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.tsv'
+        $summaryData | ConvertTo-Csv -Delimiter "`t" -NoTypeInformation | Set-Content -Path $tempPath
+        return $tempPath
+    }
+}
+
+function Initialize-TimeSheetService {
+    param([DataManager]$DataManager)
+    return [TimeSheetService]::new($DataManager)
+}
+# --- END OF ORIGINAL FILE for services/timesheet-service.psm1 ---
+```
+
+#### Step 4.2: Create the `TimeSheetScreen`
+
+**Action:** Add the UI screen that consumes the `TimeSheetService`.
+
+--- NEW SECTION: screens/timesheet-screen.psm1 ---
+
+```powershell
+# --- START OF ORIGINAL FILE for screens/timesheet-screen.psm1 ---
+class TimeSheetScreen : Screen {
+    [Table]$summaryTable
+
+    TimeSheetScreen([hashtable]$services) : base("TimeSheetScreen", $services) {}
+
+    [void] Initialize() {
+        $this.summaryTable = New-TuiTable -Props @{ Name = "TimeSheetSummary"; Width = $this.Width; Height = $this.Height }
+        $this.summaryTable.SetColumns(@(
+            [TableColumn]::new('Project', 'Project', 40),
+            [TableColumn]::new('TotalHours', 'Total Hours (Week)', 20)
+        ))
+        $this.AddChild($this.summaryTable)
+    }
+
+    [void] OnEnter() {
+        $summary = $this.Services.TimeSheetService.GetWeeklySummary()
+        $this.summaryTable.SetData($summary)
+        $this.RequestRedraw()
+    }
+}
+
+# Add the action to export the data
+[Action("TimeSheet: Export Weekly Summary", Group="TimeSheet")]
+function Export-WeeklyTimeSheet {
+    $screen = $Global:TuiState.CurrentScreen
+    if ($screen -isnot [TimeSheetScreen]) {
+        Show-AlertDialog -Title "Action Error" -Message "This action can only be run from the TimeSheet screen."
+        return
+    }
+    
+    $summary = $screen.Services.TimeSheetService.GetWeeklySummary()
+    if ($summary.Count -eq 0) {
+        Show-AlertDialog -Title "Export" -Message "No data to export."
+        return
+    }
+
+    $filePath = $screen.Services.TimeSheetService.ExportToTsv($summary)
+    Show-AlertDialog -Title "Export Complete" -Message "Weekly summary exported to:`n$filePath"
+}
+# --- END OF ORIGINAL FILE for screens/timesheet-screen.psm1 ---
+```
+
+#### Step 4.3: Final Integration in Startup Logic
+
+**Location:** The main execution block at the end of `axiom.txt`.
+**Action:** Initialize all new services and register all new screens. DELETE the section that contains the old `Start-TerminalFileBrowser` and `Search-FuzzyText` functions, as they are now replaced by integrated components.
+
+--- CODE MODIFICATION: Final Startup Block ---
+
+```powershell
+# Near the end of the file, DELETE the entire region of standalone functions for the file browser and fuzzy search.
+
+try {
+    Write-Host "`n=== PMC Terminal v5 - Phoenix Edition ===" -ForegroundColor Cyan
+    
+    # 1. Initialize core services
+    # ... (Logger) ...
+    $global:ThemeEngine = Initialize-ThemeEngine -themesDirectory (Join-Path $PSScriptRoot "themes")
+    # ... (EventSystem, DialogSystem) ...
+
+    # 2. Create the service container
+    $services = @{
+        ThemeEngine = $global:ThemeEngine
+    }
+    
+    # 3. Initialize services that depend on others
+    $services.DataManager = Initialize-DataManager
+    $services.TimeSheetService = Initialize-TimeSheetService -DataManager $services.DataManager # New
+    $services.ActionService = Initialize-ActionService # New
+    $services.KeybindingService = New-KeybindingService # This remains if needed for low-level input
+    
+    # 4. NavigationService needs the full $services container
+    $services.Navigation = Initialize-NavigationService -Services $services
+    
+    # 5. Register ALL screen classes with the navigation factory
+    $nav = $services.Navigation
+    $nav.RegisterScreenClass("DashboardScreen", [DashboardScreen])
+    $nav.RegisterScreenClass("TaskFlowScreen", [TaskFlowScreen]) # New
+    $nav.RegisterScreenClass("ExplorerScreen", [ExplorerScreen]) # New
+    $nav.RegisterScreenClass("TimeSheetScreen", [TimeSheetScreen]) # New
+    
+    Write-Host "All services initialized!" -ForegroundColor Green
+    
+    # ... (logo) ...
+    
+    # 6. Initialize TUI Engine
+    Initialize-TuiEngine
+    
+    # 7. Add a route for the new Task Flow screen
+    $nav.RouteMap["/tasks"] = "TaskFlowScreen"
+    $nav.RouteMap["/explorer"] = "ExplorerScreen"
+    $nav.RouteMap["/timesheet"] = "TimeSheetScreen"
+    
+    # 8. Start the application by navigating to the root path
+    Write-Host "Starting main application loop..." -ForegroundColor Yellow
+    $services.Navigation.GoTo("/") # Use GoTo to push the initial screen
+    Start-TuiLoop # The loop now runs on the screen pushed by GoTo
+    
+} catch {
+    # ... (error handling) ...
+} finally {
+    # ... (cleanup) ...
+}
+```
+
+---
+
+### General Architectural Consideration (Beyond this Plan's Scope, but Important)
+
+**Finding:** The plan introduces several new `.psm1` sections without a clear mechanism for including them in the final monolithic script. The original `axiom.txt` seems to be a hand-curated monolith.
+**Risk:** This process is manual and error-prone. A developer could add a new file but forget to add it to the build process, leading to `Unable to find type` errors.
+**Recommendation (For maintainability):** The project has outgrown a simple monolithic file. The "correct" PowerShell way to manage this is with a proper **module structure**. The root script (`axiom.txt`) would become a thin launcher that simply calls `Import-Module -Name ./Axiom` and starts the application. The module would have a `.psd1` manifest file that explicitly lists all `.psm1` files in the `NestedModules` key. This guarantees load order and removes any ambiguity. PowerShell's module loader is designed for exactly this scenario. While a full conversion is outside this plan's scope, it's the idiomatic solution that should be the ultimate goal. For now, ensure the monolith build script is updated to include all these new files in the correct dependency order.
+
+---
+
+#####ADDITIONAL THEME INFO
+Here’s a deeper dive into a flexible theming system that lets you skin any widget purely via configuration:
+
+1. Core Concepts
+Style Key
+Each widget or component exposes one or more “style keys”—string identifiers that map to a set of visual properties (colors, borders, padding, etc.).
+
+powershell
+Copy
+Edit
+# In your widget class
+[string]$StyleKey = 'Components.Widget.UpNext'
+Theme Definition
+A theme is just a JSON file that defines, per style key, a set of properties. At startup you load one theme (or merge multiple, e.g. “base” + “dark mode”).
+
+2. Theme JSON Schema
+jsonc
+Copy
+Edit
+{
+  "$schema": "https://example.com/axiom-theme-schema.json",
+  "metadata": {
+    "name": "Solarized Dark",
+    "author": "You",
+    "version": "1.0"
+  },
+  "styles": {
+    // style-key: property bag
+    "Components.Widget.UpNext": {
+      "Foreground": "#839496",
+      "Background": "#002b36",
+      "BorderColor": "#586e75",
+      "Padding": 1
+    },
+    "Components.Kanban.Column": {
+      "Foreground": "#eee8d5",
+      "Background": "#073642",
+      "Border": "single"
+    },
+    "Global.Window.Title": {
+      "Foreground": "#b58900",
+      "Bold": true
+    }
+  }
+}
+Schema notes
+
+styles is an object mapping style keys → property objects.
+
+Accepted properties might include:
+
+Foreground / Background (hex or ANSI)
+
+Border, BorderColor, BorderStyle
+
+Padding (int or array)
+
+Bold, Italic, Underline
+
+Any other CSS‐like property you choose to support.
+
+3. Loading & Merging Themes
+Load JSON
+
+powershell
+Copy
+Edit
+$theme = Get-Content $ThemePath | ConvertFrom-Json
+$styleMap = $theme.styles
+Merging Layers
+Optionally load a “base” theme, then overlay a “user” theme so users only need to specify deltas.
+4. Applying Styles in Widgets
+Lookup Helper
+Create a central helper that resolves a style key + property → concrete value with fallback:
+
+powershell
+Copy
+Edit
+function Get-StyleProperty {
+  param($StyleKey, $PropertyName, $Default)
+  if ($styleMap.ContainsKey($StyleKey) -and $styleMap[$StyleKey].ContainsKey($PropertyName)) {
+    return $styleMap[$StyleKey][$PropertyName]
+  } else {
+    return $Default
+  }
+}
+Widget Rendering
+In each widget’s Render() you reference styling via that helper:
+
+powershell
+Copy
+Edit
+$fg = Get-StyleProperty $this.StyleKey 'Foreground' '#FFFFFF'
+$bg = Get-StyleProperty $this.StyleKey 'Background' '#000000'
+$border = Get-StyleProperty $this.StyleKey 'Border' 'none'
+# then draw using $fg/$bg/$border…
+5. Defaults & Fallbacks
+Widget Defaults
+Each widget ships with hard‑coded defaults for every property. These only apply if neither the user theme nor any base theme provides an override.
+
+Global Overrides
+You can allow a special wildcard style key like Components.* to catch anything not explicitly defined, or even * for a true global style.
+
+6. Example in Practice
+Define a Dark Theme at ~/.axiom/themes/dark.json
+
+Startup
+
+powershell
+Copy
+Edit
+Import-Module Axiom.Core
+$ThemePath = "~/.axiom/themes/dark.json"
+[ThemeService]::LoadTheme($ThemePath)
+Result
+
+The “Up Next” widget shows with your chosen Solarized‑style colors.
+
+Add a new widget—no code change needed—so long as it picks a sensible default style key.
+
+Benefits
+No code churn when tweaking colors—just edit JSON.
+
+Granular control per widget or global catch‑all.
+
+User theming: ship a few built‑in themes and let end‑users drop their own into ~/.axiom/themes/.
+
+Future extensibility: add new properties (e.g. CornerRadius, Shadow) without touching widget logic.
+
+This approach gives you a clean separation: widgets declare what style they want, themes supply the actual look, and the engine handles the rest. Feel free to iterate on the schema and helper functions to tailor it to Axiom’s needs!

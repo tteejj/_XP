@@ -3,9 +3,9 @@
 # runnable, modular project structure by synthesizing a new runner script.
 
 param(
-    [string]$MonolithPath = ".\Monolithic-PMCTerminal.txt",
-    [string]$BuildScriptPath = ".\monolith.txt",
-    [string]$OutputDirectory = ".\Restored-PMCTerminal"
+    [string]$MonolithPath = ".\axiommv2.txt",
+    [string]$BuildScriptPath = ".\axiom.txt",
+    [string]$OutputDirectory = ".\_mega_axiom"
 )
 
 Set-StrictMode -Version Latest

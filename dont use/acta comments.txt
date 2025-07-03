@@ -1,0 +1,787 @@
+Looking at axiom.txt, I see it's a monolithic PowerShell script (~7000 lines) for a TUI (Text User Interface) application called PMC Terminal v5. It has:
+
+A complex module/class structure
+TUI primitives with ConsoleColor-based rendering
+Event system, theme manager, dialog system
+Navigation service with screens
+Data management
+Keybinding service
+
+Now examining acta.txt - this appears to be a comprehensive upgrade plan with 4 pillars:
+
+Phoenix Rendering & Theming Engine - Replace ConsoleColor with Truecolor (24-bit hex)
+Integrated Components & Command-Driven Architecture - Replace numeric menus with command palette
+Re-imagining Screens - Widget-based dashboard, Kanban-style task flow
+Decoupled Backend Services - Extract business logic into services
+
+Let me critique this plan from a PowerShell implementation perspective:
+ISSUES I SEE:
+
+Parse-time dependency problems: The plan correctly identifies the TuiAnsiHelper/TuiCell ordering issue, but the implementation approach is risky. Modifying a monolithic script's internal structure requires extreme care about load order.
+Truecolor assumptions: The plan assumes the terminal supports 24-bit color. Many Windows terminals (especially older PowerShell ISE, some SSH clients) don't. There's no fallback.
+ValidatePattern on properties: The plan adds [ValidatePattern('^#[0-9A-Fa-f]{6}$')] to TuiCell properties. This is problematic - property validators in PowerShell classes can cause unexpected errors during object construction/copying.
+Global variable pattern: The plan introduces $global:AxiomServices which is anti-pattern in PowerShell modules.
+
+Modules should leverage script or module-private scopes to manage internal state, preventing potential namespace pollution and unintended side effects. This approach ensures better encapsulation and reduces the risk of unexpected interactions between different parts of the application.
+The architectural concerns continue with potential implementation pitfalls that could compromise the module's reliability and maintainability. Critical design choices need careful reconsideration to align with PowerShell best practices and robust software engineering principles.
+Specifically, error handling remains inadequate, with components failing to account for common failure scenarios like null references or missing service dependencies. This oversight introduces significant potential for runtime instability and unpredictable behavior.
+Performance optimization opportunities exist in the current rendering strategy, particularly around string construction methods. While the differential rendering approach shows promise, there's room for more efficient implementation techniques that could improve overall system responsiveness.
+The absence of a comprehensive testing strategy further compounds these challenges, leaving critical validation mechanisms undefined and potentially exposing the system to undetected behavioral risks.Looking at this upgrade plan, I see several critical issues that will cause implementation failures. Let me break this down methodically.
+Parse-Time Dependency Chain Failure
+The plan's approach to fixing the TuiAnsiHelper/TuiCell ordering is fundamentally flawed. Here's why:
+powershell# The plan says "replace TuiAnsiHelper first"
+# But in a monolithic script, you can't just "replace" - you must delete AND insert
+# This creates a window where the script is syntactically invalid
+The correct approach: Create a completely new file with proper ordering, test it, then swap the entire script atomically.
+The Truecolor Assumption Will Break
+powershell[ValidatePattern('^#[0-9A-Fa-f]{6}$')]
+[string] $ForegroundColor = "#C0C0C0"
+This validator will throw during object construction if you try to set a null or invalid value. PowerShell property validators are aggressive - they fire on every assignment, including internal ones during serialization/deserialization.
+Better approach:
+powershellclass TuiCell {
+    hidden [string] $_foregroundColor = "#C0C0C0"
+    
+    [string] get_ForegroundColor() { return $this._foregroundColor }
+    [void] set_ForegroundColor([string]$value) {
+        if ($value -match '^#[0-9A-Fa-f]{6}$') {
+            $this._foregroundColor = $value
+        } else {
+            Write-Log -Level Warning -Message "Invalid color: $value"
+            # Fallback to default instead of throwing
+        }
+    }
+}
+The Global Services Anti-Pattern
+powershell$global:AxiomServices = $services
+This violates PowerShell module isolation. When this script becomes a module (which it should), globals won't work across module boundaries.
+Correct pattern:
+powershell# In module scope
+$script:Services = @{}
+
+function Get-AxiomService {
+    param([string]$Name)
+    return $script:Services[$Name]
+}
+The Add-Type Time Bomb
+powershellAdd-Type -TypeDefinition @"
+    [AttributeUsage(AttributeTargets.Function)]
+    public class ActionAttribute : Attribute
+"@ -ErrorAction Stop
+This will fail on second load because the type already exists. The -ErrorAction Stop makes it worse by halting execution entirely.
+Fix:
+powershellif (-not ([System.Management.Automation.PSTypeName]'ActionAttribute').Type) {
+    Add-Type -TypeDefinition $typeDefinition
+}
+Theme Engine's Synchronous I/O
+The ThemeEngine constructor does file I/O:
+powershellThemeEngine([string]$themesDirectory) {
+    $this.LoadThemesFromDirectory($themesDirectory)  # BLOCKS!
+}
+This violates PowerShell's expectation that constructors are fast. If that directory is on a network share, the entire UI freezes.
+
+
+
+
+Minimal Test to Prove the Issues
+Create this test file:
+powershell# test-acta-issues.ps1
+class TestCell {
+    [ValidatePattern('^#[0-9A-Fa-f]{6}$')]
+    [string] $Color = "#FFFFFF"
+}
+
+# This will work
+$cell1 = [TestCell]::new()
+
+# This will throw
+$cell2 = [TestCell]::new()
+$cell2.Color = $null  # BOOM! ValidatePattern throws
+
+# This will also throw during JSON deserialization
+$json = '{"Color":null}'
+[TestCell](ConvertFrom-Json $json)  # BOOM!
+The Path Forward
+
+
+Use script scope: Not global scope for services
+Lazy-load themes: Don't do I/O in constructors
+ Each component should be testable in isolation
+
+You're right. Let me dig into these critical gaps with specific examples from the upgrade plan.
+Error Handling: The Null Reference Minefield
+The plan's components are riddled with unchecked assumptions. Look at this from the FileListComponent:
+powershell[void] SetPath([string]$newPath) {
+    try {
+        $this.Path = (Get-Item -LiteralPath $newPath).FullName  # ASSUMES Get-Item succeeds
+        $this.Refresh()
+    } catch {
+        Write-Log -Level Error -Message "Failed to set path for FileListComponent: $_"
+        Show-AlertDialog -Title "Path Error" -Message "..."
+    }
+}
+But then in Refresh():
+powershell$parentEntry = $null
+try {
+    $parent = (Get-Item $this.Path).Parent  # What if $this.Path is now null?
+    if ($parent) {
+        $parentEntry = [PSCustomObject]@{ Name = '..'; FullName = $parent.FullName }
+    }
+} catch { /* Suppress errors */ }  # Silent failure!
+The correct pattern:
+powershell[void] SetPath([string]$newPath) {
+    if ([string]::IsNullOrWhiteSpace($newPath)) {
+        Write-Log -Level Warning -Message "SetPath called with null/empty path"
+        return
+    }
+    
+    $item = Get-Item -LiteralPath $newPath -ErrorAction SilentlyContinue
+    if ($null -eq $item) {
+        Write-Log -Level Warning -Message "Path not found: $newPath"
+        return
+    }
+    
+    $this.Path = $item.FullName
+    $this.Refresh()
+}
+Service Dependency Failures
+The widgets assume services exist without checking:
+powershell[void] RefreshData() {
+    if ($null -eq $this.Parent) { return }
+    $tasks = $this.Parent.Services.DataManager.GetTasks($false)  # Chain of doom!
+    # What if Services is null? What if DataManager is null?
+}
+Required defensive code:
+powershell[void] RefreshData() {
+    if ($null -eq $this.Parent) { return }
+    
+    $services = $this.Parent.PSObject.Properties['Services']
+    if ($null -eq $services -or $null -eq $services.Value) {
+        Write-Log -Level Error -Message "Widget has no access to services"
+        return
+    }
+    
+    $dm = $services.Value['DataManager']
+    if ($null -eq $dm) {
+        Write-Log -Level Error -Message "DataManager service not found"
+        return
+    }
+    
+    try {
+        $tasks = $dm.GetTasks($false)
+        # Process tasks...
+    } catch {
+        Write-Log -Level Error -Message "GetTasks failed: $_"
+        $tasks = @()  # Fallback to empty
+    }
+}
+Performance: The StringBuilder Disaster
+The plan's renderer does this:
+powershell$outputBuilder = [System.Text.StringBuilder]::new(40000)
+# ... lots of operations ...
+[void]$outputBuilder.Append("`e[$($y + 1);1H")
+[void]$outputBuilder.Append("`e[$($x)C")
+Every Append() with string interpolation creates temporary strings. For a 80x25 screen, that's potentially 2000+ string allocations per frame.
+Optimized approach:
+powershell# Pre-calculate all possible escape sequences at startup
+$script:CursorCache = @{}
+for ($y = 1; $y -le 50; $y++) {
+    for ($x = 1; $x -le 200; $x++) {
+        $script:CursorCache["$y,$x"] = "`e[$y;${x}H"
+    }
+}
+
+# During render - no string interpolation
+$pos = "$($y+1),$($x+1)"
+[void]$outputBuilder.Append($script:CursorCache[$pos])
+The Missing Render State Machine
+The differential renderer has no concept of "damage regions":
+powershellif (-not $newCell.DiffersFrom($oldCell)) {
+    continue  # Skip this cell
+}
+But what about when a window moves? Every cell behind it needs redrawing. The plan has no dirty rectangle tracking:
+powershellclass RenderRegion {
+    [int]$X; [int]$Y; [int]$Width; [int]$Height
+    
+    [bool] Contains([int]$px, [int]$py) {
+        return $px -ge $this.X -and $px -lt ($this.X + $this.Width) -and
+               $py -ge $this.Y -and $py -lt ($this.Y + $this.Height)
+    }
+}
+
+# Track what needs repainting
+$script:DirtyRegions = [System.Collections.Generic.List[RenderRegion]]::new()
+Testing Strategy: Complete Absence
+The plan has ZERO test infrastructure. Here's what's missing:
+Component Contract Tests
+powershellDescribe "TuiCell" {
+    It "Should handle null color gracefully" {
+        $cell = [TuiCell]::new()
+        { $cell.ForegroundColor = $null } | Should -Not -Throw
+        $cell.ForegroundColor | Should -Be "#C0C0C0"  # Fallback
+    }
+    
+    It "Should serialize/deserialize correctly" {
+        $cell = [TuiCell]::new('X', '#FF0000', '#0000FF')
+        $json = $cell | ConvertTo-Json
+        $restored = [TuiCell]($json | ConvertFrom-Json)
+        $restored.Char | Should -Be 'X'
+    }
+}
+Service Availability Tests
+powershellfunction Test-ServiceDependencies {
+    param($Component)
+    
+    $missingServices = @()
+    
+    # Use reflection to find all service calls
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput(
+        $Component.GetType().GetMethod('RefreshData').ToString(), 
+        [ref]$null, [ref]$null
+    )
+    
+    $serviceRefs = $ast.FindAll({
+        $args[0] -is [System.Management.Automation.Language.MemberExpressionAst] -and
+        $args[0].Member.Value -eq 'Services'
+    }, $true)
+    
+    foreach ($ref in $serviceRefs) {
+        # Extract service name and verify it exists
+    }
+    
+    return $missingServices
+}
+Render Performance Profiler
+powershellclass RenderProfiler {
+    hidden [hashtable]$Timings = @{}
+    
+    [void] StartTimer([string]$operation) {
+        $this.Timings[$operation] = [System.Diagnostics.Stopwatch]::StartNew()
+    }
+    
+    [void] StopTimer([string]$operation) {
+        if ($this.Timings.ContainsKey($operation)) {
+            $this.Timings[$operation].Stop()
+        }
+    }
+    
+    [PSCustomObject] GetReport() {
+        $report = foreach ($op in $this.Timings.Keys) {
+            [PSCustomObject]@{
+                Operation = $op
+                Milliseconds = $this.Timings[$op].ElapsedMilliseconds
+                PercentOfFrame = ($this.Timings[$op].ElapsedMilliseconds / 16.67) * 100
+            }
+        }
+        return $report | Sort-Object Milliseconds -Descending
+    }
+}
+The Validation Framework That's Missing
+powershellclass ComponentValidator {
+    static [string[]] ValidateComponent([UIElement]$component) {
+        $errors = @()
+        
+        # Check buffer initialization
+        if ($null -eq $component._private_buffer -and $component.Visible) {
+            $errors += "Component $($component.Name) has no buffer but is visible"
+        }
+        
+        # Check event handlers don't create circular references
+        $handlers = $component.PSObject.Properties | Where-Object {
+            $_.Value -is [scriptblock]
+        }
+        
+        foreach ($handler in $handlers) {
+            if ($handler.Value.ToString() -match '\$this') {
+                $errors += "Handler $($handler.Name) captures `$this - memory leak risk"
+            }
+        }
+        
+        return $errors
+    }
+}
+The plan is architecturally interesting but operationally naive. It's building a Ferrari without brakes, airbags, or even a speedometer.RetryJHso, any more safety equipment to add? roll cage, seatbelt, etc?EditMapped out comprehensive safety enhancements for PowerShell framework.5sThe user is asking for more "safety equipment" - more defensive programming patterns and reliability features that the upgrade plan is missing. They're using the car safety metaphor I introduced. Let me think about what other critical safety/reliability features are missing from this PowerShell TUI framework upgrade plan.
+Additional safety concerns:
+
+Input validation and sanitization
+Resource limits and bounds checking
+Deadlock/livelock prevention in event systems
+Memory leak prevention
+Crash recovery and state persistence
+Security considerations (code injection, path traversal)
+Concurrency/threading safety
+Error recovery strategies
+Diagnostic/debugging capabilities
+Graceful degradation
+Yes, let's add the rest of the safety equipment. Here are the critical missing pieces:
+The Resource Governor (Roll Cage)
+The plan has no limits on anything. A malicious or corrupted data file could crash the entire application:
+powershellclass ResourceGovernor {
+    static [int]$MaxComponents = 1000
+    static [int]$MaxBufferSize = 1024 * 1024  # 1MB max per buffer
+    static [int]$MaxEventHandlers = 100
+    static [int]$MaxRenderDepth = 50
+    
+    static [void] CheckComponentCount([UIElement]$parent) {
+        $count = 0
+        $stack = [System.Collections.Stack]::new()
+        $stack.Push($parent)
+        
+        while ($stack.Count -gt 0) {
+            $current = $stack.Pop()
+            $count++
+            
+            if ($count -gt [ResourceGovernor]::MaxComponents) {
+                throw "Component tree exceeds maximum size ($([ResourceGovernor]::MaxComponents))"
+            }
+            
+            foreach ($child in $current.Children) {
+                $stack.Push($child)
+            }
+        }
+    }
+    
+    static [void] CheckBufferAllocation([int]$width, [int]$height) {
+        $bytes = $width * $height * 20  # Rough estimate per cell
+        if ($bytes -gt [ResourceGovernor]::MaxBufferSize) {
+            throw "Buffer allocation ($bytes bytes) exceeds maximum"
+        }
+    }
+}
+The Deadlock Detector (Anti-lock Brakes)
+The event system can create circular dependencies:
+powershellclass EventLoopDetector {
+    hidden static [System.Collections.Generic.HashSet[string]]$ActiveEvents = @{}
+    hidden static [int]$MaxDepth = 10
+    
+    static [void] EnterEvent([string]$eventName) {
+        $callStack = "$($eventName):$([System.Threading.Thread]::CurrentThread.ManagedThreadId)"
+        
+        if ([EventLoopDetector]::ActiveEvents.Contains($callStack)) {
+            throw "Circular event detected: $eventName is already being processed"
+        }
+        
+        if ([EventLoopDetector]::ActiveEvents.Count -ge [EventLoopDetector]::MaxDepth) {
+            throw "Event cascade too deep. Possible infinite loop."
+        }
+        
+        [void][EventLoopDetector]::ActiveEvents.Add($callStack)
+    }
+    
+    static [void] ExitEvent([string]$eventName) {
+        $callStack = "$($eventName):$([System.Threading.Thread]::CurrentThread.ManagedThreadId)"
+        [void][EventLoopDetector]::ActiveEvents.Remove($callStack)
+    }
+}
+
+# Wrap Publish-Event
+function Publish-Event {
+    param($EventName, $Data)
+    
+    try {
+        [EventLoopDetector]::EnterEvent($EventName)
+        # Original publish logic
+    }
+    finally {
+        [EventLoopDetector]::ExitEvent($EventName)
+    }
+}
+The Panic Handler (Airbags)
+When things go catastrophically wrong, save state and recover:
+powershellclass PanicHandler {
+    static [string]$DumpPath = Join-Path $env:TEMP "PMCTerminal_Crash"
+    
+    static [void] Panic([string]$reason, [object]$context) {
+        try {
+            # 1. Create crash dump directory
+            $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+            $crashDir = Join-Path ([PanicHandler]::DumpPath) $timestamp
+            New-Item -ItemType Directory -Path $crashDir -Force | Out-Null
+            
+            # 2. Save current state
+            @{
+                Reason = $reason
+                Timestamp = $timestamp
+                PSVersion = $PSVersionTable
+                LastError = $Error[0]
+                Context = $context
+                BufferState = $global:TuiState.CompositorBuffer
+                ScreenStack = $global:TuiState.ScreenStack | ForEach-Object { $_.GetType().Name }
+            } | ConvertTo-Json -Depth 5 | Set-Content "$crashDir\crash.json"
+            
+            # 3. Save screenshot of buffer
+            $screenshot = [System.Text.StringBuilder]::new()
+            for ($y = 0; $y -lt $global:TuiState.BufferHeight; $y++) {
+                for ($x = 0; $x -lt $global:TuiState.BufferWidth; $x++) {
+                    $cell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
+                    [void]$screenshot.Append($cell.Char)
+                }
+                [void]$screenshot.AppendLine()
+            }
+            $screenshot.ToString() | Set-Content "$crashDir\screen.txt"
+            
+            # 4. Attempt graceful shutdown
+            Write-Host "`e[0m`e[2J`e[H" # Clear screen
+            Write-Host "FATAL ERROR: $reason" -ForegroundColor Red
+            Write-Host "Crash dump saved to: $crashDir" -ForegroundColor Yellow
+            
+        } catch {
+            # Even panic failed - last resort
+            Write-Host "CATASTROPHIC FAILURE: $reason" -ForegroundColor Red
+        }
+        finally {
+            # Ensure terminal is usable
+            [Console]::CursorVisible = $true
+            [Console]::ResetColor()
+            exit 1
+        }
+    }
+}
+The Input Sanitizer (Seatbelts)
+User input and file paths need sanitization:
+powershellclass InputSanitizer {
+    static [string] SanitizePath([string]$path) {
+        if ([string]::IsNullOrWhiteSpace($path)) { return $null }
+        
+        # Remove dangerous characters
+        $cleaned = $path -replace '[\0\r\n]', ''
+        
+        # Prevent directory traversal
+        $cleaned = $cleaned -replace '\.\.[/\\]', ''
+        
+        # Resolve to absolute path
+        try {
+            $resolved = [System.IO.Path]::GetFullPath($cleaned)
+            
+            # Verify it's under allowed roots
+            $allowedRoots = @(
+                $env:USERPROFILE,
+                $env:TEMP,
+                [Environment]::GetFolderPath('Desktop')
+            )
+            
+            $isAllowed = $allowedRoots | Where-Object { 
+                $resolved.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) 
+            }
+            
+            if (-not $isAllowed) {
+                Write-Log -Level Warning -Message "Path outside allowed roots: $resolved"
+                return $null
+            }
+            
+            return $resolved
+        }
+        catch {
+            Write-Log -Level Warning -Message "Invalid path: $path"
+            return $null
+        }
+    }
+    
+    static [string] SanitizeCommand([string]$input) {
+        # Prevent injection attacks in command palette
+        $dangerous = @('`', '$', ';', '|', '&', '>', '<', '(', ')')
+        $cleaned = $input
+        
+        foreach ($char in $dangerous) {
+            $cleaned = $cleaned.Replace($char, '')
+        }
+        
+        return $cleaned.Trim()
+    }
+}
+The Memory Guard (Fuel Cutoff)
+Prevent runaway memory usage:
+powershellclass MemoryGuard {
+    static [int]$MaxHeapMB = 500
+    static [datetime]$LastCheck = [datetime]::MinValue
+    
+    static [void] CheckMemory() {
+        $now = [datetime]::Now
+        
+        # Only check every 5 seconds
+        if (($now - [MemoryGuard]::LastCheck).TotalSeconds -lt 5) { return }
+        
+        [MemoryGuard]::LastCheck = $now
+        
+        $process = Get-Process -Id $PID
+        $memoryMB = $process.WorkingSet64 / 1MB
+        
+        if ($memoryMB -gt [MemoryGuard]::MaxHeapMB) {
+            # Force garbage collection
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+            [System.GC]::Collect()
+            
+            # Re-check
+            $process = Get-Process -Id $PID
+            $memoryMB = $process.WorkingSet64 / 1MB
+            
+            if ($memoryMB -gt [MemoryGuard]::MaxHeapMB) {
+                [PanicHandler]::Panic(
+                    "Memory limit exceeded: $([Math]::Round($memoryMB))MB", 
+                    @{ Limit = [MemoryGuard]::MaxHeapMB }
+                )
+            }
+        }
+    }
+}
+The Diagnostic Black Box (Flight Recorder)
+Continuous telemetry for post-mortem analysis:
+powershellclass DiagnosticRecorder {
+    static [System.Collections.Concurrent.ConcurrentQueue[object]]$Events
+    static [int]$MaxEvents = 1000
+    
+    static DiagnosticRecorder() {
+        [DiagnosticRecorder]::Events = [System.Collections.Concurrent.ConcurrentQueue[object]]::new()
+    }
+    
+    static [void] Record([string]$category, [object]$data) {
+        $event = @{
+            Timestamp = [datetime]::UtcNow
+            Category = $category
+            ThreadId = [System.Threading.Thread]::CurrentThread.ManagedThreadId
+            Data = $data
+        }
+        
+        [DiagnosticRecorder]::Events.Enqueue($event)
+        
+        # Trim old events
+        while ([DiagnosticRecorder]::Events.Count -gt [DiagnosticRecorder]::MaxEvents) {
+            $discard = $null
+            [void][DiagnosticRecorder]::Events.TryDequeue([ref]$discard)
+        }
+    }
+    
+    static [object[]] GetTrace([string]$category = $null, [int]$last = 100) {
+        $events = [DiagnosticRecorder]::Events.ToArray()
+        
+        if ($category) {
+            $events = $events | Where-Object { $_.Category -eq $category }
+        }
+        
+        return $events | Select-Object -Last $last
+    }
+}
+
+# Instrument all critical paths
+function Write-TuiText {
+    [DiagnosticRecorder]::Record("Render", @{ 
+        Method = "Write-TuiText"
+        X = $X; Y = $Y
+        TextLength = $Text.Length 
+    })
+    # ... rest of function
+}
+The Integration Test That Would Have Caught Everything
+powershellDescribe "Full System Integration" {
+    BeforeAll {
+        $script:TestDir = New-Item -ItemType Directory -Path (Join-Path $TestDrive "PMCTest")
+    }
+    
+    It "Should survive corrupted theme file" {
+        $badTheme = '{"invalid json'
+        Set-Content -Path "$TestDir\bad.theme.json" -Value $badTheme
+        
+        { Initialize-ThemeEngine -themesDirectory $TestDir } | Should -Not -Throw
+    }
+    
+    It "Should handle rapid window resizing" {
+        $engine = Initialize-TuiEngine -Width 80 -Height 25
+        
+        1..10 | ForEach-Object {
+            $engine.HandleResize((Get-Random -Min 40 -Max 120), (Get-Random -Min 10 -Max 50))
+        }
+        
+        $engine.State | Should -Be "Running"
+    }
+    
+    It "Should not leak memory under stress" {
+        $before = (Get-Process -Id $PID).WorkingSet64
+        
+        1..100 | ForEach-Object {
+            $screen = New-Object DashboardScreen(@{})
+            $screen.Initialize()
+            $screen.Cleanup()
+        }
+        
+        [GC]::Collect()
+        $after = (Get-Process -Id $PID).WorkingSet64
+        
+        ($after - $before) | Should -BeLessThan 10MB
+    }
+}
+The upgrade plan is trying to build a sports car, but what users need is an armored personnel carrier - something that can take abuse and keep running. Every one of these safety systems should be mandatory, not optional.
+The Module Boundary Catastrophe
+The plan treats this monolithic script like it can be cleanly modularized, but PowerShell classes don't export across module boundaries properly:
+powershell# This WILL FAIL when axiom.txt becomes a module
+# Classes defined in modules are not visible to other modules
+# Only to the module that imports them directly
+
+# The fix: Use a single module with class definitions at the top
+# OR use ScriptsToProcess in the manifest to load classes first
+@{
+    RootModule = 'AxiomTUI.psm1'
+    ScriptsToProcess = @(
+        'Classes\TuiPrimitives.ps1',  # Define all classes here
+        'Classes\UIElements.ps1'       # Before any code uses them
+    )
+}
+
+
+Async Operations Manager
+The plan blocks the UI thread everywhere:
+powershellclass AsyncOperationManager {
+    static [hashtable]$RunningOps = @{}
+    static [int]$MaxConcurrent = 5
+    
+    static [string] QueueOperation([scriptblock]$operation, [scriptblock]$callback) {
+        $opId = [guid]::NewGuid().ToString()
+        
+        # Check if we're at max capacity
+        $running = [AsyncOperationManager]::RunningOps.Values | 
+            Where-Object { $_.State -eq 'Running' }
+        
+        if ($running.Count -ge [AsyncOperationManager]::MaxConcurrent) {
+            Write-Log -Level Warning -Message "Async queue full, operation delayed"
+            # Could implement a proper queue here
+            return $null
+        }
+        
+        $job = Start-ThreadJob -ScriptBlock $operation -Name "AsyncOp_$opId"
+        
+        [AsyncOperationManager]::RunningOps[$opId] = @{
+            Job = $job
+            Callback = $callback
+            Started = [datetime]::UtcNow
+            State = 'Running'
+        }
+        
+        # Register completion handler
+        Register-ObjectEvent -InputObject $job -EventName StateChanged -Action {
+            $opId = $Event.SourceIdentifier -replace '^AsyncOp_'
+            $op = [AsyncOperationManager]::RunningOps[$opId]
+            
+            if ($Event.SourceEventArgs.JobStateInfo.State -eq 'Completed') {
+                $result = Receive-Job -Job $op.Job
+                & $op.Callback -Result $result
+                Remove-Job -Job $op.Job
+                [AsyncOperationManager]::RunningOps.Remove($opId)
+            }
+        }
+        
+        return $opId
+    }
+}
+
+# Use in FileListComponent:
+[void] SetPath([string]$newPath) {
+    $this.ShowLoadingState()
+    
+    [AsyncOperationManager]::QueueOperation({
+        Get-ChildItem -Path $using:newPath -Force
+    }, {
+        param($Result)
+        $this.Items = $Result
+        $this.HideLoadingState()
+        $this.RequestRedraw()
+    })
+}
+Configuration Management System
+No centralized config:
+powershellclass ConfigManager {
+    static [hashtable]$Config = @{}
+    static [string]$ConfigPath = Join-Path $env:LOCALAPPDATA "AxiomTUI\config.json"
+    static [hashtable]$Defaults = @{
+        UI = @{
+            TargetFPS = 60
+            EnableAnimations = $true
+            CursorBlink = $true
+        }
+        Performance = @{
+            MaxBufferSize = 1048576
+            MaxComponents = 1000
+            RenderBatchSize = 100
+        }
+        Features = @{
+            AutoSave = $true
+            AsyncFileOperations = $true
+            EnableTelemetry = $false
+        }
+    }
+    
+    static [object] Get([string]$path) {
+        $segments = $path -split '\.'
+        $current = [ConfigManager]::Config
+        
+        foreach ($segment in $segments) {
+            if ($current.ContainsKey($segment)) {
+                $current = $current[$segment]
+            } else {
+                # Return default if exists
+                $current = [ConfigManager]::Defaults
+                foreach ($seg in $segments) {
+                    if ($current.ContainsKey($seg)) {
+                        $current = $current[$seg]
+                    } else {
+                        return $null
+                    }
+                }
+                return $current
+            }
+        }
+        return $current
+    }
+}
+
+The Critical Integration Test Suite
+powershellDescribe "Axiom TUI Resilience Tests" {
+    Context "Chaos Engineering" {
+        It "Survives rapid random input" {
+            $engine = Start-AxiomTUI -Headless
+            
+            1..1000 | ForEach-Object {
+                $randomKey = [ConsoleKey]::GetValues([ConsoleKey]) | Get-Random
+                $randomMods = @(
+                    [ConsoleModifiers]::None,
+                    [ConsoleModifiers]::Control,
+                    [ConsoleModifiers]::Alt
+                ) | Get-Random
+                
+                $keyInfo = [ConsoleKeyInfo]::new(
+                    [char]0, $randomKey, $false, $false, $false
+                )
+                
+                { $engine.ProcessInput($keyInfo) } | Should -Not -Throw
+            }
+            
+            $engine.Stop()
+            $engine.State | Should -Be "Stopped"
+        }
+        
+        It "Handles filesystem race conditions" {
+            $testPath = New-TemporaryDirectory
+            $browser = New-FileListComponent
+            
+            # Start watching a directory
+            $browser.SetPath($testPath)
+            
+            # Rapidly create/delete files while browsing
+            $job = Start-ThreadJob {
+                1..50 | ForEach-Object {
+                    $file = Join-Path $using:testPath "test$_.txt"
+                    New-Item $file -Force | Out-Null
+                    Start-Sleep -Milliseconds 10
+                    Remove-Item $file -Force
+                }
+            }
+            
+            # Keep refreshing while chaos happens
+            1..20 | ForEach-Object {
+                { $browser.Refresh() } | Should -Not -Throw
+                Start-Sleep -Milliseconds 50
+            }
+            
+            Wait-Job $job | Remove-Job
+        }
+    }
+}
+The plan needs these foundational safety systems BEFORE implementing any features. Build the APC chassis first, then add the fancy dashboard.

@@ -1,0 +1,144 @@
+Alright. Let's look at the red text. And the black text. The entire plan.
+
+You've provided a comprehensive and ambitious upgrade plan. The move to a component-based, themeable, and command-driven architecture is the correct path forward for a project of this complexity. The provided code demonstrates a clear vision. My role here is not to change that vision, but to pressure-test it, identify potential points of failure, and ensure the implementation is as robust and idiomatic to PowerShell as possible, consistent with the existing patterns in Axiom.
+
+Here is my analysis, step-by-step.
+
+### Overall Assessment
+
+**Strengths:**
+
+*   **Architecturally Sound:** The plan correctly identifies the need to decouple rendering, theming, data, and UI logic. The use of services (`ThemeEngine`, `ActionService`) and component-based UI (`FileListComponent`, `KanbanBoardComponent`) is a massive improvement over the previous procedural style.
+*   **Modern UI Concepts:** Truecolor support, a command palette, and widget-based dashboards are standard features in modern TUIs. Adopting them is the right move.
+*   **Clear Intent:** The goals for each pillar are well-defined and build upon one another logically.
+
+**Areas for Hardening (Potential Failures):**
+
+My critique will focus on making the implementation "bulletproof." This means addressing edge cases, potential performance bottlenecks, and areas where the code makes assumptions that might fail under real-world conditions.
+
+---
+
+### Pillar 1: Rendering & Theming Engine - Critique
+
+This is the foundation. If it has cracks, the whole structure is unstable.
+
+*   **Step 1.1: `TuiCell` Class**
+    *   **Finding:** The `TuiCell` class now accepts any `[string]` for its color properties. The proposed code does not perform any validation at the point of assignment. A value like `'#F0A'` (invalid length), `'not-a-color'`, or even an accidental `[ConsoleColor]::Red.ToString()` will be accepted by the constructor, but will cause a runtime error later inside `TuiAnsiHelper`.
+    *   **Risk:** This violates the "fail-fast" principle. Errors should occur as close to the source of the problem as possible. A bug in a component's styling code will manifest as a cryptic error deep inside the rendering pipeline, making it difficult to debug.
+    *   **Recommendation (To make it bulletproof):**
+        *   Add a `[ValidatePattern('#[0-9A-Fa-f]{6}')]` attribute to the `$ForegroundColor` and `$BackgroundColor` properties. This provides immediate, declarative validation at the PowerShell language level.
+        *   ```powershell
+          class TuiCell {
+              #...
+              [ValidatePattern('^#[0-9A-Fa-f]{6}$')]
+              [string] $ForegroundColor = "#C0C0C0" 
+          
+              [ValidatePattern('^#[0-9A-Fa-f]{6}$')]
+              [string] $BackgroundColor = $null
+              #...
+          }
+          ```
+        *   This will cause an immediate `SetValueInvocationException` if a component attempts to create a `TuiCell` with an invalid hex code, pointing the developer directly to the source of the bad data.
+
+*   **Step 1.3: `ThemeEngine` Class**
+    *   **Finding:** The palette resolution logic in `GetStyle` uses a `while` loop to resolve variables like `$Palette.accent1`.
+    *   **Risk:** A user could create a malformed or malicious `.theme.json` file with a circular palette reference (e.g., `accent1` points to `accent2`, and `accent2` points back to `accent1`). This will cause the `while` loop to become an **infinite loop**, hanging the entire UI thread.
+    *   **Recommendation (To prevent hangs):**
+        *   Introduce a recursion depth limit to the resolution loop. If a value is still a variable after a reasonable number of lookups (e.g., 10), assume a circular reference and break out, returning a default error color.
+        *   ```powershell
+          # Inside ThemeEngine.GetStyle
+          # ...
+          foreach ($key in $currentValue.Keys) {
+              $val = $currentValue[$key]
+              $depth = 0 # Introduce depth counter
+              # Recursively resolve palette variables
+              while ($val -is [string] -and $val.StartsWith('$Palette.') -and $depth -lt 10) { # Add depth check
+                  $paletteKey = $val.Substring(9)
+                  $val = $this._currentThemeObject.Palette[$paletteKey]
+                  $depth++
+              }
+              # If it's still a variable, it's a circular reference or missing key
+              if ($val -is [string] -and $val.StartsWith('$Palette.')) {
+                  $val = '#FF00FF' # Fallback color for error
+              }
+              $resolvedStyle[$key] = $val
+          }
+          ```
+
+*   **Step 1.5: `Render-CompositorToConsole` Function**
+    *   **Finding:** The diffing logic correctly identifies that if a cell hasn't changed, the cursor should be moved forward one position using the ANSI code `"`e[1C"`" (Cursor Forward).
+    *   **Risk:** This code makes a critical assumption: **every `[char]` occupies exactly one terminal column.** This is not true for full-width characters (e.g., many CJK characters) or complex graphemes (many emojis like '📁'). A single character in the buffer can be rendered as two cells wide. When the renderer skips this character and only moves the cursor one space, the entire rest of the line becomes misaligned, causing screen corruption.
+    *   **Recommendation (For true Unicode support):**
+        *   This is a hard problem. The "bulletproof" solution requires measuring the display width of characters. A pragmatic, intermediate solution is to **disable this specific optimization** when non-ASCII characters are detected, forcing a full redraw of those characters.
+        *   A more robust, long-term fix would involve a helper function `Get-CharDisplayWidth` that can distinguish between single-width and double-width characters. For now, the safest path is to recognize the limitation. The current plan will fail with certain international text or icons.
+
+---
+
+### Pillar 2: Command-Driven Architecture - Critique
+
+This is about making the application interactive and extensible.
+
+*   **Step 2.1: `FileListComponent` Class**
+    *   **Finding:** The `SetPath` method calls `Get-ChildItem` synchronously.
+    *   **Risk:** If this component is used to browse a directory with thousands of files, or worse, a slow network share, the `Get-ChildItem` cmdlet will **block the main UI thread**. The entire application will freeze and appear unresponsive until the command completes.
+    *   **Recommendation (For a responsive UI):**
+        *   The file loading operation must be asynchronous. Use `Start-Job` or a `Runspace` to perform the `Get-ChildItem` call in the background.
+        *   When `SetPath` is called, it should immediately display a "Loading..." state, start the background job, and return. The UI loop will continue running.
+        *   The component should then periodically check the job's status. When the job is complete, it retrieves the results, populates `$this.Items`, and calls `$this.RequestRedraw()`. This is a core pattern for responsive TUIs.
+
+*   **Step 2.2: `ActionService` Class**
+    *   **Finding:** The service discovers commands using `Get-Command -CommandType Function -Scope Global`.
+    *   **Risk:** This is not fully encapsulated and relies on "magic." It makes two assumptions: 1) All actions will be in the global scope, which might not be true for properly modularized code. 2) No other third-party modules imported into the session will happen to use an `[Action]` attribute, which could lead to unintended commands appearing in the palette.
+    *   **Recommendation (For an explicit and robust contract):**
+        *   Invert the control. Instead of the service magically *finding* actions, modules should explicitly *register* their actions with the service.
+        *   ```powershell
+          # In ActionService
+          class ActionService {
+              # ...
+              [void] RegisterAction([object]$action) {
+                  $this.Actions.Add($action)
+              }
+          }
+          
+          # In commands/global-commands.psm1
+          # This now becomes an initialization function
+          function Register-GlobalCommands {
+              param([ActionService]$actionService)
+              
+              $actionService.RegisterAction(...)
+              $actionService.RegisterAction(...)
+          }
+
+          # In main startup logic
+          $services.ActionService = Initialize-ActionService
+          Register-GlobalCommands -ActionService $services.ActionService
+          ```
+        *   This changes the relationship from implicit discovery to an explicit contract, which is far more maintainable and less prone to side effects.
+
+---
+
+### Pillars 3 & 4: Screens & Services - Critique
+
+These pillars are largely sound as they build on the (now-hardened) foundation. The critiques here are more about idiomatic PowerShell and consistency.
+
+*   **General Finding:** The plan introduces several new `...psm1` sections without a clear mechanism for including them in the final monolithic script. The original `axiom.txt` seems to be a hand-curated monolith.
+*   **Risk:** This process is manual and error-prone. A developer could add a new file but forget to add it to the build process, leading to `Unable to find type` errors.
+*   **Recommendation (For maintainability):**
+    *   The project has outgrown a simple monolithic file. The "correct" PowerShell way to manage this is with a proper **module structure**. The root script (`axiom.txt`) would become a thin launcher that simply calls `Import-Module -Name ./Axiom` and starts the application.
+    *   The module would have a `.psd1` manifest file that explicitly lists all `.psm1` files in the `NestedModules` key. This guarantees load order and removes any ambiguity. PowerShell's module loader is designed for exactly this scenario.
+    *   While a full conversion is outside this plan's scope, it's the idiomatic solution that should be the ultimate goal. For now, ensure the monolith build script is updated to include all these new files in the correct dependency order.
+
+*   **Step 4.1: `TimeSheetService` Class**
+    *   **Finding:** The method `ExportToTsv` writes to a temporary file and returns the path.
+    *   **Risk:** This is a side effect. The service, which is supposed to be pure business logic, is now interacting with the filesystem in a way that is tightly coupled to the UI's need for a file path to display in a dialog. What if another consumer of this service wanted the data as a stream or a string?
+    *   **Recommendation (For better separation of concerns):**
+        *   The service's job should be to return the *data*. The UI's job is to decide what to do with it.
+        *   Modify the service method to return the TSV content as a string:
+            `[string] GetWeeklySummaryAsTsv() { ... return $summaryData | ConvertTo-Csv ... }`
+        *   The UI-level action (`Export-WeeklyTimeSheet`) would then be responsible for taking that string and writing it to a temporary file before showing the dialog. This keeps the service pure and reusable.
+
+### Final Verdict
+
+This is a **good plan**. It moves Axiom in the right direction. The critiques above are designed to take it from "good" to "bulletproof." By addressing validation, preventing infinite loops, handling asynchronous operations, creating explicit contracts, and improving separation of concerns, the final implementation will be significantly more stable, performant, and maintainable.
+
+Proceed with the plan, but incorporate these hardening measures. Start with the `TuiCell` validation and the `ThemeEngine` recursion guard, as those are the most critical risks to the foundation.

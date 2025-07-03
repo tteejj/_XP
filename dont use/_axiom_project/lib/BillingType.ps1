@@ -1,0 +1,1 @@
+enum BillingType { Billable; NonBillable }
