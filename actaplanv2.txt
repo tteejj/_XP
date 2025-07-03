@@ -1,23 +1,75 @@
-Excellent, the mandate is clear. We abandon the flawed `acta.txt` monolith and, with surgical precision, upgrade `axiom.txt` using a corrected, step-by-step blueprint. I will act as the executor of these instructions, ensuring the resulting code is functional and robust.
+@@@This is an excellent step. Establishing clear guardrails and guiding principles is crucial for a complex refactoring process, especially when executed by an LLM. It defines the "how" and the "why" behind each action.
 
-You are correct not to waste time debugging the current `axiom.txt`'s screen issues. The upgrade itself is the solution, replacing those problematic components with superior ones.
+Here's what an LLM needs to keep at the forefront during this refactoring process:
+
+---
+
+## **Refactoring Guardrails & Guiding Principles for LLM**
+
+**Core Mandate:** To transform `axiom.txt` into a robust, modern, and maintainable TUI application (Axiom-Phoenix) by applying the provided instructions with precision and adhering to the defined architectural vision.
 
 ---
 
-### **Review of `axiom - acta guide.txt` and Proposed Improvements**
+### **I. Foundational Guardrails (Non-Negotiable Constraints)**
 
-The initial `axiom - acta guide.txt` is well-structured and conceptually sound, but it contains critical flaws that would prevent a successful upgrade or introduce new bugs.
+1.  **Monolithic Constraint:**
+    *   **Rule:** All code *must* remain within the single `axiom.txt` file unless explicitly instructed otherwise (e.g., to create a separate file during a decomposition process, which is not part of *this* refactor).
+    *   **Implication:** No new `.psm1` files or external scripts are to be created for modules. All code replaces or is inserted directly into the existing monolithic structure.
+    *   **LLM Focus:** When adding new code blocks, ensure they are correctly encapsulated within `--- START OF ORIGINAL FILE: ... ---` and `--- END OF ORIGINAL FILE: ... ---` markers, maintaining the established monolith generation format.
 
-**Key Issues Identified in the Original Guide:**
+2.  **Parse-Time Integrity:**
+    *   **Rule:** The script *must* remain syntactically valid and free of parse-time errors at *every stage* of the refactoring.
+    *   **Implication:**
+        *   **No Duplicate Definitions:** Classes, functions, enums, or global variables *must not* be defined more than once. If replacing a block, the old definition must be fully removed.
+        *   **Dependency Order:** Classes and functions must be defined *before* they are used. If a class relies on another class (`TuiCell` using `TuiAnsiHelper`), the dependency *must* come first in the file order.
+    *   **LLM Focus:** This is paramount. If a proposed change leads to a duplicate definition or a load-order issue, **HALT and request clarification**.
 
-1.  **Missing Foundational UI Class Upgrade:** The guide does *not* instruct to replace the core `UIElement`, `Component`, `Screen`, and `Panel` classes with their advanced versions from `acta.txt`. These advanced versions are crucial, introducing `Cleanup()`, `OnResize()`, `OnMove()`, proper `_private_buffer` initialization, and the `LastFocusedComponent` property, all of which are relied upon by later steps. **This is the most critical omission.**
-2.  **Inconsistent Global Services Variable Name:** The guide sometimes refers to `$Global:Services` and other times to `$Global:AxiomServices`. This will lead to runtime errors or services not being accessible.
-3.  **Flawed `FileListComponent` Event Subscription:** The line `this.fileList.add_RequestRedraw(...)` attempts to subscribe to a non-existent event. This will cause a runtime error. Component communication needs to be explicitly designed (e.g., using a `scriptblock` property or a custom event published by the component).
-4.  **No Event Subscription for Dashboard Widgets:** The `UpcomingTasksWidget` and `StatsWidget` lack event subscriptions to react to `Tasks.Changed` events, meaning they won't automatically refresh their data when tasks are updated.
-5.  **Redundant `Initialize-TuiEngine` Call:** The `Start-TuiLoop` function includes a redundant call to `Initialize-TuiEngine` which is already called in the main startup block.
-6.  **`Start-TuiLoop` Parameter Mismatch:** The `Start-TuiLoop` function in `axiom.txt` does not accept an `InitialScreen` parameter, but the guide's final step tries to pass one.
+3.  **Atomic Execution:**
+    *   **Rule:** Each instruction is a single, atomic operation.
+    *   **Implication:** Do not combine steps or make speculative changes. Execute *only* what the current instruction explicitly states.
+    *   **LLM Focus:** Confirm completion of each step before proceeding to the next.
 
 ---
+
+### **II. Guiding Principles (Architectural Vision & Best Practices)**
+
+1.  **Functional Integrity (Current & Future):**
+    *   **Principle:** Where old functionality is *not* explicitly replaced, its intended behavior must be preserved. All *new* functionality must work as described in the guide.
+    *   **Implication:** The application should function correctly (even if with temporary visual inconsistencies) after each phase of the refactor.
+    *   **LLM Focus:** Understand the *purpose* of the code being replaced or added. If an instruction seems likely to break a fundamental (but unstated) piece of logic without providing a replacement, flag it.
+
+2.  **Adherence to Phoenix Architecture:**
+    *   **Principle:** Every change must align with the new architectural paradigms:
+        *   **Truecolor Theming:** Use hex color strings (`#RRGGBB`) for all new UI colors. Leverage `ThemeEngine.GetStyle()` and the `[hashtable]$Style` parameter in `Write-TuiText`/`Write-TuiBox`.
+        *   **Object-Oriented Programming (OOP):** Prioritize class-based design for UI components (inheriting from `UIElement`, `Panel`, `Screen`) and services.
+        *   **Decoupling:** Separate UI concerns (rendering, input handling) from business logic (data management, calculations). Services should be UI-agnostic.
+        *   **Event-Driven Communication:** Use the `Publish-Event`/`Subscribe-Event` system for inter-component/inter-service communication, minimizing direct dependencies.
+        *   **Cascading Cleanup:** Ensure `OnCleanup()` methods are implemented and event subscriptions are managed to prevent memory leaks.
+    *   **LLM Focus:** When encountering existing code that *could* be updated to these principles but isn't explicitly part of the current instruction, acknowledge the discrepancy but do *not* fix it unless explicitly instructed. The guide provides the scope.
+
+3.  **Maintainability & Readability:**
+    *   **Principle:** New code should be clean, well-structured, and use consistent naming conventions. Comments should explain intent where necessary.
+    *   **Implication:** Avoid overly clever or terse code that sacrifices clarity.
+    *   **LLM Focus:** Maintain the existing PowerShell style (indentation, bracket placement) when inserting new code.
+
+4.  **Error Handling & Resilience:**
+    *   **Principle:** Leverage `Invoke-WithErrorHandling` for critical operations. Incorporate hardening techniques (e.g., `ValidatePattern`, null checks, try/catch blocks for external calls) where natural.
+    *   **Implication:** The application should be robust to common failure scenarios (invalid input, missing files, unexpected data).
+    *   **LLM Focus:** When adding new components, consider common failure points and apply robust error handling patterns as seen in the examples.
+
+---
+
+### **III. Operational Mode for LLM Execution**
+
+1.  **Strict Interpretation:** Interpret instructions literally. Do not infer or deviate unless an explicit ambiguity or conflict *must* be resolved, in which case, halt and ask.
+2.  **Step-by-Step Confirmation:** After successfully applying each instruction, provide a concise confirmation.
+3.  **Ambiguity/Conflict Resolution:** If an instruction is unclear, contradictory, or seems to lead to a non-functional state or a violation of a Guardrail, **immediately halt execution and request clarification**. Explain the perceived ambiguity or conflict.
+4.  **Verification:** While the primary mode is execution, implicitly, each step should aim to result in code that *could* eventually run correctly, given the context of future steps. Report any obvious, immediate syntactical errors that arise from the current instruction.
+5.  **Output Format:** When responding with code, ensure it's in a single, complete block, ready for direct application, as if it were a patch.
+
+---@@@@
+
+
 
 ### **Action Plan: Generating and Applying `Axiom-Phoenix v2`**
 
