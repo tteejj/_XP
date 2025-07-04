@@ -1,0 +1,130 @@
+# PMC Terminal Axiom-Phoenix v4.0 Upgrade Master Log
+
+## Overview
+This document tracks the complete upgrade process from PMC Terminal v5 to Axiom-Phoenix v4.0. It serves as the primary reference for understanding all changes made, decisions taken, and the current state of the upgrade.
+
+## Current Status
+- **Start Date:** 2025-01-03
+- **Phase:** Phase 1 Complete - Panic Handler Implemented
+- **Last Updated:** 2025-01-03 - Panic handler fully integrated
+
+## Core Upgrades Being Implemented
+
+### 1. Truecolor Theming and Resilient Rendering
+- **Status:** Not Started
+- **Priority:** HIGH
+- **Components Affected:** TuiCell, TuiBuffer, Theme Manager, TUI Engine
+- **Key Features:**
+  - 24-bit color support with hex strings (#RRGGBB)
+  - External JSON theme files
+  - Palette referencing system
+  - Resilient color parsing with fallbacks
+  - Differential renderer for performance
+
+### 2. Modern Lifecycle-Aware Component Model
+- **Status:** Not Started
+- **Priority:** HIGH
+- **Components Affected:** UIElement base class, all components
+- **Key Features:**
+  - Full lifecycle hooks (OnInit, OnRender, OnCleanup, OnResize)
+  - Automatic resource cleanup cascade
+  - Dynamic layout and resizing support
+  - Fluid layouts with layout managers
+
+### 3. Command Palette & Action Service
+- **Status:** Not Started
+- **Priority:** MEDIUM
+- **Components Affected:** New ActionService, New CommandPalette component
+- **Key Features:**
+  - Central action registry
+  - Searchable command palette (Ctrl+P)
+  - Removal of rigid NavigationMenu
+  - Extensible action system
+
+### 4. Encapsulated Services & Dependency Injection
+- **Status:** Not Started
+- **Priority:** HIGH
+- **Components Affected:** All services, Screen constructors
+- **Key Features:**
+  - Formal service layer
+  - $services container
+  - Constructor-based DI
+  - Resilient data loading
+
+### 5. Fail-Fast Resilient Main Loop & Panic Handler
+- **Status:** ✅ COMPLETE
+- **Priority:** CRITICAL
+- **Components Affected:** TUI Engine, New PanicHandler module
+- **Key Features:**
+  - Try/catch wrapped main loop
+  - Crash dumping with diagnostics
+  - Terminal restoration on panic
+  - Screenshot of last good frame
+
+## Implementation Order
+1. **Phase 1:** Panic Handler (Foundation for safe development)
+2. **Phase 2:** Dependency Injection & Service Container
+3. **Phase 3:** Lifecycle-Aware Component Model
+4. **Phase 4:** Truecolor Theming System
+5. **Phase 5:** Command Palette & Action Service
+
+## Decision Log
+
+### Decision #1: Start with Panic Handler
+**Date:** [Current]
+**Rationale:** Before making any other changes, we need a safety net. The panic handler will ensure that any errors during development don't leave the terminal in an unusable state. This makes the entire upgrade process safer.
+
+### Decision #2: Module Structure
+**Date:** [Current]
+**Rationale:** Following the Axiom principles, each new feature will be its own module with a proper manifest. This ensures clean dependencies and testability.
+
+## File Changes Tracking
+
+### New Files Created
+1. `_UPGRADE_DOCUMENTATION/MASTER_UPGRADE_LOG.md` - This file
+2. `modules/panic-handler/panic-handler.psm1` - Complete panic handler module
+
+### Modified Files
+1. `modules/tui-engine/tui-engine.psm1` - Added panic handler initialization and integration
+2. `run.ps1` - Added panic-handler module to load order
+
+## Testing Log
+[Will document all tests performed]
+
+## Known Issues
+[Will track any issues discovered during upgrade]
+
+## Recovery Points
+[Will note safe states where the application is fully functional]
+
+## Phase 1 Completion Summary
+
+### What Was Implemented
+1. **PanicHandler Class** - A robust error recovery system that:
+   - Captures unhandled exceptions anywhere in the application
+   - Immediately restores terminal to usable state (cursor visible, colors reset)
+   - Creates detailed crash reports with full diagnostics
+   - Saves crash logs to LocalAppData with automatic cleanup of old logs
+   - Captures last rendered frame for debugging
+   - Displays user-friendly error messages
+
+2. **TUI Engine Integration**:
+   - Panic handler initialized at engine startup
+   - Main loop catch block now invokes panic handler
+   - Last good frame stored after each successful render
+   - Graceful fallback if panic handler unavailable
+
+### Key Features Added
+- **Terminal Safety**: No more broken terminals on crash
+- **Diagnostic Reports**: Full crash dumps with stack traces, system info, and screen captures
+- **Resource Cleanup**: Proper disposal of threads and resources on panic
+- **User Experience**: Clear error messages with crash log locations
+
+### Technical Details
+- Uses static methods to ensure availability even in corrupted states
+- Stores up to 10 crash logs with automatic rotation
+- Captures buffer state as ASCII art in crash reports
+- Handles recursive panics gracefully
+
+### Next Phase
+Phase 2 will implement the Dependency Injection and Service Container system to provide clean service management throughout the application.

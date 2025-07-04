@@ -1,0 +1,241 @@
+# ==============================================================================
+# Dependencies & Placeholders (Inferred from both versions)
+# ==============================================================================
+
+# Placeholder for the TUI Buffer class
+class TuiBuffer {
+    [int] $Width
+    [int] $Height
+    [string] $Name
+    TuiBuffer([int]$Width, [int]$Height, [string]$Name) {
+        $this.Width = $Width
+        $this.Height = $Height
+        $this.Name = $Name
+    }
+    [void] Clear() {}
+    [void] BlendBuffer([TuiBuffer]$source, [int]$x, [int]$y) {}
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        $this.Width = $newWidth
+        $this.Height = $newHeight
+    }
+}
+
+# Placeholders for Service classes (from new version)
+class NavigationService {}
+class DataManager {}
+class ThemeEngine {}
+
+# Placeholder functions
+function Write-TuiBox { param($B, $X, $Y, $W, $H, $Title, $S) }
+function Subscribe-Event { param($EventName, $Handler, $Source) { return [System.Guid]::NewGuid().ToString() } }
+function Unsubscribe-Event { param($HandlerId) }
+
+# ==============================================================================
+# UI Classes v3.3 - Merged & Improved Component Hierarchy
+# Combines the clean encapsulation of v3.2 with robust patterns from v5.
+# ==============================================================================
+
+class UIElement {
+    [string] $Name = ""
+    [int] $X = 0
+    [int] $Y = 0
+    [int] $Width = 0
+    [int] $Height = 0
+    [bool] $Visible = $true
+    [bool] $Focused = $false
+    hidden [TuiBuffer] $_private_buffer = $null
+    hidden [UIElement] $_parent = $null
+    hidden [System.Collections.Generic.List[UIElement]] $_children = [System.Collections.Generic.List[UIElement]]::new()
+    # Enhanced from v5: Use a dictionary for more robust subscription management
+    hidden [System.Collections.Generic.Dictionary[string, string]] $_subscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+
+    UIElement() { $this.Initialize() }
+
+    # Lifecycle Methods
+    [void] Initialize() {
+        $this.OnInitialize()
+        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+    }
+
+    [void] Dispose() {
+        $this.OnDispose()
+        # Enhanced from v5: More robust cleanup loop
+        foreach ($kvp in $this._subscriptions.GetEnumerator()) {
+            Unsubscribe-Event -HandlerId $kvp.Value
+        }
+        $this._subscriptions.Clear()
+        foreach ($child in $this._children) { $child.Dispose() }
+        $this._children.Clear()
+        $this._private_buffer = $null
+    }
+
+    # Hierarchy Management
+    [void] AddChild([UIElement]$child) {
+        if ($null -eq $child -or $child._parent -ne $null) { return }
+        $child._parent = $this
+        $this._children.Add($child)
+        $this.OnChildAdded($child)
+    }
+
+    [void] RemoveChild([UIElement]$child) {
+        if ($null -eq $child -or $child._parent -ne $this) { return }
+        $child._parent = $null
+        $this._children.Remove($child) | Out-Null
+        $this.OnChildRemoved($child)
+    }
+
+    [UIElement[]] GetChildren() { return $this._children.ToArray() }
+    [UIElement] GetParent() { return $this._parent }
+
+    # Rendering Pipeline
+    [void] Render() {
+        if (-not $this.Visible -or $this.Width -le 0 -or $this.Height -le 0) { return }
+        if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
+            $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        }
+        $this._private_buffer.Clear()
+        $this.OnRender()
+        foreach ($child in $this._children) {
+            if ($child.Visible) {
+                $child.Render()
+                if ($null -ne $child._private_buffer) {
+                    $this._private_buffer.BlendBuffer($child._private_buffer, $child.X, $child.Y)
+                }
+            }
+        }
+    }
+
+    # Event Handling & Subscription
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        foreach ($child in $this._children) {
+            if ($child.Focused -and $child.HandleInput($key)) { return $true }
+        }
+        return $this.OnHandleInput($key)
+    }
+    
+    # Enhanced from v5: Prevents duplicate subscriptions for the same event.
+    [void] SubscribeToEvent([string]$eventName, [scriptblock]$handler) {
+        if ($this._subscriptions.ContainsKey($eventName)) {
+            # Optionally, log a warning or unsubscribe the old one first
+            Unsubscribe-Event -HandlerId $this._subscriptions[$eventName]
+        }
+        $id = Subscribe-Event -EventName $eventName -Handler $handler -Source $this.Name
+        $this._subscriptions[$eventName] = $id
+    }
+
+    # Focus Management
+    [void] SetFocus([bool]$focused) {
+        if ($this.Focused -eq $focused) { return }
+        $this.Focused = $focused
+        $this.OnFocusChanged($focused)
+    }
+
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        $oldWidth = $this.Width
+        $oldHeight = $this.Height
+        $this.Width = $newWidth
+        $this.Height = $newHeight
+        if ($null -ne $this._private_buffer) {
+            $this._private_buffer.Resize($newWidth, $newHeight)
+        }
+        $this.OnResize($oldWidth, $oldHeight)
+    }
+    
+    # --- Utility Methods Ported from v5 ---
+    [hashtable] GetAbsolutePosition() {
+        $absX = $this.X
+        $absY = $this.Y
+        $current = $this.GetParent()
+        while ($null -ne $current) {
+            $absX += $current.X
+            $absY += $current.Y
+            $current = $current.GetParent()
+        }
+        return @{ X = $absX; Y = $absY }
+    }
+
+    [bool] ContainsPoint([int]$x, [int]$y) {
+        return ($x -ge $this.X -and $x -lt ($this.X + $this.Width) -and
+                $y -ge $this.Y -and $y -lt ($this.Y + $this.Height))
+    }
+
+    # --- Virtual Methods for Override ---
+    [void] OnInitialize() {}
+    [void] OnDispose() {}
+    [void] OnRender() {}
+    [bool] OnHandleInput([System.ConsoleKeyInfo]$key) { return $false }
+    [void] OnChildAdded([UIElement]$child) {}
+    [void] OnChildRemoved([UIElement]$child) {}
+    [void] OnResize([int]$oldWidth, [int]$oldHeight) {}
+    [void] OnFocusChanged([bool]$focused) {}
+}
+
+# --- Base Component Class ---
+class Component : UIElement {
+    [hashtable] $Style = @{}
+    Component() : base() {}
+    Component([string]$name) : base() { $this.Name = $name }
+    [void] OnInitialize() { $this.LoadDefaultStyle() }
+    [void] LoadDefaultStyle() {}
+}
+
+# --- Base Panel Class (Container) ---
+class Panel : Component {
+    [string] $Title = ""
+    [bool] $ShowBorder = $true
+    [string] $BorderStyle = "Single"
+    hidden [int] $_contentOffsetX = 1
+    hidden [int] $_contentOffsetY = 1
+
+    Panel() : base() {}
+    Panel([string]$name, [string]$title) : base($name) { $this.Title = $title }
+
+    [void] OnRender() {
+        if ($this.ShowBorder -and $null -ne $this._private_buffer) {
+            # FIX from original problem: renamed local var to avoid collision
+            $borderSettings = @{
+                BorderStyle = $this.BorderStyle
+                BorderFG = $this.Style.BorderFG ?? "#808080"
+                BG = $this.Style.BG ?? $null
+                TitleFG = $this.Style.TitleFG ?? "#FFFFFF"
+            }
+            Write-TuiBox -B $this._private_buffer -X 0 -Y 0 -W $this.Width -H $this.Height -Title $this.Title -S $borderSettings
+        }
+    }
+
+    [int] GetContentX() { return $this.ShowBorder ? $this._contentOffsetX : 0 }
+    [int] GetContentY() { return $this.ShowBorder ? $this._contentOffsetY : 0 }
+    [int] GetContentWidth() { return $this.ShowBorder ? ($this.Width - 2) : $this.Width }
+    [int] GetContentHeight() { return $this.ShowBorder ? ($this.Height - 2) : $this.Height }
+}
+
+# --- Base Screen Class with full lifecycle ---
+class Screen : UIElement {
+    [string] $Route = ""
+    hidden [NavigationService] $_navigationService = $null
+    hidden [DataManager] $_dataManager = $null
+    hidden [ThemeEngine] $_themeEngine = $null
+
+    Screen() : base() {}
+    Screen([string]$name, [string]$route) : base() {
+        $this.Name = $name
+        $this.Route = $route
+    }
+
+    [void] InjectServices([NavigationService]$nav, [DataManager]$data, [ThemeEngine]$theme) {
+        $this._navigationService = $nav
+        $this._dataManager = $data
+        $this._themeEngine = $theme
+        $this.OnServicesInjected()
+    }
+
+    # --- Merged Lifecycle Methods from v5 and v3.2 ---
+    [void] OnServicesInjected() {}
+    [void] OnScreenActivated() { $this.OnEnter() }   # New name calls old name for compatibility
+    [void] OnScreenDeactivated() { $this.OnExit() }  # New name calls old name for compatibility
+
+    # Virtual methods from v5 for a more detailed lifecycle
+    [void] OnEnter() {}   # Called when the screen becomes active
+    [void] OnExit() {}    # Called when the screen is navigated away from
+    [void] OnResume() {}  # Called when returning to a screen that was in the backstack
+}

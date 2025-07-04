@@ -6047,6 +6047,8 @@ function Test-TuiState {
     return $isValid
 }
 
+# --- START OF MAIN EXECUTION LOGIC ---
+
 try {
     Write-Host "`n=== PMC Terminal v5 - Starting Up ===" -ForegroundColor Cyan
     Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
