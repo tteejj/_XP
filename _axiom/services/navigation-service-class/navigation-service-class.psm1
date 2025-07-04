@@ -2,6 +2,11 @@
 
 # Contains only the NavigationService and ScreenFactory class definitions.
 
+using module ui-classes
+using module logger
+using module exceptions
+using module event-system
+
 
 
 

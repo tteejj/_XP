@@ -3,7 +3,7 @@
     RootModule = 'theme-manager.psm1'
     
     # Version number of this module.
-    ModuleVersion = '3.0'
+    ModuleVersion = '3.0.0'
     
     # Supported PSEditions
     CompatiblePSEditions = @('Core')

@@ -1,7 +1,7 @@
 @{
     # Module manifest for keybinding-service-class
     RootModule = 'keybinding-service-class.psm1'
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '7a3e4f5d-8b2c-4e6f-9a1b-3c5d7e9f1a2b'
     Author = 'PMC Terminal Team'
     CompanyName = 'PMC Terminal'
@@ -10,10 +10,10 @@
     PowerShellVersion = '7.0'
     
     # Dependencies
-    RequiredModules = @(
-        @{ ModuleName = 'logger'; ModuleVersion = '1.0.0' }
-        @{ ModuleName = 'exceptions'; ModuleVersion = '1.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'exceptions'; ModuleVersion = '3.0.0' }
+#    )
     
     # No functions to export - only classes
     FunctionsToExport = @()

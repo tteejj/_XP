@@ -1,7 +1,7 @@
 @{
     # Module manifest for keybinding-service
     RootModule = 'keybinding-service.psm1'
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '2b4e6f8a-1c3d-5e7f-9a2b-4c6d8e0f2a3b'
     Author = 'PMC Terminal Team'
     CompanyName = 'PMC Terminal'
@@ -10,9 +10,9 @@
     PowerShellVersion = '7.0'
     
     # Dependencies
-    RequiredModules = @(
-        @{ ModuleName = 'keybinding-service-class'; ModuleVersion = '1.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'keybinding-service-class'; ModuleVersion = '3.0.0' }
+#    )
     
     # Export the factory function
     FunctionsToExport = @('New-KeybindingService')

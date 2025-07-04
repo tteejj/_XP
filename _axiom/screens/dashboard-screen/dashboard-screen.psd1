@@ -1,7 +1,7 @@
 @{
     # Module manifest for dashboard-screen
     RootModule = 'dashboard-screen.psm1'
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '5e7f9a2b-4c6d-8e0f-3a5b-7c9d1e3f5a6b'
     Author = 'PMC Terminal Team'
     CompanyName = 'PMC Terminal'
@@ -11,10 +11,10 @@
     
     # Dependencies
     RequiredModules = @(
-        @{ ModuleName = 'ui-classes'; ModuleVersion = '1.0.0' }
-        @{ ModuleName = 'panels-class'; ModuleVersion = '1.0.0' }
-        @{ ModuleName = 'logger'; ModuleVersion = '1.0.0' }
-        @{ ModuleName = 'theme-manager'; ModuleVersion = '1.0.0' }
+        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
+        @{ ModuleName = 'panels-class'; ModuleVersion = '5.0.0' }
+        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
+        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
     )
     
     # No functions to export - only classes

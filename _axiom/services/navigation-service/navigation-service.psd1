@@ -1,7 +1,7 @@
 @{
     # Module manifest for navigation-service
     RootModule = 'navigation-service.psm1'
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '4d6f8a1b-3c5d-7e9f-2a4b-6c8d0e2f4a5b'
     Author = 'PMC Terminal Team'
     CompanyName = 'PMC Terminal'
@@ -11,7 +11,7 @@
     
     # Dependencies
     RequiredModules = @(
-        @{ ModuleName = 'navigation-service-class'; ModuleVersion = '1.0.0' }
+        @{ ModuleName = 'navigation-service-class'; ModuleVersion = '3.0.0' }
     )
     
     # Export the factory function

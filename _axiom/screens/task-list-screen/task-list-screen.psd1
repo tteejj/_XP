@@ -3,7 +3,7 @@
     RootModule = 'task-list-screen.psm1'
     
     # Version number of this module.
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '3.0.0'
     
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -29,13 +29,16 @@
     # Modules that must be imported into the global environment prior to importing this module.
     # This screen depends on types and services defined in these core modules.
     RequiredModules = @(
-        @{ ModuleName = 'ui-classes'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'tui-components'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'data-manager'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'theme-manager'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'action-service'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'keybinding-service-class'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'navigation-service-class'; ModuleVersion = '1.0.0' }
+        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'panels-class'; ModuleVersion = '5.0.0' },
+        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'advanced-data-components'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'data-manager'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'action-service'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'keybinding-service-class'; ModuleVersion = '3.0.0' },
+        @{ ModuleName = 'navigation-service-class'; ModuleVersion = '3.0.0' }
     )
     
     # Assemblies that must be loaded prior to importing this module

@@ -2,6 +2,9 @@
 
 # Contains only the KeybindingService class definition.
 
+using module logger
+using module exceptions
+
 
 
 

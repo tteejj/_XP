@@ -1,7 +1,7 @@
 @{
     # Module manifest for navigation-service-class
     RootModule = 'navigation-service-class.psm1'
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '3c5e7f9a-2d4e-6f8a-1b3c-5d7e9f1a2b4c'
     Author = 'PMC Terminal Team'
     CompanyName = 'PMC Terminal'
@@ -10,12 +10,12 @@
     PowerShellVersion = '7.0'
     
     # Dependencies
-    RequiredModules = @(
-        @{ ModuleName = 'logger'; ModuleVersion = '1.0.0' }
-        @{ ModuleName = 'exceptions'; ModuleVersion = '1.0.0' }
-        @{ ModuleName = 'ui-classes'; ModuleVersion = '1.0.0' }
-        @{ ModuleName = 'event-system'; ModuleVersion = '1.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'exceptions'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'event-system'; ModuleVersion = '3.0.0' }
+#    )
     
     # No functions to export - only classes
     FunctionsToExport = @()
