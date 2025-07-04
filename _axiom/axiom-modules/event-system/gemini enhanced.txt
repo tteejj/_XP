@@ -1,0 +1,484 @@
+You are absolutely right! My apologies for misinterpreting the "previous" and "current" versions. Thank you for clarifying.
+
+So, the first module you provided (the one starting with `# Event System Module`) is the *intended upgrade*. My task now is to take *that* module and apply further refinements and best practices to make it even more robust, performant, and user-friendly, and then document these specific changes.
+
+Let's do this!
+
+---
+
+## Enhanced Event System Module (Your "Upgraded" Version, Further Refined)
+
+This version incorporates several best practices for PowerShell modules, focusing on performance, robustness, usability, and adherence to standard Cmdlet patterns.
+
+### Key Enhancements & Rationale:
+
+1.  **Performance Optimization for Handler Collections (`[System.Collections.Generic.List[object]]`)**:
+    *   **Issue:** The original module used standard PowerShell arrays (`object[]`) for storing event handlers (e.g., `$script:EventHandlers[$EventName] = @()`, then `$script:EventHandlers[$EventName] += $handlerInfo`). Appending to a PowerShell array (`+=`) is inefficient because it creates a *new array* and copies all existing elements for each addition. Similarly, filtering with `Where-Object` to remove items (e.g., in `Unsubscribe-Event`) also creates a new array.
+    *   **Enhancement:** Changed the internal storage for event handlers from `object[]` to `[System.Collections.Generic.List[object]]`. This type allows for highly efficient `Add()` and `RemoveAll()` methods, preventing unnecessary array reallocations and copies.
+    *   **Impact:** Significantly improves performance, especially in scenarios with many subscriptions/unsubscriptions or frequent events with many handlers.
+
+2.  **Defensive Programming for Event Publication (Handler Snapshot)**:
+    *   **Issue:** In `Publish-Event`, iterating directly over `$script:EventHandlers[$EventName]` could lead to "Collection was modified" errors if an event handler were to unsubscribe itself or another handler during the iteration.
+    *   **Enhancement:** Before iterating through handlers in `Publish-Event`, a copy of the list is created using `.ToArray()`. This ensures a stable collection for the `foreach` loop, even if the original list is modified concurrently.
+    *   **Impact:** Prevents potential runtime errors and makes the event system more robust.
+
+3.  **PowerShell Cmdlet Best Practices (`[CmdletBinding()]`, `SupportsShouldProcess`)**:
+    *   **Issue:** The original functions lacked `[CmdletBinding()]`, meaning they didn't automatically support common PowerShell parameters like `-Verbose`, `-Debug`, `-ErrorAction`, `-WhatIf`, and `-Confirm`.
+    *   **Enhancement:** Added `[CmdletBinding()]` to all public functions. For functions that modify state (`Unsubscribe-Event`, `Clear-EventHandlers`, `Remove-ComponentEventHandlers`), `SupportsShouldProcess` was added, and the core logic was wrapped in `if ($PSCmdlet.ShouldProcess(...))`.
+    *   **Impact:** Improves module usability and aligns with PowerShell's standard command-line experience, allowing users to preview and confirm destructive operations.
+
+4.  **Robust Parameter Validation (`[ValidateNotNullOrEmpty()]`)**:
+    *   **Issue:** Mandatory string parameters (e.g., `EventName`, `HandlerId`, `ComponentId`) could still technically receive empty strings, which might cause unexpected behavior down the line.
+    *   **Enhancement:** Added `[ValidateNotNullOrEmpty()]` attribute to relevant string parameters.
+    *   **Impact:** Ensures cleaner input data, preventing errors caused by empty strings masquerading as valid input.
+
+5.  **Cleaner Initialization and Clearing (`.Clear()` Method)**:
+    *   **Issue:** `Initialize-EventSystem` and `Clear-EventHandlers` re-assigned empty literals (`@{}`, `[System.Collections.Generic.List[object]]::new()`) to the script-scoped variables. While functional, it's slightly less efficient than using the `.Clear()` method on existing collection objects.
+    *   **Enhancement:** Used `.Clear()` methods for `Hashtable` and `List` objects to reset their contents without re-creating the objects.
+    *   **Impact:** Minor performance improvement and more idiomatic PowerShell.
+
+6.  **Improved `Get-EventHandlers` Output for Usability**:
+    *   **Issue:** The function returned the raw internal `hashtable` or `List` containing handler information, including the `ScriptBlock` itself, which might be overly verbose or not immediately useful for casual inspection.
+    *   **Enhancement:** Modified `Get-EventHandlers` to return `PSCustomObject`s for each handler. This allows for displaying only relevant metadata (e.g., `HandlerId`, `EventName`, `SubscribedAt`, `Source`) and omitting the raw `ScriptBlock` by default for cleaner output. If no `EventName` is specified, it now returns a hashtable mapping event names to *arrays* of these cleaner custom objects.
+    *   **Impact:** Provides a more user-friendly and inspectable output, making it easier to manage and debug event subscriptions.
+
+7.  **Preventing Duplicate Subscriptions**:
+    *   **Issue:** If a caller accidentally subscribed the same `HandlerId` to the same `EventName` multiple times, it would register duplicate handlers, leading to multiple invocations for a single event.
+    *   **Enhancement:** Added a check in `Subscribe-Event` to warn if a `HandlerId` is already subscribed to the *exact same* `EventName` and skips adding the duplicate.
+    *   **Impact:** Improves logical correctness and prevents unintended side effects from accidental double-subscriptions.
+
+8.  **Enhanced Error Messages**:
+    *   **Issue:** Generic `$_` in catch blocks can sometimes hide the specific exception message, making debugging harder.
+    *   **Enhancement:** Modified error messages to explicitly include `$_ Exception.Message` where applicable, providing a more direct and actionable error description.
+    *   **Impact:** Makes debugging and error diagnosis much easier for developers using the module.
+
+---
+
+### The Refined Event System Module Code:
+
+```powershell
+# Event System Module
+# Provides pub/sub event functionality for decoupled communication
+
+# Module-scoped state variables for the event system
+# $script:EventHandlers stores eventName -> [System.Collections.Generic.List[object]] of handlers
+$script:EventHandlers = @{} 
+$script:EventHistory = [System.Collections.Generic.List[object]]::new()
+$script:MaxEventHistory = 100
+
+function Initialize-EventSystem {
+    <#
+    .SYNOPSIS
+    Initializes or resets the event system for the application.
+    This clears all registered handlers and the event history.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $script:EventHandlers.Clear() # Use Clear() method for Hashtable
+    $script:EventHistory.Clear()  # Use Clear() method for List
+    Write-Verbose "Event system initialized."
+}
+
+function Publish-Event {
+    <#
+    .SYNOPSIS
+    Publishes an event to all registered handlers for the specified event name.
+    .PARAMETER EventName
+    The name of the event to publish. Must be a non-empty string.
+    .PARAMETER Data
+    Optional data to pass to event handlers. This should be a hashtable.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter()]
+        [hashtable]$Data = @{}
+    )
+    
+    try {
+        $eventRecord = @{
+            EventName = $EventName
+            Data = $Data
+            Timestamp = (Get-Date)
+        }
+        
+        # Add to history, managing the maximum size
+        $script:EventHistory.Add($eventRecord)
+        if ($script:EventHistory.Count -gt $script:MaxEventHistory) {
+            $script:EventHistory.RemoveAt(0) # Efficient for List
+        }
+        
+        # Call handlers
+        if ($script:EventHandlers.ContainsKey($EventName)) {
+            # Create a copy of the list of handlers to iterate over.
+            # This prevents issues if a handler unsubscribes itself or others during iteration.
+            $handlersToCall = $script:EventHandlers[$EventName].ToArray()
+            
+            foreach ($handler in $handlersToCall) {
+                try {
+                    # Prepare the event data for the handler
+                    $eventData = @{
+                        EventName = $EventName
+                        Data = $Data
+                        Timestamp = $eventRecord.Timestamp
+                    }
+                    # Invoke the handler script block, passing $eventData as a named parameter
+                    & $handler.ScriptBlock -EventData $eventData
+                }
+                catch {
+                    # Log errors from individual handlers without stopping the publishing process
+                    Write-Warning "Error in event handler for '$EventName' (ID: $($handler.HandlerId)): $($_.Exception.Message)"
+                    Write-Debug "Full error details for handler ID '$($handler.HandlerId)' on event '$EventName': $_"
+                }
+            }
+        }
+        
+        Write-Verbose "Published event: $EventName."
+    }
+    catch {
+        Write-Error "Failed to publish event '$EventName': $($_.Exception.Message)"
+        throw # Re-throw to allow calling script to handle critical publishing errors
+    }
+}
+
+function Subscribe-Event {
+    <#
+    .SYNOPSIS
+    Subscribes to an event with a handler.
+    .PARAMETER EventName
+    The name of the event to subscribe to. Must be a non-empty string.
+    .PARAMETER Handler
+    The script block to execute when the event is published.
+    This script block will receive a hashtable via the '-EventData' parameter,
+    containing 'EventName', 'Data', and 'Timestamp'.
+    .PARAMETER HandlerId
+    Optional unique identifier for the handler. If not provided, a GUID will be generated.
+    This ID can be used to unsubscribe the handler later.
+    .PARAMETER Source
+    Optional source component ID. This allows for bulk removal of handlers associated
+    with a specific component, e.g., when a component is disposed.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter(Mandatory)]
+        [scriptblock]$Handler,
+        
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$HandlerId = [Guid]::NewGuid().ToString(),
+        
+        [Parameter()]
+        [string]$Source
+    )
+    
+    try {
+        # Ensure the list of handlers for this event exists, creating it if necessary
+        if (-not $script:EventHandlers.ContainsKey($EventName)) {
+            $script:EventHandlers[$EventName] = [System.Collections.Generic.List[object]]::new()
+        }
+        
+        # Check for duplicate HandlerId for the same event to prevent unintentional double subscriptions
+        if ($script:EventHandlers[$EventName].Where({$_.HandlerId -eq $HandlerId}).Count -gt 0) {
+            Write-Warning "Handler with ID '$HandlerId' is already subscribed to event '$EventName'. Skipping subscription."
+            return $HandlerId # Return existing ID
+        }
+
+        $handlerInfo = @{
+            HandlerId = $HandlerId
+            ScriptBlock = $Handler
+            SubscribedAt = (Get-Date)
+            Source = $Source
+        }
+        
+        # Add the handler information to the List (efficient)
+        $script:EventHandlers[$EventName].Add($handlerInfo)
+        
+        Write-Verbose "Subscribed to event: $EventName (Handler: $HandlerId, Source: $($Source -replace '^$', '<None>')). Returned HandlerId: $HandlerId"
+        return $HandlerId
+    }
+    catch {
+        Write-Error "Failed to subscribe to event '$EventName' for handler '$HandlerId': $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Unsubscribe-Event {
+    <#
+    .SYNOPSIS
+    Unsubscribes a specific handler from an event or searches all events.
+    .PARAMETER EventName
+    The name of the event from which to unsubscribe. Optional, but providing it
+    improves performance by targeting the search.
+    .PARAMETER HandlerId
+    The unique identifier of the handler to remove. This parameter is mandatory.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$HandlerId
+    )
+    
+    try {
+        if ($PSCmdlet.ShouldProcess("handler '$HandlerId'", "Unsubscribe event handler")) {
+            $removedCount = 0
+            if ($EventName) {
+                # Unsubscribe from a specific event (more efficient)
+                if ($script:EventHandlers.ContainsKey($EventName)) {
+                    $handlersList = $script:EventHandlers[$EventName]
+                    # Remove all matching handlers using RemoveAll (efficient)
+                    $removedCount = $handlersList.RemoveAll({param($h) $h.HandlerId -eq $HandlerId})
+                    
+                    # Clean up: If no handlers remain for this event, remove the event entry
+                    if ($handlersList.Count -eq 0) {
+                        $script:EventHandlers.Remove($EventName)
+                    }
+                    
+                    if ($removedCount -gt 0) {
+                        Write-Verbose "Unsubscribed $removedCount handler(s) from event: $EventName (Handler: $HandlerId)."
+                    } else {
+                        Write-Warning "Handler ID '$HandlerId' not found for event '$EventName'."
+                    }
+                } else {
+                    Write-Warning "Event '$EventName' has no registered handlers. Nothing to unsubscribe."
+                }
+            }
+            else {
+                # Search all events for the handler (less efficient, use EventName if known)
+                $found = $false
+                # Iterate over a copy of the keys as the dictionary might be modified
+                foreach ($eventKey in @($script:EventHandlers.Keys)) {
+                    $handlersList = $script:EventHandlers[$eventKey]
+                    $currentRemoved = $handlersList.RemoveAll({param($h) $h.HandlerId -eq $HandlerId})
+                    
+                    if ($currentRemoved -gt 0) {
+                        $removedCount += $currentRemoved
+                        $found = $true
+                        # Clean up: If no handlers remain for this event, remove the event entry
+                        if ($handlersList.Count -eq 0) {
+                            $script:EventHandlers.Remove($eventKey)
+                        }
+                        Write-Verbose "Unsubscribed $currentRemoved handler(s) from event: $eventKey (Handler: $HandlerId)."
+                        break # Handler IDs are unique, so we can stop after the first removal
+                    }
+                }
+                
+                if (-not $found) {
+                    Write-Warning "Handler ID not found across all events: $HandlerId."
+                }
+            }
+        }
+    }
+    catch {
+        Write-Error "Failed to unsubscribe handler '$HandlerId': $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Get-EventHandlers {
+    <#
+    .SYNOPSIS
+    Gets information about registered event handlers.
+    .PARAMETER EventName
+    Optional event name to filter handlers. If omitted, returns all handlers grouped by event.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName
+    )
+    
+    if ($EventName) {
+        # Return specific handlers as PSCustomObjects, excluding the ScriptBlock itself
+        $handlers = $script:EventHandlers[$EventName]
+        if ($handlers) {
+            $handlers | ForEach-Object { 
+                [pscustomobject]@{
+                    HandlerId = $_.HandlerId
+                    EventName = $EventName # Add EventName to each handler object for context
+                    SubscribedAt = $_.SubscribedAt
+                    Source = $_.Source
+                    # Uncomment below line if you need to see the raw script block content for debugging
+                    # ScriptBlock = $_.ScriptBlock 
+                }
+            }
+        } else {
+            return @() # Return empty array if no handlers for the specified event
+        }
+    }
+    else {
+        # Return a custom hashtable where keys are event names and values are arrays of handler info
+        $output = [System.Collections.Generic.Hashtable]::new()
+        foreach ($eventKey in $script:EventHandlers.Keys) {
+            $handlers = $script:EventHandlers[$eventKey]
+            # Convert internal List<object> to an array of PSCustomObjects
+            $handlerList = @($handlers | ForEach-Object { 
+                [pscustomobject]@{
+                    HandlerId = $_.HandlerId
+                    EventName = $eventKey # Add EventName to each handler object for context
+                    SubscribedAt = $_.SubscribedAt
+                    Source = $_.Source
+                    # Uncomment below line if you need to see the raw script block content for debugging
+                    # ScriptBlock = $_.ScriptBlock 
+                }
+            })
+            $output[$eventKey] = $handlerList
+        }
+        return $output
+    }
+}
+
+function Clear-EventHandlers {
+    <#
+    .SYNOPSIS
+    Clears all event handlers for a specific event or all events.
+    .PARAMETER EventName
+    Optional event name to clear handlers for. If omitted, all event handlers are cleared.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName
+    )
+    
+    if ($PSCmdlet.ShouldProcess($EventName, "Clear event handlers")) {
+        if ($EventName) {
+            if ($script:EventHandlers.ContainsKey($EventName)) {
+                $script:EventHandlers.Remove($EventName)
+                Write-Verbose "Cleared all handlers for event: $EventName."
+            } else {
+                Write-Warning "No handlers found for event: $EventName. Nothing to clear."
+            }
+        }
+        else {
+            $script:EventHandlers.Clear() # Clear all entries in the hashtable
+            Write-Verbose "Cleared all event handlers across all events."
+        }
+    }
+}
+
+function Get-EventHistory {
+    <#
+    .SYNOPSIS
+    Gets the event history.
+    .PARAMETER EventName
+    Optional event name to filter history entries.
+    .PARAMETER Last
+    Number of recent events to return. If 0 (default), returns all available history.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter()]
+        [int]$Last = 0
+    )
+    
+    # Get a snapshot of the current history to avoid collection modification issues
+    $history = $script:EventHistory.ToArray()
+    
+    if ($EventName) {
+        $history = $history | Where-Object { $_.EventName -eq $EventName }
+    }
+    
+    if ($Last -gt 0) {
+        $history = $history | Select-Object -Last $Last
+    }
+    
+    return $history
+}
+
+function Remove-ComponentEventHandlers {
+    <#
+    .SYNOPSIS
+    Removes all event handlers associated with a specific component ID.
+    This is useful for cleaning up resources when a component is no longer needed.
+    .PARAMETER ComponentId
+    The component ID whose handlers should be removed. Must be a non-empty string.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ComponentId
+    )
+    
+    try {
+        if ($PSCmdlet.ShouldProcess("component '$ComponentId'", "Remove all associated event handlers")) {
+            $removedCount = 0
+            
+            # Iterate over a copy of the keys because the dictionary might be modified during iteration
+            foreach ($eventName in @($script:EventHandlers.Keys)) {
+                $handlersList = $script:EventHandlers[$eventName]
+                
+                # Remove all handlers whose 'Source' matches the ComponentId (efficient)
+                $currentRemoved = $handlersList.RemoveAll({param($h) $h.Source -ne $null -and $h.Source -eq $ComponentId})
+                $removedCount += $currentRemoved
+                
+                if ($currentRemoved -gt 0) {
+                    Write-Verbose "Removed $currentRemoved handlers for component '$ComponentId' from event '$eventName'."
+                }
+
+                # If no handlers remain for this event, remove the event entry from the main hashtable
+                if ($handlersList.Count -eq 0) {
+                    $script:EventHandlers.Remove($eventName)
+                    Write-Verbose "Event '$eventName' now has no handlers and was removed from the system."
+                }
+            }
+            
+            Write-Verbose "Total removed $removedCount event handlers for component: $ComponentId."
+        }
+    }
+    catch {
+        Write-Error "Failed to remove handlers for component '$ComponentId': $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Export all public functions to make them available when the module is imported
+Export-ModuleMember -Function Initialize-EventSystem, Publish-Event, Subscribe-Event, Unsubscribe-Event, Get-EventHandlers, Clear-EventHandlers, Get-EventHistory, Remove-ComponentEventHandlers
+```
+
+---
+
+## Comparison: This Refined Module vs. The Monolithic Event System Module
+
+Now, let's compare this **refined module** (the "upgrade" I just provided) with the `event-system.psm1` content found within your `Monolithic-PMCTerminal.txt`.
+
+The key difference lies in the **scope of improvement** and **architectural philosophy**:
+
+1.  **Internal Implementation & PowerShell Best Practices (Refined Module is Superior):**
+    *   **Performance:** The *refined module* explicitly addresses the performance issues of array manipulation by switching to `[System.Collections.Generic.List[object]]` and utilizing its efficient `Add()` and `RemoveAll()` methods. The *monolithic module* still uses the less efficient `+=` on arrays and `Where-Object` for removal.
+    *   **Robustness:** The *refined module* adds the critical step of taking a `ToArray()` snapshot of event handlers before iterating during publishing, mitigating "collection modified" errors. The *monolithic module* does not.
+    *   **Cmdlet Compliance:** The *refined module* fully embraces PowerShell Cmdlet standards by adding `[CmdletBinding()]` and `SupportsShouldProcess`, making functions behave like native cmdlets with `-Verbose`, `-WhatIf`, etc. The *monolithic module* completely omits these, indicating an older or less mature design in this regard.
+    *   **Input Validation:** The *refined module* uses `[ValidateNotNullOrEmpty()]` for better parameter validation. The *monolithic module* lacks this.
+    *   **Duplicate Subscriptions:** The *refined module* adds a check to prevent duplicate subscriptions of the same handler ID to the same event. The *monolithic module* allows this.
+    *   **Output Clarity:** The *refined module*'s `Get-EventHandlers` provides a more structured and digestible output (PSCustomObjects). The *monolithic module* provides raw internal data.
+
+2.  **Application-Level Integration (Monolithic Module's Approach):**
+    *   **Centralized Error Handling:** The *monolithic module*'s functions are universally wrapped in `Invoke-WithErrorHandling`. This means all errors from the event system are routed through the application's global error management, which logs to `Write-Log` and potentially throws custom `Helios.HeliosException` types. This is an application-wide architectural choice for consistent error reporting.
+    *   **Centralized Logging:** The *monolithic module* explicitly uses `Write-Log` instead of `Write-Verbose`/`Warning`/`Error`. This integrates it with the application's custom logger, allowing log messages to be written to file, collected in memory, and filtered by level, independently of PowerShell's default streams.
+
+### Conclusion:
+
+The **refined module** I've provided here is a significant **internal upgrade** to the event system's implementation. It makes the module itself more performant, robust, and aligned with modern PowerShell best practices.
+
+The `event-system.psm1` within the `Monolithic-PMCTerminal.txt` appears to be an **older or parallel version of the event system module** that has been adapted to integrate with the monolithic application's *external services* (like `Invoke-WithErrorHandling` and `Write-Log`). It shows a strong focus on consistent error reporting and logging *across the entire application*, but it *lacks the internal optimizations and Cmdlet-style refinements* that are present in the "upgrade" I've just delivered.
+
+In essence, if you were to replace the `event-system.psm1` content in your monolith with my refined version, you would gain the performance and robustness benefits *while still needing to add the `Invoke-WithErrorHandling` and `Write-Log` wrappers* to maintain consistency with the rest of your monolithic application's error and logging strategy.
