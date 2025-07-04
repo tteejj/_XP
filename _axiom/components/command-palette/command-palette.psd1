@@ -11,16 +11,16 @@
     PowerShellVersion = '7.0'
     
     # Dependencies
-    RequiredModules = @(
-        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'action-service'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'keybinding-service'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'event-system'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'action-service'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'keybinding-service'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'event-system'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
+#    )
     
     # Functions to export
     FunctionsToExport = @(

@@ -11,12 +11,12 @@
     PowerShellVersion = '7.0'
     
     # Dependencies
-    RequiredModules = @(
-        @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'panic-handler'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'event-system'; ModuleVersion = '3.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'panic-handler'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'event-system'; ModuleVersion = '3.0.0' }
+#    )
     
     # Functions to export
     FunctionsToExport = @(

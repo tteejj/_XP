@@ -101,14 +101,14 @@ class MultilineTextBoxComponent : UIElement {
         if ($null -eq $key) { return $false }
         try {
             $handled = $true
-            $currentLine = $this.Lines[$this.CurrentLine]
+            $currentLineText = $this.Lines[$this.CurrentLine]
             $originalText = $this.Lines -join "`n"
             
             switch ($key.Key) {
                 ([ConsoleKey]::Enter) {
                     if ($this.Lines.Count -lt $this.MaxLines) {
-                        $beforeCursor = $currentLine.Substring(0, $this.CursorPosition)
-                        $afterCursor = $currentLine.Substring($this.CursorPosition)
+                        $beforeCursor = $currentLineText.Substring(0, $this.CursorPosition)
+                        $afterCursor = $currentLineText.Substring($this.CursorPosition)
                         
                         $this.Lines[$this.CurrentLine] = $beforeCursor
                         $this.Lines = $this.Lines[0..$this.CurrentLine] + @($afterCursor) + $this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)]
@@ -119,19 +119,19 @@ class MultilineTextBoxComponent : UIElement {
                 }
                 ([ConsoleKey]::Backspace) {
                     if ($this.CursorPosition -gt 0) {
-                        $this.Lines[$this.CurrentLine] = $currentLine.Remove($this.CursorPosition - 1, 1)
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition - 1, 1)
                         $this.CursorPosition--
                     }
                     elseif ($this.CurrentLine -gt 0) {
                         $this.CursorPosition = $this.Lines[$this.CurrentLine - 1].Length
-                        $this.Lines[$this.CurrentLine - 1] += $currentLine
+                        $this.Lines[$this.CurrentLine - 1] += $currentLineText
                         $this.Lines = $this.Lines[0..($this.CurrentLine - 1)] + $this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)]
                         $this.CurrentLine--
                     }
                 }
                 ([ConsoleKey]::Delete) {
-                    if ($this.CursorPosition -lt $currentLine.Length) {
-                        $this.Lines[$this.CurrentLine] = $currentLine.Remove($this.CursorPosition, 1)
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition, 1)
                     }
                     elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
                         $this.Lines[$this.CurrentLine] += $this.Lines[$this.CurrentLine + 1]
@@ -148,7 +148,7 @@ class MultilineTextBoxComponent : UIElement {
                     }
                 }
                 ([ConsoleKey]::RightArrow) {
-                    if ($this.CursorPosition -lt $currentLine.Length) {
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
                         $this.CursorPosition++
                     }
                     elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
@@ -172,7 +172,7 @@ class MultilineTextBoxComponent : UIElement {
                     $this.CursorPosition = 0
                 }
                 ([ConsoleKey]::End) {
-                    $this.CursorPosition = $currentLine.Length
+                    $this.CursorPosition = $currentLineText.Length
                 }
                 ([ConsoleKey]::PageUp) {
                     $this.CurrentLine = [Math]::Max(0, $this.CurrentLine - ($this.Height - 2))
@@ -184,7 +184,7 @@ class MultilineTextBoxComponent : UIElement {
                 }
                 default {
                     if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
-                        $newLine = $currentLine.Insert($this.CursorPosition, $key.KeyChar)
+                        $newLine = $currentLineText.Insert($this.CursorPosition, $key.KeyChar)
                         if ($newLine.Length -le $this.MaxLineLength) {
                             $this.Lines[$this.CurrentLine] = $newLine
                             $this.CursorPosition++
@@ -417,9 +417,9 @@ class NumericInputComponent : UIElement {
 
     hidden [bool] _ValidateAndSetValue([string]$text) {
         try {
-            $value = [double]::Parse($text)
-            if ($value -ge $this.MinValue -and $value -le $this.MaxValue) {
-                $this.Value = $value
+            $parsedValue = [double]::Parse($text)
+            if ($parsedValue -ge $this.MinValue -and $parsedValue -le $this.MaxValue) {
+                $this.Value = $parsedValue
                 $this._UpdateTextValue()
                 return $true
             }
@@ -643,13 +643,13 @@ class ComboBoxComponent : UIElement {
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
             
             # Draw current value or search text
-            $displayText = if ($this.IsDropDownOpen -and $this.AllowSearch) { $this.SearchText } else { $this.DisplayText }
-            if (-not [string]::IsNullOrEmpty($displayText)) {
+            $displayValue = if ($this.IsDropDownOpen -and $this.AllowSearch) { $this.SearchText } else { $this.DisplayText }
+            if (-not [string]::IsNullOrEmpty($displayValue)) {
                 $maxTextWidth = $this.Width - 6
-                if ($displayText.Length -gt $maxTextWidth) {
-                    $displayText = $displayText.Substring(0, $maxTextWidth - 3) + "..."
+                if ($displayValue.Length -gt $maxTextWidth) {
+                    $displayValue = $displayValue.Substring(0, $maxTextWidth - 3) + "..."
                 }
-                Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText -ForegroundColor $fgColor -BackgroundColor $bgColor
+                Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayValue -ForegroundColor $fgColor -BackgroundColor $bgColor
             }
             
             # Draw dropdown arrow
@@ -776,7 +776,17 @@ class ComboBoxComponent : UIElement {
                 }
             } else {
                 switch ($key.Key) {
-                    ([ConsoleKey]::Enter), ([ConsoleKey]::Spacebar), ([ConsoleKey]::DownArrow) {
+                    ([ConsoleKey]::Enter) {
+                        $this.IsDropDownOpen = $true
+                        $this.SelectedIndex = 0
+                        $this._UpdateFilteredItems()
+                    }
+                    ([ConsoleKey]::Spacebar) {
+                        $this.IsDropDownOpen = $true
+                        $this.SelectedIndex = 0
+                        $this._UpdateFilteredItems()
+                    }
+                    ([ConsoleKey]::DownArrow) {
                         $this.IsDropDownOpen = $true
                         $this.SelectedIndex = 0
                         $this._UpdateFilteredItems()

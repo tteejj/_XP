@@ -8,6 +8,7 @@ using module panels-class
 using module theme-manager
 using module logger
 using module tui-components
+using module models
 using module advanced-data-components
 
 class TaskListScreen : Screen {

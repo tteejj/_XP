@@ -5,6 +5,7 @@
 
 using module ui-classes
 using module tui-primitives
+using module tui-components
 using module theme-manager
 using namespace System.Management.Automation
 using namespace System.Threading.Tasks
@@ -16,7 +17,7 @@ class Dialog : UIElement {
     [string] $Message = ""
     hidden [TaskCompletionSource[object]] $_tcs # For promise-based async result
 
-    Dialog([Parameter(Mandatory)][string]$name) : base($name) {
+    Dialog([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 50
         $this.Height = 10
@@ -117,7 +118,7 @@ class Dialog : UIElement {
         # Override in subclasses
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         if ($key.Key -eq [ConsoleKey]::Escape) {
             $this.Close($null, $true)
             return $true
@@ -135,7 +136,7 @@ class Dialog : UIElement {
 #region Specialized Dialogs
 
 class AlertDialog : Dialog {
-    AlertDialog([Parameter(Mandatory)][string]$title, [Parameter(Mandatory)][string]$message) : base("AlertDialog") {
+    AlertDialog([string]$title, [string]$message) : base("AlertDialog") {
         $this.Title = $title
         $this.Message = $message
         $this.Height = 8
@@ -160,7 +161,7 @@ class AlertDialog : Dialog {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
             $this.Close($true)
             return $true
@@ -172,7 +173,7 @@ class AlertDialog : Dialog {
 class ConfirmDialog : Dialog {
     hidden [int] $_selectedButton = 0
 
-    ConfirmDialog([Parameter(Mandatory)][string]$title, [Parameter(Mandatory)][string]$message) : base("ConfirmDialog") {
+    ConfirmDialog([string]$title, [string]$message) : base("ConfirmDialog") {
         $this.Title = $title
         $this.Message = $message
         $this.Height = 8
@@ -206,9 +207,9 @@ class ConfirmDialog : Dialog {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         switch ($key.Key) {
-            ([ConsoleKey]::LeftArrow), ([ConsoleKey]::RightArrow), ([ConsoleKey]::Tab) {
+            { $_ -in @([ConsoleKey]::LeftArrow, [ConsoleKey]::RightArrow, [ConsoleKey]::Tab) } {
                 $this._selectedButton = ($this._selectedButton + 1) % 2
                 $this.RequestRedraw()
                 return $true
@@ -226,7 +227,7 @@ class ConfirmDialog : Dialog {
 class InputDialog : Dialog {
     hidden [TextBoxComponent] $_textBox
     
-    InputDialog([Parameter(Mandatory)][string]$title, [Parameter(Mandatory)][string]$message, [string]$defaultValue = "") : base("InputDialog") {
+    InputDialog([string]$title, [string]$message, [string]$defaultValue = "") : base("InputDialog") {
         $this.Title = $title
         $this.Message = $message
         $this.Height = 10
@@ -283,7 +284,7 @@ class InputDialog : Dialog {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
         if ($key.Key -eq [ConsoleKey]::Enter) {
             $result = $this._textBox ? $this._textBox.Text : ""
             $this.Close($result)

@@ -6,6 +6,7 @@
 using module ui-classes
 using module tui-primitives
 using module theme-manager
+using module tui-components
 using namespace System.Management.Automation
 
 #region Command Palette Class

@@ -94,14 +94,14 @@ try {
     $container = Initialize-ServiceContainer
     
     # 3. Register all services with the container using factories
-    $container.RegisterFactory("TuiFramework", { param($c) Initialize-TuiFrameworkService })
-    $container.RegisterFactory("ActionService", { param($c) Initialize-ActionService })
-    $container.RegisterFactory("KeybindingService", { param($c) New-KeybindingService })
-    $container.RegisterFactory("DataManager", { param($c) Initialize-DataManager })
+    $container.RegisterFactory("TuiFramework", { param($c) Initialize-TuiFrameworkService }, $true)
+    $container.RegisterFactory("ActionService", { param($c) Initialize-ActionService }, $true)
+    $container.RegisterFactory("KeybindingService", { param($c) New-KeybindingService }, $true)
+    $container.RegisterFactory("DataManager", { param($c) Initialize-DataManager }, $true)
     $container.RegisterFactory("NavigationService", { 
         param($c)
         Initialize-NavigationService -Services @{ ServiceContainer = $c } 
-    })
+    }, $true)
     
     # 4. Register screen classes with the Navigation Service
     $navService = $container.GetService("NavigationService")

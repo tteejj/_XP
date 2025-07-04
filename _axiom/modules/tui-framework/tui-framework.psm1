@@ -23,8 +23,8 @@ class TuiFrameworkService {
     # Executes a script block asynchronously using a lightweight thread job.
     # Ideal for I/O-bound operations like network requests or file access.
     [System.Management.Automation.Job] StartAsync(
-        [Parameter(Mandatory)][scriptblock]$ScriptBlock,
-        [Parameter()][hashtable]$ArgumentList = @{}
+        [scriptblock]$ScriptBlock,
+        [hashtable]$ArgumentList = @{}
     ) {
         return Invoke-WithErrorHandling -Component "TuiFramework.StartAsync" -Context "Starting async thread job" -ScriptBlock {
             $job = Start-ThreadJob -ScriptBlock $ScriptBlock -ArgumentList @($ArgumentList)

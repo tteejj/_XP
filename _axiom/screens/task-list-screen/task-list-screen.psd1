@@ -9,7 +9,7 @@
     CompatiblePSEditions = @('Core')
     
     # ID used to uniquely identify this module
-    GUID = 'c3d4e5f6-a7b8-c901-2345-678901defab'
+    GUID = '9f38b2c0-1d2a-4e75-bb03-a84b2d7a2f14'
     
     # Author of this module
     Author = 'PMC Terminal Team'
@@ -28,18 +28,18 @@
     
     # Modules that must be imported into the global environment prior to importing this module.
     # This screen depends on types and services defined in these core modules.
-    RequiredModules = @(
-        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'panels-class'; ModuleVersion = '5.0.0' },
-        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'advanced-data-components'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'data-manager'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'action-service'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'keybinding-service-class'; ModuleVersion = '3.0.0' },
-        @{ ModuleName = 'navigation-service-class'; ModuleVersion = '3.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'panels-class'; ModuleVersion = '5.0.0' },
+#        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'advanced-data-components'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'data-manager'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'action-service'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'keybinding-service-class'; ModuleVersion = '3.0.0' },
+#        @{ ModuleName = 'navigation-service-class'; ModuleVersion = '3.0.0' }
+#    )
     
     # Assemblies that must be loaded prior to importing this module
     RequiredAssemblies = @()

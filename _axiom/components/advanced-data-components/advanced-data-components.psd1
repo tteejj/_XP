@@ -11,12 +11,12 @@
     PowerShellVersion = '7.0'
     
     # Dependencies
-    RequiredModules = @(
-        @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
+#    )
     
     # Functions to export
     FunctionsToExport = @(

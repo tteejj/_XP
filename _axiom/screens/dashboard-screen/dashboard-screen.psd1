@@ -10,12 +10,12 @@
     PowerShellVersion = '7.0'
     
     # Dependencies
-    RequiredModules = @(
-        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'panels-class'; ModuleVersion = '5.0.0' }
-        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'panels-class'; ModuleVersion = '5.0.0' }
+#        @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }
+#        @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
+#    )
     
     # No functions to export - only classes
     FunctionsToExport = @()

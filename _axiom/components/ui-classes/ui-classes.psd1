@@ -27,16 +27,16 @@
     PowerShellVersion = '7.0'
     
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules = @(
-        @{
-            ModuleName = 'tui-primitives'
-            ModuleVersion = '1.0.0'
-        },
-        @{
-            ModuleName = 'exceptions'
-            ModuleVersion = '1.0.0'
-        }
-    )
+#    RequiredModules = @(
+#        @{
+#            ModuleName = 'tui-primitives'
+#            ModuleVersion = '1.0.0'
+#        },
+#        @{
+#            ModuleName = 'exceptions'
+#            ModuleVersion = '1.0.0'
+#        }
+#    )
     
     # Assemblies that must be loaded prior to importing this module
     RequiredAssemblies = @()

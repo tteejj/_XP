@@ -261,7 +261,7 @@ class Table : UIElement {
         }
         
         # Apply alignment
-        return switch ($alignment.ToLower()) {
+        $result = switch ($alignment.ToLower()) {
             'right' { $text.PadLeft($width) }
             'center' { 
                 $pad = [Math]::Max(0, ($width - $text.Length) / 2)
@@ -270,6 +270,7 @@ class Table : UIElement {
             }
             default { $text.PadRight($width) }
         }
+        return $result
     }
     
     # Resolve column widths, handling 'Auto' sizing

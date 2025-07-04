@@ -27,20 +27,20 @@
     PowerShellVersion = '7.0'
     
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules = @(
-        @{
-            ModuleName = 'exceptions'
-            ModuleVersion = '1.0.0'
-        },
-        @{
-            ModuleName = 'event-system'
-            ModuleVersion = '1.0.0'
-        },
-        @{
-            ModuleName = 'models'
-            ModuleVersion = '1.0.0'
-        }
-    )
+#    RequiredModules = @(
+#        @{
+#            ModuleName = 'exceptions'
+#            ModuleVersion = '1.0.0'
+#        },
+#        @{
+#            ModuleName = 'event-system'
+#            ModuleVersion = '1.0.0'
+#        },
+#        @{
+#            ModuleName = 'models'
+#            ModuleVersion = '1.0.0'
+#        }
+#    )
     
     # Assemblies that must be loaded prior to importing this module
     RequiredAssemblies = @()
