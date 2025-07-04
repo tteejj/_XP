@@ -1,0 +1,245 @@
+This is the last major screen to upgrade. The `TaskListScreen` is a cornerstone of the application's functionality. Its modernization will serve as a final, comprehensive demonstration of the new Axiom-Phoenix architecture.
+
+The provided code is a perfect example of the "old way": manual layout, hardcoded keybindings and colors, and a non-reactive data model. We will refactor it to fully embrace the new patterns.
+
+---
+
+## Enhanced Task List Screen
+
+This refined version of the `TaskListScreen` is a complete rewrite. It replaces the rigid, hardcoded layout and input handling with a dynamic, action-based, and theme-aware implementation that fully leverages our new framework.
+
+### Summary of Enhancements & Rationale:
+
+1.  **Full Adoption of the Component Lifecycle**:
+    *   **Issue:** The original `Initialize()` method was a monolithic block that built the entire UI tree.
+    *   **Enhancement:** The logic is moved into the correct lifecycle hooks. The constructor is minimal. `OnInitialize()` now creates the child components (`Panel`, `Table`). `OnEnter()` is responsible for loading the initial data. `OnCleanup()` is now implicitly handled by the base `Screen` class, which cleans up event subscriptions.
+    *   **Rationale:** This aligns the screen with the framework's lifecycle model, making it more predictable, robust, and free of resource leaks.
+
+2.  **Action-Driven Input Handling**:
+    *   **Issue:** The original `HandleInput` method was a large `switch` statement with hardcoded keys (`'N'` for New, `'E'` for Edit, etc.). This is inflexible and not discoverable by the user.
+    *   **Enhancement:**
+        *   The `HandleInput` method is now almost empty. Its only job is to delegate input to its focused child (the `TaskTable`).
+        *   All task-related operations (`New`, `Edit`, `Delete`, `Toggle Status`, `Filter`) are now implemented as **Actions** and registered with the `ActionService` in `OnInitialize()`.
+        *   These actions are given a `context` of `"tasklist"`.
+        *   The `KeybindingService` is used to map keys like `N`, `E`, `D`, `Spacebar` to these actions *within the `"tasklist"` context*.
+    *   **Rationale:** This is a huge architectural win. The screen no longer knows or cares about specific keys. It just provides actions. This makes the screen's functionality:
+        *   **Discoverable:** All these actions will automatically appear in the `CommandPalette` when this screen is active.
+        *   **Reconfigurable:** The user can remap the keys for "New Task" or "Edit Task" without changing any of the screen's code.
+        *   **Cleaner:** The screen's code is dramatically simplified and focused on its core responsibility of displaying tasks.
+
+3.  **Complete Theme Integration**:
+    *   **Issue:** All colors and styles were hardcoded. The footer was a simple string.
+    *   **Enhancement:**
+        *   All panels and the table now derive their appearance from the `ThemeManager`.
+        *   The footer is now a dynamically generated `StatusBar` component (or a panel acting as one) that displays the available keybindings by querying the `KeybindingService` for actions within the current context. This ensures the help text is always accurate, even if keybindings are changed.
+    *   **Rationale:** The screen is now fully skinnable and visually consistent with the rest of the Axiom-Phoenix application. The dynamic status bar is a massive UX improvement over a static text label.
+
+4.  **Event-Driven Data and Component Interaction**:
+    *   **Issue:** The screen manually controlled the `SelectedIndex` of the table. To toggle a task, the screen would get the selected index, find the task, update it, and then manually refresh everything.
+    *   **Enhancement:**
+        *   The screen subscribes to the `Tasks.Changed` event, so its data is always fresh.
+        *   The `TaskTable`'s `OnSelectionChanged` event is used. When the user navigates the table, the screen can update its internal state to know which task is currently selected, but it doesn't need to manually re-render the table for selection changes, as the table handles that itself.
+        *   When an action like "Toggle Status" is executed, it operates on the currently selected task, tells the `DataManager` to update it, and the `Tasks.Changed` event handles the subsequent UI refresh automatically.
+    *   **Rationale:** This creates a fully reactive, event-driven data flow. Components are more encapsulated, and the screen acts as a coordinator rather than a micro-manager.
+
+---
+
+### The Refined Task List Screen Code:
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Task List Screen
+# A dynamic, action-driven, and theme-aware task management screen.
+# ==============================================================================
+
+class TaskListScreen : Screen {
+    #region UI Components
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_headerPanel
+    hidden [Panel] $_tablePanel
+    hidden [Panel] $_footerPanel
+    hidden [Table] $_taskTable
+    #endregion
+
+    #region State
+    hidden [string] $_filterStatus = "All"
+    hidden [PmcTask] $_selectedTask
+    #endregion
+
+    # Constructor is minimal.
+    TaskListScreen([object]$serviceContainer) : base("TaskListScreen", $serviceContainer) {}
+
+    # OnInitialize creates the UI and registers context-specific actions.
+    [void] OnInitialize() {
+        # --- UI Construction ---
+        $this.{_mainPanel} = [Panel]::new(0, 0, $this.Width, $this.Height, "Task Management")
+        $this.AddChild($this.{_mainPanel})
+
+        $this.{_headerPanel} = [Panel]::new(1, 1, $this.Width - 2, 1)
+        $this.{_headerPanel}.HasBorder = $false
+        $this.{_mainPanel}.AddChild($this.{_headerPanel})
+
+        $this.{_tablePanel} = [Panel]::new(1, 2, $this.Width - 2, $this.Height - 4)
+        $this.{_mainPanel}.AddChild($this.{_tablePanel})
+        
+        $this.{_footerPanel} = [Panel]::new(1, $this.Height - 2, $this.Width - 2, 1)
+        $this.{_footerPanel}.HasBorder = $false
+        $this.{_mainPanel}.AddChild($this.{_footerPanel})
+
+        # --- Table Setup ---
+        $this.{_taskTable} = New-TuiTable -Props @{ Name = 'TaskTable'; ShowBorder = $false }
+        $this.{_taskTable}.Resize($this.{_tablePanel}.ContentWidth, $this.{_tablePanel}.ContentHeight)
+        $this.{_taskTable}.SetColumns(@(
+            [TableColumn]::new('Title', 'Task Title', 'Auto'),
+            [TableColumn]::new('Status', 'Status', 15),
+            [TableColumn]::new('Priority', 'Priority', 12)
+        ))
+        $this.{_taskTable}.OnSelectionChanged = { param($SelectedItem) $this.{_selectedTask} = $SelectedItem }.GetNewClosure()
+        $this.{_tablePanel}.AddChild($this.{_taskTable})
+
+        # --- Register Actions & Keybindings for THIS screen's context ---
+        $this._RegisterActions()
+        
+        # --- Subscribe to global events ---
+        $this.SubscribeToEvent("Tasks.Changed", { $this._RefreshData() })
+    }
+
+    # OnEnter/OnExit manage the keybinding context.
+    [void] OnEnter() {
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $keybindingService.PushContext('tasklist')
+        $this._RefreshData()
+        Set-ComponentFocus -Component $this.{_taskTable}
+    }
+
+    [void] OnExit() {
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $keybindingService.PopContext()
+    }
+
+    hidden [void] _RegisterActions() {
+        $actionService = $this.ServiceContainer.GetService('ActionService')
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $context = 'tasklist' # Define the context for these actions/bindings
+
+        # A helper scriptblock to ensure an action isn't run if no task is selected
+        $withSelectedTask = {
+            param($scriptblock)
+            if ($this.{_selectedTask}) { . $scriptblock $this.{_selectedTask} }
+            else { Show-AlertDialog -Title 'No Task Selected' -Message 'Please select a task first.' | Out-Null }
+        }
+
+        # New Task
+        $actionService.RegisterAction("task.new", "Create a new task", { $this._ShowNewTaskDialog() }, $context)
+        $keybindingService.SetBinding("task.new", 'N', $context)
+
+        # Edit Task
+        $actionService.RegisterAction("task.edit", "Edit the selected task's title", { . $withSelectedTask { param($task) $this._ShowEditTaskDialog($task) } }, $context)
+        $keybindingService.SetBinding("task.edit", 'E', $context)
+        
+        # Delete Task
+        $actionService.RegisterAction("task.delete", "Delete the selected task", { . $withSelectedTask { param($task) $this._ShowDeleteConfirmDialog($task) } }, $context)
+        $keybindingService.SetBinding("task.delete", 'Delete', $context)
+
+        # Toggle Task Status
+        $actionService.RegisterAction("task.toggleStatus", "Toggle the selected task's status", { . $withSelectedTask { param($task) $this._ToggleTaskStatus($task) } }, $context)
+        $keybindingService.SetBinding("task.toggleStatus", 'Spacebar', $context)
+
+        # Cycle Filter
+        $actionService.RegisterAction("task.cycleFilter", "Cycle through task filters", { $this._CycleFilter() }, $context)
+        $keybindingService.SetBinding("task.cycleFilter", 'F', $context)
+
+        # Navigate Back
+        $actionService.RegisterAction("task.back", "Return to the previous screen", { $this.ServiceContainer.GetService('NavigationService').PopScreen() }, $context)
+        $keybindingService.SetBinding("task.back", 'Escape', $context)
+    }
+
+    hidden [void] _RefreshData() {
+        $dataManager = $this.ServiceContainer.GetService('DataManager')
+        $allTasks = $dataManager.GetTasks()
+        $filteredTasks = switch ($this.{_filterStatus}) {
+            "Active"    { $allTasks | Where-Object { -not $_.Completed } }
+            "Completed" { $allTasks | Where-Object { $_.Completed } }
+            default     { $allTasks }
+        }
+        $this.{_taskTable}.SetData($filteredTasks)
+        $this._UpdateDisplay()
+    }
+    
+    hidden [void] _UpdateDisplay() {
+        $theme = $this.ServiceContainer.GetService('ThemeManager')
+        # Header
+        $this.{_headerPanel}.ClearContent()
+        $headerText = " Filter: $($this.{_filterStatus}) "
+        $this.{_headerPanel}.WriteToBuffer(0, 0, $headerText, $theme.GetColor('header.foreground'), $theme.GetColor('header.background'))
+        # Footer (Dynamic Help Text)
+        $this.{_footerPanel}.ClearContent()
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $bindings = @(
+            "($($keybindingService.GetBindingDescription('task.toggleStatus')))-Toggle"
+            "($($keybindingService.GetBindingDescription('task.new')))-New"
+            "($($keybindingService.GetBindingDescription('task.edit')))-Edit"
+            "($($keybindingService.GetBindingDescription('task.cycleFilter')))-Filter"
+            "($($keybindingService.GetBindingDescription('task.back')))-Back"
+        )
+        $this.{_footerPanel}.WriteToBuffer(0, 0, ($bindings -join ' | '), $theme.GetColor('statusbar.foreground'), $theme.GetColor('statusbar.background'))
+        
+        $this.RequestRedraw()
+    }
+    
+    # The screen's input handler only needs to forward input to the table.
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        return $this.{_taskTable}.HandleInput($keyInfo)
+    }
+
+    #region Task Action Implementations
+    hidden [void] _ToggleTaskStatus([PmcTask]$task) {
+        $task.Completed = -not $task.Completed
+        $this.ServiceContainer.GetService('DataManager').UpdateTask($task)
+    }
+
+    hidden [void] _CycleFilter() {
+        $this.{_filterStatus} = switch ($this.{_filterStatus}) {
+            "All"       { "Active" }
+            "Active"    { "Completed" }
+            default     { "All" }
+        }
+        $this._RefreshData() # Refresh data which will trigger a display update
+    }
+    
+    hidden [void] _ShowNewTaskDialog() {
+        # Using the new async/await dialog API
+        $title = await Show-InputDialog -Title "New Task" -Message "Enter task title:"
+        if ($title) { # A non-null result means the user pressed OK
+            $newTask = [PmcTask]::new($title)
+            $this.ServiceContainer.GetService('DataManager').AddTask($newTask)
+        }
+    }
+    
+    hidden [void] _ShowEditTaskDialog([PmcTask]$task) {
+        $newTitle = await Show-InputDialog -Title "Edit Task" -Message "New title:" -DefaultValue $task.Title
+        if ($newTitle) {
+            $task.Title = $newTitle
+            $this.ServiceContainer.GetService('DataManager').UpdateTask($task)
+        }
+    }
+    
+    hidden [void] _ShowDeleteConfirmDialog([PmcTask]$task) {
+        $confirmed = await Show-ConfirmDialog -Title "Delete Task" -Message "Delete task `"$($task.Title)`"?"
+        if ($confirmed) {
+            $this.ServiceContainer.GetService('DataManager').RemoveTask($task.Id)
+        }
+    }
+    #endregion
+}
+```
+
+### Conclusion
+
+This refactoring of the `TaskListScreen` completes the modernization of the application's core views.
+*   **Decoupled and Discoverable:** All functionality is exposed via the `ActionService`, making it easy for users to find commands in the `CommandPalette` and for developers to reconfigure keybindings.
+*   **Reactive and Robust:** The screen automatically updates in response to data changes and uses a clean, promise-based API for handling user input from dialogs.
+*   **Theme-Aware:** Its appearance is now entirely controlled by the `ThemeManager`, ensuring visual consistency.
+*   **Lifecycle-Managed:** Resources and event subscriptions are handled correctly by the component lifecycle, preventing leaks.
+
+The `TaskListScreen` is no longer just a static display but a dynamic, interactive, and highly maintainable component of the Axiom-Phoenix application.

@@ -1,0 +1,185 @@
+You are right to point this one out. The `navigation-class` module, specifically the `NavigationMenu`, is now effectively a **legacy component**. With the introduction of the `ActionService` and the `CommandPalette`, the primary means of application-wide navigation and command execution has shifted.
+
+However, a `NavigationMenu` is still a very useful component for *local* or *contextual* menus within a specific panel or screen (e.g., a "File", "Edit", "View" menu bar). Therefore, instead of deleting it, we should review and enhance it to be a first-class, theme-aware component, while also acknowledging its new, more limited role.
+
+---
+
+## Enhanced Navigation Component Module
+
+This refined version of the `navigation-class` module updates the `NavigationMenu` to be fully theme-aware and brings its rendering logic up to the standard of our other enhanced components.
+
+### Summary of Enhancements & Rationale:
+
+1.  **Full Theme Integration**:
+    *   **Issue:** The `NavigationItem` and `NavigationMenu` classes used hardcoded `[ConsoleColor]` values for keys, labels, separators, and the selection highlight. This makes them visually detached from the rest ofthe application.
+    *   **Enhancement:**
+        *   Removed all color properties from `NavigationItem`.
+        *   The `OnRender` method in `NavigationMenu` now exclusively uses `Get-ThemeColor` to fetch all colors. It uses semantic keys like `menu.item.foreground`, `menu.item.background.focus`, and `menu.item.hotkey`, making it completely customizable.
+    *   **Rationale:** This fully integrates the `NavigationMenu` into the Axiom-Phoenix theme system, ensuring that any contextual menus used in the application will match the active theme perfectly.
+
+2.  **Modernized Rendering Logic**:
+    *   **Issue:** The `RenderVertical` and `RenderHorizontal` methods used an older, less efficient way of drawing to the buffer by manually creating and padding strings. This is inconsistent with our more advanced components.
+    *   **Enhancement:** The rendering logic is refactored to be more direct and robust.
+        *   It now draws the selection highlight as a full-width background color bar first.
+        *   Then, it draws the text components (prefix, key, label) on top of the highlight bar.
+        *   It uses `Write-TuiText` for all drawing, which is the standard primitive.
+    *   **Rationale:** This improves rendering consistency and makes the code easier to read and maintain. The visual result is also a much clearer and more professional-looking selection highlight.
+
+3.  **Deprecation Acknowledgment**:
+    *   **Issue:** A developer looking at this file might not realize that the `CommandPalette` is now the primary means of global navigation.
+    *   **Enhancement:** Added comments at the top of the file and class to clarify the new role of `NavigationMenu` as a component for *contextual* menus, not global application navigation. This manages expectations and guides developers to use the correct pattern (`ActionService`).
+    *   **Rationale:** Improves code documentation and helps maintain the architectural integrity of the project by guiding developers toward the intended patterns.
+
+4.  **Simplified `NavigationItem`**:
+    *   **Issue:** `NavigationItem` contained color properties that are now handled by the theme.
+    *   **Enhancement:** Removed the `$KeyColor` and `$LabelColor` properties, simplifying the class. Its only responsibility is now to hold the data for a menu item (Key, Label, Action).
+    *   **Rationale:** Aligns with the principle of separating data from presentation. The `NavigationItem` is a data model, and the `NavigationMenu` is responsible for rendering it according to the theme.
+
+---
+
+### The Refined Navigation Component Module Code:
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Navigation Component Module
+# NOTE: This component is now intended for LOCAL/CONTEXTUAL menus.
+# Global application commands should be registered with the ActionService and
+# accessed via the CommandPalette.
+# ==============================================================================
+
+# NavigationItem - A simple data class for a single menu item.
+class NavigationItem {
+    [string]$Key; [string]$Label; [scriptblock]$Action
+    [bool]$Enabled = $true; [bool]$Visible = $true; [string]$Description = ""
+
+    NavigationItem([string]$key, [string]$label, [scriptblock]$action) {
+        if ([string]::IsNullOrWhiteSpace($key)) { throw [ArgumentException]::new("Navigation key cannot be null or empty") }
+        if ([string]::IsNullOrWhiteSpace($label)) { throw [ArgumentException]::new("Navigation label cannot be null or empty") }
+        if (-not $action) { throw [ArgumentNullException]::new("action", "Navigation action cannot be null") }
+
+        $this.Key = $key.ToUpper(); $this.Label = $label; $this.Action = $action
+    }
+
+    [void] Execute() {
+        if (-not $this.Enabled) {
+            Write-Log -Level Warning "Attempted to execute disabled navigation item: $($this.Key)"
+            return
+        }
+        Invoke-WithErrorHandling -Component "NavigationItem" -Context "Execute" -ScriptBlock $this.Action
+    }
+}
+
+# NavigationMenu - A UI component for displaying a list of selectable NavigationItems.
+# Now fully theme-aware and intended for contextual menus.
+class NavigationMenu : UIElement {
+    [System.Collections.Generic.List[NavigationItem]]$Items
+    [string]$Orientation = "Vertical"
+    [string]$Separator = " | "
+    [int]$SelectedIndex = 0
+
+    NavigationMenu([string]$name) : base($name) {
+        $this.Items = [System.Collections.Generic.List[NavigationItem]]::new()
+        $this.IsFocusable = $true
+    }
+
+    [void] AddItem([NavigationItem]$item) {
+        if (-not $item) { throw [ArgumentNullException]::new("item") }
+        if ($this.Items.Exists({ param($x) $x.Key -eq $item.Key })) {
+            throw [InvalidOperationException]::new("Item with key '$($item.Key)' already exists")
+        }
+        $this.Items.Add($item); $this.RequestRedraw()
+    }
+
+    [void] AddSeparator() {
+        $separatorItem = [NavigationItem]::new("-", "", {})
+        $separatorItem.Enabled = $false
+        $this.Items.Add($separatorItem)
+        $this.RequestRedraw()
+    }
+    
+    # ... (RemoveItem, GetItem, ExecuteAction are unchanged) ...
+
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        try {
+            $theme = $global:App.Services.ThemeManager
+            $this._private_buffer.Clear([TuiCell]::new(' ', $theme.GetColor('textNormal'), $theme.GetColor('background')))
+            
+            $visibleItems = @($this.Items | Where-Object { $_.Visible })
+            if ($visibleItems.Count -eq 0) { return }
+
+            if ($this.Orientation -eq "Horizontal") {
+                $this._RenderHorizontal($visibleItems, $theme)
+            } else {
+                $this._RenderVertical($visibleItems, $theme)
+            }
+        } catch { Write-Log -Level Error "NavigationMenu render error for '$($this.Name)': $_" }
+    }
+
+    hidden [void] _RenderHorizontal([object[]]$items, [object]$theme) {
+        $currentX = 0
+        foreach ($item in $items) {
+            if ($currentX -ge $this.Width) { break }
+            $text = "[$($item.Key)] $($item.Label)"
+            Write-TuiText -Buffer $this._private_buffer -X $currentX -Y 0 -Text $text -ForegroundColor $theme.GetColor('menu.item.foreground')
+            $currentX += $text.Length
+            
+            if ($currentX -lt $this.Width) {
+                Write-TuiText -Buffer $this._private_buffer -X $currentX -Y 0 -Text $this.Separator -ForegroundColor $theme.GetColor('menu.item.separator')
+                $currentX += $this.Separator.Length
+            }
+        }
+    }
+
+    hidden [void] _RenderVertical([object[]]$items, [object]$theme) {
+        if ($this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $items.Count) { $this.SelectedIndex = 0 }
+
+        for ($i = 0; $i -lt [Math]::Min($items.Count, $this.Height); $i++) {
+            $item = $items[$i]
+            
+            # Handle Separators
+            if ($item.Key -eq '-') {
+                $line = '─' * $this.Width
+                Write-TuiText -Buffer $this._private_buffer -X 0 -Y $i -Text $line -ForegroundColor $theme.GetColor('menu.item.separator')
+                continue
+            }
+            
+            $isSelected = ($i -eq $this.SelectedIndex)
+            $isFocused = ($isSelected -and $this.IsFocused)
+            
+            $bg = if ($isFocused) { $theme.GetColor('menu.item.background.focus') } else { $theme.GetColor('background') }
+            $prefixFg = if ($isFocused) { $theme.GetColor('menu.item.prefix.focus') } else { $theme.GetColor('menu.item.prefix.normal') }
+            $keyFg = if ($isFocused) { $theme.GetColor('menu.item.hotkey.focus') } else { $theme.GetColor('menu.item.hotkey.normal') }
+            $labelFg = if ($isFocused) { $theme.GetColor('menu.item.foreground.focus') } else { $theme.GetColor('menu.item.foreground.normal') }
+
+            # Draw selection highlight bar
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y $i -Text (' ' * $this.Width) -BackgroundColor $bg
+            
+            # Draw components on top
+            $prefix = $isSelected ? "> " : "  "
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y $i -Text $prefix -ForegroundColor $prefixFg -BackgroundColor $bg
+            
+            $keyText = "[$($item.Key)]"
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y $i -Text $keyText -ForegroundColor $keyFg -BackgroundColor $bg
+            
+            Write-TuiText -Buffer $this._private_buffer -X (2 + $keyText.Length + 1) -Y $i -Text $item.Label -ForegroundColor $labelFg -BackgroundColor $bg
+        }
+    }
+    
+    # HandleInput and Focus methods are unchanged
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # ... no changes needed ...
+    }
+    [void] OnFocus() { $this.IsFocused = $true; $this.RequestRedraw() }
+    [void] OnBlur() { $this.IsFocused = $false; $this.RequestRedraw() }
+}
+```
+
+### Conclusion
+
+This enhancement brings the `NavigationMenu` component in line with the rest of the Axiom-Phoenix framework.
+*   It is now **fully theme-aware**, ensuring visual consistency.
+*   Its rendering logic is **cleaner and more robust**.
+*   Its role in the new architecture is **clearly documented**.
+
+While it is no longer the star of the show for global navigation, it has been successfully upgraded into a high-quality, reusable component for creating contextual menus, ensuring it remains a valuable part of the TUI component library.

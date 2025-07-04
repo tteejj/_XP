@@ -1,0 +1,80 @@
+# ==============================================================================
+# MODULE: theme-manager (Axiom-Phoenix v4.0 - Truecolor Edition)
+# PURPOSE: Provides theming and color management with support for external
+#          JSON files, color palettes, and 24-bit truecolor.
+# ==============================================================================
+
+class ThemeManager {
+    hidden [hashtable] $_currentTheme
+    hidden [string] $_themesDirectory
+
+    ThemeManager([string]$themesDirectory) {
+        if (-not (Test-Path $themesDirectory)) {
+            throw [System.IO.DirectoryNotFoundException]::new("Themes directory not found: $themesDirectory")
+        }
+        $this.{_themesDirectory} = $themesDirectory
+        $this.{_currentTheme} = @{}
+        Write-Log -Level Info "ThemeManager initialized. Themes path: $themesDirectory"
+    }
+
+    # Loads a theme from a JSON file.
+    [void] SetTheme([string]$themeName) {
+        $themePath = Join-Path $this.{_themesDirectory} "$themeName.theme.json"
+        if (-not (Test-Path $themePath)) {
+            throw [System.IO.FileNotFoundException]::new("Theme file not found: $themePath")
+        }
+        
+        try {
+            $themeContent = Get-Content $themePath -Raw
+            $this.{_currentTheme} = $themeContent | ConvertFrom-Json -AsHashtable
+            
+            # Validate theme structure
+            if (-not $this.{_currentTheme}.palette -or -not $this.{_currentTheme}.styles) {
+                throw "Theme '$themeName' is invalid. It must contain 'palette' and 'styles' keys."
+            }
+
+            Write-Log -Level Info "Theme set to '$themeName'."
+            Publish-Event -EventName "Theme.Changed" -Data @{ ThemeName = $themeName }
+        } catch {
+            $this.{_currentTheme} = @{} # Reset to avoid using a broken theme
+            throw "Failed to load or parse theme '$themeName': $($_.Exception.Message)"
+        }
+    }
+
+    # The core method to get a color for a specific style element.
+    # It resolves palette references automatically.
+    [string] GetColor([string]$styleKey) {
+        # e.g., $styleKey = "button.focus.background"
+        $style = $this.{_currentTheme}.styles.$styleKey
+        if (-not $style) {
+            Write-Log -Level Warning "Theme style key not found: '$styleKey'. Falling back to default."
+            return "#FF00FF" # Return a noticeable "error" color (magenta)
+        }
+        
+        # Check if the style value is a palette reference (starts with '$')
+        if ($style.StartsWith('$')) {
+            $paletteKey = $style.Substring(1) # e.g., "brandPrimary"
+            $paletteColor = $this.{_currentTheme}.palette.$paletteKey
+            if (-not $paletteColor) {
+                Write-Log -Level Warning "Theme palette key not found: '$paletteKey' referenced by '$styleKey'."
+                return "#FF00FF"
+            }
+            return $paletteColor
+        }
+        
+        # Otherwise, the style value is a direct hex code
+        return $style
+    }
+    
+    # Returns the entire theme for inspection.
+    [hashtable] GetCurrentTheme() {
+        return $this.{_currentTheme}
+    }
+
+    # Lists available theme files in the themes directory.
+    [string[]] GetAvailableThemes() {
+        return Get-ChildItem -Path $this.{_themesDirectory} -Filter "*.theme.json" | ForEach-Object {
+            $_.BaseName -replace '\.theme$'
+        }
+    }
+}

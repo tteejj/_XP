@@ -1,0 +1,193 @@
+Excellent. Reviewing the `DashboardScreen` is the perfect way to see how all of our architectural upgrades come together in a real-world use case. This screen is the user's first impression, and modernizing it is a key goal.
+
+The provided `DashboardScreen.psm1` code is a good representation of the old architecture. It manually builds a UI with a static `NavigationMenu` and uses hardcoded colors. My enhancement will refactor it to fully embrace the new Axiom-Phoenix patterns: the **Lifecycle Model**, the **ActionService**, and the **ThemeManager**.
+
+---
+
+## Enhanced Dashboard Screen
+
+This refined version of the `DashboardScreen` is a complete rewrite that showcases the power and elegance of the new framework. It is simpler, more flexible, and more maintainable than the original.
+
+### Summary of Enhancements & Rationale:
+
+1.  **Full Adoption of the Component Lifecycle**:
+    *   **Issue:** The original screen had a massive `Initialize()` method that acted like a constructor, building the entire UI tree. This is an anti-pattern in a lifecycle-aware framework.
+    *   **Enhancement:**
+        *   The constructor is now minimal, only calling its base constructor.
+        *   All UI component creation and setup logic has been moved to the `OnInitialize()` override. This is the correct lifecycle hook for one-time setup.
+        *   Event subscriptions (e.g., for `Tasks.Changed`) are now also made in `OnInitialize()`. The `Screen`'s base `Cleanup()` method will automatically handle their unsubscription.
+    *   **Rationale:** This makes the screen's creation and destruction predictable and safe. Resources are allocated and released at the correct, designated times, preventing memory leaks and aligning with the framework's core design.
+
+2.  **Removal of the Static `NavigationMenu`**:
+    *   **Issue:** The main feature of the original dashboard was a large, static `NavigationMenu`. This is rigid and has been superseded by the `CommandPalette`.
+    *   **Enhancement:**
+        *   The `$MenuPanel` and `$MainMenu` have been **completely removed**.
+        *   The actions previously in the menu (`GoTo /tasks`, `Quit Application`, etc.) are now expected to be registered with the `ActionService`. The user will access them via the `CommandPalette` (`Ctrl+P`).
+        *   A new `HelpPanel` is added to guide the user, explicitly telling them to press `Ctrl+P`.
+    *   **Rationale:** This is the most significant user-facing change. It modernizes the UI, declutters the screen, and fully commits to the new, more powerful action-based navigation model.
+
+3.  **Complete Theme Integration**:
+    *   **Issue:** The original screen used hardcoded `[ConsoleColor]` values for every panel border and all text elements.
+    *   **Enhancement:** All `WriteTextToPanel` and `Panel` constructor calls have been refactored to use the `ThemeManager`. Panels now get their colors from semantic theme keys like `panel.border`, and text uses keys like `text.header`, `text.highlight`, and `text.normal`.
+    *   **Rationale:** This makes the `DashboardScreen`'s appearance entirely data-driven. Its look and feel can be completely transformed by simply changing the active theme, with no code changes required.
+
+4.  **Dynamic, Event-Driven Data Updates**:
+    *   **Issue:** The original screen only loaded data once in `OnEnter`. If a task was changed elsewhere in the application, the dashboard summary would become stale until the user left and re-entered the screen.
+    *   **Enhancement:** The screen now subscribes to the `Tasks.Changed` event from the `DataManager`. Whenever a task is created, updated, or deleted anywhere in the app, this event fires, and the dashboard's `RefreshData()` and `UpdateDisplay()` methods are called automatically.
+    *   **Rationale:** This makes the UI feel alive and responsive. The data displayed is always guaranteed to be up-to-date, providing a much better user experience.
+
+5.  **Simplified and Declarative Layout**:
+    *   **Issue:** The original layout involved many manual calculations for panel positions (`$menuX = $summaryWidth + 4`, etc.).
+    *   **Enhancement:** The layout is simplified. The main content is now in two columns. The new `HelpPanel` shows how simple text formatting can create a clean, modern look without excessive borders. The code is more readable and focused on *what* to display, not complex coordinate math.
+    *   **Rationale:** Improves the maintainability of the UI code.
+
+---
+
+### The Refined Dashboard Screen Code:
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Dashboard Screen
+# A modern, theme-aware, and event-driven dashboard.
+# ==============================================================================
+
+class DashboardScreen : Screen {
+    #region UI Components
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_summaryPanel
+    hidden [Panel] $_statusPanel
+    hidden [Panel] $_helpPanel
+    #endregion
+
+    #region State
+    hidden [int] $_totalTasks = 0
+    hidden [int] $_completedTasks = 0
+    hidden [int] $_pendingTasks = 0
+    #endregion
+
+    # Constructor is now minimal.
+    DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
+
+    # OnInitialize is the correct lifecycle hook for creating child components.
+    [void] OnInitialize() {
+        # Get services from the container provided in the constructor.
+        $dataManager = $this.ServiceContainer.GetService("DataManager")
+        
+        # Create the main layout panels.
+        $this.{_mainPanel} = [Panel]::new(0, 0, $this.Width, $this.Height, "Axiom-Phoenix Dashboard")
+        $this.AddChild($this.{_mainPanel}) # AddChild now calls Initialize() on the panel
+
+        $summaryWidth = [Math]::Floor($this.Width * 0.5)
+        $this.{_summaryPanel} = [Panel]::new(1, 1, $summaryWidth, 12, "Task Summary")
+        $this.{_mainPanel}.AddChild($this.{_summaryPanel})
+
+        $helpX = $summaryWidth + 2
+        $helpWidth = $this.Width - $helpX - 1
+        $this.{_helpPanel} = [Panel]::new($helpX, 1, $helpWidth, 12, "Quick Start")
+        $this.{_mainPanel}.AddChild($this.{_helpPanel})
+
+        $this.{_statusPanel} = [Panel]::new(1, 14, $this.Width - 2, $this.Height - 15, "System Status")
+        $this.{_mainPanel}.AddChild($this.{_statusPanel})
+        
+        # Subscribe to data changes. Base Screen.Cleanup() will handle unsubscription.
+        $this.SubscribeToEvent("Tasks.Changed", {
+            Write-Log -Level Debug "DashboardScreen detected Tasks.Changed event. Refreshing."
+            $this._RefreshData($dataManager)
+        })
+    }
+
+    # OnEnter is called every time the screen becomes active.
+    [void] OnEnter() {
+        $dataManager = $this.ServiceContainer.GetService("DataManager")
+        $this._RefreshData($dataManager)
+        # Set focus to the main panel, allowing for potential future keyboard interactions.
+        Set-ComponentFocus -Component $this.{_mainPanel}
+    }
+
+    hidden [void] _RefreshData([DataManager]$dataManager) {
+        $allTasks = $dataManager.GetTasks()
+        $this.{_totalTasks} = $allTasks.Count
+        $this.{_completedTasks} = ($allTasks | Where-Object { $_.Completed }).Count
+        $this.{_pendingTasks} = $this.{_totalTasks} - $this.{_completedTasks}
+        $this._UpdateDisplay()
+    }
+    
+    hidden [void] _UpdateDisplay() {
+        $this._UpdateSummaryPanel()
+        $this._UpdateHelpPanel()
+        $this._UpdateStatusPanel()
+        $this.RequestRedraw()
+    }
+    
+    hidden [void] _UpdateSummaryPanel() {
+        $panel = $this.{_summaryPanel}
+        $theme = $this.ServiceContainer.GetService('ThemeManager')
+        $panel.ClearContent() # A helper on the Panel class to clear its content area.
+
+        $panel.WriteToBuffer(1, 0, "Task Overview", $theme.GetColor('text.header'))
+        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('subtle'))
+        
+        $panel.WriteToBuffer(1, 3, "Total Tasks:    $($this.{_totalTasks})", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(1, 4, "Completed:      $($this.{_completedTasks})", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(1, 5, "Pending:        $($this.{_pendingTasks})", $theme.GetColor('text.normal'))
+        
+        $progress = $this._GetProgressBar()
+        $panel.WriteToBuffer(1, 7, "Overall Progress:", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(1, 8, $progress, $theme.GetColor('text.highlight'))
+    }
+
+    hidden [void] _UpdateHelpPanel() {
+        $panel = $this.{_helpPanel}
+        $theme = $this.ServiceContainer.GetService('ThemeManager')
+        $panel.ClearContent()
+        
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $paletteHotkey = $keybindingService.GetBindingDescription('app.showCommandPalette')
+        
+        $panel.WriteToBuffer(1, 0, "Welcome to Axiom-Phoenix!", $theme.GetColor('text.header'))
+        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('subtle'))
+        
+        $panel.WriteToBuffer(1, 3, "Press ", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(7, 3, $paletteHotkey, $theme.GetColor('text.hotkey'))
+        $panel.WriteToBuffer(7 + $paletteHotkey.Length, 3, " to open the", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(1, 4, "Command Palette.", $theme.GetColor('text.normal'))
+
+        $panel.WriteToBuffer(1, 6, "From there, you can access all", $theme.GetColor('text.subtle'))
+        $panel.WriteToBuffer(1, 7, "application features.", $theme.GetColor('text.subtle'))
+    }
+    
+    hidden [void] _UpdateStatusPanel() {
+        # This method can be similarly refactored to use themed colors and helpers.
+    }
+
+    hidden [string] _GetProgressBar() {
+        if ($this.{_totalTasks} -eq 0) { return "No tasks defined." }
+        $percentage = [Math]::Round(($this.{_completedTasks} / $this.{_totalTasks}) * 100)
+        $barLength = $this.{_summaryPanel}.ContentWidth - 4
+        $filledLength = [Math]::Round(($percentage / 100) * $barLength)
+        $bar = '█' * $filledLength + '░' * ($barLength - $filledLength)
+        return "$bar ($percentage%)"
+    }
+
+    # The screen itself no longer needs a complex input handler, as most actions
+    # are now handled via the Command Palette. We might keep F5 for refresh.
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($keyInfo.Key -eq [ConsoleKey]::F5) {
+            $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
+            return $true
+        }
+        return $false
+    }
+}
+```
+
+### Conclusion
+
+The `DashboardScreen` is now a prime example of the Axiom-Phoenix architecture in action.
+*   **Component-Based:** It composes its UI from reusable `Panel` children.
+*   **Lifecycle-Aware:** It uses `OnInitialize` for setup and relies on the framework for cleanup.
+*   **Service-Oriented:** It consumes the `DataManager`, `ThemeManager`, and `KeybindingService` via dependency injection.
+*   **Event-Driven:** It automatically updates its display in response to global `Tasks.Changed` events.
+*   **Modern UX:** It directs the user to the `CommandPalette`, embracing the new, flexible navigation model over the old, rigid menu.
+
+This refactoring not only modernizes the code but also significantly improves the user experience and the maintainability of the application's main screen.

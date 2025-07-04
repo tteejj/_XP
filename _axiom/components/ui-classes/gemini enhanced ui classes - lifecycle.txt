@@ -1,0 +1,227 @@
+You are absolutely right. My apologies for the misunderstanding. I have now reviewed the initial `ui-classes.psm1` you provided and am ready to proceed with the core task for **Phase 4: Designing and implementing the full component lifecycle.**
+
+This is a critical architectural upgrade. We will transform the `UIElement` from a simple class with rendering and input methods into a fully-fledged, lifecycle-aware component. This will make resource management automatic and predictable, and it's the foundation for creating truly dynamic and resilient UIs.
+
+---
+
+## Designing the Full Component Lifecycle
+
+Based on modern UI frameworks and the needs of a TUI, the essential lifecycle hooks are:
+
+1.  **`Initialize()`:** Called **once** when a component is fully constructed and added to a parent. This is the ideal place to:
+    *   Create and configure child components.
+    *   Subscribe to events.
+    *   Perform initial data loading.
+
+2.  **`Cleanup()`:** Called **once** when a component is being permanently destroyed. This is the counterpart to `Initialize()` and is crucial for preventing resource leaks. It's the place to:
+    *   Unsubscribe from all events.
+    *   Dispose of any unmanaged resources (e.g., timers, file handles).
+    *   Recursively call `Cleanup()` on all child components.
+
+3.  **`OnResize()`:** We already have this method, but we will formalize its role. It's called whenever the component's dimensions change, allowing it to re-calculate layouts and resize its children.
+
+### Implementation Plan
+
+To integrate this lifecycle into our existing classes, we will perform the following steps:
+
+1.  **Enhance `UIElement`:**
+    *   Add new virtual methods: `Initialize()` and `Cleanup()`.
+    *   Modify `AddChild()` to automatically call `Initialize()` on the new child.
+    *   Implement the recursive cleanup logic in the `UIElement.Cleanup()` method.
+
+2.  **Enhance `TUI-Engine` and `NavigationService` (Conceptual):**
+    *   The `TUI-Engine`'s `Pop-Screen` function must be modified to call `Cleanup()` on the screen being removed.
+    *   The `TUI-Engine` needs a mechanism to detect terminal resize events and propagate them down the UI tree by calling `OnResize()`.
+
+3.  **Refactor Existing Components:**
+    *   We will refactor a key component (like the `CommandPalette` or `Screen`) to demonstrate the proper use of the new lifecycle hooks, moving logic from constructors into `Initialize()`.
+
+---
+
+### The Refined `ui-classes.psm1` with Full Lifecycle
+
+Here is the enhanced code for `ui-classes.psm1`. The changes are focused on integrating the `Initialize` and `Cleanup` lifecycle hooks.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - UI Class Hierarchy with Full Component Lifecycle
+# ==============================================================================
+
+class UIElement {
+    # --- Properties (unchanged from previous enhancement) ---
+    [string] $Name = ""
+    [int] $X = 0; [int] $Y = 0; [int] $Width = 10; [int] $Height = 3
+    [bool] $Visible = $true; [bool] $Enabled = $true
+    [bool] $IsFocusable = $false; [bool] $IsFocused = $false
+    [int] $TabIndex = 0; [int] $ZIndex = 0
+    [UIElement] $Parent = $null
+    [System.Collections.Generic.List[UIElement]] $Children
+    [hashtable] $Metadata = @{}
+    
+    hidden [TuiBuffer] $_private_buffer
+    hidden [bool] $_needs_redraw = $true
+    hidden [bool] $_isInitialized = $false # NEW: Flag to prevent multiple initializations
+
+    # --- Constructors (unchanged) ---
+    UIElement() { $this.Children = [System.Collections.Generic.List[UIElement]]::new() }
+    UIElement([string]$name) { $this.Name = $name; $this.Children = [System.Collections.Generic.List[UIElement]]::new() }
+    
+    # --- Lifecycle Methods ---
+
+    # NEW: Initialize() - Called once when the component is ready.
+    [void] Initialize() {
+        if ($this._isInitialized) { return }
+        $this.OnInitialize() # Call the overrideable hook
+        $this._isInitialized = $true
+        Write-Verbose "Initialized component '$($this.Name)'."
+    }
+    
+    # NEW: OnInitialize() - Virtual hook for subclasses.
+    [void] OnInitialize() {
+        # Base implementation does nothing. Subclasses override this
+        # to create children, subscribe to events, etc.
+    }
+    
+    # NEW: Cleanup() - Called once to destroy the component and its children.
+    [void] Cleanup() {
+        Write-Verbose "Cleaning up component '$($this.Name)' and its children."
+        # Cleanup children first (depth-first traversal)
+        foreach ($child in $this.Children) {
+            $child.Cleanup()
+        }
+        $this.Children.Clear()
+        
+        # Call the overrideable hook for this component's specific cleanup
+        $this.OnCleanup()
+    }
+
+    # NEW: OnCleanup() - Virtual hook for subclasses.
+    [void] OnCleanup() {
+        # Base implementation does nothing. Subclasses override this
+        # to unsubscribe from events, dispose of resources, etc.
+    }
+
+    # --- Existing Methods (with lifecycle integration) ---
+    
+    # MODIFIED: AddChild now triggers the Initialize lifecycle hook.
+    [void] AddChild([UIElement]$child) {
+        if ($null -ne $child) {
+            $child.Parent = $this
+            $this.Children.Add($child)
+            
+            # --- LIFECYCLE INTEGRATION ---
+            # Initialize the child component now that it's part of the UI tree.
+            $child.Initialize()
+            
+            $this.RequestRedraw()
+        }
+    }
+
+    # MODIFIED: RemoveChild now triggers the Cleanup lifecycle hook.
+    [void] RemoveChild([UIElement]$child) {
+        if ($null -ne $child -and $this.Children.Contains($child)) {
+            # --- LIFECYCLE INTEGRATION ---
+            # Clean up the component being removed.
+            $child.Cleanup()
+            
+            $child.Parent = $null
+            [void]$this.Children.Remove($child)
+            $this.RequestRedraw()
+        }
+    }
+    
+    # OnResize() - No changes needed, already part of the model.
+    [void] OnResize([int]$newWidth, [int]$newHeight) { }
+
+    # --- Other methods (GetAbsolutePosition, Move, Render, etc.) are unchanged ---
+    [hashtable] GetAbsolutePosition() { $absX = $this.X; $absY = $this.Y; $c = $this.Parent; while($c){$absX+=$c.X;$absY+=$c.Y;$c=$c.Parent}; return @{X=$absX;Y=$absY} }
+    [void] RequestRedraw() { $this._needs_redraw = $true; $this.Parent?.RequestRedraw() }
+    [void] Resize([int]$newWidth, [int]$newHeight) { if($newWidth -le 0 -or $newHeight -le 0){return}; $this.Width=$newWidth; $this.Height=$newHeight; $this._private_buffer?.Resize($newWidth, $newHeight); $this.RequestRedraw(); $this.OnResize($newWidth,$newHeight) }
+    [void] Move([int]$newX, [int]$newY) { $this.X=$newX; $this.Y=$newY; $this.RequestRedraw(); $this.OnMove($newX,$newY) }
+    [void] OnMove([int]$newX, [int]$newY) {}
+    [void] OnFocus() {}
+    [void] OnBlur() {}
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) { return $false }
+    [void] OnRender() { if ($this._private_buffer) { $this._private_buffer.Clear() } }
+    [void] Render() { if (-not $this.Visible) { return }; $this._RenderContent() }
+    hidden [void] _RenderContent() { if(-not $this.Visible){return};if($this._needs_redraw -or !$this._private_buffer){if(!$this._private_buffer -or $this._private_buffer.Width-ne $this.Width -or $this._private_buffer.Height-ne $this.Height){$this._private_buffer=[TuiBuffer]::new($this.Width,$this.Height,"$($this.Name).Buffer")};$this.OnRender();$this._needs_redraw=$false};foreach($child in $this.Children|Sort-Object ZIndex){if($child.Visible){$child.Render();if($child._private_buffer){$this._private_buffer.BlendBuffer($child._private_buffer,$child.X,$child.Y)}}}}
+    [TuiBuffer] GetBuffer() { return $this._private_buffer }
+}
+
+class Screen : UIElement {
+    # --- Properties (unchanged) ---
+    [object]$ServiceContainer
+    [System.Collections.Generic.Dictionary[string, object]]$State
+    hidden [System.Collections.Generic.Dictionary[string, string]]$EventSubscriptions
+
+    Screen([string]$name, [object]$serviceContainer) : base($name) {
+        if (-not $serviceContainer) { throw [ArgumentNullException]::new("serviceContainer") }
+        $this.ServiceContainer = $serviceContainer
+        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+    }
+
+    # --- Overridden Lifecycle Hooks ---
+
+    # MODIFIED: The screen's constructor no longer creates components.
+    # That logic is moved to OnInitialize().
+    
+    # OnInitialize() is where a Screen should build its UI.
+    [void] OnInitialize() {
+        # Base implementation is empty. A specific screen like DashboardScreen
+        # would override this method to create its panels and components.
+        # Example for DashboardScreen:
+        #   $this.MainPanel = [Panel]::new(...)
+        #   $this.AddChild($this.MainPanel)
+        #   $this.MainMenu = [NavigationMenu]::new(...)
+        #   $this.MainPanel.AddChild($this.MainMenu)
+    }
+    
+    # MODIFIED: OnCleanup now correctly cleans up event subscriptions.
+    [void] OnCleanup() {
+        Write-Verbose "Cleaning up event subscriptions for screen '$($this.Name)'."
+        foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
+            try {
+                Unsubscribe-Event -EventName $kvp.Key -HandlerId $kvp.Value
+            } catch {
+                Write-Log -Level Warning -Message "Failed to unsubscribe event '$($kvp.Key)' during screen cleanup: $_"
+            }
+        }
+        $this.EventSubscriptions.Clear()
+    }
+    
+    # --- Helper Methods (with lifecycle integration) ---
+    
+    # MODIFIED: SubscribeToEvent is now safe because OnCleanup will handle unsubscription.
+    [void] SubscribeToEvent([string]$eventName, [scriptblock]$action) {
+        $subscriptionId = Subscribe-Event -EventName $eventName -Handler $action -Source $this.Name
+        $this.EventSubscriptions[$eventName] = $subscriptionId
+    }
+
+    # --- Other methods are unchanged ---
+    [void] OnEnter() {}
+    [void] OnExit() {}
+    [void] OnResume() {}
+}
+```
+
+---
+
+### How This Achieves Phase 4 Goals
+
+1.  **Defined Lifecycle:** The base `UIElement` now has a clear, standardized lifecycle: `Constructor` -> `AddChild` -> `Initialize` -> ... (rendering/input) ... -> `RemoveChild`/`Cleanup`.
+2.  **Automatic Resource Management:**
+    *   When a screen is popped from the navigation stack, the TUI engine will now call `$screen.Cleanup()`.
+    *   This single call triggers a recursive cascade: the screen cleans up its own event subscriptions, then calls `Cleanup()` on each of its child panels.
+    *   Each panel, in turn, calls `Cleanup()` on its child components, and so on.
+    *   This ensures that all resources associated with a screen are released reliably, **preventing memory leaks**.
+3.  **Clean Component Initialization:** Logic for creating child components, subscribing to events, or loading data is now moved out of constructors and into the `OnInitialize` hook. This is better practice because it ensures that a component's `Parent` and other contextual properties are set *before* its setup logic runs.
+
+### Next Steps for Completing Phase 4
+
+With this enhanced `ui-classes.psm1` as our new foundation, the next steps are:
+
+1.  **Update `TUI-Engine`:** Review `tui-engine.psm1` and modify the `Pop-Screen` (or equivalent) function to call `$screen.Cleanup()` on the screen that is being removed from the stack.
+2.  **Refactor a Concrete Screen:** Review `screens/dashboard-screen.psm1`. Move the panel and component creation logic from its `Initialize()` method (which in the old code acted as a constructor-like setup method) into a new, overridden `OnInitialize()` method. This will demonstrate the new pattern in action.
+
+I recommend we proceed by reviewing the **`tui-engine.psm1`** file next to implement the crucial cleanup trigger.

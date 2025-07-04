@@ -1,399 +1,205 @@
 # ==============================================================================
-# PMC Terminal Axiom-Phoenix v4.0 - Service Container Module
+# Axiom-Phoenix v4.0 - Service Container
+# Provides a robust, centralized dependency injection container with lifecycle management.
 # ==============================================================================
-# Purpose: Provides a centralized dependency injection container for all services
-# Features:
-#   - Service registration with lifecycle management
-#   - Constructor-based dependency injection
-#   - Lazy loading and singleton patterns
-#   - Service resolution with dependency graph
-#   - Circular dependency detection
-# ==============================================================================
-
-using namespace System
-using namespace System.Collections.Generic
-
-# Service lifecycle enumeration
-enum ServiceLifecycle {
-    Singleton    # One instance for entire application lifetime
-    Transient    # New instance every time requested
-    Scoped       # One instance per scope (future enhancement)
-}
-
-# Service registration metadata
-class ServiceRegistration {
-    [string] $Name
-    [type] $ServiceType
-    [type] $ImplementationType
-    [ServiceLifecycle] $Lifecycle
-    [scriptblock] $Factory
-    [object] $Instance
-    [bool] $IsResolved
-    [string[]] $Dependencies
-    [hashtable] $Metadata
-    
-    ServiceRegistration() {
-        $this.Lifecycle = [ServiceLifecycle]::Singleton
-        $this.IsResolved = $false
-        $this.Dependencies = @()
-        $this.Metadata = @{}
-    }
-}
-
-# Main service container class
-class ServiceContainer {
-    hidden [Dictionary[string, ServiceRegistration]] $registrations
-    hidden [HashSet[string]] $resolvingServices
-    hidden [bool] $isLocked
-    hidden [hashtable] $scopedInstances
-    
-    ServiceContainer() {
-        $this.registrations = [Dictionary[string, ServiceRegistration]]::new()
-        $this.resolvingServices = [HashSet[string]]::new()
-        $this.isLocked = $false
-        $this.scopedInstances = @{}
-    }
-    
-    # Register a service with explicit implementation type
-    [void] Register([string]$name, [type]$serviceType, [type]$implementationType) {
-        $this.Register($name, $serviceType, $implementationType, [ServiceLifecycle]::Singleton)
-    }
-    
-    # Register a service with explicit implementation type and lifecycle
-    [void] Register([string]$name, [type]$serviceType, [type]$implementationType, [ServiceLifecycle]$lifecycle) {
-        $this.ValidateNotLocked()
-        
-        if ($this.registrations.ContainsKey($name)) {
-            throw "Service '$name' is already registered"
-        }
-        
-        if (-not $implementationType.IsSubclassOf($serviceType) -and $implementationType -ne $serviceType) {
-            if (-not ($serviceType.IsInterface -and $implementationType.GetInterfaces() -contains $serviceType)) {
-                throw "Implementation type '$($implementationType.FullName)' does not implement service type '$($serviceType.FullName)'"
-            }
-        }
-        
-        $registration = [ServiceRegistration]::new()
-        $registration.Name = $name
-        $registration.ServiceType = $serviceType
-        $registration.ImplementationType = $implementationType
-        $registration.Lifecycle = $lifecycle
-        
-        # Analyze constructor dependencies
-        $registration.Dependencies = $this.AnalyzeDependencies($implementationType)
-        
-        $this.registrations[$name] = $registration
-        
-        Write-Log -Level Debug -Message "Registered service '$name' as $($implementationType.Name) with lifecycle $lifecycle"
-    }
-    
-    # Register a service with a factory function
-    [void] RegisterFactory([string]$name, [type]$serviceType, [scriptblock]$factory) {
-        $this.RegisterFactory($name, $serviceType, $factory, [ServiceLifecycle]::Singleton)
-    }
-    
-    # Register a service with a factory function and lifecycle
-    [void] RegisterFactory([string]$name, [type]$serviceType, [scriptblock]$factory, [ServiceLifecycle]$lifecycle) {
-        $this.ValidateNotLocked()
-        
-        if ($this.registrations.ContainsKey($name)) {
-            throw "Service '$name' is already registered"
-        }
-        
-        $registration = [ServiceRegistration]::new()
-        $registration.Name = $name
-        $registration.ServiceType = $serviceType
-        $registration.Factory = $factory
-        $registration.Lifecycle = $lifecycle
-        
-        $this.registrations[$name] = $registration
-        
-        Write-Log -Level Debug -Message "Registered factory for service '$name' with lifecycle $lifecycle"
-    }
-    
-    # Register an existing instance as a singleton
-    [void] RegisterInstance([string]$name, [object]$instance) {
-        $this.ValidateNotLocked()
-        
-        if ($this.registrations.ContainsKey($name)) {
-            throw "Service '$name' is already registered"
-        }
-        
-        if ($null -eq $instance) {
-            throw "Cannot register null instance"
-        }
-        
-        $registration = [ServiceRegistration]::new()
-        $registration.Name = $name
-        $registration.ServiceType = $instance.GetType()
-        $registration.ImplementationType = $instance.GetType()
-        $registration.Lifecycle = [ServiceLifecycle]::Singleton
-        $registration.Instance = $instance
-        $registration.IsResolved = $true
-        
-        $this.registrations[$name] = $registration
-        
-        Write-Log -Level Debug -Message "Registered instance for service '$name' of type $($instance.GetType().Name)"
-    }
-    
-    # Resolve a service by name
-    [object] Resolve([string]$name) {
-        if (-not $this.registrations.ContainsKey($name)) {
-            throw "Service '$name' is not registered"
-        }
-        
-        # Check for circular dependencies
-        if ($this.resolvingServices.Contains($name)) {
-            $cycle = $this.resolvingServices -join " -> "
-            throw "Circular dependency detected: $cycle -> $name"
-        }
-        
-        $registration = $this.registrations[$name]
-        
-        # Return existing instance for singletons
-        if ($registration.Lifecycle -eq [ServiceLifecycle]::Singleton -and $registration.IsResolved) {
-            return $registration.Instance
-        }
-        
-        # Add to resolving set
-        [void]$this.resolvingServices.Add($name)
-        
-        try {
-            $instance = $null
-            
-            if ($null -ne $registration.Factory) {
-                # Use factory to create instance
-                $instance = & $registration.Factory $this
-            }
-            elseif ($null -ne $registration.ImplementationType) {
-                # Create instance using constructor injection
-                $instance = $this.CreateInstance($registration.ImplementationType)
-            }
-            else {
-                throw "No factory or implementation type specified for service '$name'"
-            }
-            
-            if ($null -eq $instance) {
-                throw "Failed to create instance for service '$name'"
-            }
-            
-            # Store instance for singletons
-            if ($registration.Lifecycle -eq [ServiceLifecycle]::Singleton) {
-                $registration.Instance = $instance
-                $registration.IsResolved = $true
-            }
-            
-            Write-Log -Level Debug -Message "Resolved service '$name' as $($instance.GetType().Name)"
-            
-            return $instance
-        }
-        finally {
-            # Remove from resolving set
-            [void]$this.resolvingServices.Remove($name)
-        }
-    }
-    
-    # Resolve a service by type
-    [object] ResolveByType([type]$serviceType) {
-        $matches = @()
-        
-        foreach ($registration in $this.registrations.Values) {
-            if ($registration.ServiceType -eq $serviceType) {
-                $matches += $registration
-            }
-        }
-        
-        if ($matches.Count -eq 0) {
-            throw "No service registered for type '$($serviceType.FullName)'"
-        }
-        
-        if ($matches.Count -gt 1) {
-            throw "Multiple services registered for type '$($serviceType.FullName)'. Use Resolve(name) instead."
-        }
-        
-        return $this.Resolve($matches[0].Name)
-    }
-    
-    # Try to resolve a service, return null if not found
-    [object] TryResolve([string]$name) {
-        try {
-            return $this.Resolve($name)
-        }
-        catch {
-            return $null
-        }
-    }
-    
-    # Check if a service is registered
-    [bool] IsRegistered([string]$name) {
-        return $this.registrations.ContainsKey($name)
-    }
-    
-    # Get all registered service names
-    [string[]] GetRegisteredServices() {
-        return $this.registrations.Keys
-    }
-    
-    # Lock the container (prevent further registrations)
-    [void] Lock() {
-        $this.isLocked = $true
-        Write-Log -Level Debug -Message "Service container locked"
-    }
-    
-    # Create a scoped container (for future use)
-    [ServiceContainer] CreateScope() {
-        # TODO: Implement scoped containers for request-scoped services
-        throw "Scoped containers not yet implemented"
-    }
-    
-    # Private helper methods
-    hidden [void] ValidateNotLocked() {
-        if ($this.isLocked) {
-            throw "Service container is locked. No new registrations allowed."
-        }
-    }
-    
-    hidden [string[]] AnalyzeDependencies([type]$type) {
-        $dependencies = @()
-        
-        # Get all constructors
-        $constructors = $type.GetConstructors()
-        
-        if ($constructors.Count -eq 0) {
-            return $dependencies
-        }
-        
-        # Use the constructor with most parameters (convention)
-        $constructor = $constructors | Sort-Object { $_.GetParameters().Count } -Descending | Select-Object -First 1
-        
-        foreach ($param in $constructor.GetParameters()) {
-            # Look for a service that matches the parameter type
-            foreach ($registration in $this.registrations.Values) {
-                if ($registration.ServiceType -eq $param.ParameterType) {
-                    $dependencies += $registration.Name
-                    break
-                }
-            }
-        }
-        
-        return $dependencies
-    }
-    
-    hidden [object] CreateInstance([type]$type) {
-        # Get all constructors
-        $constructors = $type.GetConstructors()
-        
-        if ($constructors.Count -eq 0) {
-            throw "Type '$($type.FullName)' has no public constructors"
-        }
-        
-        # Try constructors from most to least parameters
-        $sortedConstructors = $constructors | Sort-Object { $_.GetParameters().Count } -Descending
-        
-        foreach ($constructor in $sortedConstructors) {
-            $parameters = $constructor.GetParameters()
-            $args = @()
-            $canResolve = $true
-            
-            foreach ($param in $parameters) {
-                # Special handling for hashtable parameter (services container)
-                if ($param.ParameterType -eq [hashtable]) {
-                    # Create a hashtable proxy for the service container
-                    $servicesProxy = @{}
-                    foreach ($key in $this.registrations.Keys) {
-                        $servicesProxy[$key] = $this.Resolve($key)
-                    }
-                    $args += $servicesProxy
-                    continue
-                }
-                
-                # Try to resolve by type
-                $resolved = $false
-                foreach ($registration in $this.registrations.Values) {
-                    if ($registration.ServiceType -eq $param.ParameterType) {
-                        try {
-                            $args += $this.Resolve($registration.Name)
-                            $resolved = $true
-                            break
-                        }
-                        catch {
-                            # Continue to next registration
-                        }
-                    }
-                }
-                
-                if (-not $resolved) {
-                    # Check if parameter has default value
-                    if ($param.HasDefaultValue) {
-                        $args += $param.DefaultValue
-                    }
-                    else {
-                        $canResolve = $false
-                        break
-                    }
-                }
-            }
-            
-            if ($canResolve) {
-                try {
-                    return $constructor.Invoke($args)
-                }
-                catch {
-                    Write-Log -Level Warning -Message "Failed to invoke constructor for $($type.FullName): $_"
-                }
-            }
-        }
-        
-        throw "Could not create instance of type '$($type.FullName)'. Unable to resolve all constructor dependencies."
-    }
-}
-
-# Global functions for module export
-function New-ServiceContainer {
-    <#
-    .SYNOPSIS
-    Creates a new service container instance
-    
-    .DESCRIPTION
-    Creates a new dependency injection container for managing application services
-    
-    .EXAMPLE
-    $container = New-ServiceContainer
-    #>
-    return [ServiceContainer]::new()
-}
+#Requires -Version 7.2
 
 function Initialize-ServiceContainer {
     <#
     .SYNOPSIS
-    Initializes the global service container with PMC Terminal services
-    
-    .DESCRIPTION
-    Sets up all the standard services used by PMC Terminal with proper registration
-    
-    .PARAMETER Services
-    Existing services hashtable to migrate to container (optional)
-    
-    .EXAMPLE
-    $container = Initialize-ServiceContainer -Services $existingServices
+    Creates and returns a new instance of the ServiceContainer.
     #>
-    param(
-        [hashtable]$Services = @{}
-    )
+    [CmdletBinding()]
+    param()
     
-    $container = New-ServiceContainer
-    
-    # Register existing service instances if provided
-    foreach ($key in $Services.Keys) {
-        if ($null -ne $Services[$key]) {
-            $container.RegisterInstance($key, $Services[$key])
+    return Invoke-WithErrorHandling -Component "ServiceContainer.Initialize" -Context "Creating new service container instance" -ScriptBlock {
+        Write-Verbose "ServiceContainer: Initializing new instance."
+        return [ServiceContainer]::new()
+    }
+}
+
+# The ServiceContainer is a central registry for application-wide services.
+# It supports lazy initialization, singleton/transient lifestyles, circular
+# dependency detection, and managed resource cleanup.
+class ServiceContainer {
+    #region Private State
+    hidden [hashtable] $_services = @{}
+    hidden [hashtable] $_serviceFactories = @{}
+    #endregion
+
+    #region Constructor
+    ServiceContainer() {
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer created."
+        }
+        Write-Verbose "ServiceContainer: Instance constructed."
+    }
+    #endregion
+
+    #region Public Methods
+    # Registers an already created service instance (eager loading).
+    [void] Register(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
+        [Parameter(Mandatory)][ValidateNotNull()][object]$serviceInstance
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "Register" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+
+            $this.{_services}[$name] = $serviceInstance
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Registered eager service instance: '$name'."
+            }
+            Write-Verbose "ServiceContainer: Registered eager instance for '$name' of type '$($serviceInstance.GetType().Name)'."
+        }
+    }
+
+    # Registers a factory scriptblock used to create the service on-demand (lazy loading).
+    [void] RegisterFactory(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
+        [Parameter(Mandatory)][ValidateNotNull()][scriptblock]$factory,
+        [bool]$isSingleton = $true
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "RegisterFactory" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+            
+            $this.{_serviceFactories}[$name] = @{
+                Factory = $factory
+                IsSingleton = $isSingleton
+                Instance = $null # To hold the singleton instance once created
+            }
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Registered service factory: '$name' (Singleton: $isSingleton)."
+            }
+            Write-Verbose "ServiceContainer: Registered factory for '$name' (Singleton: $isSingleton)."
+        }
+    }
+
+    # Retrieves a service by its name.
+    [object] GetService([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+        return Invoke-WithErrorHandling -Component "ServiceContainer" -Context "GetService" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # 1. Return from eager-loaded services
+            if ($this.{_services}.ContainsKey($name)) {
+                Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."
+                return $this.{_services}[$name]
+            }
+
+            # 2. Check for a factory
+            if ($this.{_serviceFactories}.ContainsKey($name)) {
+                return $this._InitializeServiceFromFactory($name, [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase))
+            }
+
+            # 3. If not found, throw a detailed error
+            $available = $this.GetAllRegisteredServices() | Select-Object -ExpandProperty Name
+            throw [System.InvalidOperationException]::new("Service '$name' not found. Available services: $($available -join ', ')")
         }
     }
     
-    Write-Log -Level Info -Message "Service container initialized with $($container.GetRegisteredServices().Count) services"
-    
-    return $container
+    # Retrieves a list of all registered services and their status.
+    [object[]] GetAllRegisteredServices() {
+        $list = [System.Collections.Generic.List[object]]::new()
+        
+        foreach ($key in $this.{_services}.Keys) {
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Instance'
+                Initialized = $true
+                Lifestyle = 'Singleton' # Eager instances are always singletons
+            })
+        }
+        
+        foreach ($key in $this.{_serviceFactories}.Keys) {
+            $factoryInfo = $this.{_serviceFactories}[$key]
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Factory'
+                Initialized = ($null -ne $factoryInfo.Instance)
+                Lifestyle = if ($factoryInfo.IsSingleton) { 'Singleton' } else { 'Transient' }
+            })
+        }
+        
+        return $list.ToArray() | Sort-Object Name
+    }
+
+    # Cleans up all managed singleton services that implement IDisposable.
+    [void] Cleanup() {
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer cleanup initiated."
+        }
+        Write-Verbose "ServiceContainer: Initiating cleanup of disposable singleton services."
+        
+        # Collect all singleton instances
+        $instancesToClean = [System.Collections.Generic.List[object]]::new()
+        $this.{_services}.Values | ForEach-Object { $instancesToClean.Add($_) }
+        $this.{_serviceFactories}.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
+
+        foreach ($service in $instancesToClean) {
+            if ($service -is [System.IDisposable]) {
+                try {
+                    Write-Verbose "ServiceContainer: Disposing service of type '$($service.GetType().FullName)'."
+                    $service.Dispose()
+                } catch {
+                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                        Write-Log -Level Error -Message "Error disposing service of type '$($service.GetType().FullName)': $($_.Exception.Message)"
+                    }
+                }
+            }
+        }
+        
+        $this.{_services}.Clear()
+        $this.{_serviceFactories}.Clear()
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer cleanup complete."
+        }
+        Write-Verbose "ServiceContainer: Cleanup complete. All service registries cleared."
+    }
+    #endregion
+
+    #region Private Methods
+    # The core logic for instantiating a service from its factory.
+    hidden [object] _InitializeServiceFromFactory([string]$name, [System.Collections.Generic.HashSet[string]]$resolutionChain) {
+        $factoryInfo = $this.{_serviceFactories}[$name]
+        
+        # For singletons, if an instance already exists, return it immediately.
+        if ($factoryInfo.IsSingleton -and $null -ne $factoryInfo.Instance) {
+            Write-Verbose "ServiceContainer: Returning cached singleton instance of '$name'."
+            return $factoryInfo.Instance
+        }
+
+        # Circular dependency detection
+        if ($resolutionChain.Contains($name)) {
+            $chain = ($resolutionChain -join ' -> ') + " -> $name"
+            throw [System.InvalidOperationException]::new("Circular dependency detected while resolving service '$name'. Chain: $chain")
+        }
+        [void]$resolutionChain.Add($name)
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Instantiating service '$name' from factory."
+        }
+        Write-Verbose "ServiceContainer: Invoking factory to create instance of '$name'."
+        
+        # Invoke the factory, passing the container itself as an argument.
+        $serviceInstance = & $factoryInfo.Factory $this
+
+        # If it's a singleton, cache the new instance.
+        if ($factoryInfo.IsSingleton) {
+            $factoryInfo.Instance = $serviceInstance
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Cached singleton instance of service '$name'."
+            }
+            Write-Verbose "ServiceContainer: Cached new singleton instance of '$name'."
+        }
+
+        # Unwind the resolution chain
+        [void]$resolutionChain.Remove($name)
+        
+        return $serviceInstance
+    }
+    #endregion
 }
 
-# Export module members
-Export-ModuleMember -Function New-ServiceContainer, Initialize-ServiceContainer
+# Export the factory function
+Export-ModuleMember -Function Initialize-ServiceContainer

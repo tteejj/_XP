@@ -1,0 +1,29 @@
+# From the enhanced tui-components.psm1
+
+class ButtonComponent : UIElement {
+    # ... properties are unchanged ...
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        # Get the theme manager from the service container (assuming it's available)
+        # This would typically be passed into the component's constructor or resolved via a service locator.
+        # For this example, we assume Get-Service is a global helper.
+        $theme = $global:App.Services.ThemeManager # Simplified access for example
+        
+        # 1. Determine the component's state
+        $state = if ($this.IsPressed) { "pressed" } elseif ($this.IsFocused) { "focus" } else { "normal" }
+
+        # 2. Ask the ThemeManager for the correct colors based on state
+        $bgColor = $theme.GetColor("button.$state.background")
+        $borderColor = $theme.GetColor("button.$state.border")
+        $fgColor = $theme.GetColor("button.$state.foreground")
+        
+        # 3. Render using the theme-provided colors
+        $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderColor $borderColor
+        # ... and so on ...
+    }
+    
+    # ... HandleInput remains the same ...
+}

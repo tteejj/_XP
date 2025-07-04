@@ -1,0 +1,31 @@
+{
+  "name": "Axiom Default",
+  "author": "PMC Terminal Team",
+  "palette": {
+    "brandPrimary": "#00AADD",
+    "brandSecondary": "#0088AA",
+    "textNormal": "#E0E0E0",
+    "textSubtle": "#808080",
+    "textHeader": "#FFFFFF",
+    "surface0": "#1E1E1E",
+    "surface1": "#252526",
+    "borderNormal": "#404040",
+    "borderFocus": "#00AADD",
+    "selection": "#004E66"
+  },
+  "styles": {
+    "background": "$surface0",
+
+    "button.normal.background": "$surface1",
+    "button.normal.foreground": "$textNormal",
+    "button.normal.border": "$borderNormal",
+
+    "button.focus.background": "$surface1",
+    "button.focus.foreground": "$textHeader",
+    "button.focus.border": "$borderFocus",
+
+    "button.pressed.background": "$brandSecondary",
+    "button.pressed.foreground": "$textHeader",
+    "button.pressed.border": "$brandPrimary"
+  }
+}

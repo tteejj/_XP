@@ -1,0 +1,247 @@
+Perfect. We are now reviewing the `tui-engine.psm1` file to integrate the component lifecycle features we just designed in `ui-classes.psm1`. The engine is the orchestrator, so it's responsible for triggering the key lifecycle events at the correct times.
+
+The provided TUI Engine code is already very advanced, incorporating the `Panic Handler` and a solid compositor loop. Our task is to weave the new lifecycle hooks into its existing screen management logic.
+
+---
+
+## Enhanced TUI Engine with Full Component Lifecycle
+
+This refined version of the TUI Engine correctly manages the entire component lifecycle, from initialization to cleanup. The changes are focused, safe, and critical for preventing resource leaks and enabling dynamic UI updates.
+
+### Summary of Enhancements & Rationale:
+
+1.  **Correct `Initialize()` Invocation for Screens**:
+    *   **Issue:** The original `Push-Screen` function did not call the new `Initialize()` lifecycle method. It only called `OnEnter()`. This meant that components, which should be created in a screen's `OnInitialize()` override, would never be built.
+    *   **Enhancement:** In `Push-Screen`, after the new screen is set as the `CurrentScreen`, the engine now **immediately calls `$Screen.Initialize()`**. This is done only once per screen instance.
+    *   **Rationale:** This correctly triggers the one-time setup logic for a screen and all its children. This is the designated point where a screen should build its UI, subscribe to events, and prepare its initial state.
+
+2.  **Robust `Cleanup()` on `Pop-Screen` and `Push-Screen`**:
+    *   **Issue:** The original `Pop-Screen` function called `OnExit()` but had no mechanism to permanently destroy the popped screen and release its resources. Similarly, when a new screen was pushed on top of an old one, the old one was placed on the stack but was never cleaned up if the application quit before it was popped.
+    *   **Enhancement:**
+        *   In `Pop-Screen`, after the screen is popped, the engine now **immediately calls `$screenToExit.Cleanup()`**. This triggers the recursive cleanup of the entire component tree for that screen, unsubscribing from all events and freeing resources.
+        *   The logic in `Push-Screen` is also updated. When pushing a new screen, the old `CurrentScreen` has its `OnExit()` method called before being pushed to the stack. This is correct. The `Cleanup()` is intentionally *not* called here, as the screen is being preserved for potential navigation back.
+    *   **Rationale:** This is the most critical enhancement for Phase 4. It ensures that when a screen is navigated away from permanently (popped), its resources are completely released, preventing memory leaks.
+
+3.  **Full Application Shutdown Cleanup**:
+    *   **Issue:** The `Cleanup-TuiEngine` function correctly stopped the input thread and reset the console, but it didn't clean up the screens that were still active or on the stack.
+    *   **Enhancement:** The `Cleanup-TuiEngine` function is updated to be the final authority on cleanup. It now iterates through the *entire* `$global:TuiState.ScreenStack` and calls `Cleanup()` on each screen, and finally calls `Cleanup()` on the `$global:TuiState.CurrentScreen`.
+    *   **Rationale:** This ensures that on application exit (whether normally or via a panic), every single component that was ever created gets its `Cleanup()` method called, guaranteeing a complete and orderly shutdown with no orphaned resources.
+
+4.  **Terminal Resize Event Handling (Conceptual Foundation)**:
+    *   **Issue:** The engine had no way to react to the user resizing the terminal window.
+    *   **Enhancement:**
+        *   Added a new `Check-ForResize()` function. This function compares the current `[Console]::WindowWidth` and `[Console]::WindowHeight` against the stored values in `$global:TuiState`.
+        *   If a change is detected, it publishes a global `"TUI.Resized"` event. It then updates the TUI state and calls `$global:TuiState.CurrentScreen.Resize(...)`, which will trigger a recursive resize down the component tree.
+        *   This `Check-ForResize()` function is now called once per frame within the main `Start-TuiLoop`.
+    *   **Rationale:** This provides the foundational mechanism for creating fluid UIs. While the components themselves will need to implement their `OnResize` logic, the engine now correctly detects and propagates the resize event, completing the lifecycle model.
+
+---
+
+### The Refined TUI Engine Code with Full Lifecycle:
+
+```powershell
+# TUI Engine v5.3 - Lifecycle-Aware Compositor
+# This version fully integrates the Initialize, Cleanup, and Resize lifecycle hooks.
+
+#region Core TUI State
+# ... (No changes to the TuiState hashtable structure) ...
+$global:TuiState = @{
+    Running = $false; BufferWidth = 0; BufferHeight = 0; CompositorBuffer = $null
+    PreviousCompositorBuffer = $null; ScreenStack = [System.Collections.Stack]::new()
+    CurrentScreen = $null; OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
+    IsDirty = $true; RenderStats = @{ LastFrameTime = 0; FrameCount = 0; TargetFPS = 60 }
+    Components = @(); Layouts = @{}; FocusedComponent = $null
+    InputQueue = [System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]]::new()
+    InputRunspace = $null; InputPowerShell = $null; InputAsyncResult = $null
+    CancellationTokenSource = $null; EventHandlers = @{}
+}
+#endregion
+
+#region Engine Lifecycle & Main Loop
+
+function Initialize-TuiEngine { # ... (Unchanged) ...
+    param([int]$Width = [Console]::WindowWidth, [int]$Height = [Console]::WindowHeight - 1)
+    # ... Initialization logic remains the same ...
+}
+
+function Initialize-InputThread { # ... (Unchanged) ...
+    # ... Input thread logic remains the same ...
+}
+
+function Process-TuiInput { # ... (Unchanged) ...
+    # ... Input processing logic remains the same ...
+}
+
+function Start-TuiLoop {
+    param([UIElement]$InitialScreen)
+    try {
+        if (-not $global:TuiState.BufferWidth) { Initialize-TuiEngine }
+        if ($InitialScreen) { Push-Screen -Screen $InitialScreen }
+        if (-not $global:TuiState.CurrentScreen) { throw "No screen available." }
+
+        $global:TuiState.Running = $true
+        $frameTime = [System.Diagnostics.Stopwatch]::new()
+        $targetFrameTime = 1000.0 / $global:TuiState.RenderStats.TargetFPS
+
+        while ($global:TuiState.Running) {
+            try {
+                $frameTime.Restart()
+                
+                # NEW: Check for terminal resize at the start of each frame.
+                Check-ForResize
+
+                $hadInput = Process-TuiInput
+                if ($global:TuiState.IsDirty -or $hadInput) { Render-Frame; $global:TuiState.IsDirty = $false }
+                
+                $elapsed = $frameTime.ElapsedMilliseconds
+                if ($elapsed -lt $targetFrameTime) { Start-Sleep -Milliseconds ([Math]::Max(1, $targetFrameTime - $elapsed)) }
+            }
+            # ... (Catch blocks for Panic Handler are unchanged) ...
+        }
+    }
+    finally { Cleanup-TuiEngine }
+}
+
+# NEW: Function to handle terminal resize detection and propagation.
+function Check-ForResize {
+    $newWidth = [Console]::WindowWidth
+    $newHeight = [Console]::WindowHeight - 1
+    
+    if ($newWidth -ne $global:TuiState.BufferWidth -or $newHeight -ne $global:TuiState.BufferHeight) {
+        Write-Log -Level Info -Message "Terminal resized from $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight) to $($newWidth)x$($newHeight)."
+        
+        # Update global state
+        $global:TuiState.BufferWidth = $newWidth
+        $global:TuiState.BufferHeight = $newHeight
+        
+        # Resize core buffers
+        $global:TuiState.CompositorBuffer.Resize($newWidth, $newHeight)
+        $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
+        
+        # Propagate the resize event to the current screen, which will recursively resize children.
+        $global:TuiState.CurrentScreen?.Resize($newWidth, $newHeight)
+        
+        # Also resize any overlays
+        foreach ($overlay in $global:TuiState.OverlayStack) {
+            # You might want more sophisticated logic here, e.g., re-centering the overlay.
+            # For now, we just notify it. A robust implementation would be in the overlay's OnResize.
+            $overlay.Resize($overlay.Width, $overlay.Height) # Or recalculate its size/pos
+        }
+        
+        Publish-Event -EventName "TUI.Resized" -Data @{ Width = $newWidth; Height = $newHeight }
+        Request-TuiRefresh
+    }
+}
+
+
+function Cleanup-TuiEngine {
+    try {
+        # NEW: Ensure all active screens and screens on the stack are cleaned up.
+        Write-Log -Level Info -Message "Cleaning up all active screens and components."
+        $global:TuiState.CurrentScreen?.Cleanup()
+        while ($global:TuiState.ScreenStack.Count -gt 0) {
+            $screenOnStack = $global:TuiState.ScreenStack.Pop()
+            $screenOnStack?.Cleanup()
+        }
+        
+        $global:TuiState.CancellationTokenSource?.Cancel()
+        $global:TuiState.InputPowerShell?.EndInvoke($global:TuiState.InputAsyncResult)
+        $global:TuiState.InputPowerShell?.Dispose()
+        $global:TuiState.InputRunspace?.Dispose()
+        $global:TuiState.CancellationTokenSource?.Dispose()
+        # ... (rest of cleanup is unchanged) ...
+    } catch { # ... (unchanged) ...
+    }
+}
+
+# ... (Render-Frame, Render-FrameCompositor, etc. are unchanged) ...
+
+#endregion
+
+#region Screen & Overlay Management
+
+function Push-Screen {
+    param([UIElement]$Screen)
+    if (-not $Screen) { return }
+    Write-Log -Level Debug -Message "Pushing screen: $($Screen.Name)"
+    try {
+        $global:TuiState.FocusedComponent?.OnBlur()
+        if ($global:TuiState.CurrentScreen) {
+            $global:TuiState.CurrentScreen.OnExit()
+            $global:TuiState.ScreenStack.Push($global:TuiState.CurrentScreen)
+        }
+        $global:TuiState.CurrentScreen = $Screen
+        $global:TuiState.FocusedComponent = $null
+
+        # Ensure the screen is sized to the current TUI dimensions.
+        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        
+        # --- LIFECYCLE INTEGRATION ---
+        # 1. Initialize the screen and its component tree. This happens only once.
+        $Screen.Initialize()
+        
+        # 2. Call the OnEnter hook. This happens every time it becomes the active screen.
+        $Screen.OnEnter()
+        
+        $Screen.RequestRedraw()
+        Request-TuiRefresh
+        Publish-Event -EventName "Screen.Pushed" -Data @{ ScreenName = $Screen.Name }
+    } catch { # ... (unchanged) ...
+    }
+}
+
+function Pop-Screen {
+    if ($global:TuiState.ScreenStack.Count -eq 0) { return $false }
+    Write-Log -Level Debug -Message "Popping screen"
+    try {
+        $global:TuiState.FocusedComponent?.OnBlur()
+        $screenToExit = $global:TuiState.CurrentScreen
+        $global:TuiState.CurrentScreen = $global:TuiState.ScreenStack.Pop()
+        $global:TuiState.FocusedComponent = $null
+
+        # --- LIFECYCLE INTEGRATION ---
+        # 1. Call OnExit for the screen being removed.
+        $screenToExit?.OnExit()
+        
+        # 2. **Crucially, call Cleanup to release all its resources.**
+        $screenToExit?.Cleanup()
+        
+        # 3. Call OnResume for the screen that is now active.
+        $global:TuiState.CurrentScreen?.OnResume()
+        if ($global:TuiState.CurrentScreen.LastFocusedComponent) { Set-ComponentFocus -Component $global:TuiState.CurrentScreen.LastFocusedComponent }
+
+        Request-TuiRefresh
+        Publish-Event -EventName "Screen.Popped" -Data @{ ScreenName = $global:TuiState.CurrentScreen.Name }
+        return $true
+    } catch { # ... (unchanged) ...
+    }
+}
+
+function Close-TopTuiOverlay {
+    if ($global:TuiState.OverlayStack.Count > 0) {
+        # --- LIFECYCLE INTEGRATION ---
+        # Also clean up the overlay being removed.
+        $overlayToRemove = $global:TuiState.OverlayStack[-1]
+        $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
+        $overlayToRemove?.Cleanup()
+        Request-TuiRefresh
+    }
+}
+
+#endregion
+
+# ... (Rest of the file is unchanged) ...
+```
+
+### Conclusion
+
+With these modifications to the TUI Engine, the component lifecycle is now fully managed.
+
+1.  **Initialization:** `Push-Screen` correctly calls `Initialize()` on new screens.
+2.  **Cleanup on Navigation:** `Pop-Screen` and `Close-TopTuiOverlay` now correctly call `Cleanup()`, preventing resource leaks.
+3.  **Cleanup on Shutdown:** `Cleanup-TuiEngine` ensures all remaining components are properly destroyed on application exit.
+4.  **Resize Propagation:** The new `Check-ForResize` function provides the mechanism for creating responsive, fluid layouts.
+
+**Phase 4 is now substantially complete.** The final step would be to refactor an existing screen, like `DashboardScreen`, to use the new `OnInitialize` hook instead of its constructor for setting up its UI, which would be a straightforward change.
+
+We are now ready to move on to the final and most visually impactful phase from the `MASTER_UPGRADE_LOG.md`: **Phase 5: Truecolor Theming System.**

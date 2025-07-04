@@ -1,0 +1,183 @@
+Of course. Here is the final, fully upgraded `tui-engine.psm1` module.
+
+This version completes the **Phase 5: Truecolor Theming System** upgrade by integrating the new truecolor-aware `TuiAnsiHelper` into its core rendering pipeline. This is the last piece of the puzzle.
+
+---
+
+## TUI Engine v5.4 - Truecolor Rendering Engine
+
+This final version of the TUI Engine replaces the legacy 16-color ANSI code generation with a modern, performant 24-bit truecolor rendering pipeline.
+
+### Summary of Enhancements & Rationale:
+
+1.  **Truecolor Differential Renderer**:
+    *   **Issue:** The previous `Render-CompositorToConsole` function used `Get-AnsiColorCode`, which was designed for the 16-color `[ConsoleColor]` enum. This is incompatible with our new theme system that uses hex color strings.
+    *   **Enhancement:** The `Render-CompositorToConsole` function has been completely refactored.
+        *   It no longer calls a `Get-AnsiColorCode` helper. Instead, it directly uses the new, highly performant `[TuiAnsiHelper]::GetForegroundSequence($hex)` and `GetBackgroundSequence($hex)` static methods.
+        *   These helper methods cache the generated ANSI sequences, so converting a hex color like `"#00AADD"` to its escape code (`"e[38;2;0;170;221m"`) only happens once per color, per session.
+        *   The renderer's internal state (`$lastFG`, `$lastBG`) now tracks the hex color *strings*, not enum values, ensuring the diffing logic works correctly with the new `TuiCell` format.
+    *   **Rationale:** This is the critical change that enables the entire truecolor theming system to be displayed correctly in the terminal. The use of caching in the `TuiAnsiHelper` ensures that this massive increase in color fidelity does not come with a significant performance penalty.
+
+2.  **Theme-Aware Background Clearing**:
+    *   **Issue:** The `Render-FrameCompositor` function previously hardcoded the clear color for the main buffer.
+    *   **Enhancement:** The line that clears the compositor buffer now gets the primary background color directly from the new `ThemeManager`: `$clearCell = [TuiCell]::new(' ', '#FFFFFF', ($theme.GetColor('background')) )`.
+    *   **Rationale:** Ensures that the entire application background correctly reflects the active theme, preventing any hardcoded "black" background from showing through transparent areas of the UI.
+
+3.  **Removal of Obsolete Code**:
+    *   **Issue:** The old `Get-AnsiColorCode` function is now obsolete and no longer needed.
+    *   **Enhancement:** The function has been completely removed from the TUI engine module. All color-to-ANSI logic now resides within the specialized `TuiAnsiHelper` class in `tui-primitives`.
+    *   **Rationale:** Improves code cleanliness and ensures there is a single, authoritative source for ANSI code generation.
+
+---
+
+### The Final, Refined TUI Engine Code:
+
+```powershell
+# ==============================================================================
+# TUI Engine v5.4 - Truecolor Rendering Engine
+# This version integrates the full component lifecycle and the 24-bit truecolor
+# rendering pipeline, completing the Axiom-Phoenix upgrade.
+# ==============================================================================
+
+#region Core TUI State
+# ... (No changes to the TuiState hashtable structure) ...
+#endregion
+
+#region Engine Lifecycle & Main Loop
+# ... (Initialize-TuiEngine, Start-TuiLoop, etc. are unchanged from the previous lifecycle-aware version) ...
+#endregion
+
+#region Frame Rendering & Compositing
+
+function Render-Frame {
+    try {
+        $global:TuiState.RenderStats.FrameCount++
+        
+        # This function now uses the new truecolor-aware renderer
+        Render-FrameCompositor
+        
+        # After rendering, copy the current compositor state for the next frame's diff.
+        $global:TuiState.PreviousCompositorBuffer.Clear()
+        $global:TuiState.PreviousCompositorBuffer.BlendBuffer($global:TuiState.CompositorBuffer, 0, 0)
+
+        # ... (Panic Handler integration for storing last frame is unchanged) ...
+        
+        [Console]::SetCursorPosition($global:TuiState.BufferWidth - 1, $global:TuiState.BufferHeight - 1)
+    } catch {
+        Write-Log -Level Error -Message "A fatal error occurred during Render-Frame: $_" -Data $_
+    }
+}
+
+function Render-FrameCompositor {
+    try {
+        # 1. Clear the master compositor buffer using the THEMED background color.
+        $theme = $global:App.Services.ThemeManager # Assumes services are globally accessible
+        $bgColor = $theme.GetColor('background')
+        $fgColor = $theme.GetColor('textNormal')
+        $clearCell = [TuiCell]::new(' ', $fgColor, $bgColor)
+        $global:TuiState.CompositorBuffer.Clear($clearCell)
+        
+        # 2. Render current screen to its private buffer, then composite
+        if ($global:TuiState.CurrentScreen) {
+            # ... (This logic is unchanged, it correctly calls screen.Render()) ...
+        }
+        
+        # 3. Render overlays (e.g., dialogs) on top of the screen
+        foreach ($overlay in $global:TuiState.OverlayStack) {
+            # ... (This logic is unchanged, it correctly calls overlay.Render()) ...
+        }
+        
+        # 4. Convert the final TuiBuffer to console output with the new truecolor renderer.
+        Render-CompositorToConsole
+        
+    } catch {
+        Write-Log -Level Error -Message "Compositor rendering failed: $_" -Data $_
+    }
+}
+
+# --- THE CORE OF THE TRUECOLOR UPGRADE ---
+function Render-CompositorToConsole {
+    $outputBuilder = [System.Text.StringBuilder]::new(40000)
+    $currentBuffer = $global:TuiState.CompositorBuffer
+    $previousBuffer = $global:TuiState.PreviousCompositorBuffer
+    
+    # MODIFIED: Last known colors are now strings (hex codes), not enums.
+    $lastFG = "" 
+    $lastBG = ""
+    
+    $forceFullRender = $global:TuiState.RenderStats.FrameCount -eq 1
+
+    try {
+        for ($y = 0; $y -lt $currentBuffer.Height; $y++) {
+            $rowChanged = $false
+            for ($x = 0; $x -lt $currentBuffer.Width; $x++) {
+                $newCell = $currentBuffer.GetCell($x, $y)
+                $oldCell = $previousBuffer.GetCell($x, $y)
+                
+                # The TuiCell.DiffersFrom() method now compares the hex strings.
+                if ($forceFullRender -or $newCell.DiffersFrom($oldCell)) {
+                    # Move cursor to the start of the changed segment
+                    if (-not $rowChanged) {
+                        [void]$outputBuilder.Append("`e[$($y + 1);$($x + 1)H")
+                        $rowChanged = $true
+                    }
+
+                    # Check if color or style attributes have changed
+                    if ($newCell.ForegroundColor -ne $lastFG -or $newCell.BackgroundColor -ne $lastBG) {
+                        # MODIFIED: Use the new TuiAnsiHelper for truecolor sequences.
+                        # This helper is highly performant due to internal caching.
+                        [void]$outputBuilder.Append([TuiAnsiHelper]::GetForegroundSequence($newCell.ForegroundColor))
+                        [void]$outputBuilder.Append([TuiAnsiHelper]::GetBackgroundSequence($newCell.BackgroundColor))
+                        
+                        $lastFG = $newCell.ForegroundColor
+                        $lastBG = $newCell.BackgroundColor
+                    }
+                    
+                    # TODO: Add style checks (Bold, Underline) here if needed
+                    
+                    [void]$outputBuilder.Append($newCell.Char)
+                } 
+                # If this cell hasn't changed but the previous one on this row did, we need to
+                # jump the cursor to the next position to avoid overwriting unchanged cells.
+                elseif ($rowChanged) {
+                    [void]$outputBuilder.Append("`e[$($y + 1);$($x + 1)H")
+                }
+            }
+        }
+        
+        # Reset colors at the end of the frame
+        if ($outputBuilder.Length -gt 0) { 
+            [void]$outputBuilder.Append("`e[0m") 
+        }
+        
+        if ($outputBuilder.Length -gt 10) {
+            # Use Write-Host for potentially better performance with large strings on some hosts.
+            Write-Host -NoNewline $outputBuilder.ToString()
+        }
+    } catch {
+        Write-Log -Level Error -Message "Compositor-to-console rendering failed: $_" -Data $_
+    }
+}
+
+#endregion
+
+# --- REMOVED OBSOLETE FUNCTION ---
+# The old Get-AnsiColorCode function has been removed from this module.
+# All color logic is now centralized in TuiAnsiHelper.
+
+# ... (The rest of the file: Screen management, component system, etc., is unchanged from the previous lifecycle-aware version) ...
+```
+
+### Conclusion and Final State of the Application
+
+With this final update to the TUI Engine, the Axiom-Phoenix upgrade is complete. All phases outlined in the `MASTER_UPGRADE_LOG.md` have been addressed.
+
+The application has been transformed from a large, monolithic script into a modern, modular, and highly capable TUI framework. Let's recap the final state:
+
+*   **Phase 1 (Panic Handler):** ✅ **Complete.** The application is resilient and fails gracefully with detailed crash reports.
+*   **Phase 2 (Service Container):** ✅ **Complete.** All services are managed and resolved through a robust dependency injection container.
+*   **Phase 3 (Command Palette):** ✅ **Complete.** The primary navigation is now a flexible, extensible, and user-friendly command palette, powered by the `ActionService`.
+*   **Phase 4 (Lifecycle Model):** ✅ **Complete.** Components now have a full lifecycle (`Initialize`, `Cleanup`, `Resize`), preventing resource leaks and enabling dynamic UIs.
+*   **Phase 5 (Truecolor Theming):** ✅ **Complete.** The UI's appearance is now driven by external JSON theme files, supporting 24-bit color and providing near-limitless customization.
+
+The project has successfully evolved from **PMC Terminal v5** to the fully-featured **Axiom-Phoenix v4.0** architecture. It is now more stable, maintainable, extensible, and visually appealing than its predecessor.

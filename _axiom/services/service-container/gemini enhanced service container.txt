@@ -1,0 +1,273 @@
+Of course. I have the context from the `axiom.txt` monolith, the `MASTER_UPGRADE_LOG.md`, and the enhancement examples you provided for the `action-service` and `event-system`.
+
+My task is to apply the same rigorous review and enhancement process to the `service-container.psm1` module, following the established style of providing detailed rationale, the final refined code, and a clear comparison.
+
+Here is the comprehensive enhancement and review for the Service Container.
+
+---
+
+## Enhanced Service Container Module
+
+This refined version of the `service-container.psm1` module builds upon the original's excellent foundation. The original already implements the most critical features of a DI container, such as circular dependency detection and lazy loading. These enhancements focus on hardening the module's public API, improving its diagnostic capabilities, and adding advanced lifecycle management to make it a truly complete service manager.
+
+### Summary of Enhancements & Rationale:
+
+1.  **Declarative Parameter Validation (`[ValidateNotNullOrEmpty()]`, `[ValidateNotNull()]`)**:
+    *   **Issue:** The original code correctly validated parameters using `if` statements inside the method bodies. While functional, this is a procedural approach.
+    *   **Enhancement:** Replaced internal `if` checks with declarative parameter attributes (`[Parameter(Mandatory)]`, `[ValidateNotNullOrEmpty()]`, `[ValidateNotNull()]`) directly on the method signatures.
+    *   **Rationale:** This "fail-fast" approach is a PowerShell best practice. It ensures that invalid arguments are caught and rejected by the PowerShell engine *before* the method's logic is even executed, resulting in cleaner code and more standard, immediate error messages.
+
+2.  **Advanced Lifecycle Management & Cleanup (`Cleanup()` and `IDisposable`)**:
+    *   **Issue:** The original container managed the *creation* of services but had no concept of their *destruction*. If a service held unmanaged resources (e.g., file handles, network connections, runspaces), there was no standardized way to clean them up when the application shut down.
+    *   **Enhancement:**
+        *   Added a new public `Cleanup()` method to the `ServiceContainer`.
+        *   This method iterates through all instantiated singleton services.
+        *   It intelligently checks if a service implements the `[System.IDisposable]` interface.
+        *   If it does, the container automatically calls the service's `.Dispose()` method.
+    *   **Rationale:** This elevates the container from a simple factory to a true lifecycle manager. It prevents resource leaks and provides a single, predictable entry point (`$container.Cleanup()`) for gracefully shutting down all managed services, which is critical for application stability.
+
+3.  **Improved Diagnostics and Introspection (`GetAllRegisteredServices()`)**:
+    *   **Issue:** A developer had no easy way to see which services were available in the container without triggering a "service not found" error. This made debugging and discovery difficult.
+    *   **Enhancement:** Added a new public `GetAllRegisteredServices()` method that returns a structured list of all registered services, indicating their name, type (Factory or Instance), and whether they have been initialized.
+    *   **Rationale:** Provides a powerful diagnostic tool for developers to inspect the container's state at any time, making it easier to understand dependencies and troubleshoot configuration issues.
+
+4.  **Comprehensive Verbose Logging (`Write-Verbose`)**:
+    *   **Issue:** While the original had excellent `Write-Log` calls for general application logging, it lacked developer-focused, verbose output for tracing the container's internal operations.
+    *   **Enhancement:** Added `Write-Verbose` statements throughout the module, detailing every significant step (registration, instantiation, caching, cleanup, etc.).
+    *   **Rationale:** Aligns the module with the rest of the enhanced framework. It allows developers to run the application with the `-Verbose` switch to get a deep, real-time understanding of how the DI container is working, which is invaluable for debugging complex dependency chains.
+
+5.  **PowerShell Cmdlet Best Practices (`[CmdletBinding()]`)**:
+    *   **Issue:** The public factory function, `Initialize-ServiceContainer`, was a standard function.
+    *   **Enhancement:** Added `[CmdletBinding()]` to `Initialize-ServiceContainer`.
+    *   **Rationale:** Makes the module's public entry point behave like a native PowerShell cmdlet, automatically giving it support for common parameters like `-Verbose`, `-Debug`, etc., which enhances its usability in the shell.
+
+---
+
+### The Refined Service Container Module Code:
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Service Container
+# Provides a robust, centralized dependency injection container with lifecycle management.
+# ==============================================================================
+#Requires -Version 7.2
+
+function Initialize-ServiceContainer {
+    <#
+    .SYNOPSIS
+    Creates and returns a new instance of the ServiceContainer.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    return Invoke-WithErrorHandling -Component "ServiceContainer.Initialize" -Context "Creating new service container instance" -ScriptBlock {
+        Write-Verbose "ServiceContainer: Initializing new instance."
+        return [Axiom.Core.ServiceContainer]::new()
+    }
+}
+
+# The ServiceContainer is a central registry for application-wide services.
+# It supports lazy initialization, singleton/transient lifestyles, circular
+# dependency detection, and managed resource cleanup.
+class ServiceContainer {
+    #region Private State
+    hidden [hashtable] $_services = @{}
+    hidden [hashtable] $_serviceFactories = @{}
+    #endregion
+
+    #region Constructor
+    ServiceContainer() {
+        Write-Log -Level Info -Message "ServiceContainer created."
+        Write-Verbose "ServiceContainer: Instance constructed."
+    }
+    #endregion
+
+    #region Public Methods
+    # Registers an already created service instance (eager loading).
+    [void] Register(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
+        [Parameter(Mandatory)][ValidateNotNull()][object]$serviceInstance
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "Register" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+
+            $this.{_services}[$name] = $serviceInstance
+            Write-Log -Level Debug -Message "Registered eager service instance: '$name'."
+            Write-Verbose "ServiceContainer: Registered eager instance for '$name' of type '$($serviceInstance.GetType().Name)'."
+        }
+    }
+
+    # Registers a factory scriptblock used to create the service on-demand (lazy loading).
+    [void] RegisterFactory(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
+        [Parameter(Mandatory)][ValidateNotNull()][scriptblock]$factory,
+        [bool]$isSingleton = $true
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "RegisterFactory" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+            
+            $this.{_serviceFactories}[$name] = @{
+                Factory = $factory
+                IsSingleton = $isSingleton
+                Instance = $null # To hold the singleton instance once created
+            }
+            Write-Log -Level Debug -Message "Registered service factory: '$name' (Singleton: $isSingleton)."
+            Write-Verbose "ServiceContainer: Registered factory for '$name' (Singleton: $isSingleton)."
+        }
+    }
+
+    # Retrieves a service by its name.
+    [object] GetService([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+        return Invoke-WithErrorHandling -Component "ServiceContainer" -Context "GetService" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # 1. Return from eager-loaded services
+            if ($this.{_services}.ContainsKey($name)) {
+                Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."
+                return $this.{_services}[$name]
+            }
+
+            # 2. Check for a factory
+            if ($this.{_serviceFactories}.ContainsKey($name)) {
+                return $this._InitializeServiceFromFactory($name, [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase))
+            }
+
+            # 3. If not found, throw a detailed error
+            $available = $this.GetAllRegisteredServices() | Select-Object -ExpandProperty Name
+            throw [System.InvalidOperationException]::new("Service '$name' not found. Available services: $($available -join ', ')")
+        }
+    }
+    
+    # Retrieves a list of all registered services and their status.
+    [object[]] GetAllRegisteredServices() {
+        $list = [System.Collections.Generic.List[object]]::new()
+        
+        foreach ($key in $this.{_services}.Keys) {
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Instance'
+                Initialized = $true
+                Lifestyle = 'Singleton' # Eager instances are always singletons
+            })
+        }
+        
+        foreach ($key in $this.{_serviceFactories}.Keys) {
+            $factoryInfo = $this.{_serviceFactories}[$key]
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Factory'
+                Initialized = ($null -ne $factoryInfo.Instance)
+                Lifestyle = if ($factoryInfo.IsSingleton) { 'Singleton' } else { 'Transient' }
+            })
+        }
+        
+        return $list.ToArray() | Sort-Object Name
+    }
+
+    # Cleans up all managed singleton services that implement IDisposable.
+    [void] Cleanup() {
+        Write-Log -Level Info -Message "ServiceContainer cleanup initiated."
+        Write-Verbose "ServiceContainer: Initiating cleanup of disposable singleton services."
+        
+        # Collect all singleton instances
+        $instancesToClean = [System.Collections.Generic.List[object]]::new()
+        $this.{_services}.Values | ForEach-Object { $instancesToClean.Add($_) }
+        $this.{_serviceFactories}.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
+
+        foreach ($service in $instancesToClean) {
+            if ($service -is [System.IDisposable]) {
+                try {
+                    Write-Verbose "ServiceContainer: Disposing service of type '$($service.GetType().FullName)'."
+                    $service.Dispose()
+                } catch {
+                    Write-Log -Level Error -Message "Error disposing service of type '$($service.GetType().FullName)': $($_.Exception.Message)"
+                }
+            }
+        }
+        
+        $this.{_services}.Clear()
+        $this.{_serviceFactories}.Clear()
+        Write-Log -Level Info -Message "ServiceContainer cleanup complete."
+        Write-Verbose "ServiceContainer: Cleanup complete. All service registries cleared."
+    }
+    #endregion
+
+    #region Private Methods
+    # The core logic for instantiating a service from its factory.
+    hidden [object] _InitializeServiceFromFactory([string]$name, [System.Collections.Generic.HashSet[string]]$resolutionChain) {
+        $factoryInfo = $this.{_serviceFactories}[$name]
+        
+        # For singletons, if an instance already exists, return it immediately.
+        if ($factoryInfo.IsSingleton -and $null -ne $factoryInfo.Instance) {
+            Write-Verbose "ServiceContainer: Returning cached singleton instance of '$name'."
+            return $factoryInfo.Instance
+        }
+
+        # Circular dependency detection
+        if ($resolutionChain.Contains($name)) {
+            $chain = ($resolutionChain -join ' -> ') + " -> $name"
+            throw [System.InvalidOperationException]::new("Circular dependency detected while resolving service '$name'. Chain: $chain")
+        }
+        [void]$resolutionChain.Add($name)
+        
+        Write-Log -Level Debug -Message "Instantiating service '$name' from factory."
+        Write-Verbose "ServiceContainer: Invoking factory to create instance of '$name'."
+        
+        # Invoke the factory, passing the container itself as an argument.
+        $serviceInstance = & $factoryInfo.Factory $this
+
+        # If it's a singleton, cache the new instance.
+        if ($factoryInfo.IsSingleton) {
+            $factoryInfo.Instance = $serviceInstance
+            Write-Log -Level Debug -Message "Cached singleton instance of service '$name'."
+            Write-Verbose "ServiceContainer: Cached new singleton instance of '$name'."
+        }
+
+        # Unwind the resolution chain
+        [void]$resolutionChain.Remove($name)
+        
+        return $serviceInstance
+    }
+    #endregion
+}
+```
+
+---
+
+### Comparison: Refined `service-container.psm1` vs. Original Version
+
+This comparison highlights how the refined version is a direct, non-regressive superset of the original's capabilities.
+
+1.  **Core Logic (Unchanged and Preserved):**
+    *   **Circular Dependency Detection:** The robust logic using a `resolutionChain` is identical and remains the core strength.
+    *   **Lazy Loading:** The factory pattern for on-demand service creation is preserved.
+    *   **Error on Missing Service:** The clear, helpful error message when a service isn't found is preserved.
+    *   **`Invoke-WithErrorHandling`:** The integration with the application's central error handling is maintained.
+
+2.  **Parameter Validation (Enhanced):**
+    *   **Original:** Used `if` statements inside methods.
+    *   **Refined:** Uses declarative `[ValidateNotNullOrEmpty()]` and `[ValidateNotNull()]` attributes for a cleaner, fail-fast approach.
+    *   **Result:** More robust and idiomatic PowerShell code with no change in effective functionality.
+
+3.  **Lifecycle Management (New Feature):**
+    *   **Original:** No concept of service cleanup.
+    *   **Refined:** Adds a `Cleanup()` method that automatically finds and calls `.Dispose()` on any singleton service implementing `IDisposable`.
+    *   **Result:** A major enhancement that prevents resource leaks and provides a standard way to shut down the application gracefully.
+
+4.  **Diagnostics (New Feature):**
+    *   **Original:** No built-in way to list registered services.
+    *   **Refined:** Adds the `GetAllRegisteredServices()` method, providing a structured view of the container's contents.
+    *   **Result:** Massively improves debuggability and developer introspection capabilities.
+
+5.  **Logging (Enhanced):**
+    *   **Original:** Had good `Write-Log` calls for application-level logs.
+    *   **Refined:** Adds comprehensive `Write-Verbose` calls for developer-level tracing.
+    *   **Result:** Provides a richer, two-tiered logging experience, crucial for both production monitoring and development debugging.
+
+### Conclusion
+
+The refined `ServiceContainer` is a significant architectural upgrade. While preserving the excellent core DI logic of the original, it adds critical features for **lifecycle management**, **diagnostics**, and **robustness**. It is no longer just a service locator but a complete service manager, responsible for the creation, resolution, and safe destruction of application components.
+
+This enhanced module is a more mature, feature-complete, and developer-friendly component that perfectly aligns with the high standards of the Axiom-Phoenix project.
