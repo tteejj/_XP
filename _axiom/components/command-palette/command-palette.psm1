@@ -400,8 +400,9 @@ function Register-CommandPalette {
             "Show the command palette for quick action access", 
             { 
                 Publish-Event -EventName "CommandPalette.Open" 
-            },
-            "Application"
+            }, 
+            "Application",
+            $false # Don't force overwrite
         )
 
         # Bind Ctrl+P to the palette action

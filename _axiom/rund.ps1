@@ -1,7 +1,9 @@
 param(
     [switch]$Debug,
     [switch]$SkipLogo
-)# Point PSModulePath at your modules folder, not the repo root:
+)
+
+# Point PSModulePath at your modules folder, not the repo root:
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $env:PSModulePath = "$PSScriptRoot\modules;$env:PSModulePath"
 
@@ -105,8 +107,19 @@ try {
     
     # 4. Register screen classes with the Navigation Service
     $navService = $container.GetService("NavigationService")
-    $navService.RegisterScreenClass("DashboardScreen", [DashboardScreen])
-    $navService.RegisterScreenClass("TaskListScreen", [TaskListScreen])
+    # Debug: Check what types are available
+    Write-Host "Checking for screen types..." -ForegroundColor Yellow
+    $allTypes = [AppDomain]::CurrentDomain.GetAssemblies() | ForEach-Object { $_.GetExportedTypes() } | Where-Object { $_.Name -match 'Screen' }
+    Write-Host "Found screen types: $($allTypes.Name -join ', ')" -ForegroundColor Green
+    
+    # Get the type objects after modules are loaded - use different approach
+    $dashboardScreenType = $allTypes | Where-Object { $_.Name -eq 'DashboardScreen' } | Select-Object -First 1
+    $taskListScreenType = $allTypes | Where-Object { $_.Name -eq 'TaskListScreen' } | Select-Object -First 1
+    
+    if (-not $dashboardScreenType) { throw "DashboardScreen type not found" }
+    if (-not $taskListScreenType) { throw "TaskListScreen type not found" }
+    $navService.RegisterScreenClass("DashboardScreen", $dashboardScreenType)
+    $navService.RegisterScreenClass("TaskListScreen", $taskListScreenType)
     
     # 5. Initialize the Command Palette system
     Register-CommandPalette -ActionService $container.GetService("ActionService") -KeybindingService $container.GetService("KeybindingService")
@@ -131,7 +144,7 @@ try {
     
     # 8. Create the initial screen
     Write-Host "Creating initial dashboard screen..." -ForegroundColor Yellow
-    $initialScreen = [DashboardScreen]::new($container)
+    $initialScreen = [System.Activator]::CreateInstance($dashboardScreenType, $container)
     
     # 9. Start the main application loop
     Write-Host "Starting main application loop... Press Ctrl+P to open the Command Palette." -ForegroundColor Yellow

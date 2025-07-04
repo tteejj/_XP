@@ -43,15 +43,27 @@ class ActionService {
         Write-Verbose "ActionService: Constructor called."
         # Register default application-level actions.
         # These actions typically publish events for other services to handle.
-        $this.RegisterAction("app.exit", "Exits the PMC Terminal application.", {
-            # This script block will be executed when 'app.exit' action is called.
-            # It expects the global 'Publish-Event' function to be available.
-            Publish-Event -EventName "Application.Exit" -Data @{ Source = "ActionService"; Action = "AppExit" }
-        }, "Application", $true) # Force overwrite if called multiple times in tests
+        $this.RegisterAction(
+            "app.exit", 
+            "Exits the PMC Terminal application.", 
+            {
+                # This script block will be executed when 'app.exit' action is called.
+                # It expects the global 'Publish-Event' function to be available.
+                Publish-Event -EventName "Application.Exit" -Data @{ Source = "ActionService"; Action = "AppExit" }
+            }, 
+            "Application", 
+            $true # Force overwrite if called multiple times in tests
+        )
 
-        $this.RegisterAction("app.help", "Displays application help.", {
-            Publish-Event -EventName "App.HelpRequested" -Data @{ Source = "ActionService"; Action = "Help" }
-        }, "Application", $true) # Force overwrite
+        $this.RegisterAction(
+            "app.help", 
+            "Displays application help.", 
+            {
+                Publish-Event -EventName "App.HelpRequested" -Data @{ Source = "ActionService"; Action = "Help" }
+            }, 
+            "Application", 
+            $true # Force overwrite
+        )
 
         Write-Log -Level Info -Message "ActionService initialized with default actions."
         Write-Verbose "ActionService: Default actions registered."

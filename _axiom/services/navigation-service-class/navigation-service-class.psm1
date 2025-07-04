@@ -33,7 +33,17 @@ Write-Log -Level Debug -Message "ScreenFactory initialized"
 
 [void] RegisterScreen([string]$name, [type]$screenType) {
 
-if (-not ($screenType -eq [Screen] -or $screenType.IsSubclassOf([Screen]))) {
+# Debug information
+Write-Log -Level Debug -Message "RegisterScreen: $name with type $($screenType.Name)"
+Write-Log -Level Debug -Message "BaseType: $($screenType.BaseType?.Name)"
+Write-Log -Level Debug -Message "BaseType.BaseType: $($screenType.BaseType?.BaseType?.Name)"
+
+# More flexible inheritance check
+$isScreenType = $screenType.Name -eq 'Screen' -or 
+               $screenType.BaseType.Name -eq 'Screen' -or 
+               ($screenType.BaseType -and $screenType.BaseType.BaseType -and $screenType.BaseType.BaseType.Name -eq 'Screen')
+
+if (-not $isScreenType) {
 
 throw "Screen type '$($screenType.Name)' must inherit from the Screen class."
 
