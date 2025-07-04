@@ -1,667 +1,485 @@
 # ==============================================================================
-
-# PMC Terminal v5 - Class-Based Dialog System
-
-# Implements dialogs as proper UIElement classes following the unified architecture
-
+# Dialog System Class Module v5.0
+# Theme-aware, lifecycle-managed dialogs with modern promise-based API
 # ==============================================================================
 
+using namespace System.Management.Automation
+using namespace System.Threading.Tasks
 
-
-# A UIElement designed to be displayed modally over other content using the
-
-# TUI Engine's overlay system. It handles its own rendering and input,
-
-# and uses Show-TuiOverlay/Close-TopTuiOverlay to manage its lifecycle.
+#region Base Dialog Class
 
 class Dialog : UIElement {
+    [string] $Title = "Dialog"
+    [string] $Message = ""
+    hidden [TaskCompletionSource[object]] $_tcs # For promise-based async result
 
-[string] $Title = "Dialog"
+    Dialog([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 50
+        $this.Height = 10
+        $this._tcs = [TaskCompletionSource[object]]::new()
+        Write-Verbose "Dialog: Constructor called for '$($this.Name)'"
+    }
 
-[string] $Message = ""
+    [Task[object]] Show() {
+        try {
+            # Center the dialog on screen
+            $this.X = [Math]::Floor(($global:TuiState.BufferWidth - $this.Width) / 2)
+            $this.Y = [Math]::Floor(($global:TuiState.BufferHeight - $this.Height) / 4)
+            
+            # Show as overlay and set focus
+            Show-TuiOverlay -Element $this
+            Set-ComponentFocus -Component $this
+            
+            Write-Verbose "Dialog '$($this.Name)': Shown at ($($this.X), $($this.Y))"
+            return $this._tcs.Task
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error showing dialog: $($_.Exception.Message)"
+            $this._tcs.TrySetException($_.Exception)
+            return $this._tcs.Task
+        }
+    }
 
-[ConsoleColor] $BorderColor = [ConsoleColor]::Cyan
+    [void] Close([object]$result, [bool]$wasCancelled = $false) {
+        try {
+            if ($wasCancelled) {
+                $this._tcs.TrySetCanceled()
+                Write-Verbose "Dialog '$($this.Name)': Closed with cancellation"
+            } else {
+                $this._tcs.TrySetResult($result)
+                Write-Verbose "Dialog '$($this.Name)': Closed with result: $result"
+            }
+            
+            # The engine will call Cleanup() on this dialog automatically
+            Close-TopTuiOverlay
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error closing dialog: $($_.Exception.Message)"
+            $this._tcs.TrySetException($_.Exception)
+        }
+    }
 
-[ConsoleColor] $TitleColor = [ConsoleColor]::White
+    [void] OnRender() {
+        if (-not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'dialog.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = Get-ThemeColor 'dialog.border' -Fallback (Get-ThemeColor 'Border')
+            $titleColor = Get-ThemeColor 'dialog.title' -Fallback (Get-ThemeColor 'Accent')
+            
+            # Clear buffer and draw dialog
+            $this._private_buffer.Clear([TuiCell]::new(' ', $titleColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Title " $($this.Title) " -BorderStyle "Double" -BorderColor $borderColor -BackgroundColor $bgColor
 
-[ConsoleColor] $MessageColor = [ConsoleColor]::Gray
+            # Render message if present
+            if (-not [string]::IsNullOrWhiteSpace($this.Message)) {
+                $this._RenderMessage()
+            }
+            
+            # Allow subclasses to render their specific content
+            $this.RenderDialogContent()
+            
+            Write-Verbose "Dialog '$($this.Name)': Rendered"
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
+    hidden [void] _RenderMessage() {
+        try {
+            $messageColor = Get-ThemeColor 'dialog.message' -Fallback (Get-ThemeColor 'Foreground')
+            $bgColor = Get-ThemeColor 'dialog.background' -Fallback (Get-ThemeColor 'Background')
+            
+            $messageY = 2
+            $messageX = 2
+            $maxWidth = $this.Width - 4
+            
+            $wrappedLines = Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth
+            foreach ($line in $wrappedLines) {
+                if ($messageY -ge ($this.Height - 3)) { break }
+                Write-TuiText -Buffer $this._private_buffer -X $messageX -Y $messageY -Text $line -ForegroundColor $messageColor -BackgroundColor $bgColor
+                $messageY++
+            }
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error rendering message: $($_.Exception.Message)"
+        }
+    }
 
+    # Virtual method for subclasses to render their specific content
+    [void] RenderDialogContent() { 
+        # Override in subclasses
+    }
 
-Dialog([string]$name) : base($name) {
+    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+        if ($key.Key -eq [ConsoleKey]::Escape) {
+            $this.Close($null, $true)
+            return $true
+        }
+        return $false
+    }
 
-$this.IsFocusable = $true
-
-$this.Width = 50
-
-$this.Height = 10
-
+    [string] ToString() {
+        return "Dialog(Name='$($this.Name)', Title='$($this.Title)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
 
+#endregion
 
-
-[void] Show() {
-
-$this.X = [Math]::Floor(($global:TuiState.BufferWidth - $this.Width) / 2)
-
-$this.Y = [Math]::Floor(($global:TuiState.BufferHeight - $this.Height) / 2)
-
-if ($null -eq $this.{_private_buffer} -or $this.{_private_buffer}.Width -ne $this.Width -or $this.{_private_buffer}.Height -ne $this.Height) {
-
-$this.{_private_buffer} = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
-
-}
-
-Show-TuiOverlay -Element $this
-
-}
-
-
-
-[void] Close() {
-
-Close-TopTuiOverlay
-
-}
-
-
-
-[void] OnRender() {
-
-if ($null -eq $this.{_private_buffer}) { return }
-
-$this.{_private_buffer}.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-Write-TuiBox -Buffer $this.{_private_buffer} -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor $this.BorderColor -BackgroundColor [ConsoleColor]::Black -Title $this.Title
-
-if (-not [string]::IsNullOrWhiteSpace($this.Message)) { $this.RenderMessage() }
-
-$this.RenderDialogContent()
-
-}
-
-
-
-hidden [void] RenderMessage() {
-
-$messageY = 2; $messageX = 2; $maxWidth = $this.Width - 4
-
-$wrappedLines = Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth
-
-foreach ($line in $wrappedLines) {
-
-if ($messageY -ge ($this.Height - 3)) { break }
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $messageX -Y $messageY -Text $line -ForegroundColor $this.MessageColor
-
-$messageY++
-
-}
-
-}
-
-
-
-[void] RenderDialogContent() { }
-
-
-
-[bool] HandleInput([ConsoleKeyInfo]$key) {
-
-if ($key.Key -eq [ConsoleKey]::Escape) { $this.OnCancel(); return $true }
-
-return $false
-
-}
-
-
-
-[void] OnConfirm() { $this.Close() }
-
-[void] OnCancel() { $this.Close() }
-
-}
-
-
+#region Specialized Dialogs
 
 class AlertDialog : Dialog {
+    AlertDialog([Parameter(Mandatory)][string]$title, [Parameter(Mandatory)][string]$message) : base("AlertDialog") {
+        $this.Title = $title
+        $this.Message = $message
+        $this.Height = 8
+        $this.Width = [Math]::Min(70, [Math]::Max(40, $message.Length + 10))
+        Write-Verbose "AlertDialog: Created with title '$title'"
+    }
 
-[string] $ButtonText = "OK"
+    [void] RenderDialogContent() {
+        try {
+            # Get theme colors for button
+            $buttonFg = Get-ThemeColor 'dialog.button.focus.foreground' -Fallback (Get-ThemeColor 'Background')
+            $buttonBg = Get-ThemeColor 'dialog.button.focus.background' -Fallback (Get-ThemeColor 'Accent')
+            
+            $buttonY = $this.Height - 2
+            $buttonLabel = " [ OK ] "
+            $buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
+            
+            Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor $buttonFg -BackgroundColor $buttonBg
+        }
+        catch {
+            Write-Error "AlertDialog '$($this.Name)': Error rendering content: $($_.Exception.Message)"
+        }
+    }
 
-AlertDialog([string]$title, [string]$message) : base("AlertDialog") {
-
-$this.Title = $title; $this.Message = $message; $this.Height = 10
-
-$this.Width = [Math]::Min(80, [Math]::Max(40, $message.Length + 10))
-
+    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            $this.Close($true)
+            return $true
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
 }
-
-[void] RenderDialogContent() {
-
-$buttonY = $this.Height - 2; $buttonLabel = "[ $($this.ButtonText) ]"
-
-$buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor ([ConsoleColor]::Yellow)
-
-}
-
-[bool] HandleInput([ConsoleKeyInfo]$key) {
-
-if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) { $this.OnConfirm(); return $true }
-
-return ([Dialog]$this).HandleInput($key)
-
-}
-
-}
-
-
 
 class ConfirmDialog : Dialog {
+    hidden [int] $_selectedButton = 0
 
-[scriptblock] $OnConfirmAction; [scriptblock] $OnCancelAction
+    ConfirmDialog([Parameter(Mandatory)][string]$title, [Parameter(Mandatory)][string]$message) : base("ConfirmDialog") {
+        $this.Title = $title
+        $this.Message = $message
+        $this.Height = 8
+        $this.Width = [Math]::Min(70, [Math]::Max(50, $message.Length + 10))
+        Write-Verbose "ConfirmDialog: Created with title '$title'"
+    }
 
-[string[]] $Buttons = @("Yes", "No"); [int] $SelectedButton = 0
+    [void] RenderDialogContent() {
+        try {
+            # Get theme colors
+            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $normalBg = Get-ThemeColor 'dialog.button.normal.background' -Fallback (Get-ThemeColor 'Background')
+            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Fallback (Get-ThemeColor 'Background')
+            $focusBg = Get-ThemeColor 'dialog.button.focus.background' -Fallback (Get-ThemeColor 'Accent')
+            
+            $buttonY = $this.Height - 3
+            $buttons = @("  Yes  ", "  No   ")
+            $startX = [Math]::Floor(($this.Width - 24) / 2)
+            
+            for ($i = 0; $i -lt $buttons.Count; $i++) {
+                $isFocused = ($i -eq $this._selectedButton)
+                $label = if ($isFocused) { "[ $($buttons[$i].Trim()) ]" } else { $buttons[$i] }
+                $fg = if ($isFocused) { $focusFg } else { $normalFg }
+                $bg = if ($isFocused) { $focusBg } else { $normalBg }
+                
+                Write-TuiText -Buffer $this._private_buffer -X ($startX + ($i * 14)) -Y $buttonY -Text $label -ForegroundColor $fg -BackgroundColor $bg
+            }
+        }
+        catch {
+            Write-Error "ConfirmDialog '$($this.Name)': Error rendering content: $($_.Exception.Message)"
+        }
+    }
 
-ConfirmDialog([string]$title, [string]$message, [scriptblock]$onConfirm, [scriptblock]$onCancel) : base("ConfirmDialog") {
-
-$this.Title = $title; $this.Message = $message; $this.OnConfirmAction = $onConfirm; $this.OnCancelAction = $onCancel
-
-$this.Width = [Math]::Min(80, [Math]::Max(50, $message.Length + 10)); $this.Height = 10
-
+    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+        switch ($key.Key) {
+            ([ConsoleKey]::LeftArrow), ([ConsoleKey]::RightArrow), ([ConsoleKey]::Tab) {
+                $this._selectedButton = ($this._selectedButton + 1) % 2
+                $this.RequestRedraw()
+                return $true
+            }
+            ([ConsoleKey]::Enter) {
+                $result = ($this._selectedButton -eq 0) # True for Yes, False for No
+                $this.Close($result)
+                return $true
+            }
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
 }
-
-[void] RenderDialogContent() {
-
-$buttonY = $this.Height - 3; $totalButtonWidth = ($this.Buttons.Count * 12) + (($this.Buttons.Count - 1) * 2)
-
-$buttonX = [Math]::Floor(($this.Width - $totalButtonWidth) / 2)
-
-for ($i = 0; $i -lt $this.Buttons.Count; $i++) {
-
-$isSelected = ($i -eq $this.SelectedButton)
-
-$buttonLabel = if ($isSelected) { "[ $($this.Buttons[$i]) ]" } else { "  $($this.Buttons[$i])  " }
-
-$color = if ($isSelected) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor $color
-
-$buttonX += 14
-
-}
-
-}
-
-[bool] HandleInput([ConsoleKeyInfo]$key) {
-
-switch ($key.Key) {
-
-([ConsoleKey]::LeftArrow) { $this.SelectedButton = [Math]::Max(0, $this.SelectedButton - 1); $this.RequestRedraw(); return $true }
-
-([ConsoleKey]::RightArrow) { $this.SelectedButton = [Math]::Min($this.Buttons.Count - 1, $this.SelectedButton + 1); $this.RequestRedraw(); return $true }
-
-([ConsoleKey]::Tab) { $this.SelectedButton = ($this.SelectedButton + 1) % $this.Buttons.Count; $this.RequestRedraw(); return $true }
-
-([ConsoleKey]::Enter) { if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }; return $true }
-
-([ConsoleKey]::Spacebar) { if ($this.SelectedButton -eq 0) { $this.OnConfirm() } else { $this.OnCancel() }; return $true }
-
-}
-
-return ([Dialog]$this).HandleInput($key)
-
-}
-
-[void] OnConfirm() { $this.Close(); if ($this.OnConfirmAction) { Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnConfirm" -ScriptBlock $this.OnConfirmAction } }
-
-[void] OnCancel() { $this.Close(); if ($this.OnCancelAction) { Invoke-WithErrorHandling -Component "ConfirmDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction } }
-
-}
-
-
 
 class InputDialog : Dialog {
+    hidden [TextBoxComponent] $_textBox
+    
+    InputDialog([Parameter(Mandatory)][string]$title, [Parameter(Mandatory)][string]$message, [string]$defaultValue = "") : base("InputDialog") {
+        $this.Title = $title
+        $this.Message = $message
+        $this.Height = 10
+        $this.Width = [Math]::Min(70, [Math]::Max(50, $message.Length + 20))
+        # Store default value in metadata for use during initialization
+        $this.Metadata.DefaultValue = $defaultValue
+        Write-Verbose "InputDialog: Created with title '$title'"
+    }
 
-[string] $Prompt = ""
+    # Create child components during the Initialize lifecycle hook
+    [void] OnInitialize() {
+        try {
+            $this._textBox = New-TuiTextBox -Props @{ 
+                Name = 'DialogInput'
+                Text = $this.Metadata.DefaultValue
+                Width = $this.Width - 4
+                Height = 3
+                X = 2
+                Y = 4
+            }
+            $this.AddChild($this._textBox)
+            Write-Verbose "InputDialog '$($this.Name)': TextBox component initialized"
+        }
+        catch {
+            Write-Error "InputDialog '$($this.Name)': Error initializing: $($_.Exception.Message)"
+        }
+    }
 
-[string] $InputValue = ""
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        if ($this._textBox) {
+            $this._textBox.Move(2, 4)
+            $this._textBox.Resize($newWidth - 4, 3)
+        }
+    }
 
-[int] $CursorPosition = 0
+    [void] RenderDialogContent() {
+        try {
+            # The textbox is a child, so the base UIElement.Render() will handle it.
+            # We just need to render the buttons.
+            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Fallback (Get-ThemeColor 'Accent')
+            $bgColor = Get-ThemeColor 'dialog.background' -Fallback (Get-ThemeColor 'Background')
+            
+            $buttonY = $this.Height - 2
+            $okLabel = "[ OK ]"
+            $cancelLabel = "[ Cancel ]"
+            $startX = $this.Width - $okLabel.Length - $cancelLabel.Length - 6
+            
+            Write-TuiText -Buffer $this._private_buffer -X $startX -Y $buttonY -Text $okLabel -ForegroundColor $focusFg -BackgroundColor $bgColor
+            Write-TuiText -Buffer $this._private_buffer -X ($startX + $okLabel.Length + 2) -Y $buttonY -Text $cancelLabel -ForegroundColor $normalFg -BackgroundColor $bgColor
+        }
+        catch {
+            Write-Error "InputDialog '$($this.Name)': Error rendering content: $($_.Exception.Message)"
+        }
+    }
 
-[scriptblock] $OnSubmitAction
-
-[scriptblock] $OnCancelAction
-
-
-
-InputDialog([string]$title, [string]$prompt, [scriptblock]$onSubmit, [scriptblock]$onCancel) : base("InputDialog") {
-
-$this.Title = $title
-
-$this.Prompt = $prompt
-
-$this.OnSubmitAction = $onSubmit
-
-$this.OnCancelAction = $onCancel
-
-$this.Width = [Math]::Min(80, [Math]::Max(50, $prompt.Length + 20))
-
-$this.Height = 12
-
+    [bool] HandleInput([Parameter(Mandatory)][ConsoleKeyInfo]$key) {
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            $result = $this._textBox ? $this._textBox.Text : ""
+            $this.Close($result)
+            return $true
+        }
+        
+        # Let the textbox handle all other input
+        if ($this._textBox -and $this._textBox.HandleInput($key)) {
+            return $true
+        }
+        
+        return ([Dialog]$this).HandleInput($key)
+    }
 }
 
+#endregion
 
+#region Factory Functions (Promise-based API)
 
-[void] SetDefaultValue([string]$value) {
-
-$this.InputValue = $value
-
-$this.CursorPosition = $value.Length
-
+function Show-AlertDialog {
+    <#
+    .SYNOPSIS
+    Shows an alert dialog with a message and OK button.
+    
+    .DESCRIPTION
+    Displays a modal alert dialog with the specified title and message.
+    Returns a Task that can be awaited for the user's acknowledgment.
+    
+    .PARAMETER Title
+    The title of the alert dialog.
+    
+    .PARAMETER Message
+    The message to display in the dialog.
+    
+    .EXAMPLE
+    $result = Show-AlertDialog -Title "Success" -Message "Operation completed successfully!"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message
+    )
+    
+    try {
+        $dialog = [AlertDialog]::new($Title, $Message)
+        Write-Verbose "Show-AlertDialog: Created alert dialog '$Title'"
+        return $dialog.Show()
+    }
+    catch {
+        Write-Error "Show-AlertDialog: Error creating alert dialog: $($_.Exception.Message)"
+        throw
+    }
 }
 
-
-
-[void] RenderDialogContent() {
-
-$promptY = 3; $promptX = 4
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor [ConsoleColor]::White
-
-
-
-$inputY = 5; $inputX = 4; $inputWidth = $this.Width - 8
-
-Write-TuiBox -Buffer $this.{_private_buffer} -X $inputX -Y $inputY -Width $inputWidth -Height 3 -BorderStyle "Single" -BorderColor [ConsoleColor]::DarkGray
-
-
-
-$displayValue = $this.InputValue
-
-if ($displayValue.Length -gt ($inputWidth - 3)) {
-
-$displayValue = $displayValue.Substring($displayValue.Length - ($inputWidth - 3))
-
+function Show-ConfirmDialog {
+    <#
+    .SYNOPSIS
+    Shows a confirmation dialog with Yes/No buttons.
+    
+    .DESCRIPTION
+    Displays a modal confirmation dialog with the specified title and message.
+    Returns a Task that resolves to $true for Yes, $false for No.
+    
+    .PARAMETER Title
+    The title of the confirmation dialog.
+    
+    .PARAMETER Message
+    The message to display in the dialog.
+    
+    .EXAMPLE
+    $confirmed = Show-ConfirmDialog -Title "Delete" -Message "Are you sure you want to delete this item?"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message
+    )
+    
+    try {
+        $dialog = [ConfirmDialog]::new($Title, $Message)
+        Write-Verbose "Show-ConfirmDialog: Created confirm dialog '$Title'"
+        return $dialog.Show()
+    }
+    catch {
+        Write-Error "Show-ConfirmDialog: Error creating confirm dialog: $($_.Exception.Message)"
+        throw
+    }
 }
 
-Write-TuiText -Buffer $this.{_private_buffer} -X ($inputX + 1) -Y ($inputY + 1) -Text $displayValue -ForegroundColor [ConsoleColor]::Yellow
-
-
-
-$buttonY = $this.Height - 3; $okLabel = "[ OK ]"; $cancelLabel = "[ Cancel ]"
-
-$totalWidth = $okLabel.Length + $cancelLabel.Length + 4
-
-$startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $startX -Y $buttonY -Text $okLabel -ForegroundColor [ConsoleColor]::Green
-
-Write-TuiText -Buffer $this.{_private_buffer} -X ($startX + $okLabel.Length + 4) -Y $buttonY -Text $cancelLabel -ForegroundColor [ConsoleColor]::Gray
-
+function Show-InputDialog {
+    <#
+    .SYNOPSIS
+    Shows an input dialog for text entry.
+    
+    .DESCRIPTION
+    Displays a modal input dialog with the specified title, message, and optional default value.
+    Returns a Task that resolves to the entered text, or null if cancelled.
+    
+    .PARAMETER Title
+    The title of the input dialog.
+    
+    .PARAMETER Message
+    The message to display in the dialog.
+    
+    .PARAMETER DefaultValue
+    The default value to pre-fill in the text box.
+    
+    .EXAMPLE
+    $userInput = Show-InputDialog -Title "Name" -Message "Enter your name:" -DefaultValue "John Doe"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message,
+        [string]$DefaultValue = ""
+    )
+    
+    try {
+        $dialog = [InputDialog]::new($Title, $Message, $DefaultValue)
+        Write-Verbose "Show-InputDialog: Created input dialog '$Title'"
+        return $dialog.Show()
+    }
+    catch {
+        Write-Error "Show-InputDialog: Error creating input dialog: $($_.Exception.Message)"
+        throw
+    }
 }
 
+#endregion
 
-
-[bool] HandleInput([ConsoleKeyInfo]$key) {
-
-switch ($key.Key) {
-
-([ConsoleKey]::Enter) { $this.OnSubmit(); return $true }
-
-([ConsoleKey]::Escape) { $this.OnCancel(); return $true }
-
-([ConsoleKey]::Backspace) { if ($this.CursorPosition -gt 0) { $this.InputValue = $this.InputValue.Remove($this.CursorPosition - 1, 1); $this.CursorPosition--; $this.RequestRedraw() }; return $true }
-
-([ConsoleKey]::Delete) { if ($this.CursorPosition -lt $this.InputValue.Length) { $this.InputValue = $this.InputValue.Remove($this.CursorPosition, 1); $this.RequestRedraw() }; return $true }
-
-([ConsoleKey]::LeftArrow) { if ($this.CursorPosition -gt 0) { $this.CursorPosition--; $this.RequestRedraw() }; return $true }
-
-([ConsoleKey]::RightArrow) { if ($this.CursorPosition -lt $this.InputValue.Length) { $this.CursorPosition++; $this.RequestRedraw() }; return $true }
-
-([ConsoleKey]::Home) { $this.CursorPosition = 0; $this.RequestRedraw(); return $true }
-
-([ConsoleKey]::End) { $this.CursorPosition = $this.InputValue.Length; $this.RequestRedraw(); return $true }
-
-default {
-
-if ($key.KeyChar -and [char]::IsLetterOrDigit($key.KeyChar) -or $key.KeyChar -in @(' ', '.', '-', '_', '@', '!', '?', ',', ';', ':', '/', '\', '(', ')', '[', ']', '{', '}')) {
-
-$this.InputValue = $this.InputValue.Insert($this.CursorPosition, $key.KeyChar)
-
-$this.CursorPosition++
-
-$this.RequestRedraw()
-
-return $true
-
-}
-
-}
-
-}
-
-return ([Dialog]$this).HandleInput($key)
-
-}
-
-
-
-[void] OnSubmit() {
-
-$this.Close()
-
-if ($this.OnSubmitAction) {
-
-Invoke-WithErrorHandling -Component "InputDialog" -Context "OnSubmit" -ScriptBlock { & $this.OnSubmitAction $this.InputValue }
-
-}
-
-}
-
-
-
-[void] OnCancel() {
-
-$this.Close()
-
-if ($this.OnCancelAction) {
-
-Invoke-WithErrorHandling -Component "InputDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction
-
-}
-
-}
-
-}
-
-
-
-class ProgressDialog : Dialog {
-
-[int] $PercentComplete = 0
-
-[string] $StatusText = ""
-
-[bool] $ShowCancel = $false
-
-[bool] $IsCancelled = $false
-
-
-
-ProgressDialog([string]$title, [string]$message) : base("ProgressDialog") {
-
-$this.Title = $title; $this.Message = $message; $this.Width = 60; $this.Height = 10
-
-}
-
-
-
-[void] UpdateProgress([int]$percent, [string]$status = "") {
-
-$this.PercentComplete = [Math]::Max(0, [Math]::Min(100, $percent))
-
-if ($status) { $this.StatusText = $status }
-
-$this.RequestRedraw()
-
-}
-
-
-
-[void] RenderDialogContent() {
-
-$barY = 4; $barX = 4; $barWidth = $this.Width - 8
-
-$filledWidth = [Math]::Floor($barWidth * ($this.PercentComplete / 100.0))
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $barX -Y $barY -Text ('─' * $barWidth) -ForegroundColor [ConsoleColor]::DarkGray
-
-if ($filledWidth -gt 0) { Write-TuiText -Buffer $this.{_private_buffer} -X $barX -Y $barY -Text ('█' * $filledWidth) -ForegroundColor [ConsoleColor]::Green }
-
-
-
-$percentText = "$($this.PercentComplete)%"; $percentX = [Math]::Floor(($this.Width - $percentText.Length) / 2)
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $percentX -Y ($barY + 1) -Text $percentText -ForegroundColor [ConsoleColor]::White
-
-
-
-if ($this.StatusText) {
-
-$statusY = $barY + 3; $maxStatusWidth = $this.Width - 8
-
-$displayStatus = if ($this.StatusText.Length -gt $maxStatusWidth) { $this.StatusText.Substring(0, $maxStatusWidth - 3) + "..." } else { $this.StatusText }
-
-$statusX = [Math]::Floor(($this.Width - $displayStatus.Length) / 2)
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $statusX -Y $statusY -Text $displayStatus -ForegroundColor [ConsoleColor]::Gray
-
-}
-
-
-
-if ($this.ShowCancel) {
-
-$buttonY = $this.Height - 2; $cancelLabel = "[ Cancel ]"; $buttonX = [Math]::Floor(($this.Width - $cancelLabel.Length) / 2)
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $buttonX -Y $buttonY -Text $cancelLabel -ForegroundColor [ConsoleColor]::Yellow
-
-}
-
-}
-
-
-
-[bool] HandleInput([ConsoleKeyInfo]$key) {
-
-if ($this.ShowCancel -and $key.Key -in @([ConsoleKey]::Escape, [ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-
-$this.IsCancelled = $true
-
-$this.Close()
-
-return $true
-
-}
-
-return $false
-
-}
-
-}
-
-
-
-class ListDialog : Dialog {
-
-[string] $Prompt = ""; [string[]] $Items = @(); [int] $SelectedIndex = 0; [int] $ScrollOffset = 0; [int] $VisibleItems = 10; [bool] $AllowMultiple = $false; [System.Collections.Generic.HashSet[int]] $SelectedIndices; [scriptblock] $OnSelectAction; [scriptblock] $OnCancelAction
-
-
-
-ListDialog([string]$title, [string]$prompt, [string[]]$items, [scriptblock]$onSelect, [scriptblock]$onCancel) : base("ListDialog") {
-
-$this.Title = $title; $this.Prompt = $prompt; $this.Items = $items; $this.OnSelectAction = $onSelect; $this.OnCancelAction = $onCancel
-
-$this.SelectedIndices = [System.Collections.Generic.HashSet[int]]::new()
-
-$maxItemWidth = ($items | Measure-Object -Property Length -Maximum).Maximum
-
-$this.Width = [Math]::Min(80, [Math]::Max(40, $maxItemWidth + 10))
-
-$this.VisibleItems = [Math]::Min(10, $items.Count)
-
-$this.Height = $this.VisibleItems + 8
-
-}
-
-
-
-[void] RenderDialogContent() {
-
-if ($this.Prompt) { $promptY = 2; $promptX = 4; Write-TuiText -Buffer $this.{_private_buffer} -X $promptX -Y $promptY -Text $this.Prompt -ForegroundColor [ConsoleColor]::White }
-
-
-
-$listY = 4; $listX = 4; $listWidth = $this.Width - 8
-
-$endIndex = [Math]::Min($this.ScrollOffset + $this.VisibleItems, $this.Items.Count)
-
-for ($i = $this.ScrollOffset; $i -lt $endIndex; $i++) {
-
-$relativeY = $listY + ($i - $this.ScrollOffset); $item = $this.Items[$i]; $isSelected = ($i -eq $this.SelectedIndex); $isChecked = $this.SelectedIndices.Contains($i)
-
-if ($item.Length -gt ($listWidth - 4)) { $item = $item.Substring(0, $listWidth - 7) + "..." }
-
-$prefix = if ($this.AllowMultiple) { if ($isChecked) { "[x] " } else { "[ ] " } } else { "" }
-
-$displayText = "$prefix$item"
-
-$fg = if ($isSelected) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Gray }; $bg = if ($isSelected) { [ConsoleColor]::DarkGray } else { [ConsoleColor]::Black }
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $listX -Y $relativeY -Text (' ' * $listWidth) -BackgroundColor $bg
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $listX -Y $relativeY -Text $displayText -ForegroundColor $fg -BackgroundColor $bg
-
-}
-
-
-
-if ($this.ScrollOffset -gt 0) { Write-TuiText -Buffer $this.{_private_buffer} -X ($this.Width - 5) -Y $listY -Text "▲" -ForegroundColor [ConsoleColor]::DarkGray }
-
-if ($endIndex -lt $this.Items.Count) { Write-TuiText -Buffer $this.{_private_buffer} -X ($this.Width - 5) -Y ($listY + $this.VisibleItems - 1) -Text "▼" -ForegroundColor [ConsoleColor]::DarkGray }
-
-
-
-$instructY = $this.Height - 3; $instructions = if ($this.AllowMultiple) { "Space: Toggle, Enter: Confirm, Esc: Cancel" } else { "Enter: Select, Esc: Cancel" }; $instructX = [Math]::Floor(($this.Width - $instructions.Length) / 2)
-
-Write-TuiText -Buffer $this.{_private_buffer} -X $instructX -Y $instructY -Text $instructions -ForegroundColor [ConsoleColor]::DarkGray
-
-}
-
-
-
-[bool] HandleInput([ConsoleKeyInfo]$key) {
-
-switch ($key.Key) {
-
-([ConsoleKey]::UpArrow) { if ($this.SelectedIndex -gt 0) { $this.SelectedIndex--; if ($this.SelectedIndex -lt $this.ScrollOffset) { $this.ScrollOffset = $this.SelectedIndex }; $this.RequestRedraw() }; return $true }
-
-([ConsoleKey]::DownArrow) { if ($this.SelectedIndex -lt ($this.Items.Count - 1)) { $this.SelectedIndex++; if ($this.SelectedIndex -ge ($this.ScrollOffset + $this.VisibleItems)) { $this.ScrollOffset = $this.SelectedIndex - $this.VisibleItems + 1 }; $this.RequestRedraw() }; return $true }
-
-([ConsoleKey]::Spacebar) { if ($this.AllowMultiple) { if ($this.SelectedIndices.Contains($this.SelectedIndex)) { [void]$this.SelectedIndices.Remove($this.SelectedIndex) } else { [void]$this.SelectedIndices.Add($this.SelectedIndex) }; $this.RequestRedraw() }; return $true }
-
-([ConsoleKey]::Enter) { $this.OnSelect(); return $true }
-
-([ConsoleKey]::Escape) { $this.OnCancel(); return $true }
-
-}
-
-return $false
-
-}
-
-
-
-[void] OnSelect() {
-
-$this.Close()
-
-if ($this.OnSelectAction) {
-
-if ($this.AllowMultiple) {
-
-$selectedItems = @(); foreach ($index in $this.SelectedIndices) { $selectedItems += $this.Items[$index] }
-
-Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock { & $this.OnSelectAction $selectedItems }
-
-} else {
-
-$selectedItem = $this.Items[$this.SelectedIndex]
-
-Invoke-WithErrorHandling -Component "ListDialog" -Context "OnSelect" -ScriptBlock { & $this.OnSelectAction $selectedItem }
-
-}
-
-}
-
-}
-
-
-
-[void] OnCancel() {
-
-$this.Close()
-
-if ($this.OnCancelAction) {
-
-Invoke-WithErrorHandling -Component "ListDialog" -Context "OnCancel" -ScriptBlock $this.OnCancelAction
-
-}
-
-}
-
-}
-
-
+#region Utility Functions
 
 function Get-WordWrappedLines {
-
-param([string]$Text, [int]$MaxWidth)
-
-$lines = @(); $words = $Text -split '\s+'; $currentLine = ""
-
-foreach ($word in $words) {
-
-if ($currentLine.Length -eq 0) { $currentLine = $word }
-
-elseif (($currentLine.Length + 1 + $word.Length) -le $MaxWidth) { $currentLine += " " + $word }
-
-else { $lines += $currentLine; $currentLine = $word }
-
+    <#
+    .SYNOPSIS
+    Wraps text to fit within a specified width.
+    
+    .DESCRIPTION
+    Breaks text into lines that fit within the specified maximum width,
+    attempting to break at word boundaries when possible.
+    
+    .PARAMETER Text
+    The text to wrap.
+    
+    .PARAMETER MaxWidth
+    The maximum width for each line.
+    
+    .EXAMPLE
+    $lines = Get-WordWrappedLines -Text "This is a long message that needs to be wrapped" -MaxWidth 20
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][int]$MaxWidth
+    )
+    
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return @()
+    }
+    
+    $lines = @()
+    $words = $Text -split '\s+'
+    $currentLine = ""
+    
+    foreach ($word in $words) {
+        $testLine = if ($currentLine) { "$currentLine $word" } else { $word }
+        
+        if ($testLine.Length -le $MaxWidth) {
+            $currentLine = $testLine
+        } else {
+            if ($currentLine) {
+                $lines += $currentLine
+                $currentLine = $word
+            } else {
+                # Word is longer than max width, break it
+                while ($word.Length -gt $MaxWidth) {
+                    $lines += $word.Substring(0, $MaxWidth)
+                    $word = $word.Substring($MaxWidth)
+                }
+                $currentLine = $word
+            }
+        }
+    }
+    
+    if ($currentLine) {
+        $lines += $currentLine
+    }
+    
+    return $lines
 }
 
-if ($currentLine.Length -gt 0) { $lines += $currentLine }
+#endregion
 
-return $lines
+#region Module Exports
 
-}
+# Export public functions
+Export-ModuleMember -Function Show-AlertDialog, Show-ConfirmDialog, Show-InputDialog, Get-WordWrappedLines
 
+# Classes are automatically exported in PowerShell 7+
+# Dialog, AlertDialog, ConfirmDialog, InputDialog classes are available when module is imported
 
-
-function Initialize-DialogSystem {
-
-Invoke-WithErrorHandling -Component "DialogSystem" -Context "Initialize" -ScriptBlock {
-
-Subscribe-Event -EventName "Confirm.Request" -Handler { param($EventData) $params = $EventData.Data; Show-ConfirmDialog @params }
-
-Subscribe-Event -EventName "Alert.Show" -Handler { param($EventData) $params = $EventData.Data; Show-AlertDialog @params }
-
-Subscribe-Event -EventName "Input.Request" -Handler { param($EventData) $params = $EventData.Data; Show-InputDialog @params }
-
-Write-Log -Level Info -Message "Class-based Dialog System initialized"
-
-}
-
-}
-
-
-
-function Show-AlertDialog { param([string]$Title="Alert", [string]$Message); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowAlertDialog" -ScriptBlock { ([AlertDialog]::new($Title, $Message)).Show() } }
-
-function Show-ConfirmDialog { param([string]$Title="Confirm", [string]$Message, [scriptblock]$OnConfirm, [scriptblock]$OnCancel={}); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowConfirmDialog" -ScriptBlock { ([ConfirmDialog]::new($Title, $Message, $OnConfirm, $OnCancel)).Show() } }
-
-function Show-InputDialog { param([string]$Title="Input", [string]$Prompt, [string]$DefaultValue="", [scriptblock]$OnSubmit, [scriptblock]$OnCancel={}); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowInputDialog" -ScriptBlock { $d = [InputDialog]::new($Title, $Prompt, $OnSubmit, $OnCancel); if ($DefaultValue) { $d.SetDefaultValue($DefaultValue) }; $d.Show() } }
-
-function Show-ProgressDialog { param([string]$Title="Progress", [string]$Message="Processing...", [int]$PercentComplete=0, [switch]$ShowCancel); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowProgressDialog" -ScriptBlock { $d = [ProgressDialog]::new($Title, $Message); $d.PercentComplete = $PercentComplete; $d.ShowCancel = $ShowCancel; $d.Show(); return $d } }
-
-function Show-ListDialog { param([string]$Title="Select Item", [string]$Prompt="Choose an item:", [string[]]$Items, [scriptblock]$OnSelect, [scriptblock]$OnCancel={}, [switch]$AllowMultiple); Invoke-WithErrorHandling -Component "DialogSystem" -Context "ShowListDialog" -ScriptBlock { $d = [ListDialog]::new($Title, $Prompt, $Items, $OnSelect, $OnCancel); $d.AllowMultiple = $AllowMultiple; $d.Show() } }
-
-function Close-TuiDialog { Invoke-WithErrorHandling -Component "DialogSystem" -Context "CloseDialog" -ScriptBlock { Close-TopTuiOverlay } }
-
-
-
-# --- END OF FULL REPLACEMENT for modules\dialog-system-class\dialog-system-class.psm1 ---
+#endregion

@@ -1,529 +1,428 @@
-# Navigation Component Classes Module for PMC Terminal v5
+# ==============================================================================
+# Navigation Class Module v5.0
+# Contextual navigation menu components with theme integration
+# ==============================================================================
+# NOTE: This module is intended for LOCAL/CONTEXTUAL menus only.
+# Global application commands should be registered with the ActionService and
+# accessed via the CommandPalette (Ctrl+P).
+# ==============================================================================
 
-# Phase 1 Migration Complete - Proper UIElement inheritance and Panel integration
+using namespace System.Management.Automation
+using namespace System.Collections.Generic
 
-# CORRECTED (v2): Removed unused and confusing `BuildContextMenu` method.
-
-
-
-# NavigationItem - Represents a single menu item
+#region Navigation Classes
 
 class NavigationItem {
+    [string]$Key
+    [string]$Label
+    [scriptblock]$Action
+    [bool]$Enabled = $true
+    [bool]$Visible = $true
+    [string]$Description = ""
 
-[string] $Key
+    NavigationItem([Parameter(Mandatory)][string]$key, [Parameter(Mandatory)][string]$label, [Parameter(Mandatory)][scriptblock]$action) {
+        if ([string]::IsNullOrWhiteSpace($key)) {
+            throw [System.ArgumentException]::new("Navigation key cannot be null or empty")
+        }
+        if ([string]::IsNullOrWhiteSpace($label)) {
+            throw [System.ArgumentException]::new("Navigation label cannot be null or empty")
+        }
+        if (-not $action) {
+            throw [System.ArgumentNullException]::new("action", "Navigation action cannot be null")
+        }
 
-[string] $Label
+        $this.Key = $key.ToUpper()
+        $this.Label = $label
+        $this.Action = $action
+        
+        Write-Verbose "NavigationItem: Created item '$($this.Key)' - '$($this.Label)'"
+    }
 
-[scriptblock] $Action
+    [void] Execute() {
+        try {
+            if (-not $this.Enabled) {
+                Write-Log -Level Warning -Message "Attempted to execute disabled navigation item: $($this.Key)"
+                return
+            }
+            
+            Write-Log -Level Debug -Message "Executing navigation item: $($this.Key)"
+            Invoke-WithErrorHandling -Component "NavigationItem" -Context "Execute '$($this.Key)'" -ScriptBlock $this.Action
+        }
+        catch {
+            Write-Error "NavigationItem '$($this.Key)': Error during execution: $($_.Exception.Message)"
+        }
+    }
 
-[bool] $Enabled = $true
-
-[bool] $Visible = $true
-
-[string] $Description = ""
-
-[ConsoleColor] $KeyColor = [ConsoleColor]::Yellow
-
-[ConsoleColor] $LabelColor = [ConsoleColor]::White
-
-
-
-NavigationItem([string]$key, [string]$label, [scriptblock]$action) {
-
-if ([string]::IsNullOrWhiteSpace($key))   { throw [ArgumentException]::new("Navigation key cannot be null or empty") }
-
-if ([string]::IsNullOrWhiteSpace($label)) { throw [ArgumentException]::new("Navigation label cannot be null or empty") }
-
-if ($null -eq $action)                    { throw [ArgumentNullException]::new("action", "Navigation action cannot be null") }
-
-
-
-$this.Key = $key.ToUpper()
-
-$this.Label = $label
-
-$this.Action = $action
-
+    [string] ToString() {
+        return "NavigationItem(Key='$($this.Key)', Label='$($this.Label)', Enabled=$($this.Enabled))"
+    }
 }
-
-
-
-[void] Execute() {
-
-if (-not $this.Enabled) {
-
-Write-Log -Level Warning -Message "Attempted to execute disabled navigation item: $($this.Key)"
-
-return
-
-}
-
-
-
-try {
-
-Write-Log -Level Debug -Message "Executing navigation item: $($this.Key) - $($this.Label)"
-
-& $this.Action
-
-}
-
-catch {
-
-Write-Log -Level Error -Message "Navigation action failed for item '$($this.Key)': $_"
-
-throw
-
-}
-
-}
-
-
-
-[string] FormatDisplay([bool]$showDescription = $false) {
-
-$display = "[$($this.Key)] "
-
-
-
-if ($this.Enabled) {
-
-$display += $this.Label
-
-}
-
-else {
-
-$display += "$($this.Label) (Disabled)"
-
-}
-
-
-
-if ($showDescription -and -not [string]::IsNullOrWhiteSpace($this.Description)) {
-
-$display += " - $($this.Description)"
-
-}
-
-
-
-return $display
-
-}
-
-}
-
-
-
-# AI: REFACTORED - NavigationMenu now properly inherits from UIElement
 
 class NavigationMenu : UIElement {
+    [System.Collections.Generic.List[NavigationItem]]$Items
+    [ValidateSet("Vertical", "Horizontal")][string]$Orientation = "Vertical"
+    [string]$Separator = " | "
+    [int]$SelectedIndex = 0
 
-[System.Collections.Generic.List[NavigationItem]] $Items
+    NavigationMenu([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.Items = [System.Collections.Generic.List[NavigationItem]]::new()
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 10
+        Write-Verbose "NavigationMenu: Constructor called for '$($this.Name)'"
+    }
 
-[hashtable] $Services
+    [void] AddItem([Parameter(Mandatory)][NavigationItem]$item) {
+        try {
+            if (-not $item) {
+                throw [System.ArgumentNullException]::new("item")
+            }
+            
+            # Check for duplicate keys
+            $existingItem = $this.Items | Where-Object { $_.Key -eq $item.Key }
+            if ($existingItem) {
+                throw [System.InvalidOperationException]::new("Item with key '$($item.Key)' already exists")
+            }
+            
+            $this.Items.Add($item)
+            $this.RequestRedraw()
+            Write-Verbose "NavigationMenu '$($this.Name)': Added item '$($item.Key)'"
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error adding item: $($_.Exception.Message)"
+            throw
+        }
+    }
 
-[string] $Orientation = "Vertical"
+    [void] AddSeparator() {
+        try {
+            $separatorItem = [NavigationItem]::new("-", "---", {})
+            $separatorItem.Enabled = $false
+            $this.Items.Add($separatorItem)
+            $this.RequestRedraw()
+            Write-Verbose "NavigationMenu '$($this.Name)': Added separator"
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error adding separator: $($_.Exception.Message)"
+        }
+    }
 
-[string] $Separator = "  |  "
+    [void] RemoveItem([Parameter(Mandatory)][string]$key) {
+        try {
+            $item = $this.Items | Where-Object { $_.Key -eq $key.ToUpper() }
+            if ($item) {
+                $this.Items.Remove($item)
+                
+                # Adjust selected index if needed
+                if ($this.SelectedIndex -ge $this.Items.Count) {
+                    $this.SelectedIndex = [Math]::Max(0, $this.Items.Count - 1)
+                }
+                
+                $this.RequestRedraw()
+                Write-Verbose "NavigationMenu '$($this.Name)': Removed item '$key'"
+            }
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error removing item '$key': $($_.Exception.Message)"
+        }
+    }
 
-[bool] $ShowDescriptions = $false
+    [NavigationItem] GetItem([Parameter(Mandatory)][string]$key) {
+        return $this.Items | Where-Object { $_.Key -eq $key.ToUpper() } | Select-Object -First 1
+    }
 
-[ConsoleColor] $SeparatorColor = [ConsoleColor]::DarkGray
+    [void] ExecuteSelectedItem() {
+        try {
+            $visibleItems = @($this.Items | Where-Object { $_.Visible })
+            if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $visibleItems.Count) {
+                $selectedItem = $visibleItems[$this.SelectedIndex]
+                if ($selectedItem.Enabled -and $selectedItem.Key -ne "-") {
+                    $selectedItem.Execute()
+                }
+            }
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error executing selected item: $($_.Exception.Message)"
+        }
+    }
 
-[int] $SelectedIndex = 0
+    [void] ExecuteByKey([Parameter(Mandatory)][string]$key) {
+        try {
+            $item = $this.GetItem($key)
+            if ($item -and $item.Enabled -and $item.Visible) {
+                $item.Execute()
+            }
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error executing item by key '$key': $($_.Exception.Message)"
+        }
+    }
 
-[bool] $IsFocused = $false
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'Background'
+            $fgColor = Get-ThemeColor 'Foreground'
+            
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            
+            $visibleItems = @($this.Items | Where-Object { $_.Visible })
+            if ($visibleItems.Count -eq 0) {
+                Write-Verbose "NavigationMenu '$($this.Name)': No visible items to render"
+                return
+            }
 
+            # Ensure selected index is valid
+            if ($this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $visibleItems.Count) {
+                $this.SelectedIndex = 0
+            }
 
+            if ($this.Orientation -eq "Horizontal") {
+                $this._RenderHorizontal($visibleItems)
+            } else {
+                $this._RenderVertical($visibleItems)
+            }
+            
+            Write-Verbose "NavigationMenu '$($this.Name)': Rendered $($visibleItems.Count) items"
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-NavigationMenu([string]$name) : base() {
+    hidden [void] _RenderHorizontal([NavigationItem[]]$items) {
+        try {
+            $currentX = 0
+            $maxY = 0
+            
+            for ($i = 0; $i -lt $items.Count; $i++) {
+                if ($currentX -ge $this.Width) { break }
+                
+                $item = $items[$i]
+                $isSelected = ($i -eq $this.SelectedIndex)
+                $isFocused = ($isSelected -and $this.IsFocused)
+                
+                # Get colors based on state
+                $itemFg = if (-not $item.Enabled) {
+                    Get-ThemeColor 'menu.item.disabled' -Fallback (Get-ThemeColor 'Subtle')
+                } elseif ($isFocused) {
+                    Get-ThemeColor 'menu.item.foreground.focus' -Fallback (Get-ThemeColor 'Background')
+                } else {
+                    Get-ThemeColor 'menu.item.foreground.normal' -Fallback (Get-ThemeColor 'Foreground')
+                }
+                
+                $itemBg = if ($isFocused) {
+                    Get-ThemeColor 'menu.item.background.focus' -Fallback (Get-ThemeColor 'Accent')
+                } else {
+                    Get-ThemeColor 'Background'
+                }
+                
+                # Format item text
+                $text = if ($item.Key -eq "-") {
+                    "---"
+                } else {
+                    "[$($item.Key)] $($item.Label)"
+                }
+                
+                # Draw item
+                $textLength = [Math]::Min($text.Length, $this.Width - $currentX)
+                $displayText = $text.Substring(0, $textLength)
+                
+                Write-TuiText -Buffer $this._private_buffer -X $currentX -Y 0 -Text $displayText -ForegroundColor $itemFg -BackgroundColor $itemBg
+                $currentX += $textLength
+                
+                # Add separator if not last item and space available
+                if ($i -lt ($items.Count - 1) -and ($currentX + $this.Separator.Length) -lt $this.Width) {
+                    $separatorColor = Get-ThemeColor 'menu.item.separator' -Fallback (Get-ThemeColor 'Subtle')
+                    Write-TuiText -Buffer $this._private_buffer -X $currentX -Y 0 -Text $this.Separator -ForegroundColor $separatorColor -BackgroundColor (Get-ThemeColor 'Background')
+                    $currentX += $this.Separator.Length
+                }
+            }
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error rendering horizontal layout: $($_.Exception.Message)"
+        }
+    }
 
-$this.Name = $name
+    hidden [void] _RenderVertical([NavigationItem[]]$items) {
+        try {
+            $maxItems = [Math]::Min($items.Count, $this.Height)
+            
+            for ($i = 0; $i -lt $maxItems; $i++) {
+                $item = $items[$i]
+                $isSelected = ($i -eq $this.SelectedIndex)
+                $isFocused = ($isSelected -and $this.IsFocused)
+                
+                # Handle separators
+                if ($item.Key -eq "-") {
+                    $separatorColor = Get-ThemeColor 'menu.item.separator' -Fallback (Get-ThemeColor 'Subtle')
+                    $line = '─' * $this.Width
+                    Write-TuiText -Buffer $this._private_buffer -X 0 -Y $i -Text $line -ForegroundColor $separatorColor -BackgroundColor (Get-ThemeColor 'Background')
+                    continue
+                }
+                
+                # Get colors based on state
+                $itemBg = if ($isFocused) {
+                    Get-ThemeColor 'menu.item.background.focus' -Fallback (Get-ThemeColor 'Accent')
+                } else {
+                    Get-ThemeColor 'Background'
+                }
+                
+                $prefixFg = if ($isFocused) {
+                    Get-ThemeColor 'menu.item.prefix.focus' -Fallback (Get-ThemeColor 'Background')
+                } else {
+                    Get-ThemeColor 'menu.item.prefix.normal' -Fallback (Get-ThemeColor 'Accent')
+                }
+                
+                $keyFg = if (-not $item.Enabled) {
+                    Get-ThemeColor 'menu.item.disabled' -Fallback (Get-ThemeColor 'Subtle')
+                } elseif ($isFocused) {
+                    Get-ThemeColor 'menu.item.hotkey.focus' -Fallback (Get-ThemeColor 'Background')
+                } else {
+                    Get-ThemeColor 'menu.item.hotkey.normal' -Fallback (Get-ThemeColor 'Accent')
+                }
+                
+                $labelFg = if (-not $item.Enabled) {
+                    Get-ThemeColor 'menu.item.disabled' -Fallback (Get-ThemeColor 'Subtle')
+                } elseif ($isFocused) {
+                    Get-ThemeColor 'menu.item.foreground.focus' -Fallback (Get-ThemeColor 'Background')
+                } else {
+                    Get-ThemeColor 'menu.item.foreground.normal' -Fallback (Get-ThemeColor 'Foreground')
+                }
+                
+                # Draw selection highlight background
+                $highlightText = ' ' * $this.Width
+                Write-TuiText -Buffer $this._private_buffer -X 0 -Y $i -Text $highlightText -ForegroundColor $labelFg -BackgroundColor $itemBg
+                
+                # Draw selection prefix
+                $prefix = if ($isSelected) { "> " } else { "  " }
+                Write-TuiText -Buffer $this._private_buffer -X 0 -Y $i -Text $prefix -ForegroundColor $prefixFg -BackgroundColor $itemBg
+                
+                # Draw hotkey
+                $keyText = "[$($item.Key)]"
+                Write-TuiText -Buffer $this._private_buffer -X 2 -Y $i -Text $keyText -ForegroundColor $keyFg -BackgroundColor $itemBg
+                
+                # Draw label
+                $labelX = 2 + $keyText.Length + 1
+                $maxLabelWidth = $this.Width - $labelX
+                $labelText = $item.Label
+                if ($labelText.Length -gt $maxLabelWidth) {
+                    $labelText = $labelText.Substring(0, $maxLabelWidth - 3) + "..."
+                }
+                Write-TuiText -Buffer $this._private_buffer -X $labelX -Y $i -Text $labelText -ForegroundColor $labelFg -BackgroundColor $itemBg
+            }
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error rendering vertical layout: $($_.Exception.Message)"
+        }
+    }
 
-$this.Items = [System.Collections.Generic.List[NavigationItem]]::new()
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$keyInfo) {
+        try {
+            $visibleItems = @($this.Items | Where-Object { $_.Visible })
+            if ($visibleItems.Count -eq 0) {
+                return $false
+            }
+            
+            # Handle direct hotkey access
+            $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
+            $hotkeyItem = $visibleItems | Where-Object { $_.Key -eq $keyChar -and $_.Enabled }
+            if ($hotkeyItem) {
+                $hotkeyItem.Execute()
+                return $true
+            }
+            
+            # Handle navigation keys
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Enter) {
+                    $this.ExecuteSelectedItem()
+                    return $true
+                }
+                ([ConsoleKey]::UpArrow) {
+                    if ($this.Orientation -eq "Vertical") {
+                        $this._MovePrevious($visibleItems)
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this.Orientation -eq "Vertical") {
+                        $this._MoveNext($visibleItems)
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.Orientation -eq "Horizontal") {
+                        $this._MovePrevious($visibleItems)
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.Orientation -eq "Horizontal") {
+                        $this._MoveNext($visibleItems)
+                        return $true
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.SelectedIndex = 0
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::End) {
+                    $this.SelectedIndex = $visibleItems.Count - 1
+                    $this.RequestRedraw()
+                    return $true
+                }
+            }
+            
+            return $false
+        }
+        catch {
+            Write-Error "NavigationMenu '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
 
-$this.IsFocusable = $true
+    hidden [void] _MovePrevious([NavigationItem[]]$items) {
+        do {
+            $this.SelectedIndex = if ($this.SelectedIndex -le 0) { $items.Count - 1 } else { $this.SelectedIndex - 1 }
+        } while ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $items.Count -and (-not $items[$this.SelectedIndex].Enabled -or $items[$this.SelectedIndex].Key -eq "-"))
+        
+        $this.RequestRedraw()
+    }
 
-$this.SelectedIndex = 0
+    hidden [void] _MoveNext([NavigationItem[]]$items) {
+        do {
+            $this.SelectedIndex = if ($this.SelectedIndex -ge ($items.Count - 1)) { 0 } else { $this.SelectedIndex + 1 }
+        } while ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $items.Count -and (-not $items[$this.SelectedIndex].Enabled -or $items[$this.SelectedIndex].Key -eq "-"))
+        
+        $this.RequestRedraw()
+    }
 
-$this.Width = 30
+    [void] OnFocus() {
+        ([UIElement]$this).OnFocus()
+        $this.RequestRedraw()
+        Write-Verbose "NavigationMenu '$($this.Name)': Gained focus"
+    }
 
-$this.Height = 10
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        $this.RequestRedraw()
+        Write-Verbose "NavigationMenu '$($this.Name)': Lost focus"
+    }
 
+    [string] ToString() {
+        return "NavigationMenu(Name='$($this.Name)', Items=$($this.Items.Count), Selected=$($this.SelectedIndex), Orientation='$($this.Orientation)')"
+    }
 }
 
+#endregion
 
+#region Module Exports
 
-NavigationMenu([string]$name, [hashtable]$services) : base() {
+# Classes are automatically exported in PowerShell 7+
+# NavigationItem, NavigationMenu classes are available when module is imported
 
-if ($null -eq $services) { throw [ArgumentNullException]::new("services") }
-
-$this.Name = $name
-
-$this.Services = $services
-
-$this.Items = [System.Collections.Generic.List[NavigationItem]]::new()
-
-$this.IsFocusable = $true
-
-$this.SelectedIndex = 0
-
-$this.Width = 30
-
-$this.Height = 10
-
-}
-
-
-
-[void] AddItem([NavigationItem]$item) {
-
-if (-not $item) { throw [ArgumentNullException]::new("item") }
-
-if ($this.Items.Exists({param($x) $x.Key -eq $item.Key})) {
-
-throw [InvalidOperationException]::new("Item with key '$($item.Key)' already exists")
-
-}
-
-$this.Items.Add($item)
-
-$this.RequestRedraw()
-
-}
-
-
-
-[void] RemoveItem([string]$key) {
-
-$item = $this.GetItem($key)
-
-if ($item) {
-
-[void]$this.Items.Remove($item)
-
-$this.RequestRedraw()
-
-}
-
-}
-
-
-
-[NavigationItem] GetItem([string]$key) {
-
-return $this.Items.Find({param($x) $x.Key -eq $key.ToUpper()})
-
-}
-
-
-
-[void] ExecuteAction([string]$key) {
-
-$item = $this.GetItem($key)
-
-if ($item -and $item.Visible) {
-
-Invoke-WithErrorHandling -Component "NavigationMenu" -Context "ExecuteAction:$key" -ScriptBlock {
-
-$item.Execute()
-
-}
-
-}
-
-}
-
-
-
-[void] AddSeparator() {
-
-$separatorItem = [NavigationItem]::new("-", "---", {})
-
-$separatorItem.Enabled = $false
-
-$this.Items.Add($separatorItem)
-
-$this.RequestRedraw()
-
-}
-
-
-
-# AI: REFACTORED - Now uses Panel buffer integration
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-# Clear our buffer
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-# Get visible items
-
-$visibleItems = @($this.Items | Where-Object { $null -ne $_ -and $_.Visible })
-
-if ($visibleItems.Count -eq 0) { return }
-
-
-
-if ($this.Orientation -eq "Horizontal") {
-
-$this.RenderHorizontal($visibleItems)
-
-}
-
-else {
-
-$this.RenderVertical($visibleItems)
-
-}
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "NavigationMenu render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-hidden [void] RenderHorizontal([object[]]$items) {
-
-if ($null -eq $items -or $items.Count -eq 0) { return }
-
-
-
-$menuText = ""
-
-$isFirst = $true
-
-foreach ($item in $items) {
-
-if ($null -eq $item) { continue }
-
-
-
-if (-not $isFirst) {
-
-$menuText += $this.Separator
-
-}
-
-$menuText += "[$($item.Key)] $($item.Label)"
-
-$isFirst = $false
-
-}
-
-
-
-# Write to our private buffer
-
-$this._private_buffer.WriteString(0, 0, $menuText, [ConsoleColor]::White, [ConsoleColor]::Black)
-
-}
-
-
-
-hidden [void] RenderVertical([object[]]$items) {
-
-if ($null -eq $items -or $items.Count -eq 0) { return }
-
-
-
-# Ensure SelectedIndex is within bounds
-
-if ($this.SelectedIndex -lt 0 -or $this.SelectedIndex -ge $items.Count) {
-
-$this.SelectedIndex = 0
-
-}
-
-
-
-for ($i = 0; $i -lt $items.Count; $i++) {
-
-$item = $items[$i]
-
-if ($null -eq $item) { continue }
-
-
-
-$prefix = if ($i -eq $this.SelectedIndex -and $item.Key -ne "-") { " > " } else { "   " }
-
-$menuText = "$prefix[$($item.Key)] $($item.Label)"
-
-
-
-# Pad text to clear the full line width
-
-if ($menuText.Length -lt $this.Width) {
-
-$menuText = $menuText.PadRight($this.Width)
-
-}
-
-
-
-$fg = if ($i -eq $this.SelectedIndex -and $item.Key -ne "-") {
-
-[ConsoleColor]::Black
-
-} else {
-
-[ConsoleColor]::White
-
-}
-
-$bg = if ($i -eq $this.SelectedIndex -and $item.Key -ne "-") {
-
-[ConsoleColor]::White
-
-} else {
-
-[ConsoleColor]::Black
-
-}
-
-
-
-# Write to our private buffer
-
-$this._private_buffer.WriteString(0, $i, $menuText, $fg, $bg)
-
-}
-
-}
-
-
-
-# AI: REFACTORED - Updated input handling for new architecture
-
-[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-
-try {
-
-$visibleItems = @($this.Items | Where-Object { $null -ne $_ -and $_.Visible })
-
-if ($visibleItems.Count -eq 0) { return $false }
-
-
-
-switch ($keyInfo.Key) {
-
-([ConsoleKey]::UpArrow) {
-
-if ($this.SelectedIndex -gt 0) {
-
-$this.SelectedIndex--
-
-$this.RequestRedraw()
-
-}
-
-return $true
-
-}
-
-([ConsoleKey]::DownArrow) {
-
-if ($this.SelectedIndex -lt ($visibleItems.Count - 1)) {
-
-$this.SelectedIndex++
-
-$this.RequestRedraw()
-
-}
-
-return $true
-
-}
-
-([ConsoleKey]::Enter) {
-
-if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $visibleItems.Count) {
-
-$selectedItem = $visibleItems[$this.SelectedIndex]
-
-if ($selectedItem.Enabled -and $selectedItem.Key -ne "-") {
-
-$selectedItem.Execute()
-
-}
-
-}
-
-return $true
-
-}
-
-default {
-
-# Check for direct key matches
-
-$keyChar = $keyInfo.KeyChar.ToString().ToUpper()
-
-$matchingItem = $this.Items.Find({param($x) $x.Key -eq $keyChar})
-
-if ($matchingItem -and $matchingItem.Enabled -and $matchingItem.Visible) {
-
-$matchingItem.Execute()
-
-return $true
-
-}
-
-}
-
-}
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "NavigationMenu input error for '$($this.Name)': $_"
-
-}
-
-
-
-return $false
-
-}
-
-
-
-# AI: NEW - Focus management
-
-[void] OnFocus() {
-
-$this.IsFocused = $true
-
-$this.RequestRedraw()
-
-}
-
-
-
-[void] OnBlur() {
-
-$this.IsFocused = $false
-
-$this.RequestRedraw()
-
-}
-
-}
+#endregion

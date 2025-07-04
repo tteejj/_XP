@@ -1,1627 +1,1022 @@
-# Advanced Input Components - Phase 2 Migration Complete
+# ==============================================================================
+# Advanced Input Components Module v5.0
+# Sophisticated input controls with theme integration and overlay rendering
+# ==============================================================================
 
-# All components now inherit from UIElement and use buffer-based rendering
-
-
-
-
-
-
-
-
-
-
+using namespace System.Management.Automation
+using namespace System.Collections.Generic
 
 #region Advanced Input Classes
 
-
-
-# AI: REFACTORED - MultilineTextBox converted from functional to class-based
-
 class MultilineTextBoxComponent : UIElement {
+    [string[]]$Lines = @("")
+    [string]$Placeholder = "Enter text..."
+    [ValidateRange(1, 100)][int]$MaxLines = 10
+    [ValidateRange(1, 1000)][int]$MaxLineLength = 100
+    [int]$CurrentLine = 0
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+    
+    hidden [int]$_scrollOffsetY = 0
+    hidden [int]$_scrollOffsetX = 0
 
-[string[]]$Lines = @("")
+    MultilineTextBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 40
+        $this.Height = 8
+        Write-Verbose "MultilineTextBoxComponent: Constructor called for '$($this.Name)'"
+    }
 
-[string]$Placeholder = "Enter text..."
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $placeholderColor = Get-ThemeColor 'input.placeholder' -Fallback (Get-ThemeColor 'Subtle')
+            $cursorColor = Get-ThemeColor 'input.cursor' -Fallback (Get-ThemeColor 'Accent')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
 
-[int]$MaxLines = 10
+            $textAreaHeight = $this.Height - 2
+            $textAreaWidth = $this.Width - 2
+            
+            # Render visible lines
+            for ($i = 0; $i -lt $textAreaHeight; $i++) {
+                $lineIndex = $i + $this._scrollOffsetY
+                if ($lineIndex -ge $this.Lines.Count) { break }
+                
+                $lineText = $this.Lines[$lineIndex]
+                $displayLine = ""
+                
+                if ($lineText.Length -gt $this._scrollOffsetX) {
+                    $displayLine = $lineText.Substring($this._scrollOffsetX, [Math]::Min($textAreaWidth, $lineText.Length - $this._scrollOffsetX))
+                }
+                
+                if (-not [string]::IsNullOrEmpty($displayLine)) {
+                    Write-TuiText -Buffer $this._private_buffer -X 1 -Y ($i + 1) -Text $displayLine -ForegroundColor $fgColor -BackgroundColor $bgColor
+                }
+            }
 
-[int]$MaxLineLength = 100
+            # Show placeholder if empty and not focused
+            if ($this.Lines.Count -eq 1 -and [string]::IsNullOrEmpty($this.Lines[0]) -and -not $this.IsFocused) {
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $this.Placeholder -ForegroundColor $placeholderColor -BackgroundColor $bgColor
+            }
 
-[int]$CurrentLine = 0
+            # Render cursor
+            if ($this.IsFocused) {
+                $cursorLineY = $this.CurrentLine - $this._scrollOffsetY
+                if ($cursorLineY -ge 0 -and $cursorLineY -lt $textAreaHeight) {
+                    $cursorX = 1 + ($this.CursorPosition - $this._scrollOffsetX)
+                    if ($cursorX -ge 1 -and $cursorX -le $textAreaWidth) {
+                        $cell = $this._private_buffer.GetCell($cursorX, $cursorLineY + 1)
+                        if ($null -ne $cell) {
+                            $cell.BackgroundColor = $cursorColor
+                            $cell.ForegroundColor = $bgColor
+                            $this._private_buffer.SetCell($cursorX, $cursorLineY + 1, $cell)
+                        }
+                    }
+                }
+            }
+            
+            Write-Verbose "MultilineTextBoxComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "MultilineTextBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-[int]$CursorPosition = 0
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        try {
+            $handled = $true
+            $currentLine = $this.Lines[$this.CurrentLine]
+            $originalText = $this.Lines -join "`n"
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::Enter) {
+                    if ($this.Lines.Count -lt $this.MaxLines) {
+                        $beforeCursor = $currentLine.Substring(0, $this.CursorPosition)
+                        $afterCursor = $currentLine.Substring($this.CursorPosition)
+                        
+                        $this.Lines[$this.CurrentLine] = $beforeCursor
+                        $this.Lines = $this.Lines[0..$this.CurrentLine] + @($afterCursor) + $this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)]
+                        
+                        $this.CurrentLine++
+                        $this.CursorPosition = 0
+                    }
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.Lines[$this.CurrentLine] = $currentLine.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    }
+                    elseif ($this.CurrentLine -gt 0) {
+                        $this.CursorPosition = $this.Lines[$this.CurrentLine - 1].Length
+                        $this.Lines[$this.CurrentLine - 1] += $currentLine
+                        $this.Lines = $this.Lines[0..($this.CurrentLine - 1)] + $this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)]
+                        $this.CurrentLine--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $currentLine.Length) {
+                        $this.Lines[$this.CurrentLine] = $currentLine.Remove($this.CursorPosition, 1)
+                    }
+                    elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.Lines[$this.CurrentLine] += $this.Lines[$this.CurrentLine + 1]
+                        $this.Lines = $this.Lines[0..$this.CurrentLine] + $this.Lines[($this.CurrentLine + 2)..($this.Lines.Count - 1)]
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.CursorPosition--
+                    }
+                    elseif ($this.CurrentLine -gt 0) {
+                        $this.CurrentLine--
+                        $this.CursorPosition = $this.Lines[$this.CurrentLine].Length
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $currentLine.Length) {
+                        $this.CursorPosition++
+                    }
+                    elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.CurrentLine++
+                        $this.CursorPosition = 0
+                    }
+                }
+                ([ConsoleKey]::UpArrow) {
+                    if ($this.CurrentLine -gt 0) {
+                        $this.CurrentLine--
+                        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                    }
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.CurrentLine++
+                        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $currentLine.Length
+                }
+                ([ConsoleKey]::PageUp) {
+                    $this.CurrentLine = [Math]::Max(0, $this.CurrentLine - ($this.Height - 2))
+                    $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                }
+                ([ConsoleKey]::PageDown) {
+                    $this.CurrentLine = [Math]::Min($this.Lines.Count - 1, $this.CurrentLine + ($this.Height - 2))
+                    $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
+                        $newLine = $currentLine.Insert($this.CursorPosition, $key.KeyChar)
+                        if ($newLine.Length -le $this.MaxLineLength) {
+                            $this.Lines[$this.CurrentLine] = $newLine
+                            $this.CursorPosition++
+                        }
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                $this._UpdateScrolling()
+                
+                # Fire change event if text changed
+                $newText = $this.Lines -join "`n"
+                if ($newText -ne $originalText -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $newText
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "MultilineTextBoxComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
 
-[int]$ScrollOffsetY = 0
+    hidden [void] _UpdateScrolling() {
+        $textAreaHeight = $this.Height - 2
+        $textAreaWidth = $this.Width - 2
+        
+        # Vertical scrolling
+        if ($this.CurrentLine -lt $this._scrollOffsetY) {
+            $this._scrollOffsetY = $this.CurrentLine
+        }
+        elseif ($this.CurrentLine -ge ($this._scrollOffsetY + $textAreaHeight)) {
+            $this._scrollOffsetY = $this.CurrentLine - $textAreaHeight + 1
+        }
+        
+        # Horizontal scrolling
+        if ($this.CursorPosition -lt $this._scrollOffsetX) {
+            $this._scrollOffsetX = $this.CursorPosition
+        }
+        elseif ($this.CursorPosition -ge ($this._scrollOffsetX + $textAreaWidth)) {
+            $this._scrollOffsetX = $this.CursorPosition - $textAreaWidth + 1
+        }
+        
+        # Ensure scroll offsets are within bounds
+        $this._scrollOffsetY = [Math]::Max(0, $this._scrollOffsetY)
+        $this._scrollOffsetX = [Math]::Max(0, $this._scrollOffsetX)
+    }
 
-[bool]$WordWrap = $true
+    [string] GetText() {
+        return $this.Lines -join "`n"
+    }
 
-[scriptblock]$OnChange
+    [void] SetText([string]$text) {
+        if ([string]::IsNullOrEmpty($text)) {
+            $this.Lines = @("")
+        } else {
+            $this.Lines = $text -split "`n"
+        }
+        $this.CurrentLine = 0
+        $this.CursorPosition = 0
+        $this._scrollOffsetY = 0
+        $this._scrollOffsetX = 0
+        $this.RequestRedraw()
+    }
 
-
-
-MultilineTextBoxComponent([string]$name) : base() {
-
-$this.Name = $name
-
-$this.IsFocusable = $true
-
-$this.Width = 40
-
-$this.Height = 10
-
+    [string] ToString() {
+        return "MultilineTextBoxComponent(Name='$($this.Name)', Lines=$($this.Lines.Count), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-# AI: REFACTORED - Now uses UIElement buffer system
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-# Clear buffer
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
-
-
-
-# AI: Draw border
-
-Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Calculate visible area
-
-$textAreaHeight = $this.Height - 2
-
-$textAreaWidth = $this.Width - 2
-
-$startLine = $this.ScrollOffsetY
-
-$endLine = [Math]::Min($this.Lines.Count - 1, $startLine + $textAreaHeight - 1)
-
-
-
-# AI: Render text lines
-
-for ($i = $startLine; $i -le $endLine; $i++) {
-
-if ($i -ge $this.Lines.Count) { break }
-
-
-
-$line = $this.Lines[$i] ?? ""
-
-$displayLine = $line
-
-if ($displayLine.Length -gt $textAreaWidth) {
-
-$displayLine = $displayLine.Substring(0, $textAreaWidth)
-
-}
-
-
-
-$lineY = 1 + ($i - $startLine)
-
-Write-TuiText -Buffer $this._private_buffer -X 1 -Y $lineY -Text $displayLine `
-
--ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
-
-}
-
-
-
-# AI: Show placeholder if empty and not focused
-
-if ($this.Lines.Count -eq 1 -and [string]::IsNullOrEmpty($this.Lines[0]) -and -not $this.IsFocused) {
-
-Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $this.Placeholder `
-
--ForegroundColor ([ConsoleColor]::DarkGray) -BackgroundColor ([ConsoleColor]::Black)
-
-}
-
-
-
-# AI: Draw cursor if focused
-
-if ($this.IsFocused) {
-
-$cursorLine = $this.CurrentLine - $this.ScrollOffsetY
-
-if ($cursorLine -ge 0 -and $cursorLine -lt $textAreaHeight) {
-
-$cursorX = 1 + $this.CursorPosition
-
-$cursorY = 1 + $cursorLine
-
-if ($cursorX -lt $this.Width - 1) {
-
-Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y $cursorY -Text "_" `
-
--ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
-
-}
-
-}
-
-}
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "MultilineTextBox render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-$currentLineText = $this.Lines[$this.CurrentLine] ?? ""
-
-$originalLines = $this.Lines.Clone()
-
-$handled = $true
-
-
-
-switch ($key.Key) {
-
-([ConsoleKey]::UpArrow) {
-
-if ($this.CurrentLine -gt 0) {
-
-$this.CurrentLine--
-
-$this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-([ConsoleKey]::DownArrow) {
-
-if ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
-
-$this.CurrentLine++
-
-$this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-([ConsoleKey]::LeftArrow) {
-
-if ($this.CursorPosition -gt 0) {
-
-$this.CursorPosition--
-
-} elseif ($this.CurrentLine -gt 0) {
-
-$this.CurrentLine--
-
-$this.CursorPosition = $this.Lines[$this.CurrentLine].Length
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-([ConsoleKey]::RightArrow) {
-
-if ($this.CursorPosition -lt $currentLineText.Length) {
-
-$this.CursorPosition++
-
-} elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
-
-$this.CurrentLine++
-
-$this.CursorPosition = 0
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-([ConsoleKey]::Home) { $this.CursorPosition = 0 }
-
-([ConsoleKey]::End) { $this.CursorPosition = $currentLineText.Length }
-
-([ConsoleKey]::Enter) {
-
-if ($this.Lines.Count -lt $this.MaxLines) {
-
-$beforeCursor = $currentLineText.Substring(0, $this.CursorPosition)
-
-$afterCursor = $currentLineText.Substring($this.CursorPosition)
-
-
-
-$this.Lines[$this.CurrentLine] = $beforeCursor
-
-$this.Lines = @($this.Lines[0..$this.CurrentLine]) + @($afterCursor) + @($this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)])
-
-
-
-$this.CurrentLine++
-
-$this.CursorPosition = 0
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-([ConsoleKey]::Backspace) {
-
-if ($this.CursorPosition -gt 0) {
-
-$this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition - 1, 1)
-
-$this.CursorPosition--
-
-} elseif ($this.CurrentLine -gt 0 -and $this.Lines.Count -gt 1) {
-
-$previousLine = $this.Lines[$this.CurrentLine - 1]
-
-$this.CursorPosition = $previousLine.Length
-
-$this.Lines[$this.CurrentLine - 1] = $previousLine + $currentLineText
-
-$this.Lines = @($this.Lines[0..($this.CurrentLine - 1)]) + @($this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)])
-
-$this.CurrentLine--
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-([ConsoleKey]::Delete) {
-
-if ($this.CursorPosition -lt $currentLineText.Length) {
-
-$this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition, 1)
-
-} elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
-
-$nextLine = $this.Lines[$this.CurrentLine + 1]
-
-$this.Lines[$this.CurrentLine] = $currentLineText + $nextLine
-
-$this.Lines = @($this.Lines[0..$this.CurrentLine]) + @($this.Lines[($this.CurrentLine + 2)..($this.Lines.Count - 1)])
-
-}
-
-}
-
-default {
-
-if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentLineText.Length -lt $this.MaxLineLength) {
-
-$this.Lines[$this.CurrentLine] = $currentLineText.Insert($this.CursorPosition, $key.KeyChar)
-
-$this.CursorPosition++
-
-} else {
-
-$handled = $false
-
-}
-
-}
-
-}
-
-
-
-if ($handled -and $this.OnChange -and -not $this._ArraysEqual($originalLines, $this.Lines)) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock {
-
-& $this.OnChange -NewValue $this.Lines
-
-}
-
-$this.RequestRedraw()
-
-}
-
-
-
-return $handled
-
-} catch {
-
-Write-Log -Level Error -Message "MultilineTextBox input error for '$($this.Name)': $_"
-
-return $false
-
-}
-
-}
-
-
-
-hidden [void] _UpdateScrolling() {
-
-$textAreaHeight = $this.Height - 2
-
-if ($this.CurrentLine -lt $this.ScrollOffsetY) {
-
-$this.ScrollOffsetY = $this.CurrentLine
-
-} elseif ($this.CurrentLine -ge ($this.ScrollOffsetY + $textAreaHeight)) {
-
-$this.ScrollOffsetY = $this.CurrentLine - $textAreaHeight + 1
-
-}
-
-}
-
-
-
-hidden [bool] _ArraysEqual([string[]]$array1, [string[]]$array2) {
-
-if ($array1.Count -ne $array2.Count) { return $false }
-
-for ($i = 0; $i -lt $array1.Count; $i++) {
-
-if ($array1[$i] -ne $array2[$i]) { return $false }
-
-}
-
-return $true
-
-}
-
-
-
-[string] GetText() {
-
-return $this.Lines -join "`n"
-
-}
-
-
-
-[void] SetText([string]$text) {
-
-$this.Lines = if ([string]::IsNullOrEmpty($text)) { @("") } else { $text -split "`n" }
-
-$this.CurrentLine = 0
-
-$this.CursorPosition = 0
-
-$this.ScrollOffsetY = 0
-
-$this.RequestRedraw()
-
-}
-
-}
-
-
-
-# AI: REFACTORED - NumericInput converted from functional to class-based
 
 class NumericInputComponent : UIElement {
+    [double]$Value = 0
+    [double]$MinValue = [double]::MinValue
+    [double]$MaxValue = [double]::MaxValue
+    [double]$Step = 1
+    [int]$DecimalPlaces = 0
+    [string]$Suffix = ""
+    [string]$TextValue = "0"
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
 
-[double]$Value = 0
+    NumericInputComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 3
+        $this.TextValue = $this.Value.ToString()
+        Write-Verbose "NumericInputComponent: Constructor called for '$($this.Name)'"
+    }
 
-[double]$Min = [double]::MinValue
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $suffixColor = Get-ThemeColor 'input.suffix' -Fallback (Get-ThemeColor 'Subtle')
+            $cursorColor = Get-ThemeColor 'input.cursor' -Fallback (Get-ThemeColor 'Accent')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw main value
+            $displayText = $this.TextValue
+            if (-not [string]::IsNullOrEmpty($this.Suffix)) {
+                $displayText += $this.Suffix
+            }
+            
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText -ForegroundColor $fgColor -BackgroundColor $bgColor
+            
+            # Draw spinner arrows
+            $spinnerColor = if ($this.IsFocused) { $borderColor } else { (Get-ThemeColor 'Subtle') }
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 0 -Text "▲" -ForegroundColor $spinnerColor -BackgroundColor $bgColor
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 2 -Text "▼" -ForegroundColor $spinnerColor -BackgroundColor $bgColor
+            
+            # Draw cursor
+            if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt ($this.Width - 4)) {
+                    $cell = $this._private_buffer.GetCell($cursorX, 1)
+                    if ($null -ne $cell) {
+                        $cell.BackgroundColor = $cursorColor
+                        $cell.ForegroundColor = $bgColor
+                        $this._private_buffer.SetCell($cursorX, 1, $cell)
+                    }
+                }
+            }
+            
+            Write-Verbose "NumericInputComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "NumericInputComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-[double]$Max = [double]::MaxValue
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        try {
+            $handled = $true
+            $originalValue = $this.Value
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    $this.Value = [Math]::Min($this.MaxValue, $this.Value + $this.Step)
+                    $this._UpdateTextValue()
+                }
+                ([ConsoleKey]::DownArrow) {
+                    $this.Value = [Math]::Max($this.MinValue, $this.Value - $this.Step)
+                    $this._UpdateTextValue()
+                }
+                ([ConsoleKey]::Enter) {
+                    if ($this._ValidateAndSetValue($this.TextValue)) {
+                        # Value was valid and set
+                    }
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.CursorPosition++
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $this.TextValue.Length
+                }
+                default {
+                    if ($key.KeyChar -and $this._IsValidNumericChar($key.KeyChar)) {
+                        $this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                # Fire change event if value changed
+                if ($this.Value -ne $originalValue -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Value
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "NumericInputComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
 
-[double]$Step = 1
+    hidden [bool] _IsValidNumericChar([char]$char) {
+        return [char]::IsDigit($char) -or $char -eq '.' -or $char -eq '-'
+    }
 
-[int]$DecimalPlaces = 0
+    hidden [bool] _ValidateAndSetValue([string]$text) {
+        try {
+            $value = [double]::Parse($text)
+            if ($value -ge $this.MinValue -and $value -le $this.MaxValue) {
+                $this.Value = $value
+                $this._UpdateTextValue()
+                return $true
+            }
+        }
+        catch {
+            # Invalid format, revert to current value
+            $this._UpdateTextValue()
+        }
+        return $false
+    }
 
-[string]$TextValue = "0"
+    hidden [void] _UpdateTextValue() {
+        $this.TextValue = $this.Value.ToString("F$($this.DecimalPlaces)")
+        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.TextValue.Length)
+    }
 
-[int]$CursorPosition = 0
-
-[string]$Suffix = ""
-
-[scriptblock]$OnChange
-
-
-
-NumericInputComponent([string]$name) : base() {
-
-$this.Name = $name
-
-$this.IsFocusable = $true
-
-$this.Width = 20
-
-$this.Height = 3
-
-$this.TextValue = $this.Value.ToString("F$($this.DecimalPlaces)")
-
+    [string] ToString() {
+        return "NumericInputComponent(Name='$($this.Name)', Value=$($this.Value), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-# AI: REFACTORED - Now uses UIElement buffer system
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-# Clear buffer
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
-
-
-
-# AI: Draw border
-
-Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Display value with suffix
-
-$displayText = $this.TextValue + $this.Suffix
-
-$maxDisplayLength = $this.Width - 6
-
-if ($displayText.Length -gt $maxDisplayLength) {
-
-$displayText = $displayText.Substring(0, $maxDisplayLength)
-
-}
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
-
--ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Draw spinner arrows
-
-Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 0 -Text "▲" `
-
--ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 2 -Text "▼" `
-
--ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Draw cursor if focused
-
-if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
-
-$cursorX = 2 + $this.CursorPosition
-
-if ($cursorX -lt $this.Width - 4) {
-
-Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" `
-
--ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
-
-}
-
-}
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "NumericInput render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-$handled = $true
-
-$originalValue = $this.Value
-
-
-
-switch ($key.Key) {
-
-([ConsoleKey]::UpArrow) {
-
-$this._IncrementValue()
-
-}
-
-([ConsoleKey]::DownArrow) {
-
-$this._DecrementValue()
-
-}
-
-([ConsoleKey]::LeftArrow) {
-
-if ($this.CursorPosition -gt 0) {
-
-$this.CursorPosition--
-
-}
-
-}
-
-([ConsoleKey]::RightArrow) {
-
-if ($this.CursorPosition -lt $this.TextValue.Length) {
-
-$this.CursorPosition++
-
-}
-
-}
-
-([ConsoleKey]::Home) { $this.CursorPosition = 0 }
-
-([ConsoleKey]::End) { $this.CursorPosition = $this.TextValue.Length }
-
-([ConsoleKey]::Backspace) {
-
-if ($this.CursorPosition -gt 0) {
-
-$this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
-
-$this.CursorPosition--
-
-}
-
-}
-
-([ConsoleKey]::Delete) {
-
-if ($this.CursorPosition -lt $this.TextValue.Length) {
-
-$this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
-
-}
-
-}
-
-([ConsoleKey]::Enter) {
-
-$this._ValidateAndUpdate()
-
-}
-
-default {
-
-if ($key.KeyChar -and ($key.KeyChar -match '[\d\.\-]' -or
-
-($key.KeyChar -eq '.' -and $this.DecimalPlaces -gt 0 -and -not $this.TextValue.Contains('.')))) {
-
-$this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
-
-$this.CursorPosition++
-
-} else {
-
-$handled = $false
-
-}
-
-}
-
-}
-
-
-
-if ($handled -and $this.Value -ne $originalValue -and $this.OnChange) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock {
-
-& $this.OnChange -NewValue $this.Value
-
-}
-
-$this.RequestRedraw()
-
-}
-
-
-
-return $handled
-
-} catch {
-
-Write-Log -Level Error -Message "NumericInput input error for '$($this.Name)': $_"
-
-return $false
-
-}
-
-}
-
-
-
-hidden [void] _IncrementValue() {
-
-$newValue = [Math]::Min($this.Max, $this.Value + $this.Step)
-
-$this._SetValue($newValue)
-
-}
-
-
-
-hidden [void] _DecrementValue() {
-
-$newValue = [Math]::Max($this.Min, $this.Value - $this.Step)
-
-$this._SetValue($newValue)
-
-}
-
-
-
-hidden [void] _SetValue([double]$value) {
-
-$this.Value = $value
-
-$this.TextValue = $value.ToString("F$($this.DecimalPlaces)")
-
-$this.CursorPosition = $this.TextValue.Length
-
-}
-
-
-
-hidden [bool] _ValidateAndUpdate() {
-
-try {
-
-$newValue = [double]$this.TextValue
-
-$newValue = [Math]::Max($this.Min, [Math]::Min($this.Max, $newValue))
-
-$newValue = [Math]::Round($newValue, $this.DecimalPlaces)
-
-
-
-$this._SetValue($newValue)
-
-return $true
-
-} catch {
-
-$this.TextValue = $this.Value.ToString("F$($this.DecimalPlaces)")
-
-Write-Log -Level Warning -Message "NumericInput validation failed for '$($this.Name)': $_"
-
-return $false
-
-}
-
-}
-
-}
-
-
-
-# AI: REFACTORED - DateInput converted from functional to class-based
 
 class DateInputComponent : UIElement {
+    [DateTime]$Value = (Get-Date)
+    [DateTime]$MinDate = [DateTime]::MinValue
+    [DateTime]$MaxDate = [DateTime]::MaxValue
+    [string]$DateFormat = "yyyy-MM-dd"
+    [string]$TextValue = ""
+    [int]$CursorPosition = 0
+    [bool]$ShowCalendar = $false
+    [scriptblock]$OnChange
 
-[DateTime]$Value = (Get-Date)
+    DateInputComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 25
+        $this.Height = 3
+        $this.TextValue = $this.Value.ToString($this.DateFormat)
+        Write-Verbose "DateInputComponent: Constructor called for '$($this.Name)'"
+    }
 
-[DateTime]$MinDate = [DateTime]::MinValue
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $cursorColor = Get-ThemeColor 'input.cursor' -Fallback (Get-ThemeColor 'Accent')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw date value
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $this.TextValue -ForegroundColor $fgColor -BackgroundColor $bgColor
+            
+            # Draw calendar icon
+            $iconColor = if ($this.IsFocused) { $borderColor } else { (Get-ThemeColor 'Subtle') }
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text "📅" -ForegroundColor $iconColor -BackgroundColor $bgColor
+            
+            # Draw cursor
+            if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt ($this.Width - 4)) {
+                    $cell = $this._private_buffer.GetCell($cursorX, 1)
+                    if ($null -ne $cell) {
+                        $cell.BackgroundColor = $cursorColor
+                        $cell.ForegroundColor = $bgColor
+                        $this._private_buffer.SetCell($cursorX, 1, $cell)
+                    }
+                }
+            }
+            
+            Write-Verbose "DateInputComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "DateInputComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-[DateTime]$MaxDate = [DateTime]::MaxValue
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        try {
+            $handled = $true
+            $originalValue = $this.Value
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::Enter) {
+                    if ($this._ValidateAndSetDate($this.TextValue)) {
+                        # Date was valid and set
+                    }
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.CursorPosition++
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $this.TextValue.Length
+                }
+                default {
+                    if ($key.KeyChar -and $this._IsValidDateChar($key.KeyChar)) {
+                        $this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                # Fire change event if value changed
+                if ($this.Value -ne $originalValue -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Value
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "DateInputComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
 
-[string]$Format = "yyyy-MM-dd"
+    hidden [bool] _IsValidDateChar([char]$char) {
+        return [char]::IsDigit($char) -or $char -eq '-' -or $char -eq '/' -or $char -eq '.'
+    }
 
-[string]$TextValue = ""
+    hidden [bool] _ValidateAndSetDate([string]$text) {
+        try {
+            $date = [DateTime]::ParseExact($text, $this.DateFormat, $null)
+            if ($date -ge $this.MinDate -and $date -le $this.MaxDate) {
+                $this.Value = $date
+                $this._UpdateTextValue()
+                return $true
+            }
+        }
+        catch {
+            # Invalid format, revert to current value
+            $this._UpdateTextValue()
+        }
+        return $false
+    }
 
-[int]$CursorPosition = 0
+    hidden [void] _UpdateTextValue() {
+        $this.TextValue = $this.Value.ToString($this.DateFormat)
+        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.TextValue.Length)
+    }
 
-[bool]$ShowCalendar = $false
-
-[scriptblock]$OnChange
-
-
-
-DateInputComponent([string]$name) : base() {
-
-$this.Name = $name
-
-$this.IsFocusable = $true
-
-$this.Width = 25
-
-$this.Height = 3
-
-$this.TextValue = $this.Value.ToString($this.Format)
-
+    [string] ToString() {
+        return "DateInputComponent(Name='$($this.Name)', Value=$($this.Value), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-# AI: REFACTORED - Now uses UIElement buffer system
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-# Clear buffer
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
-
-
-
-# AI: Draw border
-
-Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Display date value
-
-$displayText = $this.TextValue
-
-$maxDisplayLength = $this.Width - 6
-
-if ($displayText.Length -gt $maxDisplayLength) {
-
-$displayText = $displayText.Substring(0, $maxDisplayLength)
-
-}
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
-
--ForegroundColor ([ConsoleColor]::White) -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Draw calendar icon
-
-Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text "📅" `
-
--ForegroundColor ([ConsoleColor]::Cyan) -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Draw cursor if focused
-
-if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
-
-$cursorX = 2 + $this.CursorPosition
-
-if ($cursorX -lt $this.Width - 4) {
-
-Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" `
-
--ForegroundColor ([ConsoleColor]::Yellow) -BackgroundColor ([ConsoleColor]::Black)
-
-}
-
-}
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "DateInput render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-$handled = $true
-
-$originalValue = $this.Value
-
-
-
-if ($this.ShowCalendar) {
-
-switch ($key.Key) {
-
-([ConsoleKey]::Escape) { $this.ShowCalendar = $false }
-
-([ConsoleKey]::LeftArrow) { $this.Value = $this.Value.AddDays(-1) }
-
-([ConsoleKey]::RightArrow) { $this.Value = $this.Value.AddDays(1) }
-
-([ConsoleKey]::UpArrow) { $this.Value = $this.Value.AddDays(-7) }
-
-([ConsoleKey]::DownArrow) { $this.Value = $this.Value.AddDays(7) }
-
-([ConsoleKey]::Enter) {
-
-$this.ShowCalendar = $false
-
-$this.TextValue = $this.Value.ToString($this.Format)
-
-}
-
-default { $handled = $false }
-
-}
-
-} else {
-
-switch ($key.Key) {
-
-([ConsoleKey]::F4) { $this.ShowCalendar = $true }
-
-([ConsoleKey]::UpArrow) { $this.Value = $this.Value.AddDays(1); $this.TextValue = $this.Value.ToString($this.Format) }
-
-([ConsoleKey]::DownArrow) { $this.Value = $this.Value.AddDays(-1); $this.TextValue = $this.Value.ToString($this.Format) }
-
-([ConsoleKey]::LeftArrow) {
-
-if ($this.CursorPosition -gt 0) { $this.CursorPosition-- }
-
-}
-
-([ConsoleKey]::RightArrow) {
-
-if ($this.CursorPosition -lt $this.TextValue.Length) { $this.CursorPosition++ }
-
-}
-
-([ConsoleKey]::Home) { $this.CursorPosition = 0 }
-
-([ConsoleKey]::End) { $this.CursorPosition = $this.TextValue.Length }
-
-([ConsoleKey]::Backspace) {
-
-if ($this.CursorPosition -gt 0) {
-
-$this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
-
-$this.CursorPosition--
-
-}
-
-}
-
-([ConsoleKey]::Delete) {
-
-if ($this.CursorPosition -lt $this.TextValue.Length) {
-
-$this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
-
-}
-
-}
-
-([ConsoleKey]::Enter) {
-
-$this._ValidateAndUpdate()
-
-}
-
-default {
-
-if ($key.KeyChar -and ($key.KeyChar -match '[\d\-\/]')) {
-
-$this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
-
-$this.CursorPosition++
-
-} else {
-
-$handled = $false
-
-}
-
-}
-
-}
-
-}
-
-
-
-if ($handled -and $this.Value -ne $originalValue -and $this.OnChange) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -Context "Change Event" -ScriptBlock {
-
-& $this.OnChange -NewValue $this.Value
-
-}
-
-$this.RequestRedraw()
-
-}
-
-
-
-return $handled
-
-} catch {
-
-Write-Log -Level Error -Message "DateInput input error for '$($this.Name)': $_"
-
-return $false
-
-}
-
-}
-
-
-
-hidden [bool] _ValidateAndUpdate() {
-
-try {
-
-$newDate = [DateTime]::ParseExact($this.TextValue, $this.Format, $null)
-
-if ($newDate -ge $this.MinDate -and $newDate -le $this.MaxDate) {
-
-$this.Value = $newDate
-
-$this.TextValue = $newDate.ToString($this.Format)
-
-return $true
-
-}
-
-} catch {
-
-# Reset to current value on parse error
-
-$this.TextValue = $this.Value.ToString($this.Format)
-
-Write-Log -Level Warning -Message "DateInput validation failed for '$($this.Name)': $_"
-
-}
-
-return $false
-
-}
-
-}
-
-
-
-# AI: REFACTORED - ComboBox converted from functional to class-based
 
 class ComboBoxComponent : UIElement {
+    [string[]]$Items = @()
+    [int]$SelectedIndex = -1
+    [string]$SelectedItem = ""
+    [string]$DisplayText = ""
+    [string]$SearchText = ""
+    [bool]$IsDropDownOpen = $false
+    [bool]$AllowSearch = $true
+    [ValidateRange(3, 20)][int]$MaxDropDownHeight = 8
+    [int]$ScrollOffset = 0
+    [scriptblock]$OnSelectionChanged
+    
+    hidden [TuiBuffer]$_dropdownBuffer = $null
+    hidden [string[]]$_filteredItems = @()
 
-[object[]]$Items = @()
+    ComboBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 30
+        $this.Height = 3
+        $this._filteredItems = $this.Items
+        Write-Verbose "ComboBoxComponent: Constructor called for '$($this.Name)'"
+    }
 
-[object]$SelectedItem = $null
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw current value or search text
+            $displayText = if ($this.IsDropDownOpen -and $this.AllowSearch) { $this.SearchText } else { $this.DisplayText }
+            if (-not [string]::IsNullOrEmpty($displayText)) {
+                $maxTextWidth = $this.Width - 6
+                if ($displayText.Length -gt $maxTextWidth) {
+                    $displayText = $displayText.Substring(0, $maxTextWidth - 3) + "..."
+                }
+                Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText -ForegroundColor $fgColor -BackgroundColor $bgColor
+            }
+            
+            # Draw dropdown arrow
+            $arrow = if ($this.IsDropDownOpen) { "▲" } else { "▼" }
+            $arrowColor = if ($this.IsFocused) { $borderColor } else { (Get-ThemeColor 'Subtle') }
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text $arrow -ForegroundColor $arrowColor -BackgroundColor $bgColor
+            
+            # Render dropdown overlay if open
+            if ($this.IsDropDownOpen) {
+                $this._RenderDropdownOverlay()
+            }
+            
+            Write-Verbose "ComboBoxComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "ComboBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-[int]$SelectedIndex = -1
+    hidden [void] _RenderDropdownOverlay() {
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent')
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $selectionBg = Get-ThemeColor 'input.selection' -Fallback (Get-ThemeColor 'Selection')
+            $selectionFg = Get-ThemeColor 'input.selection.foreground' -Fallback (Get-ThemeColor 'Background')
+            
+            $dropdownHeight = [Math]::Min($this.MaxDropDownHeight, $this._filteredItems.Count + 2)
+            
+            # Create or resize dropdown buffer
+            if (-not $this._dropdownBuffer -or $this._dropdownBuffer.Height -ne $dropdownHeight -or $this._dropdownBuffer.Width -ne $this.Width) {
+                $this._dropdownBuffer = [TuiBuffer]::new($this.Width, $dropdownHeight, "$($this.Name).Dropdown")
+            }
+            
+            # Clear and draw dropdown
+            $this._dropdownBuffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._dropdownBuffer -X 0 -Y 0 -Width $this.Width -Height $dropdownHeight -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw items
+            $visibleItems = [Math]::Min($this.MaxDropDownHeight - 2, $this._filteredItems.Count)
+            for ($i = 0; $i -lt $visibleItems; $i++) {
+                $itemIndex = $i + $this.ScrollOffset
+                if ($itemIndex -ge $this._filteredItems.Count) { break }
+                
+                $item = $this._filteredItems[$itemIndex]
+                $isSelected = ($itemIndex -eq $this.SelectedIndex)
+                
+                $itemBg = if ($isSelected) { $selectionBg } else { $bgColor }
+                $itemFg = if ($isSelected) { $selectionFg } else { $fgColor }
+                
+                # Draw selection background
+                $highlightText = ' ' * ($this.Width - 2)
+                Write-TuiText -Buffer $this._dropdownBuffer -X 1 -Y ($i + 1) -Text $highlightText -ForegroundColor $itemFg -BackgroundColor $itemBg
+                
+                # Draw item text
+                $itemText = " $item"
+                $maxItemWidth = $this.Width - 4
+                if ($itemText.Length -gt $maxItemWidth) {
+                    $itemText = $itemText.Substring(0, $maxItemWidth - 3) + "..."
+                }
+                Write-TuiText -Buffer $this._dropdownBuffer -X 2 -Y ($i + 1) -Text $itemText -ForegroundColor $itemFg -BackgroundColor $itemBg
+            }
+            
+            # Add dropdown to overlay stack for rendering
+            # Note: This would need integration with the TUI engine's overlay system
+            # For now, we'll blend it directly onto the current screen
+            
+            Write-Verbose "ComboBoxComponent '$($this.Name)': Dropdown overlay rendered"
+        }
+        catch {
+            Write-Error "ComboBoxComponent '$($this.Name)': Error rendering dropdown: $($_.Exception.Message)"
+        }
+    }
 
-[string]$DisplayMember = "Display"
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        try {
+            $handled = $true
+            $originalSelection = $this.SelectedItem
+            
+            if ($this.IsDropDownOpen) {
+                switch ($key.Key) {
+                    ([ConsoleKey]::Escape) {
+                        $this.IsDropDownOpen = $false
+                        $this.SearchText = ""
+                        $this._UpdateFilteredItems()
+                    }
+                    ([ConsoleKey]::Enter) {
+                        if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this._filteredItems.Count) {
+                            $this.SelectedItem = $this._filteredItems[$this.SelectedIndex]
+                            $this.DisplayText = $this.SelectedItem
+                            $this.IsDropDownOpen = $false
+                            $this.SearchText = ""
+                            $this._UpdateFilteredItems()
+                        }
+                    }
+                    ([ConsoleKey]::UpArrow) {
+                        if ($this.SelectedIndex -gt 0) {
+                            $this.SelectedIndex--
+                            $this._EnsureSelectedVisible()
+                        }
+                    }
+                    ([ConsoleKey]::DownArrow) {
+                        if ($this.SelectedIndex -lt ($this._filteredItems.Count - 1)) {
+                            $this.SelectedIndex++
+                            $this._EnsureSelectedVisible()
+                        }
+                    }
+                    ([ConsoleKey]::Backspace) {
+                        if ($this.AllowSearch -and $this.SearchText.Length -gt 0) {
+                            $this.SearchText = $this.SearchText.Substring(0, $this.SearchText.Length - 1)
+                            $this._UpdateFilteredItems()
+                        }
+                    }
+                    default {
+                        if ($this.AllowSearch -and $key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
+                            $this.SearchText += $key.KeyChar
+                            $this._UpdateFilteredItems()
+                        } else {
+                            $handled = $false
+                        }
+                    }
+                }
+            } else {
+                switch ($key.Key) {
+                    ([ConsoleKey]::Enter), ([ConsoleKey]::Spacebar), ([ConsoleKey]::DownArrow) {
+                        $this.IsDropDownOpen = $true
+                        $this.SelectedIndex = 0
+                        $this._UpdateFilteredItems()
+                    }
+                    default {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                # Fire selection changed event
+                if ($this.SelectedItem -ne $originalSelection -and $this.OnSelectionChanged) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -ScriptBlock {
+                        & $this.OnSelectionChanged -SelectedItem $this.SelectedItem
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "ComboBoxComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
 
-[string]$ValueMember = "Value"
+    hidden [void] _UpdateFilteredItems() {
+        if ([string]::IsNullOrWhiteSpace($this.SearchText)) {
+            $this._filteredItems = $this.Items
+        } else {
+            $this._filteredItems = $this.Items | Where-Object { $_ -like "*$($this.SearchText)*" }
+        }
+        
+        # Reset selection if current selection is no longer valid
+        if ($this.SelectedIndex -ge $this._filteredItems.Count) {
+            $this.SelectedIndex = [Math]::Max(0, $this._filteredItems.Count - 1)
+        }
+        
+        $this.ScrollOffset = 0
+    }
 
-[string]$Placeholder = "Select an item..."
+    hidden [void] _EnsureSelectedVisible() {
+        $visibleItems = $this.MaxDropDownHeight - 2
+        
+        if ($this.SelectedIndex -lt $this.ScrollOffset) {
+            $this.ScrollOffset = $this.SelectedIndex
+        }
+        elseif ($this.SelectedIndex -ge ($this.ScrollOffset + $visibleItems)) {
+            $this.ScrollOffset = $this.SelectedIndex - $visibleItems + 1
+        }
+    }
 
-[bool]$IsDropDownOpen = $false
+    [void] SetItems([string[]]$items) {
+        $this.Items = $items
+        $this._filteredItems = $items
+        $this.SelectedIndex = -1
+        $this.SelectedItem = ""
+        $this.DisplayText = ""
+        $this.RequestRedraw()
+    }
 
-[int]$MaxDropDownHeight = 6
-
-[int]$ScrollOffset = 0
-
-[scriptblock]$OnSelectionChanged
-
-
-
-ComboBoxComponent([string]$name) : base() {
-
-$this.Name = $name
-
-$this.IsFocusable = $true
-
-$this.Width = 30
-
-$this.Height = 3
-
+    [string] ToString() {
+        return "ComboBoxComponent(Name='$($this.Name)', Items=$($this.Items.Count), Selected='$($this.SelectedItem)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-# AI: REFACTORED - Now uses UIElement buffer system
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-#```
-
-
-
-try {
-
-# Clear buffer
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
-
-
-
-# AI: Draw main combobox
-
-Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Display selected item or placeholder
-
-$displayText = ""
-
-if ($this.SelectedItem) {
-
-if ($this.SelectedItem -is [string]) {
-
-$displayText = $this.SelectedItem
-
-} elseif ($this.SelectedItem -is [hashtable] -and $this.SelectedItem.ContainsKey($this.DisplayMember)) {
-
-$displayText = $this.SelectedItem[$this.DisplayMember]
-
-} else {
-
-$displayText = $this.SelectedItem.ToString()
-
-}
-
-} else {
-
-$displayText = $this.Placeholder
-
-}
-
-
-
-$maxDisplayLength = $this.Width - 6
-
-if ($displayText.Length -gt $maxDisplayLength) {
-
-$displayText = $displayText.Substring(0, $maxDisplayLength - 3) + "..."
-
-}
-
-
-
-$textColor = $this.SelectedItem ? [ConsoleColor]::White : [ConsoleColor]::DarkGray
-
-Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
-
--ForegroundColor $textColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# AI: Draw dropdown arrow
-
-$arrow = $this.IsDropDownOpen ? "▲" : "▼"
-
-Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text $arrow `
-
--ForegroundColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "ComboBox render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-$handled = $true
-
-$originalSelection = $this.SelectedItem
-
-
-
-if ($this.IsDropDownOpen) {
-
-switch ($key.Key) {
-
-([ConsoleKey]::Escape) {
-
-$this.IsDropDownOpen = $false
-
-}
-
-([ConsoleKey]::Enter) {
-
-if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.Items.Count) {
-
-$this.SelectedItem = $this.Items[$this.SelectedIndex]
-
-}
-
-$this.IsDropDownOpen = $false
-
-}
-
-([ConsoleKey]::UpArrow) {
-
-if ($this.SelectedIndex -gt 0) {
-
-$this.SelectedIndex--
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-([ConsoleKey]::DownArrow) {
-
-if ($this.SelectedIndex -lt ($this.Items.Count - 1)) {
-
-$this.SelectedIndex++
-
-$this._UpdateScrolling()
-
-}
-
-}
-
-default { $handled = $false }
-
-}
-
-} else {
-
-switch ($key.Key) {
-
-([ConsoleKey]::Enter) { $this._OpenDropDown() }
-
-([ConsoleKey]::Spacebar) { $this._OpenDropDown() }
-
-([ConsoleKey]::DownArrow) { $this._OpenDropDown() }
-
-([ConsoleKey]::UpArrow) { $this._OpenDropDown() }
-
-([ConsoleKey]::F4) { $this._OpenDropDown() }
-
-default { $handled = $false }
-
-}
-
-}
-
-
-
-if ($handled -and $this.SelectedItem -ne $originalSelection -and $this.OnSelectionChanged) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -Context "Selection Change" -ScriptBlock {
-
-& $this.OnSelectionChanged -SelectedItem $this.SelectedItem
-
-}
-
-$this.RequestRedraw()
-
-}
-
-
-
-return $handled
-
-} catch {
-
-Write-Log -Level Error -Message "ComboBox input error for '$($this.Name)': $_"
-
-return $false
-
-}
-
-}
-
-
-
-hidden [void] _OpenDropDown() {
-
-if ($this.Items.Count -gt 0) {
-
-$this.IsDropDownOpen = $true
-
-$this._FindCurrentSelection()
-
-}
-
-}
-
-
-
-hidden [void] _FindCurrentSelection() {
-
-$this.SelectedIndex = -1
-
-if ($this.SelectedItem) {
-
-for ($i = 0; $i -lt $this.Items.Count; $i++) {
-
-if ($this._ItemsEqual($this.Items[$i], $this.SelectedItem)) {
-
-$this.SelectedIndex = $i
-
-break
-
-}
-
-}
-
-}
-
-if ($this.SelectedIndex -eq -1) { $this.SelectedIndex = 0 }
-
-$this._UpdateScrolling()
-
-}
-
-
-
-hidden [void] _UpdateScrolling() {
-
-if ($this.SelectedIndex -lt $this.ScrollOffset) {
-
-$this.ScrollOffset = $this.SelectedIndex
-
-} elseif ($this.SelectedIndex -ge ($this.ScrollOffset + $this.MaxDropDownHeight)) {
-
-$this.ScrollOffset = $this.SelectedIndex - $this.MaxDropDownHeight + 1
-
-}
-
-}
-
-
-
-hidden [bool] _ItemsEqual([object]$item1, [object]$item2) {
-
-if ($item1 -is [string] -and $item2 -is [string]) {
-
-return $item1 -eq $item2
-
-} elseif ($item1 -is [hashtable] -and $item2 -is [hashtable]) {
-
-return $item1[$this.ValueMember] -eq $item2[$this.ValueMember]
-
-} else {
-
-return $item1 -eq $item2
-
-}
-
-}
-
-
-
-[void] SetItems([object[]]$items) {
-
-$this.Items = $items
-
-$this.SelectedItem = $null
-
-$this.SelectedIndex = -1
-
-$this.ScrollOffset = 0
-
-$this.IsDropDownOpen = $false
-
-$this.RequestRedraw()
-
-}
-
-
-
-[object] GetSelectedValue() {
-
-if ($this.SelectedItem -is [hashtable] -and $this.SelectedItem.ContainsKey($this.ValueMember)) {
-
-return $this.SelectedItem[$this.ValueMember]
-
-}
-
-return $this.SelectedItem
-
-}
-
-}
-
-
 
 #endregion
 
-
-
 #region Factory Functions
 
-
-
-# AI: Updated factories to return class instances
-
-
-
 function New-TuiMultilineTextBox {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "MultilineTextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$textBox = [MultilineTextBoxComponent]::new($name)
-
-
-
-$textBox.X = $Props.X ?? $textBox.X
-
-$textBox.Y = $Props.Y ?? $textBox.Y
-
-$textBox.Width = $Props.Width ?? $textBox.Width
-
-$textBox.Height = $Props.Height ?? $textBox.Height
-
-$textBox.Visible = $Props.Visible ?? $textBox.Visible
-
-$textBox.ZIndex = $Props.ZIndex ?? $textBox.ZIndex
-
-$textBox.Placeholder = $Props.Placeholder ?? $textBox.Placeholder
-
-$textBox.MaxLines = $Props.MaxLines ?? $textBox.MaxLines
-
-$textBox.MaxLineLength = $Props.MaxLineLength ?? $textBox.MaxLineLength
-
-$textBox.WordWrap = $Props.WordWrap ?? $textBox.WordWrap
-
-$textBox.OnChange = $Props.OnChange ?? $textBox.OnChange
-
-
-
-if ($Props.Text) {
-
-$textBox.SetText($Props.Text)
-
+    <#
+    .SYNOPSIS
+    Creates a new multiline text box component.
+    
+    .DESCRIPTION
+    Factory function to create a MultilineTextBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $multilineText = New-TuiMultilineTextBox -Props @{
+        Name = "Description"
+        Width = 60
+        Height = 10
+        MaxLines = 50
+        Placeholder = "Enter description..."
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "MultilineTextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [MultilineTextBoxComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created multiline text box '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create multiline text box: $($_.Exception.Message)"
+        throw
+    }
 }
-
-
-
-return $textBox
-
-}
-
-
 
 function New-TuiNumericInput {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "NumericInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$numericInput = [NumericInputComponent]::new($name)
-
-
-
-$numericInput.X = $Props.X ?? $numericInput.X
-
-$numericInput.Y = $Props.Y ?? $numericInput.Y
-
-$numericInput.Width = $Props.Width ?? $numericInput.Width
-
-$numericInput.Height = $Props.Height ?? $numericInput.Height
-
-$numericInput.Visible = $Props.Visible ?? $numericInput.Visible
-
-$numericInput.ZIndex = $Props.ZIndex ?? $numericInput.ZIndex
-
-$numericInput.Value = $Props.Value ?? $numericInput.Value
-
-$numericInput.Min = $Props.Min ?? $numericInput.Min
-
-$numericInput.Max = $Props.Max ?? $numericInput.Max
-
-$numericInput.Step = $Props.Step ?? $numericInput.Step
-
-$numericInput.DecimalPlaces = $Props.DecimalPlaces ?? $numericInput.DecimalPlaces
-
-$numericInput.Suffix = $Props.Suffix ?? $numericInput.Suffix
-
-$numericInput.OnChange = $Props.OnChange ?? $numericInput.OnChange
-
-
-
-# Update text value based on initial value
-
-$numericInput.TextValue = $numericInput.Value.ToString("F$($numericInput.DecimalPlaces)")
-
-
-
-return $numericInput
-
+    <#
+    .SYNOPSIS
+    Creates a new numeric input component.
+    
+    .DESCRIPTION
+    Factory function to create a NumericInputComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $numericInput = New-TuiNumericInput -Props @{
+        Name = "Amount"
+        MinValue = 0
+        MaxValue = 1000
+        DecimalPlaces = 2
+        Step = 0.5
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "NumericInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [NumericInputComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created numeric input '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create numeric input: $($_.Exception.Message)"
+        throw
+    }
 }
-
-
 
 function New-TuiDateInput {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "DateInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$dateInput = [DateInputComponent]::new($name)
-
-
-
-$dateInput.X = $Props.X ?? $dateInput.X
-
-$dateInput.Y = $Props.Y ?? $dateInput.Y
-
-$dateInput.Width = $Props.Width ?? $dateInput.Width
-
-$dateInput.Height = $Props.Height ?? $dateInput.Height
-
-$dateInput.Visible = $Props.Visible ?? $dateInput.Visible
-
-$dateInput.ZIndex = $Props.ZIndex ?? $dateInput.ZIndex
-
-$dateInput.Value = $Props.Value ?? $dateInput.Value
-
-$dateInput.MinDate = $Props.MinDate ?? $dateInput.MinDate
-
-$dateInput.MaxDate = $Props.MaxDate ?? $dateInput.MaxDate
-
-$dateInput.Format = $Props.Format ?? $dateInput.Format
-
-$dateInput.OnChange = $Props.OnChange ?? $dateInput.OnChange
-
-
-
-# Update text value based on initial value
-
-$dateInput.TextValue = $dateInput.Value.ToString($dateInput.Format)
-
-
-
-return $dateInput
-
+    <#
+    .SYNOPSIS
+    Creates a new date input component.
+    
+    .DESCRIPTION
+    Factory function to create a DateInputComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $dateInput = New-TuiDateInput -Props @{
+        Name = "DueDate"
+        DateFormat = "yyyy-MM-dd"
+        MinDate = (Get-Date)
+        MaxDate = (Get-Date).AddYears(1)
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "DateInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [DateInputComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created date input '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create date input: $($_.Exception.Message)"
+        throw
+    }
 }
-
-
 
 function New-TuiComboBox {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "ComboBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$comboBox = [ComboBoxComponent]::new($name)
-
-
-
-$comboBox.X = $Props.X ?? $comboBox.X
-
-$comboBox.Y = $Props.Y ?? $comboBox.Y
-
-$comboBox.Width = $Props.Width ?? $comboBox.Width
-
-$comboBox.Height = $Props.Height ?? $comboBox.Height
-
-$comboBox.Visible = $Props.Visible ?? $comboBox.Visible
-
-$comboBox.ZIndex = $Props.ZIndex ?? $comboBox.ZIndex
-
-$comboBox.DisplayMember = $Props.DisplayMember ?? $comboBox.DisplayMember
-
-$comboBox.ValueMember = $Props.ValueMember ?? $comboBox.ValueMember
-
-$comboBox.Placeholder = $Props.Placeholder ?? $comboBox.Placeholder
-
-$comboBox.MaxDropDownHeight = $Props.MaxDropDownHeight ?? $comboBox.MaxDropDownHeight
-
-$comboBox.OnSelectionChanged = $Props.OnSelectionChanged ?? $comboBox.OnSelectionChanged
-
-
-
-if ($Props.Items) {
-
-$comboBox.SetItems($Props.Items)
-
+    <#
+    .SYNOPSIS
+    Creates a new combo box component.
+    
+    .DESCRIPTION
+    Factory function to create a ComboBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $comboBox = New-TuiComboBox -Props @{
+        Name = "Priority"
+        Items = @("Low", "Medium", "High", "Critical")
+        AllowSearch = $true
+        MaxDropDownHeight = 6
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "ComboBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [ComboBoxComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created combo box '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create combo box: $($_.Exception.Message)"
+        throw
+    }
 }
 
+#endregion
 
+#region Module Exports
 
-if ($Props.SelectedItem) {
+# Export public functions
+Export-ModuleMember -Function New-TuiMultilineTextBox, New-TuiNumericInput, New-TuiDateInput, New-TuiComboBox
 
-$comboBox.SelectedItem = $Props.SelectedItem
-
-}
-
-
-
-return $comboBox
-
-}
-
-
+# Classes are automatically exported in PowerShell 7+
+# MultilineTextBoxComponent, NumericInputComponent, DateInputComponent, ComboBoxComponent classes are available when module is imported
 
 #endregion

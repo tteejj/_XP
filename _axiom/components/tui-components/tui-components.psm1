@@ -1,853 +1,636 @@
-####\components\tui-components.psm1
+# ==============================================================================
+# TUI Components Module v5.0
+# Core interactive UI components with theme integration and advanced features
+# ==============================================================================
 
-# TUI Component Library - Phase 1 Migration Complete
-
-# All components now inherit from UIElement and use buffer-based rendering
-
-
-
-
-
-
-
-
-
-
+using namespace System.Management.Automation
 
 #region Core UI Components
 
-
-
-# AI: REFACTORED - LabelComponent now properly inherits from UIElement
-
 class LabelComponent : UIElement {
+    [string]$Text = ""
+    [object]$ForegroundColor
 
-[string]$Text = ""
+    LabelComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $false
+        $this.Width = 10
+        $this.Height = 1
+        Write-Verbose "LabelComponent: Constructor called for '$($this.Name)'"
+    }
 
-[object]$ForegroundColor
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear()
+            $fg = $this.ForegroundColor ?? (Get-ThemeColor 'Foreground')
+            $bg = Get-ThemeColor 'Background'
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -ForegroundColor $fg -BackgroundColor $bg
+            Write-Verbose "LabelComponent '$($this.Name)': Rendered text '$($this.Text)'"
+        }
+        catch {
+            Write-Error "LabelComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        return $false # Labels don't handle input
+    }
 
-
-LabelComponent([string]$name) : base($name) {
-
-$this.IsFocusable = $false
-
-$this.Width = 10
-
-$this.Height = 1
-
+    [string] ToString() {
+        return "LabelComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-[void] OnRender() {
-
-# AI: REFACTORED - Renders to its own private buffer.
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-$this._private_buffer.Clear()
-
-$fg = $this.ForegroundColor ?? [ConsoleColor]::White
-
-Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -ForegroundColor $fg
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "Label render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-return $false # Labels don't handle input
-
-}
-
-}
-
-
-
-# AI: REFACTORED - ButtonComponent updated for buffer-based rendering
 
 class ButtonComponent : UIElement {
+    [string]$Text = "Button"
+    [bool]$IsPressed = $false
+    [scriptblock]$OnClick
 
-[string]$Text = "Button"
+    ButtonComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 10
+        $this.Height = 3
+        Write-Verbose "ButtonComponent: Constructor called for '$($this.Name)'"
+    }
 
-[bool]$IsPressed = $false
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Determine state for theme colors
+            $state = if ($this.IsPressed) { "pressed" } elseif ($this.IsFocused) { "focus" } else { "normal" }
+            
+            # Get theme colors based on state
+            $bgColor = Get-ThemeColor "button.$state.background"
+            $borderColor = Get-ThemeColor "button.$state.border"
+            $fgColor = Get-ThemeColor "button.$state.foreground"
+            
+            # Fallback to basic theme colors if specific button colors not available
+            if (-not $bgColor) {
+                $bgColor = if ($this.IsPressed) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Background' }
+            }
+            if (-not $borderColor) {
+                $borderColor = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Border' }
+            }
+            if (-not $fgColor) {
+                $fgColor = if ($this.IsPressed) { Get-ThemeColor 'Background' } else { Get-ThemeColor 'Foreground' }
+            }
 
-[scriptblock]$OnClick
+            # Clear buffer and draw button
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Center text
+            $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
+            $textY = [Math]::Floor(($this.Height - 1) / 2)
+            Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -ForegroundColor $fgColor -BackgroundColor $bgColor
+            
+            Write-Verbose "ButtonComponent '$($this.Name)': Rendered in state '$state'"
+        }
+        catch {
+            Write-Error "ButtonComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                $this.IsPressed = $true
+                $this.RequestRedraw()
+                
+                if ($this.OnClick) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnClick" -ScriptBlock {
+                        & $this.OnClick
+                    }
+                }
+                
+                # Brief visual feedback
+                Start-Sleep -Milliseconds 50
+                $this.IsPressed = $false
+                $this.RequestRedraw()
+                
+                Write-Verbose "ButtonComponent '$($this.Name)': Click event handled"
+                return $true
+            }
+            catch {
+                Write-Error "ButtonComponent '$($this.Name)': Error handling click: $($_.Exception.Message)"
+                $this.IsPressed = $false
+                $this.RequestRedraw()
+            }
+        }
+        return $false
+    }
 
-
-ButtonComponent([string]$name) : base($name) {
-
-$this.IsFocusable = $true
-
-$this.Width = 10
-
-$this.Height = 3
-
-$this.Text = "Button"
-
+    [string] ToString() {
+        return "ButtonComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-[void] OnRender() {
-
-# AI: REFACTORED - Renders to its own private buffer, not the parent's.
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
-
-$bgColor = $this.IsPressed ? [ConsoleColor]::Yellow : [ConsoleColor]::Black
-
-$fgColor = $this.IsPressed ? [ConsoleColor]::Black : $borderColor
-
-
-
-# Render border to own buffer
-
-Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
-
-
-
-# Render text centered in own buffer
-
-$textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
-
-$textY = [Math]::Floor(($this.Height - 1) / 2)
-
-Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -ForegroundColor $fgColor -BackgroundColor $bgColor
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "Button render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-
-$this.IsPressed = $true
-
-$this.RequestRedraw()
-
-
-
-if ($this.OnClick) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnClick" -ScriptBlock { & $this.OnClick }
-
-}
-
-
-
-Start-Sleep -Milliseconds 50 # Visual feedback for press
-
-$this.IsPressed = $false
-
-$this.RequestRedraw()
-
-return $true
-
-}
-
-} catch {
-
-Write-Log -Level Error -Message "Button input error for '$($this.Name)': $_"
-
-}
-
-return $false
-
-}
-
-}
-
-
-
-# AI: REFACTORED - TextBoxComponent with buffer-based rendering
 
 class TextBoxComponent : UIElement {
+    [string]$Text = ""
+    [string]$Placeholder = ""
+    [ValidateRange(1, [int]::MaxValue)][int]$MaxLength = 100
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+    hidden [int]$_scrollOffset = 0 # Tracks the start of the visible text window
 
-[string]$Text = ""
+    TextBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 3
+        Write-Verbose "TextBoxComponent: Constructor called for '$($this.Name)'"
+    }
 
-[string]$Placeholder = ""
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'Background'
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Border' }
+            $textColor = Get-ThemeColor 'Foreground'
+            $placeholderColor = Get-ThemeColor 'Subtle'
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $textColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
 
-[int]$MaxLength = 100
+            $textAreaWidth = $this.Width - 2
+            $displayText = $this.Text ?? ""
+            $currentTextColor = $textColor
 
-[int]$CursorPosition = 0
+            # Show placeholder if empty and not focused
+            if ([string]::IsNullOrEmpty($displayText) -and -not $this.IsFocused) {
+                $displayText = $this.Placeholder ?? ""
+                $currentTextColor = $placeholderColor
+            }
 
-[scriptblock]$OnChange
+            # Apply viewport scrolling
+            if ($displayText.Length -gt $textAreaWidth) {
+                $displayText = $displayText.Substring($this._scrollOffset, [Math]::Min($textAreaWidth, $displayText.Length - $this._scrollOffset))
+            }
 
+            # Draw text
+            if (-not [string]::IsNullOrEmpty($displayText)) {
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayText -ForegroundColor $currentTextColor -BackgroundColor $bgColor
+            }
 
+            # Render non-destructive block cursor
+            if ($this.IsFocused) {
+                $cursorX = 1 + ($this.CursorPosition - $this._scrollOffset)
+                if ($cursorX -ge 1 -and $cursorX -lt ($this.Width - 1)) {
+                    $cell = $this._private_buffer.GetCell($cursorX, 1)
+                    if ($null -ne $cell) {
+                        $cell.BackgroundColor = Get-ThemeColor 'Accent'
+                        $cell.ForegroundColor = Get-ThemeColor 'Background'
+                        $this._private_buffer.SetCell($cursorX, 1, $cell)
+                    }
+                }
+            }
+            
+            Write-Verbose "TextBoxComponent '$($this.Name)': Rendered text (length: $($this.Text.Length), cursor: $($this.CursorPosition))"
+        }
+        catch {
+            Write-Error "TextBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-TextBoxComponent([string]$name) : base($name) {
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        try {
+            $currentText = $this.Text ?? ""
+            $cursorPos = $this.CursorPosition
+            $originalText = $currentText
+            $handled = $true
 
-$this.IsFocusable = $true
+            switch ($key.Key) {
+                ([ConsoleKey]::Backspace) {
+                    if ($cursorPos -gt 0) {
+                        $this.Text = $currentText.Remove($cursorPos - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($cursorPos -lt $currentText.Length) {
+                        $this.Text = $currentText.Remove($cursorPos, 1)
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($cursorPos -gt 0) {
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($cursorPos -lt $this.Text.Length) {
+                        $this.CursorPosition++
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $this.Text.Length
+                }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentText.Length -lt $this.MaxLength) {
+                        $this.Text = $currentText.Insert($cursorPos, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
 
-$this.Width = 20
+            if ($handled) {
+                $this._UpdateScrollOffset()
+                
+                # Trigger change event if text changed
+                if ($this.Text -ne $originalText -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Text
+                    }
+                }
+                
+                $this.RequestRedraw()
+                Write-Verbose "TextBoxComponent '$($this.Name)': Input handled, new text: '$($this.Text)'"
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "TextBoxComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
 
-$this.Height = 3
+    # Update scroll offset to keep cursor visible
+    hidden [void] _UpdateScrollOffset() {
+        $textAreaWidth = $this.Width - 2
+        
+        # Scroll right if cursor is beyond visible area
+        if ($this.CursorPosition -gt ($this._scrollOffset + $textAreaWidth - 1)) {
+            $this._scrollOffset = $this.CursorPosition - $textAreaWidth + 1
+        }
+        
+        # Scroll left if cursor is before visible area
+        if ($this.CursorPosition -lt $this._scrollOffset) {
+            $this._scrollOffset = $this.CursorPosition
+        }
+        
+        # Ensure scroll offset is within bounds
+        $maxScroll = [Math]::Max(0, $this.Text.Length - $textAreaWidth)
+        $this._scrollOffset = [Math]::Min($this._scrollOffset, $maxScroll)
+        $this._scrollOffset = [Math]::Max(0, $this._scrollOffset)
+    }
 
-$this.MaxLength = 100
-
+    [string] ToString() {
+        return "TextBoxComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-[void] OnRender() {
-
-# AI: REFACTORED - Renders to its own private buffer.
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$borderColor = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::Gray
-
-
-
-# Draw border
-
-Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor $borderColor -BackgroundColor ([ConsoleColor]::Black)
-
-
-
-# Display text or placeholder
-
-$displayText = $this.Text ?? ""
-
-$textColor = [ConsoleColor]::White
-
-if ([string]::IsNullOrEmpty($displayText) -and -not $this.IsFocused) {
-
-$displayText = $this.Placeholder ?? ""
-
-$textColor = [ConsoleColor]::DarkGray
-
-}
-
-
-
-$maxDisplayLength = $this.Width - 2
-
-if ($displayText.Length > $maxDisplayLength) {
-
-$displayText = $displayText.Substring(0, $maxDisplayLength)
-
-}
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayText -ForegroundColor $textColor
-
-
-
-# Draw cursor if focused
-
-if ($this.IsFocused -and ($this.CursorPosition -le $displayText.Length)) {
-
-$cursorX = 1 + $this.CursorPosition
-
-# Only draw cursor if it's within the visible area
-
-# AI: FIX - Changed '<' to '-lt' to avoid PowerShell parser ambiguity
-
-if ($cursorX -lt ($this.Width - 1)) {
-
-Write-TuiText -Buffer $this._private_buffer -X $cursorX -Y 1 -Text "_" -ForegroundColor [ConsoleColor]::Yellow
-
-}
-
-}
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "TextBox render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-$currentText = $this.Text ?? ""
-
-$cursorPos = $this.CursorPosition ?? 0
-
-$originalText = $currentText
-
-$handled = $true
-
-
-
-switch ($key.Key) {
-
-([ConsoleKey]::Backspace) {
-
-if ($cursorPos -gt 0) {
-
-$currentText = $currentText.Remove($cursorPos - 1, 1)
-
-$cursorPos--
-
-}
-
-}
-
-([ConsoleKey]::Delete) {
-
-if ($cursorPos -lt $currentText.Length) {
-
-$currentText = $currentText.Remove($cursorPos, 1)
-
-}
-
-}
-
-([ConsoleKey]::LeftArrow) {
-
-if ($cursorPos -gt 0) { $cursorPos-- }
-
-}
-
-([ConsoleKey]::RightArrow) {
-
-if ($cursorPos -lt $currentText.Length) { $cursorPos++ }
-
-}
-
-([ConsoleKey]::Home) { $cursorPos = 0 }
-
-([ConsoleKey]::End) { $cursorPos = $currentText.Length }
-
-default {
-
-if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentText.Length -lt $this.MaxLength) {
-
-$currentText = $currentText.Insert($cursorPos, $key.KeyChar)
-
-$cursorPos++
-
-} else {
-
-$handled = $false
-
-}
-
-}
-
-}
-
-
-
-if ($handled) {
-
-if ($currentText -ne $originalText -or $cursorPos -ne $this.CursorPosition) {
-
-$this.Text = $currentText
-
-$this.CursorPosition = $cursorPos
-
-if ($this.OnChange) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
-
-& $this.OnChange -NewValue $currentText
-
-}
-
-}
-
-$this.RequestRedraw()
-
-}
-
-}
-
-return $handled
-
-} catch {
-
-Write-Log -Level Error -Message "TextBox input error for '$($this.Name)': $_"
-
-return $false
-
-}
-
-}
-
-}
-
-
-
-# AI: NEW - CheckBoxComponent converted from functional to class-based
 
 class CheckBoxComponent : UIElement {
+    [string]$Text = "Checkbox"
+    [bool]$Checked = $false
+    [scriptblock]$OnChange
 
-[string]$Text = "Checkbox"
+    CheckBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+        Write-Verbose "CheckBoxComponent: Constructor called for '$($this.Name)'"
+    }
 
-[bool]$Checked = $false
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear()
+            $fg = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Foreground' }
+            $bg = Get-ThemeColor 'Background'
+            
+            $checkbox = if ($this.Checked) { "[X]" } else { "[ ]" }
+            $displayText = "$checkbox $($this.Text)"
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg -BackgroundColor $bg
+            Write-Verbose "CheckBoxComponent '$($this.Name)': Rendered (Checked: $($this.Checked))"
+        }
+        catch {
+            Write-Error "CheckBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-[scriptblock]$OnChange
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                $this.Checked = -not $this.Checked
+                
+                if ($this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Checked
+                    }
+                }
+                
+                $this.RequestRedraw()
+                Write-Verbose "CheckBoxComponent '$($this.Name)': State changed to $($this.Checked)"
+                return $true
+            }
+            catch {
+                Write-Error "CheckBoxComponent '$($this.Name)': Error handling toggle: $($_.Exception.Message)"
+            }
+        }
+        return $false
+    }
 
-
-
-CheckBoxComponent([string]$name) : base($name) {
-
-$this.IsFocusable = $true
-
-$this.Width = 20
-
-$this.Height = 1
-
+    [string] ToString() {
+        return "CheckBoxComponent(Name='$($this.Name)', Text='$($this.Text)', Checked=$($this.Checked), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$fg = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::White
-
-$checkbox = $this.Checked ? "[X]" : "[ ]"
-
-$displayText = "$checkbox $($this.Text)"
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "CheckBox render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-
-$this.Checked = -not $this.Checked
-
-if ($this.OnChange) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
-
-& $this.OnChange -NewValue $this.Checked
-
-}
-
-}
-
-$this.RequestRedraw()
-
-return $true
-
-}
-
-} catch {
-
-Write-Log -Level Error -Message "CheckBox input error for '$($this.Name)': $_"
-
-}
-
-return $false
-
-}
-
-}
-
-
-
-# AI: NEW - RadioButtonComponent converted from functional to class-based
 
 class RadioButtonComponent : UIElement {
+    [string]$Text = "Option"
+    [bool]$Selected = $false
+    [string]$GroupName = ""
+    [scriptblock]$OnChange
 
-[string]$Text = "Option"
+    RadioButtonComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+        Write-Verbose "RadioButtonComponent: Constructor called for '$($this.Name)'"
+    }
 
-[bool]$Selected = $false
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear()
+            $fg = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Foreground' }
+            $bg = Get-ThemeColor 'Background'
+            
+            $radio = if ($this.Selected) { "(●)" } else { "( )" }
+            $displayText = "$radio $($this.Text)"
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg -BackgroundColor $bg
+            Write-Verbose "RadioButtonComponent '$($this.Name)': Rendered (Selected: $($this.Selected))"
+        }
+        catch {
+            Write-Error "RadioButtonComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-[string]$GroupName = ""
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                if (-not $this.Selected) {
+                    $this.Selected = $true
+                    
+                    # Unselect other radio buttons in the same group
+                    if ($this.Parent -and $this.GroupName) {
+                        $this.Parent.Children | Where-Object { 
+                            $_ -is [RadioButtonComponent] -and $_.GroupName -eq $this.GroupName -and $_ -ne $this 
+                        } | ForEach-Object {
+                            $_.Selected = $false
+                            $_.RequestRedraw()
+                        }
+                    }
+                    
+                    if ($this.OnChange) {
+                        Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                            & $this.OnChange -NewValue $this.Selected
+                        }
+                    }
+                    
+                    $this.RequestRedraw()
+                    Write-Verbose "RadioButtonComponent '$($this.Name)': Selected in group '$($this.GroupName)'"
+                }
+                return $true
+            }
+            catch {
+                Write-Error "RadioButtonComponent '$($this.Name)': Error handling selection: $($_.Exception.Message)"
+            }
+        }
+        return $false
+    }
 
-[scriptblock]$OnChange
-
-
-
-RadioButtonComponent([string]$name) : base($name) {
-
-$this.IsFocusable = $true
-
-$this.Width = 20
-
-$this.Height = 1
-
+    [string] ToString() {
+        return "RadioButtonComponent(Name='$($this.Name)', Text='$($this.Text)', Selected=$($this.Selected), Group='$($this.GroupName)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
 }
-
-
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-$fg = $this.IsFocused ? [ConsoleColor]::Yellow : [ConsoleColor]::White
-
-$radio = $this.Selected ? "(●)" : "( )"
-
-$displayText = "$radio $($this.Text)"
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "RadioButton render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-[bool] HandleInput([System.ConsoleKeyInfo]$key) {
-
-try {
-
-if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-
-if (-not $this.Selected) {
-
-# AI: Unselect other radio buttons in the same group
-
-if ($this.Parent -and $this.GroupName) {
-
-$siblingRadios = $this.Parent.Children | Where-Object {
-
-$_ -is [RadioButtonComponent] -and $_.GroupName -eq $this.GroupName -and $_ -ne $this
-
-}
-
-foreach ($radio in $siblingRadios) {
-
-$radio.Selected = $false
-
-}
-
-}
-
-
-
-$this.Selected = $true
-
-if ($this.OnChange) {
-
-Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
-
-& $this.OnChange -NewValue $this.Selected
-
-}
-
-}
-
-$this.Parent.RequestRedraw()
-
-}
-
-return $true
-
-}
-
-} catch {
-
-Write-Log -Level Error -Message "RadioButton input error for '$($this.Name)': $_"
-
-}
-
-return $false
-
-}
-
-}
-
-
 
 #endregion
 
-
-
 #region Factory Functions
 
-
-
-# AI: Updated factories to return class instances
-
-
-
 function New-TuiLabel {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "Label_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$label = [LabelComponent]::new($name)
-
-
-
-$label.X = $Props.X ?? $label.X
-
-$label.Y = $Props.Y ?? $label.Y
-
-$label.Width = $Props.Width ?? $label.Width
-
-$label.Height = $Props.Height ?? $label.Height
-
-$label.Visible = $Props.Visible ?? $label.Visible
-
-$label.ZIndex = $Props.ZIndex ?? $label.ZIndex
-
-$label.Text = $Props.Text ?? $label.Text
-
-$label.ForegroundColor = $Props.ForegroundColor ?? $label.ForegroundColor
-
-
-
-return $label
-
+    <#
+    .SYNOPSIS
+    Creates a new Label component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a LabelComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the label component.
+    
+    .EXAMPLE
+    $label = New-TuiLabel -Props @{
+        Name = "StatusLabel"
+        Text = "Ready"
+        ForegroundColor = [ConsoleColor]::Green
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $labelName = $Props.Name ?? "Label_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $label = [LabelComponent]::new($labelName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($label.PSObject.Properties.Match($_.Name)) {
+                $label.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created label '$labelName' with $($Props.Count) properties"
+        return $label
+    }
+    catch {
+        Write-Error "Failed to create label: $($_.Exception.Message)"
+        throw
+    }
 }
-
-
 
 function New-TuiButton {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "Button_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$button = [ButtonComponent]::new($name)
-
-
-
-$button.X = $Props.X ?? $button.X
-
-$button.Y = $Props.Y ?? $button.Y
-
-$button.Width = $Props.Width ?? $button.Width
-
-$button.Height = $Props.Height ?? $button.Height
-
-$button.Visible = $Props.Visible ?? $button.Visible
-
-$button.ZIndex = $Props.ZIndex ?? $button.ZIndex
-
-$button.Text = $Props.Text ?? $button.Text
-
-$button.OnClick = $Props.OnClick ?? $button.OnClick
-
-
-
-return $button
-
+    <#
+    .SYNOPSIS
+    Creates a new Button component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a ButtonComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the button component.
+    
+    .EXAMPLE
+    $button = New-TuiButton -Props @{
+        Name = "SubmitButton"
+        Text = "Submit"
+        OnClick = { Write-Host "Submitted!" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $buttonName = $Props.Name ?? "Button_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $button = [ButtonComponent]::new($buttonName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($button.PSObject.Properties.Match($_.Name)) {
+                $button.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created button '$buttonName' with $($Props.Count) properties"
+        return $button
+    }
+    catch {
+        Write-Error "Failed to create button: $($_.Exception.Message)"
+        throw
+    }
 }
-
-
 
 function New-TuiTextBox {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "TextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$textBox = [TextBoxComponent]::new($name)
-
-
-
-$textBox.X = $Props.X ?? $textBox.X
-
-$textBox.Y = $Props.Y ?? $textBox.Y
-
-$textBox.Width = $Props.Width ?? $textBox.Width
-
-$textBox.Height = $Props.Height ?? $textBox.Height
-
-$textBox.Visible = $Props.Visible ?? $textBox.Visible
-
-$textBox.ZIndex = $Props.ZIndex ?? $textBox.ZIndex
-
-$textBox.Text = $Props.Text ?? $textBox.Text
-
-$textBox.Placeholder = $Props.Placeholder ?? $textBox.Placeholder
-
-$textBox.MaxLength = $Props.MaxLength ?? $textBox.MaxLength
-
-$textBox.CursorPosition = $Props.CursorPosition ?? $textBox.CursorPosition
-
-$textBox.OnChange = $Props.OnChange ?? $textBox.OnChange
-
-
-
-return $textBox
-
+    <#
+    .SYNOPSIS
+    Creates a new TextBox component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a TextBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the textbox component.
+    
+    .EXAMPLE
+    $textBox = New-TuiTextBox -Props @{
+        Name = "InputField"
+        Placeholder = "Enter text here"
+        MaxLength = 50
+        OnChange = { param($NewValue) Write-Host "Text changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $textBoxName = $Props.Name ?? "TextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $textBox = [TextBoxComponent]::new($textBoxName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($textBox.PSObject.Properties.Match($_.Name)) {
+                $textBox.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created textbox '$textBoxName' with $($Props.Count) properties"
+        return $textBox
+    }
+    catch {
+        Write-Error "Failed to create textbox: $($_.Exception.Message)"
+        throw
+    }
 }
-
-
 
 function New-TuiCheckBox {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "CheckBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$checkBox = [CheckBoxComponent]::new($name)
-
-
-
-$checkBox.X = $Props.X ?? $checkBox.X
-
-$checkBox.Y = $Props.Y ?? $checkBox.Y
-
-$checkBox.Width = $Props.Width ?? $checkBox.Width
-
-$checkBox.Height = $Props.Height ?? $checkBox.Height
-
-$checkBox.Visible = $Props.Visible ?? $checkBox.Visible
-
-$checkBox.ZIndex = $Props.ZIndex ?? $checkBox.ZIndex
-
-$checkBox.Text = $Props.Text ?? $checkBox.Text
-
-$checkBox.Checked = $Props.Checked ?? $checkBox.Checked
-
-$checkBox.OnChange = $Props.OnChange ?? $checkBox.OnChange
-
-
-
-return $checkBox
-
+    <#
+    .SYNOPSIS
+    Creates a new CheckBox component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a CheckBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the checkbox component.
+    
+    .EXAMPLE
+    $checkBox = New-TuiCheckBox -Props @{
+        Name = "AgreeCheckbox"
+        Text = "I agree to the terms"
+        OnChange = { param($NewValue) Write-Host "Checkbox changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $checkBoxName = $Props.Name ?? "CheckBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $checkBox = [CheckBoxComponent]::new($checkBoxName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($checkBox.PSObject.Properties.Match($_.Name)) {
+                $checkBox.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created checkbox '$checkBoxName' with $($Props.Count) properties"
+        return $checkBox
+    }
+    catch {
+        Write-Error "Failed to create checkbox: $($_.Exception.Message)"
+        throw
+    }
 }
-
-
 
 function New-TuiRadioButton {
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "RadioButton_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$radioButton = [RadioButtonComponent]::new($name)
-
-
-
-$radioButton.X = $Props.X ?? $radioButton.X
-
-$radioButton.Y = $Props.Y ?? $radioButton.Y
-
-$radioButton.Width = $Props.Width ?? $radioButton.Width
-
-$radioButton.Height = $Props.Height ?? $radioButton.Height
-
-$radioButton.Visible = $Props.Visible ?? $radioButton.Visible
-
-$radioButton.ZIndex = $Props.ZIndex ?? $radioButton.ZIndex
-
-$radioButton.Text = $Props.Text ?? $radioButton.Text
-
-$radioButton.Selected = $Props.Selected ?? $radioButton.Selected
-
-$radioButton.GroupName = $Props.GroupName ?? $radioButton.GroupName
-
-$radioButton.OnChange = $Props.OnChange ?? $radioButton.OnChange
-
-
-
-return $radioButton
-
+    <#
+    .SYNOPSIS
+    Creates a new RadioButton component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a RadioButtonComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the radio button component.
+    
+    .EXAMPLE
+    $radioButton = New-TuiRadioButton -Props @{
+        Name = "Option1"
+        Text = "Option 1"
+        GroupName = "MyGroup"
+        OnChange = { param($NewValue) Write-Host "Radio button changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $radioButtonName = $Props.Name ?? "RadioButton_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $radioButton = [RadioButtonComponent]::new($radioButtonName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($radioButton.PSObject.Properties.Match($_.Name)) {
+                $radioButton.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created radio button '$radioButtonName' with $($Props.Count) properties"
+        return $radioButton
+    }
+    catch {
+        Write-Error "Failed to create radio button: $($_.Exception.Message)"
+        throw
+    }
 }
 
+#endregion
 
+#region Module Exports
+
+# Export public functions
+Export-ModuleMember -Function New-TuiLabel, New-TuiButton, New-TuiTextBox, New-TuiCheckBox, New-TuiRadioButton
+
+# Classes are automatically exported in PowerShell 7+
+# LabelComponent, ButtonComponent, TextBoxComponent, CheckBoxComponent, RadioButtonComponent classes are available when module is imported
 
 #endregion

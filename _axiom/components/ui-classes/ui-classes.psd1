@@ -9,7 +9,7 @@
     CompatiblePSEditions = @('Core')
     
     # ID used to uniquely identify this module
-    GUID = 'b2c3d4e5-f6a7-8901-bcde-f23456789012'
+    GUID = 'f5a6b7c8-9012-3cde-4faf-56789012cdef'
     
     # Author of this module
     Author = 'PMC Terminal Team'
@@ -21,7 +21,7 @@
     Copyright = '(c) 2025 PMC Terminal. All rights reserved.'
     
     # Description of the functionality provided by this module
-    Description = 'PMC Terminal AXIOM Module: Base UI class hierarchy including UIElement, Component, and Screen classes'
+    Description = 'PMC Terminal AXIOM Module: Foundational UI class hierarchy with lifecycle management, compositor rendering, and service integration'
     
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion = '7.0'
@@ -30,6 +30,10 @@
     RequiredModules = @(
         @{
             ModuleName = 'tui-primitives'
+            ModuleVersion = '1.0.0'
+        },
+        @{
+            ModuleName = 'exceptions'
             ModuleVersion = '1.0.0'
         }
     )
@@ -68,7 +72,7 @@
     PrivateData = @{
         PSData = @{
             # Tags applied to this module for online gallery discoverability
-            Tags = @('PMCTerminal', 'TUI', 'PowerShell7', 'UI', 'Classes')
+            Tags = @('PMCTerminal', 'UI', 'PowerShell7', 'TUI', 'Components', 'Framework')
             
             # A URL to the main website for this project
             ProjectUri = ''
@@ -77,7 +81,7 @@
             IconUri = ''
             
             # ReleaseNotes of this module
-            ReleaseNotes = 'Initial AXIOM architecture release - Base UI classes'
+            ReleaseNotes = 'Initial AXIOM architecture release - Foundational UI classes with lifecycle management'
             
             # Prerelease string of this module
             Prerelease = ''

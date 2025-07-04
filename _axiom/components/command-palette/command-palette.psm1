@@ -1,400 +1,425 @@
 # ==============================================================================
-# PMC Terminal Axiom-Phoenix v4.0 - Command Palette Component
-# ==============================================================================
-# Purpose: A searchable, filterable command palette for executing actions
-# Features:
-#   - Fuzzy search through all registered actions
-#   - Group-based filtering
-#   - Recent command history
-#   - Keyboard navigation
-#   - Visual feedback for hotkeys
+# Command Palette Module v5.0
+# Advanced command palette with fuzzy search and action execution
 # ==============================================================================
 
-using namespace System
-using namespace System.Collections.Generic
+using namespace System.Management.Automation
+
+#region Command Palette Class
 
 class CommandPalette : UIElement {
-    hidden [ActionService] $actionService
-    hidden [TextBoxComponent] $searchBox
-    hidden [List[Action]] $filteredActions
-    hidden [List[Action]] $allActions
-    hidden [int] $selectedIndex
-    hidden [int] $maxVisibleItems
-    hidden [int] $scrollOffset
-    hidden [bool] $isOpen
-    hidden [string] $lastQuery
-    hidden [ConsoleColor] $borderColor
-    hidden [ConsoleColor] $backgroundColor
-    hidden [ConsoleColor] $foregroundColor
-    hidden [ConsoleColor] $selectedColor
-    hidden [ConsoleColor] $hotkeyColor
-    hidden [ConsoleColor] $groupColor
-    
-    CommandPalette([ActionService]$actionService) : base("CommandPalette") {
-        $this.actionService = $actionService
-        $this.filteredActions = [List[Action]]::new()
-        $this.allActions = [List[Action]]::new()
-        $this.selectedIndex = 0
-        $this.scrollOffset = 0
-        $this.maxVisibleItems = 15
-        $this.isOpen = $false
-        $this.lastQuery = ""
+    hidden [object] $_actionService
+    hidden [TextBoxComponent] $_searchBox
+    hidden [object[]] $_filteredActions
+    hidden [object[]] $_allActions
+    hidden [int] $_selectedIndex
+    hidden [int] $_scrollOffset
+    hidden [string] $_lastQuery
+
+    CommandPalette([Parameter(Mandatory)][object]$actionService) : base("CommandPalette") {
+        if (-not $actionService) {
+            throw [System.ArgumentNullException]::new('actionService')
+        }
         
-        # Set up as a modal overlay
+        $this._actionService = $actionService
+        $this._filteredActions = @()
+        $this._allActions = @()
+        $this._selectedIndex = 0
+        $this._scrollOffset = 0
+        $this._lastQuery = ""
+        
+        # Setup as a modal overlay
         $this.IsFocusable = $true
         $this.Enabled = $true
         $this.Visible = $false
-        $this.ZIndex = 1000  # High z-index for overlay
+        $this.ZIndex = 1000
         
-        # Colors
-        $this.borderColor = [ConsoleColor]::Cyan
-        $this.backgroundColor = [ConsoleColor]::Black
-        $this.foregroundColor = [ConsoleColor]::White
-        $this.selectedColor = [ConsoleColor]::Blue
-        $this.hotkeyColor = [ConsoleColor]::Yellow
-        $this.groupColor = [ConsoleColor]::DarkGray
+        Write-Verbose "CommandPalette: Constructor called"
         
-        # Create search box
-        $this.searchBox = [TextBoxComponent]::new("CommandSearch")
-        $this.searchBox.Placeholder = "Type to search commands..."
-        $this.searchBox.X = 2
-        $this.searchBox.Y = 2
-        $this.searchBox.IsFocusable = $true
-        $this.AddChild($this.searchBox)
+        # Create and configure the search box child component
+        $this._searchBox = New-TuiTextBox -Props @{
+            Name = 'CommandPaletteSearch'
+            Placeholder = "Type to search actions..."
+            Width = 70
+            Height = 3
+        }
         
-        # Subscribe to search box changes
-        $this.searchBox.OnTextChanged = {
-            param($sender, $text)
-            $this.UpdateFilter($text)
+        # Set up change handler for search box
+        $this._searchBox.OnChange = {
+            param($NewValue)
+            $this._UpdateFilter($NewValue)
         }.GetNewClosure()
         
-        # Subscribe to command palette open event
+        $this.AddChild($this._searchBox)
+        
+        # Listen for activation events
         Subscribe-Event -EventName "CommandPalette.Open" -Handler {
             $this.Show()
         }.GetNewClosure() -Source "CommandPalette"
         
-        $this.Initialize()
+        Write-Verbose "CommandPalette: Initialization complete"
     }
-    
-    [void] Initialize() {
-        # Position in center of screen
-        $screenWidth = $global:TuiState.BufferWidth
-        $screenHeight = $global:TuiState.BufferHeight
-        
-        $this.Width = [Math]::Min(80, $screenWidth - 10)
-        $this.Height = [Math]::Min(25, $screenHeight - 5)
-        
-        $this.X = [Math]::Floor(($screenWidth - $this.Width) / 2)
-        $this.Y = [Math]::Floor(($screenHeight - $this.Height) / 2)
-        
-        # Resize buffer
-        if ($null -ne $this._private_buffer) {
-            $this._private_buffer.Resize($this.Width, $this.Height)
-        }
-        
-        # Size search box
-        $this.searchBox.Width = $this.Width - 4
-        
-        # Load all actions
-        $this.RefreshActions()
-    }
-    
+
     [void] Show() {
-        Write-Log -Level Debug -Message "Opening command palette"
-        
-        $this.isOpen = $true
-        $this.Visible = $true
-        $this.selectedIndex = 0
-        $this.scrollOffset = 0
-        $this.lastQuery = ""
-        $this.searchBox.Text = ""
-        
-        # Load recent actions first
-        $this.ShowRecentActions()
-        
-        # Add to overlay stack
-        Show-TuiOverlay -Element $this
-        
-        # Focus the search box
-        Set-ComponentFocus -Component $this.searchBox
-        
-        Request-TuiRefresh
+        try {
+            Write-Log -Level Debug -Message "Opening Command Palette"
+            
+            # Center and size the palette based on current screen dimensions
+            $screenWidth = $global:TuiState.BufferWidth
+            $screenHeight = $global:TuiState.BufferHeight
+            
+            $this.Width = [Math]::Min(80, $screenWidth - 10)
+            $this.Height = [Math]::Min(20, $screenHeight - 6)
+            $this.X = [Math]::Floor(($screenWidth - $this.Width) / 2)
+            $this.Y = [Math]::Floor(($screenHeight - $this.Height) / 4)
+            
+            # Ensure buffer is properly sized
+            if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
+                $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+            }
+
+            # Position and size the search box within the palette
+            $this._searchBox.Move(2, 2)
+            $this._searchBox.Resize($this.Width - 4, 3)
+
+            # Reset state
+            $this.Visible = $true
+            $this._selectedIndex = 0
+            $this._scrollOffset = 0
+            $this._searchBox.Text = ""
+            $this._lastQuery = ""
+
+            # Load actions from service
+            $this._allActions = $this._actionService.GetAllActions()
+            $this._filteredActions = $this._allActions
+            
+            # Show overlay and set focus
+            Show-TuiOverlay -Element $this
+            Set-ComponentFocus -Component $this._searchBox
+            Request-TuiRefresh
+            
+            Write-Verbose "CommandPalette: Shown successfully"
+        }
+        catch {
+            Write-Error "CommandPalette: Error showing palette: $($_.Exception.Message)"
+        }
     }
-    
+
     [void] Hide() {
-        Write-Log -Level Debug -Message "Closing command palette"
-        
-        $this.isOpen = $false
-        $this.Visible = $false
-        
-        # Remove from overlay stack
-        Close-TopTuiOverlay
-        
-        Request-TuiRefresh
-    }
-    
-    hidden [void] RefreshActions() {
-        $this.allActions.Clear()
-        $this.allActions.AddRange($this.actionService.GetAllActions())
-    }
-    
-    hidden [void] ShowRecentActions() {
-        $this.filteredActions.Clear()
-        $recent = $this.actionService.GetRecentActions(10)
-        
-        if ($recent.Count -gt 0) {
-            $this.filteredActions.AddRange($recent)
+        try {
+            Write-Log -Level Debug -Message "Closing Command Palette"
+            
+            $this.Visible = $false
+            Close-TopTuiOverlay
+            
+            # Clear focus
+            if ($global:TuiState.FocusedComponent -eq $this._searchBox) {
+                Set-ComponentFocus -Component $null
+            }
+            
+            Request-TuiRefresh
+            
+            Write-Verbose "CommandPalette: Hidden successfully"
         }
-        else {
-            # Show all actions if no recent
-            $this.filteredActions.AddRange($this.allActions)
+        catch {
+            Write-Error "CommandPalette: Error hiding palette: $($_.Exception.Message)"
         }
     }
-    
-    hidden [void] UpdateFilter([string]$query) {
-        $this.lastQuery = $query
-        $this.selectedIndex = 0
-        $this.scrollOffset = 0
-        
-        if ([string]::IsNullOrWhiteSpace($query)) {
-            $this.ShowRecentActions()
+
+    hidden [void] _UpdateFilter([string]$query) {
+        try {
+            $this._lastQuery = $query
+            $this._selectedIndex = 0
+            $this._scrollOffset = 0
+
+            if ([string]::IsNullOrWhiteSpace($query)) {
+                $this._filteredActions = $this._allActions
+            }
+            else {
+                # Perform fuzzy search on name and description
+                $this._filteredActions = $this._allActions | Where-Object { 
+                    $_.Name -like "*$query*" -or $_.Description -like "*$query*" 
+                }
+            }
+            
+            $this.RequestRedraw()
+            Write-Verbose "CommandPalette: Filter updated, $($this._filteredActions.Count) results"
         }
-        else {
-            $this.filteredActions.Clear()
-            $results = $this.actionService.SearchActions($query)
-            $this.filteredActions.AddRange($results)
+        catch {
+            Write-Error "CommandPalette: Error updating filter: $($_.Exception.Message)"
         }
-        
-        $this.RequestRedraw()
     }
-    
+
     [void] OnRender() {
-        if (-not $this.Visible) { return }
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
         
-        # Clear buffer
-        $clearCell = [TuiCell]::new(' ', $this.foregroundColor, $this.backgroundColor)
-        $this._private_buffer.Clear($clearCell)
-        
-        # Draw border
-        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
-                     -Width $this.Width -Height $this.Height `
-                     -Style "Double" -ForegroundColor $this.borderColor `
-                     -BackgroundColor $this.backgroundColor
-        
-        # Draw title
-        $title = " Command Palette "
-        if ($this.filteredActions.Count -gt 0) {
-            $title += "($($this.filteredActions.Count)) "
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'Background'
+            $borderColor = Get-ThemeColor 'Accent'
+            $fgColor = Get-ThemeColor 'Foreground'
+            $selectionBg = Get-ThemeColor 'Selection'
+            $selectionFg = Get-ThemeColor 'Background'
+            $subtleColor = Get-ThemeColor 'Subtle'
+            
+            # Clear buffer
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            
+            # Draw border with title
+            $title = " Command Palette ($($this._filteredActions.Count)) "
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Title $title -BorderStyle "Double" -BorderColor $borderColor -BackgroundColor $bgColor
+
+            # Draw help text in bottom border
+            $helpText = " [↑↓] Navigate | [Enter] Execute | [Esc] Close "
+            if ($helpText.Length -lt ($this.Width - 2)) {
+                $helpX = $this.Width - $helpText.Length - 1
+                Write-TuiText -Buffer $this._private_buffer -X $helpX -Y ($this.Height - 1) -Text $helpText -ForegroundColor $subtleColor -BackgroundColor $bgColor
+            }
+
+            # Calculate list area
+            $listY = 5 # Start list below the search box
+            $listHeight = $this.Height - 6
+            
+            # Render action list
+            for ($i = 0; $i -lt $listHeight; $i++) {
+                $dataIndex = $i + $this._scrollOffset
+                if ($dataIndex -ge $this._filteredActions.Count) { break }
+                
+                $action = $this._filteredActions[$dataIndex]
+                $yPos = $listY + $i
+                $isSelected = ($dataIndex -eq $this._selectedIndex)
+                
+                # Colors based on selection
+                $itemBg = if ($isSelected) { $selectionBg } else { $bgColor }
+                $itemFg = if ($isSelected) { $selectionFg } else { $fgColor }
+                
+                # Draw selection highlight bar
+                $highlightText = ' ' * ($this.Width - 2)
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $yPos -Text $highlightText -ForegroundColor $itemFg -BackgroundColor $itemBg
+
+                # Draw action name and description
+                $displayText = " $($action.Name)"
+                if ($action.Description) {
+                    $displayText += ": $($action.Description)"
+                }
+                
+                # Truncate if too long
+                $maxWidth = $this.Width - 4
+                if ($displayText.Length -gt $maxWidth) {
+                    $displayText = $displayText.Substring(0, $maxWidth - 3) + "..."
+                }
+                
+                Write-TuiText -Buffer $this._private_buffer -X 2 -Y $yPos -Text $displayText -ForegroundColor $itemFg -BackgroundColor $itemBg
+            }
+
+            # Show "no results" message if needed
+            if ($this._filteredActions.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($this._lastQuery)) {
+                $noResultsText = "No actions match '$($this._lastQuery)'"
+                $centerX = [Math]::Floor(($this.Width - $noResultsText.Length) / 2)
+                $centerY = [Math]::Floor($this.Height / 2)
+                Write-TuiText -Buffer $this._private_buffer -X $centerX -Y $centerY -Text $noResultsText -ForegroundColor $subtleColor -BackgroundColor $bgColor
+            }
+            
+            Write-Verbose "CommandPalette: Rendered successfully"
         }
-        Write-TuiText -Buffer $this._private_buffer -Text $title `
-                      -X 2 -Y 0 -ForegroundColor $this.foregroundColor
+        catch {
+            Write-Error "CommandPalette: Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$keyInfo) {
+        if (-not $this.Visible) { return $false }
         
-        # Draw help text
-        $helpText = " ↑↓ Navigate | Enter Execute | Esc Cancel "
-        $helpX = $this.Width - $helpText.Length - 2
-        Write-TuiText -Buffer $this._private_buffer -Text $helpText `
-                      -X $helpX -Y $this.Height - 1 `
-                      -ForegroundColor [ConsoleColor]::DarkGray
-        
-        # Calculate list area
-        $listY = 4
-        $listHeight = $this.Height - 6
-        $visibleCount = [Math]::Min($this.filteredActions.Count, $listHeight)
-        
-        # Draw action list
-        for ($i = 0; $i -lt $visibleCount; $i++) {
-            $index = $i + $this.scrollOffset
-            if ($index -ge $this.filteredActions.Count) { break }
-            
-            $action = $this.filteredActions[$index]
-            $y = $listY + $i
-            $isSelected = ($index -eq $this.selectedIndex)
-            
-            # Background for selected item
-            if ($isSelected) {
-                for ($x = 1; $x -lt $this.Width - 1; $x++) {
-                    $cell = $this._private_buffer.GetCell($x, $y)
-                    $cell.BackgroundColor = $this.selectedColor
-                    $this._private_buffer.SetCell($x, $y, $cell)
+        try {
+            # If search box is focused, let it handle character input first
+            if ($this._searchBox.IsFocused) {
+                # But we intercept navigation keys before the textbox can consume them
+                switch ($keyInfo.Key) {
+                    ([ConsoleKey]::UpArrow) { }
+                    ([ConsoleKey]::DownArrow) { }
+                    ([ConsoleKey]::PageUp) { }
+                    ([ConsoleKey]::PageDown) { }
+                    ([ConsoleKey]::Home) { }
+                    ([ConsoleKey]::End) { }
+                    ([ConsoleKey]::Enter) { }
+                    ([ConsoleKey]::Escape) { }
+                    default { 
+                        if ($this._searchBox.HandleInput($keyInfo)) {
+                            return $true
+                        }
+                    }
                 }
             }
             
-            # Draw action name
-            $nameText = $action.Name
-            if ($nameText.Length > 40) {
-                $nameText = $nameText.Substring(0, 37) + "..."
-            }
-            Write-TuiText -Buffer $this._private_buffer -Text $nameText `
-                          -X 3 -Y $y -ForegroundColor $this.foregroundColor
-            
-            # Draw group
-            $groupX = 45
-            Write-TuiText -Buffer $this._private_buffer -Text "[$($action.Group)]" `
-                          -X $groupX -Y $y -ForegroundColor $this.groupColor
-            
-            # Draw hotkey if available
-            if ($action.Hotkey) {
-                $hotkeyX = $this.Width - $action.Hotkey.Length - 3
-                Write-TuiText -Buffer $this._private_buffer -Text $action.Hotkey `
-                              -X $hotkeyX -Y $y -ForegroundColor $this.hotkeyColor
-            }
-        }
-        
-        # Draw scrollbar if needed
-        if ($this.filteredActions.Count -gt $listHeight) {
-            $this.DrawScrollbar($listY, $listHeight)
-        }
-        
-        # Draw "no results" message if needed
-        if ($this.filteredActions.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($this.lastQuery)) {
-            $noResultsText = "No commands match '$($this.lastQuery)'"
-            $x = [Math]::Floor(($this.Width - $noResultsText.Length) / 2)
-            Write-TuiText -Buffer $this._private_buffer -Text $noResultsText `
-                          -X $x -Y ([Math]::Floor($this.Height / 2)) `
-                          -ForegroundColor [ConsoleColor]::DarkGray
-        }
-    }
-    
-    hidden [void] DrawScrollbar([int]$y, [int]$height) {
-        $scrollbarX = $this.Width - 2
-        $scrollRatio = [double]$height / $this.filteredActions.Count
-        $thumbSize = [Math]::Max(1, [Math]::Floor($height * $scrollRatio))
-        $thumbPos = [Math]::Floor($this.scrollOffset * $scrollRatio)
-        
-        # Draw scrollbar track
-        for ($i = 0; $i -lt $height; $i++) {
-            $char = '│'
-            $color = [ConsoleColor]::DarkGray
-            
-            # Draw thumb
-            if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) {
-                $char = '█'
-                $color = [ConsoleColor]::Gray
-            }
-            
-            Write-TuiText -Buffer $this._private_buffer -Text $char `
-                          -X $scrollbarX -Y ($y + $i) -ForegroundColor $color
-        }
-    }
-    
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if (-not $this.isOpen) { return $false }
-        
-        # Let search box handle text input first
-        if ($this.searchBox.IsFocused -and $this.searchBox.HandleInput($keyInfo)) {
-            return $true
-        }
-        
-        switch ($keyInfo.Key) {
-            ([ConsoleKey]::Escape) {
-                $this.Hide()
-                return $true
-            }
-            
-            ([ConsoleKey]::Enter) {
-                if ($this.filteredActions.Count -gt 0 -and $this.selectedIndex -lt $this.filteredActions.Count) {
-                    $action = $this.filteredActions[$this.selectedIndex]
+            # Handle palette-specific navigation
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Escape) {
                     $this.Hide()
-                    
-                    # Execute action asynchronously to avoid UI blocking
-                    try {
-                        $this.actionService.ExecuteAction($action.Id, @{
-                            Source = "CommandPalette"
-                        })
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    if ($this._filteredActions.Count -gt 0 -and $this._selectedIndex -lt $this._filteredActions.Count) {
+                        $action = $this._filteredActions[$this._selectedIndex]
+                        $this.Hide()
+                        
+                        try {
+                            # Execute the selected action
+                            $this._actionService.ExecuteAction($action.Name)
+                            Write-Log -Level Info -Message "Executed action: $($action.Name)"
+                        }
+                        catch {
+                            Write-Error "Failed to execute action '$($action.Name)': $($_.Exception.Message)"
+                            if (Get-Command Show-AlertDialog -ErrorAction SilentlyContinue) {
+                                Show-AlertDialog -Title "Action Failed" -Message "Failed to execute action: $($_.Exception.Message)"
+                            }
+                        }
                     }
-                    catch {
-                        Show-AlertDialog -Title "Action Failed" -Message $_.Exception.Message
+                    return $true
+                }
+                ([ConsoleKey]::UpArrow) {
+                    if ($this._selectedIndex -gt 0) {
+                        $this._selectedIndex--
+                        $this._EnsureSelectedVisible()
+                        $this.RequestRedraw()
                     }
+                    return $true
                 }
-                return $true
-            }
-            
-            ([ConsoleKey]::UpArrow) {
-                if ($this.selectedIndex -gt 0) {
-                    $this.selectedIndex--
-                    $this.EnsureSelectedVisible()
+                ([ConsoleKey]::DownArrow) {
+                    if ($this._selectedIndex -lt ($this._filteredActions.Count - 1)) {
+                        $this._selectedIndex++
+                        $this._EnsureSelectedVisible()
+                        $this.RequestRedraw()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::PageUp) {
+                    $pageSize = $this.Height - 6
+                    $this._selectedIndex = [Math]::Max(0, $this._selectedIndex - $pageSize)
+                    $this._EnsureSelectedVisible()
                     $this.RequestRedraw()
+                    return $true
                 }
-                return $true
-            }
-            
-            ([ConsoleKey]::DownArrow) {
-                if ($this.selectedIndex -lt $this.filteredActions.Count - 1) {
-                    $this.selectedIndex++
-                    $this.EnsureSelectedVisible()
+                ([ConsoleKey]::PageDown) {
+                    $pageSize = $this.Height - 6
+                    $this._selectedIndex = [Math]::Min($this._filteredActions.Count - 1, $this._selectedIndex + $pageSize)
+                    $this._EnsureSelectedVisible()
                     $this.RequestRedraw()
+                    return $true
                 }
-                return $true
+                ([ConsoleKey]::Home) {
+                    $this._selectedIndex = 0
+                    $this._EnsureSelectedVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::End) {
+                    $this._selectedIndex = $this._filteredActions.Count - 1
+                    $this._EnsureSelectedVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
             }
             
-            ([ConsoleKey]::PageUp) {
-                $this.selectedIndex = [Math]::Max(0, $this.selectedIndex - $this.maxVisibleItems)
-                $this.EnsureSelectedVisible()
-                $this.RequestRedraw()
-                return $true
-            }
-            
-            ([ConsoleKey]::PageDown) {
-                $maxIndex = $this.filteredActions.Count - 1
-                $this.selectedIndex = [Math]::Min($maxIndex, $this.selectedIndex + $this.maxVisibleItems)
-                $this.EnsureSelectedVisible()
-                $this.RequestRedraw()
-                return $true
-            }
-            
-            ([ConsoleKey]::Home) {
-                $this.selectedIndex = 0
-                $this.scrollOffset = 0
-                $this.RequestRedraw()
-                return $true
-            }
-            
-            ([ConsoleKey]::End) {
-                $this.selectedIndex = $this.filteredActions.Count - 1
-                $this.EnsureSelectedVisible()
-                $this.RequestRedraw()
-                return $true
-            }
+            return $false
         }
-        
-        return $false
+        catch {
+            Write-Error "CommandPalette: Error handling input: $($_.Exception.Message)"
+            return $false
+        }
     }
     
-    hidden [void] EnsureSelectedVisible() {
+    hidden [void] _EnsureSelectedVisible() {
         $listHeight = $this.Height - 6
         
-        if ($this.selectedIndex -lt $this.scrollOffset) {
-            $this.scrollOffset = $this.selectedIndex
+        # Scroll up if selected item is above visible area
+        if ($this._selectedIndex -lt $this._scrollOffset) {
+            $this._scrollOffset = $this._selectedIndex
         }
-        elseif ($this.selectedIndex -ge ($this.scrollOffset + $listHeight)) {
-            $this.scrollOffset = $this.selectedIndex - $listHeight + 1
+        # Scroll down if selected item is below visible area
+        elseif ($this._selectedIndex -ge ($this._scrollOffset + $listHeight)) {
+            $this._scrollOffset = $this._selectedIndex - $listHeight + 1
         }
         
-        # Clamp scroll offset
-        $maxScroll = [Math]::Max(0, $this.filteredActions.Count - $listHeight)
-        $this.scrollOffset = [Math]::Max(0, [Math]::Min($this.scrollOffset, $maxScroll))
+        # Ensure scroll offset is within bounds
+        $this._scrollOffset = [Math]::Max(0, $this._scrollOffset)
     }
-    
-    [void] OnFocus() {
-        # Forward focus to search box
-        if ($this.searchBox) {
-            Set-ComponentFocus -Component $this.searchBox
-        }
+
+    [string] ToString() {
+        return "CommandPalette(Name='$($this.Name)', Actions=$($this._allActions.Count), Filtered=$($this._filteredActions.Count), Selected=$($this._selectedIndex))"
     }
 }
 
-# Export function for creating command palette
-function New-CommandPalette {
+#endregion
+
+#region Factory Functions
+
+function Register-CommandPalette {
+    <#
+    .SYNOPSIS
+    Registers the Command Palette component with the application.
+    
+    .DESCRIPTION
+    Creates a Command Palette instance and registers the necessary action and keybinding
+    to activate it with Ctrl+P. This should be called during application startup.
+    
+    .PARAMETER ActionService
+    The ActionService instance to use for action registration and execution.
+    
+    .PARAMETER KeybindingService
+    The KeybindingService instance to use for keybinding registration.
+    
+    .EXAMPLE
+    $palette = Register-CommandPalette -ActionService $actionService -KeybindingService $keybindingService
+    
+    .OUTPUTS
+    [CommandPalette] The created Command Palette instance.
+    #>
+    [CmdletBinding()]
     param(
-        [ActionService]$ActionService
+        [Parameter(Mandatory)]
+        [object]$ActionService,
+        
+        [Parameter(Mandatory)]
+        [object]$KeybindingService
     )
-    
-    if (-not $ActionService) {
-        throw "ActionService is required for CommandPalette"
+
+    try {
+        Write-Log -Level Info -Message "Registering Command Palette"
+        
+        # Create the Command Palette instance
+        $palette = [CommandPalette]::new($ActionService)
+
+        # Register the action that opens the palette
+        $ActionService.RegisterAction(
+            "app.showCommandPalette", 
+            "Show the command palette for quick action access", 
+            { 
+                Publish-Event -EventName "CommandPalette.Open" 
+            },
+            "Application"
+        )
+
+        # Bind Ctrl+P to the palette action
+        $KeybindingService.SetBinding("app.showCommandPalette", 'P', @('Ctrl'))
+        
+        Write-Log -Level Info -Message "Command Palette registered successfully with Ctrl+P keybinding"
+        
+        return $palette
     }
-    
-    return [CommandPalette]::new($ActionService)
+    catch {
+        Write-Error "Failed to register Command Palette: $($_.Exception.Message)"
+        throw
+    }
 }
 
-# Export module members
-Export-ModuleMember -Function New-CommandPalette
+#endregion
+
+#region Module Exports
+
+# Export public functions
+Export-ModuleMember -Function Register-CommandPalette
+
+# Classes are automatically exported in PowerShell 7+
+# CommandPalette class is available when module is imported
+
+#endregion

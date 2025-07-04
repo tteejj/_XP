@@ -1,519 +1,391 @@
-# Advanced Data Components Module for PMC Terminal v5
+# ==============================================================================
+# Advanced Data Components Module v3.0
+# High-performance, theme-aware data display components for TUI applications
+# ==============================================================================
 
-# Phase 1 Migration Complete - Enhanced data display with proper UIElement inheritance
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+using namespace System.Collections.Generic
 
 #region Table Classes
 
-
-
 class TableColumn {
+    [string]$Key
+    [string]$Header
+    [object]$Width # Can be [int] or the string 'Auto'
+    [string]$Alignment = "Left"
 
-[string]$Key
+    TableColumn([Parameter(Mandatory)][string]$key, [Parameter(Mandatory)][string]$header, [Parameter(Mandatory)][object]$width) {
+        $this.Key = $key
+        $this.Header = $header
+        $this.Width = $width
+    }
 
-[string]$Header
-
-[int]$Width
-
-[string]$Alignment = "Left"
-
-
-
-TableColumn([string]$key, [string]$header, [int]$width) {
-
-$this.Key = $key
-
-$this.Header = $header
-
-$this.Width = $width
-
+    [string] ToString() {
+        return "TableColumn(Key='$($this.Key)', Header='$($this.Header)', Width=$($this.Width))"
+    }
 }
-
-}
-
-
-
-# AI: REFACTORED - Table now properly inherits from UIElement
 
 class Table : UIElement {
+    [System.Collections.Generic.List[TableColumn]]$Columns
+    [object[]]$Data = @()
+    [int]$SelectedIndex = 0
+    [bool]$ShowBorder = $true
+    [bool]$ShowHeader = $true
+    [scriptblock]$OnSelectionChanged
+    hidden [int]$_scrollOffset = 0 # The index of the first visible row
 
-[System.Collections.Generic.List[TableColumn]]$Columns
+    Table([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.Columns = [System.Collections.Generic.List[TableColumn]]::new()
+        $this.IsFocusable = $true
+        $this.Width = 60
+        $this.Height = 15
+        Write-Verbose "Table: Constructor called for '$($this.Name)'"
+    }
 
-[object[]]$Data = @()
+    [void] SetColumns([Parameter(Mandatory)][TableColumn[]]$columns) {
+        try {
+            $this.Columns.Clear()
+            foreach ($col in $columns) {
+                $this.Columns.Add($col)
+            }
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Set $($columns.Count) columns"
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error setting columns: $($_.Exception.Message)"
+            throw
+        }
+    }
 
-[int]$SelectedIndex = 0
+    [void] SetData([Parameter(Mandatory)][object[]]$data) {
+        try {
+            $this.Data = @($data) # Consistently cast to an array
+            if ($this.SelectedIndex -ge $this.Data.Count) {
+                $this.SelectedIndex = [Math]::Max(0, $this.Data.Count - 1)
+            }
+            $this._scrollOffset = 0 # Reset scroll on new data
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Set data with $($this.Data.Count) items"
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error setting data: $($_.Exception.Message)"
+            throw
+        }
+    }
 
-[bool]$ShowBorder = $true
+    [void] SelectNext() {
+        if ($this.SelectedIndex -lt ($this.Data.Count - 1)) {
+            $this.SelectedIndex++
+            $this._EnsureVisible()
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Selected next item (index $($this.SelectedIndex))"
+        }
+    }
 
-[bool]$ShowHeader = $true
+    [void] SelectPrevious() {
+        if ($this.SelectedIndex -gt 0) {
+            $this.SelectedIndex--
+            $this._EnsureVisible()
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Selected previous item (index $($this.SelectedIndex))"
+        }
+    }
 
-[bool]$IsFocused = $false
+    [object] GetSelectedItem() {
+        if ($this.Data.Count -gt 0 -and $this.SelectedIndex -in (0..($this.Data.Count - 1))) {
+            return $this.Data[$this.SelectedIndex]
+        }
+        return $null
+    }
 
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Clear buffer with theme-aware colors
+            $bgColor = Get-ThemeColor 'Background'
+            $fgColor = Get-ThemeColor 'Foreground'
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            
+            # Draw border if enabled
+            if ($this.ShowBorder) {
+                $borderColor = Get-ThemeColor 'Border'
+                Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            }
 
+            $contentWidth = if ($this.ShowBorder) { $this.Width - 2 } else { $this.Width }
+            $contentHeight = $this._GetContentHeight()
+            $renderX = if ($this.ShowBorder) { 1 } else { 0 }
+            $currentY = if ($this.ShowBorder) { 1 } else { 0 }
+            
+            # Resolve auto-sized column widths
+            $resolvedColumns = $this._ResolveColumnWidths($contentWidth)
+            
+            # Header
+            if ($this.ShowHeader -and $resolvedColumns.Count -gt 0) {
+                $headerColor = Get-ThemeColor 'Header'
+                $xOffset = 0
+                foreach ($col in $resolvedColumns) {
+                    $headerText = $this._FormatCell($col.Header, $col.ResolvedWidth, $col.Alignment)
+                    Write-TuiText -Buffer $this._private_buffer -X ($renderX + $xOffset) -Y $currentY -Text $headerText -ForegroundColor $headerColor -BackgroundColor $bgColor
+                    $xOffset += $col.ResolvedWidth
+                }
+                $currentY++
+            }
+            
+            # Data rows (respecting scroll offset)
+            for ($i = 0; $i -lt $contentHeight; $i++) {
+                $dataIndex = $i + $this._scrollOffset
+                if ($dataIndex -ge $this.Data.Count) { break }
+                $row = $this.Data[$dataIndex]
+                if (-not $row) { continue }
 
-Table([string]$name) : base() {
+                $isSelected = ($dataIndex -eq $this.SelectedIndex)
+                $bg = if ($isSelected -and $this.IsFocused) { Get-ThemeColor 'Selection' } else { $bgColor }
+                $fg = if ($isSelected -and $this.IsFocused) { Get-ThemeColor 'Background' } else { $fgColor }
 
-$this.Name = $name
+                $xOffset = 0
+                foreach ($col in $resolvedColumns) {
+                    $propValue = $row | Select-Object -ExpandProperty $col.Key -ErrorAction SilentlyContinue
+                    $cellValue = if ($propValue) { $propValue.ToString() } else { "" }
+                    $cellText = $this._FormatCell($cellValue, $col.ResolvedWidth, $col.Alignment)
+                    Write-TuiText -Buffer $this._private_buffer -X ($renderX + $xOffset) -Y $currentY -Text $cellText -ForegroundColor $fg -BackgroundColor $bg
+                    $xOffset += $col.ResolvedWidth
+                }
+                $currentY++
+            }
 
-$this.Columns = [System.Collections.Generic.List[TableColumn]]::new()
+            # Show message if no data
+            if ($this.Data.Count -eq 0) {
+                $subtleColor = Get-ThemeColor 'Subtle'
+                Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text " (No data to display) " -ForegroundColor $subtleColor -BackgroundColor $bgColor
+            }
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
 
-$this.Data = @()
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$keyInfo) {
+        try {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) { 
+                    $this.SelectPrevious()
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) { 
+                    $this.SelectNext()
+                    return $true
+                }
+                ([ConsoleKey]::PageUp) { 
+                    0..($this._GetContentHeight() - 1) | ForEach-Object { $this.SelectPrevious() }
+                    return $true
+                }
+                ([ConsoleKey]::PageDown) { 
+                    0..($this._GetContentHeight() - 1) | ForEach-Object { $this.SelectNext() }
+                    return $true
+                }
+                ([ConsoleKey]::Home) { 
+                    $this.SelectedIndex = 0
+                    $this._EnsureVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::End) { 
+                    $this.SelectedIndex = $this.Data.Count - 1
+                    $this._EnsureVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    if ($this.OnSelectionChanged) {
+                        $item = $this.GetSelectedItem()
+                        if ($item) {
+                            Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -ScriptBlock {
+                                & $this.OnSelectionChanged -SelectedItem $item
+                            }
+                        }
+                    }
+                    return $true
+                }
+            }
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error handling input: $($_.Exception.Message)"
+        }
+        return $false
+    }
+    
+    # Ensure the selected item is visible in the viewport
+    hidden [void] _EnsureVisible() {
+        $contentHeight = $this._GetContentHeight()
+        
+        # Scroll down if selected item is below visible area
+        if ($this.SelectedIndex -ge ($this._scrollOffset + $contentHeight)) {
+            $this._scrollOffset = $this.SelectedIndex - $contentHeight + 1
+        }
+        
+        # Scroll up if selected item is above visible area
+        if ($this.SelectedIndex -lt $this._scrollOffset) {
+            $this._scrollOffset = $this.SelectedIndex
+        }
+        
+        # Ensure scroll offset is within bounds
+        $this._scrollOffset = [Math]::Max(0, $this._scrollOffset)
+    }
+    
+    # Calculate available height for content (excluding border and header)
+    hidden [int] _GetContentHeight() {
+        $h = $this.Height
+        if ($this.ShowBorder) { $h -= 2 }
+        if ($this.ShowHeader) { $h -= 1 }
+        return [Math]::Max(0, $h)
+    }
 
-$this.SelectedIndex = 0
+    # Format cell content with proper alignment and overflow handling
+    hidden [string] _FormatCell([string]$text, [int]$width, [string]$alignment) {
+        if ([string]::IsNullOrEmpty($text)) { return ' ' * $width }
+        
+        # Handle overflow with ellipsis
+        if ($text.Length -gt $width) { 
+            $text = $text.Substring(0, $width - 1) + '…' 
+        }
+        
+        # Apply alignment
+        return switch ($alignment.ToLower()) {
+            'right' { $text.PadLeft($width) }
+            'center' { 
+                $pad = [Math]::Max(0, ($width - $text.Length) / 2)
+                $padded = (' ' * $pad) + $text
+                $padded.PadRight($width)
+            }
+            default { $text.PadRight($width) }
+        }
+    }
+    
+    # Resolve column widths, handling 'Auto' sizing
+    hidden [object[]] _ResolveColumnWidths([int]$totalWidth) {
+        $fixedWidth = 0
+        $autoCols = @()
+        $resolved = @()
 
-$this.IsFocusable = $true
+        # First pass: calculate fixed widths and identify auto columns
+        foreach ($col in $this.Columns) {
+            if ($col.Width -is [int]) {
+                $fixedWidth += $col.Width
+                $resolved += [pscustomobject]@{ 
+                    Original = $col
+                    ResolvedWidth = $col.Width
+                    Key = $col.Key
+                    Header = $col.Header
+                    Alignment = $col.Alignment
+                }
+            } else {
+                $autoCols += $col
+            }
+        }
 
-$this.Width = 60
+        # Second pass: distribute remaining width among auto columns
+        if ($autoCols.Count -gt 0) {
+            $remainingWidth = $totalWidth - $fixedWidth
+            $autoWidth = [Math]::Max(1, [Math]::Floor($remainingWidth / $autoCols.Count))
+            
+            foreach ($col in $autoCols) {
+                $resolved += [pscustomobject]@{ 
+                    Original = $col
+                    ResolvedWidth = $autoWidth
+                    Key = $col.Key
+                    Header = $col.Header
+                    Alignment = $col.Alignment
+                }
+            }
+        }
 
-$this.Height = 15
+        # Return in original column order
+        $orderedResolved = @()
+        foreach ($originalCol in $this.Columns) {
+            $matchedCol = $resolved | Where-Object { $_.Original -eq $originalCol } | Select-Object -First 1
+            if ($matchedCol) {
+                $orderedResolved += $matchedCol
+            }
+        }
+        
+        return $orderedResolved
+    }
 
+    [string] ToString() {
+        return "Table(Name='$($this.Name)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height), Data=$($this.Data.Count) items, Selected=$($this.SelectedIndex))"
+    }
 }
-
-
-
-[void] SetColumns([TableColumn[]]$columns) {
-
-$this.Columns.Clear()
-
-foreach ($col in $columns) {
-
-$this.Columns.Add($col)
-
-}
-
-$this.RequestRedraw()
-
-}
-
-
-
-[void] SetData([object[]]$data) {
-
-$this.Data = if ($null -eq $data) { @() } else { @($data) }
-
-$dataCount = if ($this.Data -is [array]) { $this.Data.Count } else { 1 }
-
-if ($this.SelectedIndex -ge $dataCount) {
-
-$this.SelectedIndex = [Math]::Max(0, $dataCount - 1)
-
-}
-
-$this.RequestRedraw()
-
-}
-
-
-
-[void] SelectNext() {
-
-$dataCount = if ($null -eq $this.Data) { 0 } elseif ($this.Data -is [array]) { $this.Data.Count } else { 1 }
-
-if ($this.SelectedIndex -lt ($dataCount - 1)) {
-
-$this.SelectedIndex++
-
-$this.RequestRedraw()
-
-}
-
-}
-
-
-
-[void] SelectPrevious() {
-
-if ($this.SelectedIndex -gt 0) {
-
-$this.SelectedIndex--
-
-$this.RequestRedraw()
-
-}
-
-}
-
-
-
-[object] GetSelectedItem() {
-
-if ($null -eq $this.Data) { return $null }
-
-
-
-$dataCount = if ($this.Data -is [array]) { $this.Data.Count } else { 1 }
-
-
-
-if ($dataCount -gt 0 -and $this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $dataCount) {
-
-return if ($this.Data -is [array]) { $this.Data[$this.SelectedIndex] } else { $this.Data }
-
-}
-
-return $null
-
-}
-
-
-
-# AI: REFACTORED - Now uses UIElement buffer system
-
-[void] OnRender() {
-
-if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-
-
-
-try {
-
-# Clear buffer
-
-$this._private_buffer.Clear([TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black))
-
-
-
-# Draw border if enabled
-
-if ($this.ShowBorder) {
-
-Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-
--BorderStyle "Single" -BorderColor ([ConsoleColor]::Gray) -BackgroundColor ([ConsoleColor]::Black)
-
-}
-
-
-
-$currentY = if ($this.ShowBorder) { 1 } else { 0 }
-
-$contentWidth = if ($this.ShowBorder) { $this.Width - 2 } else { $this.Width }
-
-$renderX = if ($this.ShowBorder) { 1 } else { 0 }
-
-
-
-# Header
-
-if ($this.ShowHeader -and $this.Columns.Count -gt 0) {
-
-$headerLine = ""
-
-foreach ($col in $this.Columns) {
-
-$headerText = $col.Header.PadRight($col.Width).Substring(0, [Math]::Min($col.Header.Length, $col.Width))
-
-$headerLine += $headerText + " "
-
-}
-
-
-
-if ($headerLine.TrimEnd().Length -gt $contentWidth) {
-
-$headerLine = $headerLine.Substring(0, $contentWidth)
-
-}
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text $headerLine.TrimEnd() `
-
--ForegroundColor ([ConsoleColor]::Cyan) -BackgroundColor ([ConsoleColor]::Black)
-
-$currentY++
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY `
-
--Text ("-" * [Math]::Min($headerLine.TrimEnd().Length, $contentWidth)) `
-
--ForegroundColor ([ConsoleColor]::DarkGray) -BackgroundColor ([ConsoleColor]::Black)
-
-$currentY++
-
-}
-
-
-
-# Data rows
-
-$dataToRender = @()
-
-if ($null -ne $this.Data) {
-
-$dataToRender = if ($this.Data -is [array]) { $this.Data } else { @($this.Data) }
-
-}
-
-
-
-for ($i = 0; $i -lt $dataToRender.Count; $i++) {
-
-$row = $dataToRender[$i]
-
-if ($null -eq $row) { continue }
-
-
-
-$rowLine = ""
-
-$isSelected = ($i -eq $this.SelectedIndex)
-
-
-
-foreach ($col in $this.Columns) {
-
-$cellValue = ""
-
-if ($row -is [hashtable] -and $row.ContainsKey($col.Key)) {
-
-$cellValue = $row[$col.Key]?.ToString() ?? ""
-
-} elseif ($row.PSObject.Properties[$col.Key]) {
-
-$propValue = $row.($col.Key)
-
-if ($col.Key -eq 'DueDate' -and $propValue -is [DateTime]) {
-
-$cellValue = $propValue.ToString('yyyy-MM-dd')
-
-} else {
-
-$cellValue = if ($null -ne $propValue) { $propValue.ToString() } else { "" }
-
-}
-
-}
-
-
-
-$cellText = $cellValue.PadRight($col.Width).Substring(0, [Math]::Min($cellValue.Length, $col.Width))
-
-$rowLine += $cellText + " "
-
-}
-
-
-
-$finalLine = $rowLine.TrimEnd()
-
-if ($isSelected) {
-
-$finalLine = "> $finalLine"
-
-} else {
-
-$finalLine = "  $finalLine"
-
-}
-
-
-
-$fg = if ($isSelected) { [ConsoleColor]::Black } else { [ConsoleColor]::White }
-
-$bg = if ($isSelected) { [ConsoleColor]::White } else { [ConsoleColor]::Black }
-
-
-
-if ($finalLine.Length -gt $contentWidth) {
-
-$finalLine = $finalLine.Substring(0, $contentWidth)
-
-}
-
-
-
-Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text $finalLine `
-
--ForegroundColor $fg -BackgroundColor $bg
-
-$currentY++
-
-
-
-# Don't exceed available space
-
-if ($currentY -ge ($this.Height - 1)) { break }
-
-}
-
-
-
-if ($dataToRender.Count -eq 0) {
-
-Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text "  No data to display" `
-
--ForegroundColor ([ConsoleColor]::DarkGray) -BackgroundColor ([ConsoleColor]::Black)
-
-}
-
-
-
-} catch {
-
-Write-Log -Level Error -Message "Table render error for '$($this.Name)': $_"
-
-}
-
-}
-
-
-
-# AI: REFACTORED - Updated input handling
-
-[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-
-try {
-
-switch ($keyInfo.Key) {
-
-([ConsoleKey]::UpArrow) {
-
-$this.SelectPrevious()
-
-return $true
-
-}
-
-([ConsoleKey]::DownArrow) {
-
-$this.SelectNext()
-
-return $true
-
-}
-
-([ConsoleKey]::Enter) {
-
-$selectedItem = $this.GetSelectedItem()
-
-if ($null -ne $selectedItem) {
-
-# Trigger selection event or action
-
-Write-Log -Level Debug -Message "Table item selected: $($selectedItem)"
-
-}
-
-return $true
-
-}
-
-}
-
-} catch {
-
-Write-Log -Level Error -Message "Table input error for '$($this.Name)': $_"
-
-}
-
-
-
-return $false
-
-}
-
-
-
-[void] OnFocus() {
-
-$this.IsFocused = $true
-
-$this.RequestRedraw()
-
-}
-
-
-
-[void] OnBlur() {
-
-$this.IsFocused = $false
-
-$this.RequestRedraw()
-
-}
-
-}
-
-
-
-# AI: DELETED - Obsolete DataTableComponent class was here and has been removed.
-
-
 
 #endregion
 
-
-
 #region Factory Functions
 
-
-
 function New-TuiTable {
-
-# AI: REFACTORED - Creates a proper Table instance
-
-param([hashtable]$Props = @{})
-
-
-
-$name = $Props.Name ?? "Table_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-
-$table = [Table]::new($name)
-
-
-
-if ($Props.Columns) {
-
-$table.SetColumns($Props.Columns)
-
+    <#
+    .SYNOPSIS
+    Creates a new Table component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a Table component with configurable properties.
+    The table supports scrolling, theme integration, and event-driven selection.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the table component.
+    
+    .EXAMPLE
+    $table = New-TuiTable -Props @{
+        Name = "MyTable"
+        Width = 60
+        Height = 15
+        ShowBorder = $true
+        OnSelectionChanged = { param($SelectedItem) Write-Host "Selected: $($SelectedItem.Name)" }
+    }
+    #>
+    [CmdletBinding()]
+    param(
+        [hashtable]$Props = @{}
+    )
+    
+    try {
+        $tableName = $Props.Name ?? "Table_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $table = [Table]::new($tableName)
+        
+        # Apply properties
+        $Props.GetEnumerator() | ForEach-Object {
+            $propertyName = $_.Name
+            $propertyValue = $_.Value
+            
+            if ($table.PSObject.Properties.Match($propertyName)) {
+                $table.($propertyName) = $propertyValue
+            }
+        }
+        
+        # Special handling for columns and data
+        if ($Props.Columns) {
+            $table.SetColumns($Props.Columns)
+        }
+        if ($Props.Data) {
+            $table.SetData($Props.Data)
+        }
+        
+        Write-Verbose "Created table '$tableName' with $($Props.Count) properties"
+        return $table
+    }
+    catch {
+        Write-Error "Failed to create table: $($_.Exception.Message)"
+        throw
+    }
 }
 
-if ($Props.Data) {
+#endregion
 
-$table.SetData($Props.Data)
+#region Module Exports
 
-}
+# Export public functions
+Export-ModuleMember -Function New-TuiTable
 
-
-
-$table.X = $Props.X ?? $table.X
-
-$table.Y = $Props.Y ?? $table.Y
-
-$table.Width = $Props.Width ?? $table.Width
-
-$table.Height = $Props.Height ?? $table.Height
-
-$table.ShowBorder = $Props.ShowBorder ?? $table.ShowBorder
-
-$table.ShowHeader = $Props.ShowHeader ?? $table.ShowHeader
-
-$table.Visible = $Props.Visible ?? $table.Visible
-
-
-
-return $table
-
-}
-
-
+# Classes are automatically exported in PowerShell 7+
+# Table, TableColumn classes are available when module is imported
 
 #endregion
