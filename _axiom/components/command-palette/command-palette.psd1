@@ -1,7 +1,7 @@
 @{
     # Module manifest for Command Palette
     RootModule = 'command-palette.psm1'
-    ModuleVersion = '5.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '2b1c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e'
     Author = 'PMC Terminal Development Team'
     CompanyName = 'PMC Terminal'
@@ -13,7 +13,7 @@
     # Dependencies
     RequiredModules = @(
         @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'tui-components'; ModuleVersion = '5.0.0' }
+        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'action-service'; ModuleVersion = '3.0.0' }

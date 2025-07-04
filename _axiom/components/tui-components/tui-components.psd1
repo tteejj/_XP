@@ -1,7 +1,7 @@
 @{
     # Module manifest for TUI Components
     RootModule = 'tui-components.psm1'
-    ModuleVersion = '5.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '9a8b7c6d-5e4f-3a2b-9c8d-7e6f5a4b3c2d'
     Author = 'PMC Terminal Development Team'
     CompanyName = 'PMC Terminal'

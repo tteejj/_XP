@@ -1,7 +1,7 @@
 @{
     # Module manifest for Advanced Input Components
     RootModule = 'advanced-input-components.psm1'
-    ModuleVersion = '5.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '3c2d5e4f-7a8b-9c0d-1e2f-3a4b5c6d7e8f'
     Author = 'PMC Terminal Development Team'
     CompanyName = 'PMC Terminal'
@@ -13,7 +13,7 @@
     # Dependencies
     RequiredModules = @(
         @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'tui-components'; ModuleVersion = '5.0.0' }
+        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }

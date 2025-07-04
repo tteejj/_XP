@@ -1,7 +1,7 @@
 @{
     # Module manifest for Dialog System Class
     RootModule = 'dialog-system-class.psm1'
-    ModuleVersion = '5.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '4e3f2a1b-9c8d-5e4f-2a1b-9c8d5e4f2a1b'
     Author = 'PMC Terminal Development Team'
     CompanyName = 'PMC Terminal'
@@ -13,7 +13,7 @@
     # Dependencies
     RequiredModules = @(
         @{ ModuleName = 'ui-classes'; ModuleVersion = '3.0.0' }
-        @{ ModuleName = 'tui-components'; ModuleVersion = '5.0.0' }
+        @{ ModuleName = 'tui-components'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'tui-primitives'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'theme-manager'; ModuleVersion = '3.0.0' }
         @{ ModuleName = 'logger'; ModuleVersion = '3.0.0' }

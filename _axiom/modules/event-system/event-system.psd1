@@ -3,7 +3,7 @@
     RootModule = 'event-system.psm1'
     
     # Version number of this module.
-    ModuleVersion = '1.1.0' # Incremented to reflect significant upgrades
+    ModuleVersion = '3.0' # Incremented to reflect significant upgrades
     
     # Supported PSEditions
     CompatiblePSEditions = @('Core')

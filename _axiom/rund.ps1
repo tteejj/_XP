@@ -1,5 +1,5 @@
 # run.ps1 - Main entry point for the Axiom-Phoenix application
-# v3 - Corrected Load Order and Instantiation
+# FINAL VERSION - Using proper module manifests for all components
 
 # --- PARAMETERS & GLOBAL SETTINGS ---
 param(
@@ -12,61 +12,57 @@ $ErrorActionPreference = "Stop"
 # --- MODULE SOURCING ---
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
-# --- CORRECTED & FINALIZED LOAD ORDER ---
-# This order is critical. Classes must be loaded before they are used.
+# The load order now points to the .psd1 manifests.
+# The order is still critical for class dependencies.
 $FileLoadOrder = @(
-    # Foundational modules with no dependencies
-    'modules/logger/logger.psm1',
-    'modules/exceptions/exceptions.psm1',
-    'modules/panic-handler/panic-handler.psm1',
-    'modules/event-system/event-system.psm1',
-    'modules/models/models.psm1',
-    'components/tui-primitives/tui-primitives.psm1',
-    
-    # Core UI classes that depend on primitives
-    'modules/theme-manager/theme-manager.psm1',
-    'components/ui-classes/ui-classes.psm1',
-    'layout/panels-class/panels-class.psm1',
-
-    # Service classes MUST be loaded before their factory functions
-    'services/service-container/service-container.psm1',
-    'services/action-service/action-service.psm1',
-    'services/keybinding-service-class/keybinding-service-class.psm1',
-    'services/keybinding-service/keybinding-service.psm1',
-    'services/navigation-service-class/navigation-service-class.psm1',
-    'services/navigation-service/navigation-service.psm1',
-    
-    # High-level components and systems
-    'components/command-palette/command-palette.psm1',
-    'modules/dialog-system-class/dialog-system-class.psm1',
-    'components/tui-components/tui-components.psm1',
-    'components/advanced-data-components/advanced-data-components.psm1',
-    'components/advanced-input-components/advanced-input-components.psm1',
-    'modules/data-manager/data-manager.psm1',
-    
-    # Screens, which depend on many services and components
-    'screens/dashboard-screen/dashboard-screen.psm1',
-    'screens/task-list-screen/task-list-screen.psm1',
-    
-    # Framework and Engine are loaded last as they orchestrate everything
-    'modules/tui-framework/tui-framework.psm1',
-    'modules/tui-engine/tui-engine.psm1'
+    'modules/logger/logger.psd1',
+    'modules/exceptions/exceptions.psd1',
+    'modules/panic-handler/panic-handler.psd1',
+    'modules/event-system/event-system.psd1',
+    'modules/models/models.psd1',
+    'components/tui-primitives/tui-primitives.psd1',
+    'modules/theme-manager/theme-manager.psd1',
+    'components/ui-classes/ui-classes.psd1',
+    'layout/panels-class/panels-class.psd1',
+    'services/service-container/service-container.psd1',
+    'services/action-service/action-service.psd1',
+    'services/keybinding-service-class/keybinding-service-class.psd1',
+    'services/keybinding-service/keybinding-service.psd1',
+    'services/navigation-service-class/navigation-service-class.psd1',
+    'services/navigation-service/navigation-service.psd1',
+    'components/command-palette/command-palette.psd1',
+    'modules/dialog-system-class/dialog-system-class.psd1',
+    'components/tui-components/tui-components.psd1',
+    'components/advanced-data-components/advanced-data-components.psd1',
+    'components/advanced-input-components/advanced-input-components.psd1',
+    'modules/data-manager/data-manager.psd1',
+    'screens/dashboard-screen/dashboard-screen.psd1',
+    'screens/task-list-screen/task-list-screen.psd1',
+    'modules/tui-framework/tui-framework.psd1',
+    'modules/tui-engine/tui-engine.psd1'
 )
 
-Write-Host "🚀 Loading Axiom-Phoenix modules..."
+Write-Host "🚀 Loading Axiom-Phoenix modules via Import-Module..."
 foreach ($filePath in $FileLoadOrder) {
     $fullPath = Join-Path $PSScriptRoot $filePath
     if (Test-Path $fullPath) {
-        . $fullPath
+        try {
+            # Use Import-Module, which correctly handles manifests and scopes.
+            Import-Module $fullPath -Force -ErrorAction Stop
+        } catch {
+            Write-Error "FATAL: Failed to import module '$fullPath'. Error: $($_.Exception.Message)"
+            Write-Error $_.ScriptStackTrace
+            exit 1
+        }
     } else {
         Write-Error "FATAL: Required module not found: '$fullPath'. Aborting."
         exit 1
     }
 }
-Write-Host "✅ All modules loaded."
+Write-Host "✅ All modules loaded successfully."
 
 # --- MAIN EXECUTION LOGIC ---
-$container = $null # Define in outer scope for finally block
+$container = $null 
 try {
     Write-Host "`n=== Axiom-Phoenix v4.0 - Starting Up ===" -ForegroundColor Cyan
     Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
@@ -88,7 +84,6 @@ try {
     $container.RegisterFactory("DataManager", { param($c) Initialize-DataManager })
     $container.RegisterFactory("NavigationService", { 
         param($c)
-        # The constructor expects a simple hashtable. We pass the container inside it.
         Initialize-NavigationService -Services @{ ServiceContainer = $c } 
     })
     
@@ -127,7 +122,6 @@ try {
     Start-TuiLoop -InitialScreen $initialScreen
     
 } catch {
-    # If an error happens before the panic handler is set, this is the last resort.
     Write-Host "`n=== FATAL STARTUP ERROR ===" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
@@ -135,7 +129,6 @@ try {
     exit 1
 } finally {
     Write-Host "`nApplication has exited. Cleaning up..."
-    # Ensure all disposable services and the TUI engine are cleaned up.
     if ($container) {
         try {
             $tuiFramework = $container.GetService("TuiFramework")

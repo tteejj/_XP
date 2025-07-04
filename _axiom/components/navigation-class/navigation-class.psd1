@@ -1,7 +1,7 @@
 @{
     # Module manifest for Navigation Class
     RootModule = 'navigation-class.psm1'
-    ModuleVersion = '5.0.0'
+    ModuleVersion = '3.0.0'
     GUID = '4d3e5f6a-7b8c-9d0e-1f2a-3b4c5d6e7f8a'
     Author = 'PMC Terminal Development Team'
     CompanyName = 'PMC Terminal'
