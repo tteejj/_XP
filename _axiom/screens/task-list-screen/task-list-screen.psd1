@@ -1,15 +1,15 @@
 @{
     # Script module or binary module file associated with this manifest.
-    RootModule = 'logger.psm1'
+    RootModule = 'task-list-screen.psm1'
     
     # Version number of this module.
-    ModuleVersion = '1.1.0'
+    ModuleVersion = '1.0.0'
     
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
     
     # ID used to uniquely identify this module
-    GUID = 'c3d4e5f6-a7b8-9012-cdef-345678901234'
+    GUID = 'c3d4e5f6-a7b8-c901-2345-678901defab'
     
     # Author of this module
     Author = 'PMC Terminal Team'
@@ -21,13 +21,22 @@
     Copyright = '(c) 2025 PMC Terminal. All rights reserved.'
     
     # Description of the functionality provided by this module
-    Description = 'A robust, high-performance logging system for the PMC Terminal application, featuring granular tracing, structured data logging, automatic log rotation, and full cmdlet best practice support.'
+    Description = 'PMC Terminal AXIOM Module: A dynamic, action-driven, and theme-aware screen for managing tasks.'
     
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion = '7.0'
     
-    # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules = @()
+    # Modules that must be imported into the global environment prior to importing this module.
+    # This screen depends on types and services defined in these core modules.
+    RequiredModules = @(
+        @{ ModuleName = 'ui-classes'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'ui-components'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'data-manager'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'theme-manager'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'action-service'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'keybinding-service'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'navigation-service'; ModuleVersion = '1.0.0' }
+    )
     
     # Assemblies that must be loaded prior to importing this module
     RequiredAssemblies = @()
@@ -41,25 +50,8 @@
     # Format files (.ps1xml) to be loaded when importing this module
     FormatsToProcess = @()
     
-    # Functions to export from this module
-    FunctionsToExport = @(
-        'Initialize-Logger',
-        'Write-Log',
-        'Trace-FunctionEntry',
-        'Trace-FunctionExit',
-        'Trace-Step',
-        'Trace-StateChange',
-        'Trace-ComponentLifecycle',
-        'Trace-ServiceCall',
-        'Get-LogEntries',
-        'Get-CallTrace',
-        'Clear-LogQueue',
-        'Set-LogLevel',
-        'Enable-CallTracing',
-        'Disable-CallTracing',
-        'Get-LogPath',
-        'Get-LogStatistics'
-    )
+    # Functions to export from this module. This module only exports a class.
+    FunctionsToExport = @()
     
     # Cmdlets to export from this module
     CmdletsToExport = @()
@@ -74,13 +66,13 @@
     DscResourcesToExport = @()
     
     # List of all files packaged with this module
-    FileList = @('logger.psm1', 'logger.psd1', 'README.md')
+    FileList = @('task-list-screen.psm1', 'task-list-screen.psd1', 'README.md')
     
     # Private data to pass to the module specified in RootModule/ModuleToProcess.
     PrivateData = @{
         PSData = @{
             # Tags applied to this module for online gallery discoverability
-            Tags = @('PMCTerminal', 'Logging', 'PowerShell7', 'Diagnostics', 'Tracing', 'StructuredLogging')
+            Tags = @('PMCTerminal', 'Screen', 'Tasks', 'UI', 'EventDriven', 'ActionDriven', 'Theming')
             
             # A URL to the main website for this project
             ProjectUri = ''
@@ -89,7 +81,7 @@
             IconUri = ''
             
             # ReleaseNotes of this module
-            ReleaseNotes = 'Upgraded to a more robust logging system with stricter parameter validation, improved caller context detection, and enhanced exception serialization. Clear-LogQueue now supports ShouldProcess (-WhatIf/-Confirm).'
+            ReleaseNotes = 'Complete rewrite to align with the Axiom-Phoenix architecture. Replaces hardcoded input with ActionService/KeybindingService, uses ThemeManager for all styling, and is fully event-driven for data updates.'
             
             # Prerelease string of this module
             Prerelease = ''

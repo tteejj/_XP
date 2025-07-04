@@ -3,7 +3,7 @@
     RootModule = 'models.psm1'
     
     # Version number of this module.
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '1.1.0'
     
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -21,7 +21,7 @@
     Copyright = '(c) 2025 PMC Terminal. All rights reserved.'
     
     # Description of the functionality provided by this module
-    Description = 'PMC Terminal AXIOM Module: Core data models including Task and Project classes with validation'
+    Description = 'PMC Terminal AXIOM Module: Provides core business data models (PmcTask, PmcProject) with robust, built-in validation and improved diagnostics for data integrity.'
     
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion = '7.0'
@@ -63,7 +63,7 @@
     PrivateData = @{
         PSData = @{
             # Tags applied to this module for online gallery discoverability
-            Tags = @('PMCTerminal', 'Models', 'PowerShell7', 'DataModels', 'Business')
+            Tags = @('PMCTerminal', 'Models', 'PowerShell7', 'DataModels', 'Business', 'Validation')
             
             # A URL to the main website for this project
             ProjectUri = ''
@@ -72,7 +72,7 @@
             IconUri = ''
             
             # ReleaseNotes of this module
-            ReleaseNotes = 'Initial AXIOM architecture release - Core data models'
+            ReleaseNotes = 'Upgraded core data models with strict parameter validation in constructors and methods, transparent warnings for data parsing errors, and enhanced diagnostic logging.'
             
             # Prerelease string of this module
             Prerelease = ''

@@ -3,7 +3,7 @@
     RootModule = 'event-system.psm1'
     
     # Version number of this module.
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '1.1.0' # Incremented to reflect significant upgrades
     
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -21,7 +21,7 @@
     Copyright = '(c) 2025 PMC Terminal. All rights reserved.'
     
     # Description of the functionality provided by this module
-    Description = 'PMC Terminal AXIOM Module: Event-driven publish/subscribe system for decoupled component communication'
+    Description = 'PMC Terminal AXIOM Module: A high-performance, robust event-driven publish/subscribe system for decoupled component communication, with full support for PowerShell cmdlet best practices.'
     
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion = '7.0'
@@ -72,7 +72,7 @@
     PrivateData = @{
         PSData = @{
             # Tags applied to this module for online gallery discoverability
-            Tags = @('PMCTerminal', 'Events', 'PowerShell7', 'PubSub', 'Messaging')
+            Tags = @('PMCTerminal', 'Events', 'PowerShell7', 'PubSub', 'Messaging', 'Framework')
             
             # A URL to the main website for this project
             ProjectUri = ''
@@ -81,7 +81,7 @@
             IconUri = ''
             
             # ReleaseNotes of this module
-            ReleaseNotes = 'Initial AXIOM architecture release - Event system'
+            ReleaseNotes = 'Upgraded to a robust, high-performance event system with full cmdlet support (ShouldProcess), improved parameter validation, and safe-by-default handler iteration.'
             
             # Prerelease string of this module
             Prerelease = ''

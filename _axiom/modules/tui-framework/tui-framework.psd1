@@ -1,15 +1,15 @@
 @{
     # Script module or binary module file associated with this manifest.
-    RootModule = 'logger.psm1'
+    RootModule = 'tui-framework.psm1'
     
     # Version number of this module.
-    ModuleVersion = '1.1.0'
+    ModuleVersion = '2.0.0'
     
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
     
     # ID used to uniquely identify this module
-    GUID = 'c3d4e5f6-a7b8-9012-cdef-345678901234'
+    GUID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
     
     # Author of this module
     Author = 'PMC Terminal Team'
@@ -21,13 +21,18 @@
     Copyright = '(c) 2025 PMC Terminal. All rights reserved.'
     
     # Description of the functionality provided by this module
-    Description = 'A robust, high-performance logging system for the PMC Terminal application, featuring granular tracing, structured data logging, automatic log rotation, and full cmdlet best practice support.'
+    Description = 'PMC Terminal AXIOM Module: Provides the TuiFrameworkService for lightweight asynchronous task management and core TUI engine interaction, designed for the class-based Axiom-Phoenix architecture.'
     
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion = '7.0'
     
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules = @()
+    RequiredModules = @(
+        @{
+            ModuleName = 'ThreadJob'
+            ModuleVersion = '2.0.0' # Specify a version for the dependency
+        }
+    )
     
     # Assemblies that must be loaded prior to importing this module
     RequiredAssemblies = @()
@@ -43,22 +48,7 @@
     
     # Functions to export from this module
     FunctionsToExport = @(
-        'Initialize-Logger',
-        'Write-Log',
-        'Trace-FunctionEntry',
-        'Trace-FunctionExit',
-        'Trace-Step',
-        'Trace-StateChange',
-        'Trace-ComponentLifecycle',
-        'Trace-ServiceCall',
-        'Get-LogEntries',
-        'Get-CallTrace',
-        'Clear-LogQueue',
-        'Set-LogLevel',
-        'Enable-CallTracing',
-        'Disable-CallTracing',
-        'Get-LogPath',
-        'Get-LogStatistics'
+        'Initialize-TuiFrameworkService'
     )
     
     # Cmdlets to export from this module
@@ -74,13 +64,13 @@
     DscResourcesToExport = @()
     
     # List of all files packaged with this module
-    FileList = @('logger.psm1', 'logger.psd1', 'README.md')
+    FileList = @('tui-framework.psm1', 'tui-framework.psd1', 'README.md')
     
     # Private data to pass to the module specified in RootModule/ModuleToProcess.
     PrivateData = @{
         PSData = @{
             # Tags applied to this module for online gallery discoverability
-            Tags = @('PMCTerminal', 'Logging', 'PowerShell7', 'Diagnostics', 'Tracing', 'StructuredLogging')
+            Tags = @('PMCTerminal', 'Framework', 'TUI', 'Async', 'ThreadJob', 'Service')
             
             # A URL to the main website for this project
             ProjectUri = ''
@@ -89,7 +79,7 @@
             IconUri = ''
             
             # ReleaseNotes of this module
-            ReleaseNotes = 'Upgraded to a more robust logging system with stricter parameter validation, improved caller context detection, and enhanced exception serialization. Clear-LogQueue now supports ShouldProcess (-WhatIf/-Confirm).'
+            ReleaseNotes = 'Major refactor to a service-based architecture (TuiFrameworkService). Replaced heavy process-based jobs with lightweight thread jobs for async tasks. Removed obsolete Invoke-TuiMethod function.'
             
             # Prerelease string of this module
             Prerelease = ''

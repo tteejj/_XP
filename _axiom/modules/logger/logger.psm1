@@ -8,138 +8,581 @@
 # ------------------------------------------------------------------------------
 $script:LogPath = $null
 $script:LogLevel = "Info" # Default log level.
-$script:LogQueue = [System.Collections.Generic.List[object]]::new()
-$script:MaxLogSize = 5MB
-$script:LogInitialized = $false
-$script:CallDepth = 0
-$script:TraceAllCalls = $false
+$script:LogQueue = [System.Collections.Generic.List[object]]::new() # In-memory log buffer
+$script:MaxLogSize = 5MB # Maximum size for a log file before rolling
+$script:LogInitialized = $false # Flag to ensure logger is ready
+$script:CallDepth = 0 # Used for tracing function call depth
+$script:TraceAllCalls = $false # Flag to enable/disable extensive call tracing
 
 # ------------------------------------------------------------------------------
 # Private Helper Functions
 # ------------------------------------------------------------------------------
+
+# Converts a complex PowerShell object into a simpler, serializable hashtable or primitive.
+# Handles common types, circular references, and limits recursion/array size to prevent huge log data.
 function ConvertTo-SerializableObject {
-    param([object]$Object)
+    param(
+        [Parameter(Mandatory)][object]$Object # The object to convert
+    )
+
     if ($null -eq $Object) { return $null }
+
+    # Keep track of visited objects to prevent infinite loops from circular references.
     $visited = New-Object 'System.Collections.Generic.HashSet[object]'
+
+    # Internal recursive function to perform the conversion.
     function Convert-Internal {
-        param([object]$InputObject, [int]$Depth)
-        if ($null -eq $InputObject -or $Depth -gt 5) { return $null }
-        if ($InputObject -is [System.Management.Automation.ScriptBlock]) { return '<ScriptBlock>' }
-        if ($visited.Contains($InputObject)) { return '<CircularReference>' }
-        if (-not $InputObject.GetType().IsValueType -and -not ($InputObject -is [string])) { [void]$visited.Add($InputObject) }
+        param(
+            [Parameter(Mandatory)][object]$InputObject, # Current object to convert
+            [int]$Depth # Current recursion depth
+        )
+
+        # Base cases for recursion and known non-serializable types.
+        if ($null -eq $InputObject) { return $null }
+        if ($Depth -gt 5) { return '<MaxDepthExceeded>' } # Limit recursion depth
+        if ($InputObject -is [System.Management.Automation.ScriptBlock]) { return '<ScriptBlock>' } # Represent script blocks as string
+        
+        # Detect and handle circular references.
+        if (-not $InputObject.GetType().IsValueType -and -not ($InputObject -is [string])) {
+            if ($visited.Contains($InputObject)) { return '<CircularReference>' }
+            [void]$visited.Add($InputObject) # Mark as visited
+        }
+        
+        # Convert based on object type.
         switch ($InputObject.GetType().Name) {
-            'Hashtable' { $r = @{}; foreach ($k in $InputObject.Keys) { try { $r[$k] = Convert-Internal $InputObject[$k] ($Depth+1) } catch { $r[$k] = "<Err>" } }; return $r }
-            'PSCustomObject' { $r = @{}; foreach ($p in $InputObject.PSObject.Properties) { try { if ($p.MemberType -ne 'ScriptMethod') { $r[$p.Name] = Convert-Internal $p.Value ($Depth+1) } } catch { $r[$p.Name] = "<Err>" } }; return $r }
-            'Object[]' { $r = @(); for ($i=0; $i -lt [Math]::Min($InputObject.Count,10); $i++) { try { $r += Convert-Internal $InputObject[$i] ($Depth+1) } catch { $r += "<Err>" } }; if($InputObject.Count -gt 10) { $r += "<...>" }; return $r }
-            default { try { if ($InputObject -is [ValueType] -or $InputObject -is [string] -or $InputObject -is [datetime]) { return $InputObject } else { return $InputObject.ToString() } } catch { return "<Err>" } }
+            'Hashtable' {
+                $r = @{}
+                foreach ($k in $InputObject.Keys) {
+                    try { $r[$k] = Convert-Internal $InputObject[$k] ($Depth+1) }
+                    catch { $r[$k] = "<Err: $($_.Exception.Message)>" }
+                }
+                return $r
+            }
+            'PSCustomObject' {
+                $r = @{}
+                foreach ($p in $InputObject.PSObject.Properties) {
+                    try {
+                        if ($p.MemberType -ne 'ScriptMethod') { # Exclude script methods to avoid serialization issues
+                            $r[$p.Name] = Convert-Internal $p.Value ($Depth+1)
+                        }
+                    } catch { $r[$p.Name] = "<Err: $($_.Exception.Message)>" }
+                }
+                return $r
+            }
+            'Object[]' {
+                $r = [System.Collections.Generic.List[object]]::new() # Use List for efficient adding
+                for ($i=0; $i -lt [Math]::Min($InputObject.Count,10); $i++) { # Limit array elements to 10
+                    try { [void]$r.Add((Convert-Internal $InputObject[$i] ($Depth+1))) }
+                    catch { [void]$r.Add("<Err: $($_.Exception.Message)>") }
+                }
+                if($InputObject.Count -gt 10) { [void]$r.Add("<...>") } # Indicate truncation
+                return $r.ToArray()
+            }
+            default {
+                # Return value types, strings, and DateTime directly. For others, try ToString().
+                try {
+                    if ($InputObject -is [ValueType] -or $InputObject -is [string] -or $InputObject -is [datetime]) {
+                        return $InputObject
+                    } else {
+                        return $InputObject.ToString()
+                    }
+                } catch {
+                    return "<Err: $($_.Exception.Message)>" # Return error if ToString() fails
+                }
+            }
         }
     }
+    
+    # Start the recursive conversion process.
     return Convert-Internal -InputObject $Object -Depth 0
 }
 
 # ------------------------------------------------------------------------------
 # Public Functions
 # ------------------------------------------------------------------------------
+
 function Initialize-Logger {
+    <#
+    .SYNOPSIS
+    Initializes the logger configuration, setting up log file path and minimum log level.
+    .PARAMETER LogDirectory
+    The directory where log files will be stored. Defaults to a 'PMCTerminal' folder in TEMP.
+    .PARAMETER LogFileName
+    The naming convention for log files. Defaults to 'pmc_terminal_YYYY-MM-DD.log'.
+    .PARAMETER Level
+    The minimum log level to capture. Messages below this level will be ignored.
+    Valid levels: Debug, Verbose, Info, Warning, Error, Fatal, Trace.
+    #>
     [CmdletBinding()]
     param(
+        [ValidateNotNullOrEmpty()]
         [string]$LogDirectory = (Join-Path $env:TEMP "PMCTerminal"),
+        
+        [ValidateNotNullOrEmpty()]
         [string]$LogFileName = "pmc_terminal_{0:yyyy-MM-dd}.log" -f (Get-Date),
+        
+        [Parameter(Mandatory)]
         [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")]
-        [string]$Level = "Debug"
+        [string]$Level = "Info"
     )
-    if ([string]::IsNullOrWhiteSpace($LogDirectory) -or [string]::IsNullOrWhiteSpace($LogFileName)) { Write-Warning "Invalid logger parameters."; return }
+
     try {
-        if (-not (Test-Path $LogDirectory)) { New-Item -ItemType Directory -Path $LogDirectory -Force -ErrorAction Stop | Out-Null }
+        if (-not (Test-Path $LogDirectory)) {
+            # Use ErrorAction Stop to ensure directory creation failures are caught by the try/catch.
+            New-Item -ItemType Directory -Path $LogDirectory -Force -ErrorAction Stop | Out-Null
+        }
         $script:LogPath = Join-Path $LogDirectory $LogFileName
         $script:LogLevel = $Level
         $script:LogInitialized = $true
-        Write-Log -Level Info -Message "Logger initialized" -Data @{ LogPath = $script:LogPath; PowerShellVersion = $PSVersionTable.PSVersion.ToString(); OS = $PSVersionTable.OS; PID = $PID } -Force
-    } catch { Write-Warning "Failed to initialize logger: $_"; $script:LogInitialized = $false }
+        
+        # Log initialization message using Write-Log itself, forcing it to be written.
+        Write-Log -Level Info -Message "Logger initialized" -Data @{
+            LogPath = $script:LogPath;
+            LogLevel = $script:LogLevel;
+            PowerShellVersion = $PSVersionTable.PSVersion.ToString();
+            OS = $PSVersionTable.OS;
+            PID = $PID
+        } -Force
+    } catch {
+        # Log initialization failures using Write-Warning.
+        Write-Warning "Failed to initialize logger: $($_.Exception.Message)"
+        $script:LogInitialized = $false # Ensure flag is reset on failure
+    }
 }
 
 function Write-Log {
+    <#
+    .SYNOPSIS
+    Writes a log entry with a specified level, message, and optional data.
+    .DESCRIPTION
+    Log entries are added to an in-memory queue and, if configured, appended to a file.
+    The function respects the configured global log level.
+    .PARAMETER Level
+    The severity level of the log entry. Valid levels: Debug, Verbose, Info, Warning, Error, Fatal, Trace.
+    .PARAMETER Message
+    The primary text message of the log entry.
+    .PARAMETER Data
+    Optional, additional structured data to include with the log entry. Can be any PowerShell object,
+    which will be converted to a serializable format (hashtable, PSCustomObject, array, etc.).
+    If an Exception object, it is specially formatted.
+    .PARAMETER Force
+    If specified, the log entry will be written regardless of whether the logger is initialized or
+    if its level is below the configured minimum log level. Useful for critical startup/shutdown messages.
+    #>
     [CmdletBinding()]
     param(
-        [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")] [string]$Level = "Info",
-        [Parameter(Mandatory)] [string]$Message,
-        [object]$Data,
+        [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")]
+        [string]$Level = "Info",
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Message,
+        
+        [object]$Data, # Allow any object type for data
+        
         [switch]$Force
     )
+    
+    # Early exit if logger is not initialized and 'Force' is not specified.
     if (-not $script:LogInitialized -and -not $Force) { return }
+
+    # Define log level priorities.
     $levelPriority = @{ Debug=0; Trace=0; Verbose=1; Info=2; Warning=3; Error=4; Fatal=5 }
+
+    # Check if the current log entry's level is high enough to be processed.
     if (-not $Force -and $levelPriority[$Level] -lt $levelPriority[$script:LogLevel]) { return }
+
     try {
+        # Get caller information from the PowerShell call stack.
+        # [1] is typically the direct caller of Write-Log.
         $caller = (Get-PSCallStack)[1]
+        
+        # Initialize the log context hashtable with core information.
         $logContext = @{
-            Timestamp = (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"); Level = $Level; ThreadId = [System.Threading.Thread]::CurrentThread.ManagedThreadId
-            CallDepth = $script:CallDepth; Message = $Message; Caller = @{ Command = $caller.Command; Location = $caller.Location; ScriptName = $caller.ScriptName; LineNumber = $caller.ScriptLineNumber }
+            Timestamp = (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff");
+            Level = $Level;
+            ThreadId = [System.Threading.Thread]::CurrentThread.ManagedThreadId;
+            CallDepth = $script:CallDepth;
+            Message = $Message;
+            Caller = @{
+                Command = $caller.Command;
+                Location = $caller.Location;
+                ScriptName = $caller.ScriptName;
+                LineNumber = $caller.ScriptLineNumber;
+            }
         }
-        if ($PSBoundParameters.ContainsKey('Data')) { $logContext.UserData = if ($Data -is [Exception]) { @{ Type="Exception"; Message=$Data.Message; StackTrace=$Data.StackTrace; InnerException=$Data.InnerException.Message } } else { ConvertTo-SerializableObject -Object $Data } }
-        $indent = "  " * $script:CallDepth
-        $callerInfo = if ($caller.ScriptName) { "$([System.IO.Path]::GetFileName($caller.ScriptName)):$($caller.ScriptLineNumber)" } else { $caller.Command }
+        
+        # Add UserData to logContext if the 'Data' parameter was provided.
+        if ($PSBoundParameters.ContainsKey('Data')) {
+            # Special handling for Exception objects for better error logging.
+            $logContext.UserData = if ($Data -is [Exception]) {
+                # Recursively extract inner exceptions for comprehensive error data.
+                $innerExceptions = [System.Collections.Generic.List[object]]::new()
+                $currentInner = $Data.InnerException
+                while ($currentInner) {
+                    [void]$innerExceptions.Add(@{ Message = $currentInner.Message; Type = $currentInner.GetType().FullName; StackTrace = $currentInner.StackTrace })
+                    $currentInner = $currentInner.InnerException
+                }
+                @{
+                    Type = $Data.GetType().FullName;
+                    Message = $Data.Message;
+                    StackTrace = $Data.StackTrace;
+                    TargetSite = $Data.TargetSite.Name;
+                    InnerExceptions = $innerExceptions.ToArray()
+                }
+            } else {
+                # Convert other data objects to a serializable format.
+                ConvertTo-SerializableObject -Object $Data
+            }
+
+            # If the original Data parameter contained a 'Component' property, promote it to top-level Caller context.
+            # This is specifically for integration with Invoke-WithErrorHandling in the monolith.
+            if ($Data -is [hashtable] -and $Data.ContainsKey('Component')) {
+                $logContext.Caller.Command = $Data.Component # Override command with provided component name
+                $logContext.Caller.Location = "" # Clear specific location if component name is provided
+                $logContext.Caller.ScriptName = ""
+                $logContext.Caller.LineNumber = 0
+            }
+            elseif ($logContext.UserData -is [hashtable] -and $logContext.UserData.ContainsKey('Component')) {
+                 $logContext.Caller.Command = $logContext.UserData.Component # If Component is nested in UserData
+                 $logContext.Caller.Location = ""
+                 $logContext.Caller.ScriptName = ""
+                 $logContext.Caller.LineNumber = 0
+            }
+        }
+
+        # Format the log entry string for console and file output.
+        $indent = "  " * $script:CallDepth # Visual indentation for call tracing
+        $callerInfo = if ($logContext.Caller.ScriptName) {
+            "$([System.IO.Path]::GetFileName($logContext.Caller.ScriptName)):$($logContext.Caller.LineNumber)"
+        } elseif ($logContext.Caller.Command) {
+            $logContext.Caller.Command
+        } else {
+            "UnknownCaller"
+        }
+        
         $logEntry = "$($logContext.Timestamp) [$($Level.PadRight(7))] $indent [$callerInfo] $Message"
-        if ($PSBoundParameters.ContainsKey('Data')) { $logEntry += if ($Data -is [Exception]) { "`n${indent}  Exception: $($Data.Message)`n${indent}  StackTrace: $($Data.StackTrace)" } else { try { "`n${indent}  Data: $(ConvertTo-SerializableObject -Object $Data | ConvertTo-Json -Compress -Depth 4 -WarningAction SilentlyContinue)" } catch { "`n${indent}  Data: $($Data.ToString())" } } }
+        
+        # Append serialized data to the log entry string if available.
+        if ($PSBoundParameters.ContainsKey('Data')) {
+            if ($Data -is [Exception]) {
+                $logEntry += "`n${indent}  Exception: $($Data.Message)`n${indent}  StackTrace: $($Data.StackTrace)"
+                if ($Data.InnerException) { $logEntry += "`n${indent}  InnerException: $($Data.InnerException.Message)" }
+            } else {
+                try {
+                    # Convert UserData to JSON for structured logging output.
+                    $logEntry += "`n${indent}  Data: $(ConvertTo-SerializableObject -Object $Data | ConvertTo-Json -Compress -Depth 4 -WarningAction SilentlyContinue)"
+                } catch {
+                    # Fallback if JSON conversion fails.
+                    $logEntry += "`n${indent}  Data: $($Data.ToString()) (JSON conversion failed: $($_.Exception.Message))"
+                }
+            }
+        }
+        
+        # Add the full log context object to the in-memory queue.
         $script:LogQueue.Add($logContext)
-        if ($script:LogQueue.Count -gt 2000) { $script:LogQueue.RemoveRange(0, 1000) }
+        
+        # Manage the size of the in-memory log queue.
+        if ($script:LogQueue.Count -gt 2000) {
+            $script:LogQueue.RemoveRange(0, 1000) # Remove oldest 1000 entries efficiently
+        }
+        
+        # Write to log file if a path is configured.
         if ($script:LogPath) {
             try {
-                if ((Test-Path $script:LogPath) -and (Get-Item $script:LogPath).Length -gt $script:MaxLogSize) { Move-Item $script:LogPath ($script:LogPath -replace '\.log$', "_$(Get-Date -Format 'yyyyMMdd_HHmmss').log") -Force }
+                # Implement log file rolling: if file exceeds MaxLogSize, rename it.
+                if ((Test-Path $script:LogPath) -and (Get-Item $script:LogPath).Length -gt $script:MaxLogSize) {
+                    $newLogFileName = ($script:LogPath -replace '\.log$', "_$(Get-Date -Format 'yyyyMMdd_HHmmss').log")
+                    Move-Item -Path $script:LogPath -Destination $newLogFileName -Force -ErrorAction SilentlyContinue
+                    Write-Host "Log file '$([System.IO.Path]::GetFileName($script:LogPath))' rolled to '$([System.IO.Path]::GetFileName($newLogFileName))'." -ForegroundColor DarkYellow
+                }
                 Add-Content -Path $script:LogPath -Value $logEntry -Encoding UTF8 -Force
-            } catch { Write-Host "LOG WRITE FAILED: $logEntry`nError: $_" -ForegroundColor Yellow }
+            } catch {
+                # Critical: If log file write fails, log to console directly.
+                Write-Host "LOG FILE WRITE FAILED FOR '$($script:LogPath)': $logEntry`nError: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
         }
-        if ($Level -in @('Error', 'Fatal', 'Warning')) { Write-Host $logEntry -ForegroundColor ($Level -in @('Error', 'Fatal') ? 'Red' : 'Yellow') }
-    } catch { try { $errorEntry = "$(Get-Date -Format 'o') [LOGGER ERROR] Failed to log: $_"; if ($script:LogPath) { Add-Content -Path $script:LogPath -Value $errorEntry -Encoding UTF8 }; Write-Host $errorEntry -ForegroundColor Red } catch { Write-Host "CRITICAL: Logger failed: $_" -ForegroundColor Red } }
+        
+        # Output to console for certain log levels for immediate feedback.
+        if ($Level -in @('Error', 'Fatal')) {
+            Write-Host $logEntry -ForegroundColor Red
+        } elseif ($Level -eq 'Warning') {
+            Write-Host $logEntry -ForegroundColor Yellow
+        }
+
+    } catch {
+        # CRITICAL: Last-ditch error handling if Write-Log itself fails.
+        try {
+            $errorEntry = "$(Get-Date -Format 'o') [CRITICAL LOGGER ERROR] Failed to log: $($_.Exception.Message)"
+            if ($script:LogPath) { Add-Content -Path $script:LogPath -Value $errorEntry -Encoding UTF8 -Force }
+            Write-Host $errorEntry -ForegroundColor Red
+        } catch {
+            Write-Host "CRITICAL: Logger failed completely, cannot log its own failure: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
 }
 
-function Trace-FunctionEntry { [CmdletBinding()] param([string]$FunctionName, [object]$Parameters); if (-not $script:TraceAllCalls) { return }; $script:CallDepth++; Write-Log -Level Trace -Message "ENTER: $FunctionName" -Data @{ Parameters=$Parameters; Action="FunctionEntry" } }
-function Trace-FunctionExit { [CmdletBinding()] param([string]$FunctionName, [object]$ReturnValue, [switch]$WithError); if (-not $script:TraceAllCalls) { return }; Write-Log -Level Trace -Message "EXIT: $FunctionName" -Data @{ ReturnValue=$ReturnValue; Action=($WithError ? "FunctionExitWithError" : "FunctionExit"); HasError=$WithError.IsPresent }; $script:CallDepth = [Math]::Max(0, $script:CallDepth - 1) }
-function Trace-Step { [CmdletBinding()] param([string]$StepName, [object]$StepData, [string]$Module); $caller = (Get-PSCallStack)[1]; $moduleInfo = $Module ?? ($caller.ScriptName ? [System.IO.Path]::GetFileNameWithoutExtension($caller.ScriptName) : "Unknown"); Write-Log -Level Debug -Message "STEP: $StepName" -Data @{ StepData=$StepData; Module=$moduleInfo; Action="Step" } }
-function Trace-StateChange { [CmdletBinding()] param([string]$StateType, [object]$OldValue, [object]$NewValue, [string]$PropertyPath); Write-Log -Level Debug -Message "STATE: $StateType changed" -Data @{ StateType=$StateType; PropertyPath=$PropertyPath; OldValue=$OldValue; NewValue=$NewValue; Action="StateChange" } }
-function Trace-ComponentLifecycle { [CmdletBinding()] param([string]$ComponentType, [string]$ComponentId, [ValidateSet('Create','Initialize','Render','Update','Destroy')] [string]$Phase, [object]$ComponentData); Write-Log -Level Debug -Message "COMPONENT: $ComponentType [$ComponentId] $Phase" -Data @{ ComponentType=$ComponentType; ComponentId=$ComponentId; Phase=$Phase; ComponentData=$ComponentData; Action="ComponentLifecycle" } }
-function Trace-ServiceCall { [CmdletBinding()] param([string]$ServiceName, [string]$MethodName, [object]$Parameters, [object]$Result, [switch]$IsError); Write-Log -Level Debug -Message "SERVICE: $ServiceName.$MethodName" -Data @{ ServiceName=$ServiceName; MethodName=$MethodName; Parameters=$Parameters; Result=$Result; Action=($IsError ? "ServiceCallError" : "ServiceCall"); IsError=$IsError.IsPresent } }
+function Trace-FunctionEntry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$FunctionName,
+        [object]$Parameters
+    )
+    if (-not $script:TraceAllCalls) { return }
+    $script:CallDepth++; # Increment call depth before logging
+    Write-Log -Level Trace -Message "ENTER: $FunctionName" -Data @{ Parameters = ConvertTo-SerializableObject $Parameters; Action = "FunctionEntry" }
+}
+
+function Trace-FunctionExit {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$FunctionName,
+        [object]$ReturnValue,
+        [switch]$WithError
+    )
+    if (-not $script:TraceAllCalls) { return }
+    # Decrement call depth after logging
+    $script:CallDepth = [Math]::Max(0, $script:CallDepth - 1)
+    Write-Log -Level Trace -Message "EXIT: $FunctionName" -Data @{ ReturnValue = ConvertTo-SerializableObject $ReturnValue; Action = ($WithError ? "FunctionExitWithError" : "FunctionExit"); HasError = $WithError.IsPresent }
+}
+
+function Trace-Step {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$StepName,
+        [object]$StepData,
+        [string]$Module # Optional module name for categorization
+    )
+    $caller = (Get-PSCallStack)[1] # Get immediate caller for context
+    $moduleInfo = $Module ?? ($caller.ScriptName ? [System.IO.Path]::GetFileNameWithoutExtension($caller.ScriptName) : "Unknown");
+    Write-Log -Level Debug -Message "STEP: $StepName" -Data @{ StepData = ConvertTo-SerializableObject $StepData; Module = $moduleInfo; Action = "Step" }
+}
+
+function Trace-StateChange {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$StateType,
+        [object]$OldValue,
+        [object]$NewValue,
+        [string]$PropertyPath # Path to the changed property (e.g., "Settings.Theme")
+    )
+    Write-Log -Level Debug -Message "STATE: $StateType changed" -Data @{ StateType = $StateType; PropertyPath = $PropertyPath; OldValue = ConvertTo-SerializableObject $OldValue; NewValue = ConvertTo-SerializableObject $NewValue; Action = "StateChange" }
+}
+
+function Trace-ComponentLifecycle {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ComponentType,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ComponentId,
+        [Parameter(Mandatory)][ValidateSet('Create','Initialize','Render','Update','Destroy')][string]$Phase,
+        [object]$ComponentData
+    )
+    Write-Log -Level Debug -Message "COMPONENT: $ComponentType [$ComponentId] $Phase" -Data @{ ComponentType = $ComponentType; ComponentId = $ComponentId; Phase = $Phase; ComponentData = ConvertTo-SerializableObject $ComponentData; Action = "ComponentLifecycle" }
+}
+
+function Trace-ServiceCall {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ServiceName,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$MethodName,
+        [object]$Parameters,
+        [object]$Result,
+        [switch]$IsError
+    )
+    Write-Log -Level Debug -Message "SERVICE: $ServiceName.$MethodName" -Data @{ ServiceName = $ServiceName; MethodName = $MethodName; Parameters = ConvertTo-SerializableObject $Parameters; Result = ConvertTo-SerializableObject $Result; Action = ($IsError ? "ServiceCallError" : "ServiceCall"); IsError = $IsError.IsPresent }
+}
 
 function Get-LogEntries {
+    <#
+    .SYNOPSIS
+    Retrieves entries from the in-memory log queue.
+    .PARAMETER Count
+    The maximum number of log entries to retrieve. Defaults to 100.
+    .PARAMETER Level
+    Optional. Filters entries by log level (e.g., "Error", "Debug").
+    .PARAMETER Module
+    Optional. Filters entries by the script name (or module name) of the caller. Supports wildcard matching.
+    .PARAMETER Action
+    Optional. Filters entries by the 'Action' property in their UserData (common in trace functions).
+    #>
     [CmdletBinding()]
-    param([int]$Count = 100, [string]$Level, [string]$Module, [string]$Action)
+    param(
+        [int]$Count = 100,
+        [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")][string]$Level,
+        [string]$Module,
+        [string]$Action
+    )
     try {
+        # Take a snapshot of the log queue for safe iteration.
         $entries = $script:LogQueue.ToArray()
+        
+        # Apply filters if specified.
         if ($Level) { $entries = $entries | Where-Object { $_.Level -eq $Level } }
         if ($Module) { $entries = $entries | Where-Object { $_.Caller.ScriptName -and ([System.IO.Path]::GetFileNameWithoutExtension($_.Caller.ScriptName) -like "*$Module*") } }
         if ($Action) { $entries = $entries | Where-Object { $_.UserData.Action -eq $Action } }
+        
+        # Return the requested number of most recent entries.
         return $entries | Select-Object -Last $Count
-    } catch { Write-Warning "Error getting log entries: $_"; return @() }
+    } catch {
+        Write-Warning "Error getting log entries: $($_.Exception.Message)"
+        return @() # Return empty array on error
+    }
 }
 
 function Get-CallTrace {
+    <#
+    .SYNOPSIS
+    Retrieves a portion of the current PowerShell call stack.
+    .PARAMETER Depth
+    The maximum depth of the call stack to retrieve. Defaults to 10.
+    #>
     [CmdletBinding()]
-    param([int]$Depth = 10)
+    param(
+        [int]$Depth = 10
+    )
     try {
-        $callStack = Get-PSCallStack; $trace = @()
-        for ($i = 1; $i -lt [Math]::Min($callStack.Count, $Depth + 1); $i++) { $call = $callStack[$i]; $trace += @{ Level=$i-1; Command=$call.Command; Location=$call.Location; ScriptName=$call.ScriptName; LineNumber=$call.ScriptLineNumber } }
-        return $trace
-    } catch { Write-Warning "Error getting call trace: $_"; return @() }
+        $callStack = Get-PSCallStack
+        $trace = [System.Collections.Generic.List[object]]::new() # Use List for efficient adding
+        
+        # Start from index 1 to exclude Get-CallTrace itself from the trace.
+        for ($i = 1; $i -lt [Math]::Min($callStack.Count, $Depth + 1); $i++) {
+            $call = $callStack[$i]
+            [void]$trace.Add(@{
+                Level = $i - 1; # Adjust level to be 0-based relative to the caller
+                Command = $call.Command;
+                Location = $call.Location;
+                ScriptName = $call.ScriptName;
+                LineNumber = $call.ScriptLineNumber
+            })
+        }
+        return $trace.ToArray()
+    } catch {
+        Write-Warning "Error getting call trace: $($_.Exception.Message)"
+        return @()
+    }
 }
 
-function Clear-LogQueue { try { $script:LogQueue.Clear(); Write-Log -Level Info -Message "In-memory log queue cleared" } catch { Write-Warning "Error clearing log queue: $_" } }
-function Set-LogLevel { [CmdletBinding()] param([Parameter(Mandatory)] [ValidateSet("Debug","Verbose","Info","Warning","Error","Fatal","Trace")] [string]$Level); try { $oldLevel = $script:LogLevel; $script:LogLevel = $Level; Write-Log -Level Info -Message "Log level changed from '$oldLevel' to '$Level'" -Force } catch { Write-Warning "Error setting log level to '$Level': $_" } }
-function Enable-CallTracing { $script:TraceAllCalls = $true; Write-Log -Level Info -Message "Call tracing enabled" -Force }
-function Disable-CallTracing { $script:TraceAllCalls = $false; Write-Log -Level Info -Message "Call tracing disabled" -Force }
-function Get-LogPath { return $script:LogPath }
+function Clear-LogQueue {
+    <#
+    .SYNOPSIS
+    Clears all entries from the in-memory log queue.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess("in-memory log queue", "Clear")) {
+        try {
+            $script:LogQueue.Clear() # Clear the List efficiently
+            Write-Verbose "In-memory log queue cleared."
+        } catch {
+            Write-Warning "Error clearing log queue: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Set-LogLevel {
+    <#
+    .SYNOPSIS
+    Sets the minimum log level for the logger.
+    .PARAMETER Level
+    The new minimum log level. Valid levels: Debug, Verbose, Info, Warning, Error, Fatal, Trace.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet("Debug","Verbose","Info","Warning","Error","Fatal","Trace")]
+        [string]$Level
+    )
+    try {
+        $oldLevel = $script:LogLevel
+        $script:LogLevel = $Level
+        Write-Log -Level Info -Message "Log level changed from '$oldLevel' to '$Level'" -Force
+        Write-Verbose "Log level set to '$Level'."
+    } catch {
+        Write-Warning "Error setting log level to '$Level': $($_.Exception.Message)"
+    }
+}
+
+function Enable-CallTracing {
+    <#
+    .SYNOPSIS
+    Enables extensive function call tracing.
+    #>
+    [CmdletBinding()]
+    param()
+    $script:TraceAllCalls = $true
+    Write-Log -Level Info -Message "Call tracing enabled" -Force
+}
+
+function Disable-CallTracing {
+    <#
+    .SYNOPSIS
+    Disables extensive function call tracing.
+    #>
+    [CmdletBinding()]
+    param()
+    $script:TraceAllCalls = $false
+    $script:CallDepth = 0 # Reset call depth
+    Write-Log -Level Info -Message "Call tracing disabled" -Force
+}
+
+function Get-LogPath {
+    <#
+    .SYNOPSIS
+    Gets the current path of the log file.
+    #>
+    [CmdletBinding()]
+    param()
+    return $script:LogPath
+}
 
 function Get-LogStatistics {
+    <#
+    .SYNOPSIS
+    Retrieves various statistics about the in-memory log queue and logger configuration.
+    #>
     [CmdletBinding()]
     param()
     try {
-        $stats = [PSCustomObject]@{ TotalEntries=$script:LogQueue.Count; LogPath=$script:LogPath; LogLevel=$script:LogLevel; CallTracingEnabled=$script:TraceAllCalls; LogFileSize=($script:LogPath -and (Test-Path $script:LogPath) ? (Get-Item $script:LogPath).Length : 0); EntriesByLevel=@{}; EntriesByModule=@{}; EntriesByAction=@{} }
-        foreach ($entry in $script:LogQueue) {
-            $level = $entry.Level; if (-not $stats.EntriesByLevel.ContainsKey($level)) { $stats.EntriesByLevel[$level]=0 }; $stats.EntriesByLevel[$level]++
-            if ($entry.Caller.ScriptName) { $module = [System.IO.Path]::GetFileNameWithoutExtension($entry.Caller.ScriptName); if (-not $stats.EntriesByModule.ContainsKey($module)) { $stats.EntriesByModule[$module]=0 }; $stats.EntriesByModule[$module]++ }
-            if ($entry.UserData.Action) { $action = $entry.UserData.Action; if (-not $stats.EntriesByAction.ContainsKey($action)) { $stats.EntriesByAction[$action]=0 }; $stats.EntriesByAction[$action]++ }
+        $stats = [PSCustomObject]@{
+            TotalEntries = $script:LogQueue.Count;
+            LogPath = $script:LogPath;
+            LogLevel = $script:LogLevel;
+            CallTracingEnabled = $script:TraceAllCalls;
+            LogFileSize = ($script:LogPath -and (Test-Path $script:LogPath) ? (Get-Item $script:LogPath).Length : 0);
+            EntriesByLevel = @{};
+            EntriesByModule = @{};
+            EntriesByAction = @{}
         }
+        
+        # Populate statistics by iterating through the log queue.
+        foreach ($entry in $script:LogQueue) {
+            # Count by Level
+            $level = $entry.Level;
+            if (-not $stats.EntriesByLevel.ContainsKey($level)) { $stats.EntriesByLevel[$level]=0 }
+            $stats.EntriesByLevel[$level]++
+
+            # Count by Module (derived from ScriptName)
+            if ($entry.Caller.ScriptName) {
+                $module = [System.IO.Path]::GetFileNameWithoutExtension($entry.Caller.ScriptName);
+                if (-not $stats.EntriesByModule.ContainsKey($module)) { $stats.EntriesByModule[$module]=0 }
+                $stats.EntriesByModule[$module]++
+            }
+
+            # Count by Action (from UserData)
+            if ($entry.UserData -is [hashtable] -and $entry.UserData.ContainsKey('Action')) {
+                $action = $entry.UserData.Action;
+                if (-not $stats.EntriesByAction.ContainsKey($action)) { $stats.EntriesByAction[$action]=0 }
+                $stats.EntriesByAction[$action]++
+            }
+        }
+        Write-Verbose "Retrieved logger statistics."
         return $stats
-    } catch { Write-Warning "Error getting log statistics: $_"; return [PSCustomObject]@{} }
+    } catch {
+        Write-Warning "Error getting log statistics: $($_.Exception.Message)"
+        return [PSCustomObject]@{} # Return empty object on error
+    }
 }
 
-# Export all public functions
+# Export all public functions, making them available when the module is imported.
 Export-ModuleMember -Function Initialize-Logger, Write-Log, Trace-FunctionEntry, Trace-FunctionExit, Trace-Step, Trace-StateChange, Trace-ComponentLifecycle, Trace-ServiceCall, Get-LogEntries, Get-CallTrace, Clear-LogQueue, Set-LogLevel, Enable-CallTracing, Disable-CallTracing, Get-LogPath, Get-LogStatistics
