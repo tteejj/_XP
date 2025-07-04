@@ -20,7 +20,7 @@ class NavigationItem {
     [bool]$Visible = $true
     [string]$Description = ""
 
-    NavigationItem([Parameter(Mandatory)][string]$key, [Parameter(Mandatory)][string]$label, [Parameter(Mandatory)][scriptblock]$action) {
+    NavigationItem([string]$key, [string]$label, [scriptblock]$action) {
         if ([string]::IsNullOrWhiteSpace($key)) {
             throw [System.ArgumentException]::new("Navigation key cannot be null or empty")
         }
@@ -64,7 +64,7 @@ class NavigationMenu : UIElement {
     [string]$Separator = " | "
     [int]$SelectedIndex = 0
 
-    NavigationMenu([Parameter(Mandatory)][string]$name) : base($name) {
+    NavigationMenu([string]$name) : base($name) {
         $this.Items = [System.Collections.Generic.List[NavigationItem]]::new()
         $this.IsFocusable = $true
         $this.Width = 20
@@ -72,7 +72,7 @@ class NavigationMenu : UIElement {
         Write-Verbose "NavigationMenu: Constructor called for '$($this.Name)'"
     }
 
-    [void] AddItem([Parameter(Mandatory)][NavigationItem]$item) {
+    [void] AddItem([NavigationItem]$item) {
         try {
             if (-not $item) {
                 throw [System.ArgumentNullException]::new("item")
@@ -107,8 +107,9 @@ class NavigationMenu : UIElement {
         }
     }
 
-    [void] RemoveItem([Parameter(Mandatory)][string]$key) {
+    [void] RemoveItem([string]$key) {
         try {
+            if ([string]::IsNullOrWhiteSpace($key)) { return }
             $item = $this.Items | Where-Object { $_.Key -eq $key.ToUpper() }
             if ($item) {
                 $this.Items.Remove($item)
@@ -127,7 +128,8 @@ class NavigationMenu : UIElement {
         }
     }
 
-    [NavigationItem] GetItem([Parameter(Mandatory)][string]$key) {
+    [NavigationItem] GetItem([string]$key) {
+        if ([string]::IsNullOrWhiteSpace($key)) { return $null }
         return $this.Items | Where-Object { $_.Key -eq $key.ToUpper() } | Select-Object -First 1
     }
 
@@ -146,8 +148,9 @@ class NavigationMenu : UIElement {
         }
     }
 
-    [void] ExecuteByKey([Parameter(Mandatory)][string]$key) {
+    [void] ExecuteByKey([string]$key) {
         try {
+            if ([string]::IsNullOrWhiteSpace($key)) { return }
             $item = $this.GetItem($key)
             if ($item -and $item.Enabled -and $item.Visible) {
                 $item.Execute()
@@ -320,7 +323,8 @@ class NavigationMenu : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
         try {
             $visibleItems = @($this.Items | Where-Object { $_.Visible })
             if ($visibleItems.Count -eq 0) {

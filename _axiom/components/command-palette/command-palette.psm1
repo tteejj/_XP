@@ -16,7 +16,7 @@ class CommandPalette : UIElement {
     hidden [int] $_scrollOffset
     hidden [string] $_lastQuery
 
-    CommandPalette([Parameter(Mandatory)][object]$actionService) : base("CommandPalette") {
+    CommandPalette([object]$actionService) : base("CommandPalette") {
         if (-not $actionService) {
             throw [System.ArgumentNullException]::new('actionService')
         }
@@ -227,8 +227,9 @@ class CommandPalette : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if (-not $this.Visible) { return $false }
+        if ($null -eq $keyInfo) { return $false }
         
         try {
             # If search box is focused, let it handle character input first

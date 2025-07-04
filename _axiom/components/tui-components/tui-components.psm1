@@ -11,7 +11,7 @@ class LabelComponent : UIElement {
     [string]$Text = ""
     [object]$ForegroundColor
 
-    LabelComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    LabelComponent([string]$name) : base($name) {
         $this.IsFocusable = $false
         $this.Width = 10
         $this.Height = 1
@@ -47,7 +47,7 @@ class ButtonComponent : UIElement {
     [bool]$IsPressed = $false
     [scriptblock]$OnClick
 
-    ButtonComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    ButtonComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 10
         $this.Height = 3
@@ -93,7 +93,8 @@ class ButtonComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
             try {
                 $this.IsPressed = $true
@@ -135,7 +136,7 @@ class TextBoxComponent : UIElement {
     [scriptblock]$OnChange
     hidden [int]$_scrollOffset = 0 # Tracks the start of the visible text window
 
-    TextBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    TextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 20
         $this.Height = 3
@@ -196,7 +197,8 @@ class TextBoxComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         try {
             $currentText = $this.Text ?? ""
             $cursorPos = $this.CursorPosition
@@ -293,7 +295,7 @@ class CheckBoxComponent : UIElement {
     [bool]$Checked = $false
     [scriptblock]$OnChange
 
-    CheckBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    CheckBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 20
         $this.Height = 1
@@ -319,7 +321,8 @@ class CheckBoxComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
             try {
                 $this.Checked = -not $this.Checked
@@ -352,7 +355,7 @@ class RadioButtonComponent : UIElement {
     [string]$GroupName = ""
     [scriptblock]$OnChange
 
-    RadioButtonComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    RadioButtonComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 20
         $this.Height = 1
@@ -378,7 +381,8 @@ class RadioButtonComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
             try {
                 if (-not $this.Selected) {

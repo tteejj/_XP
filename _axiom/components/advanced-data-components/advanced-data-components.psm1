@@ -13,7 +13,11 @@ class TableColumn {
     [object]$Width # Can be [int] or the string 'Auto'
     [string]$Alignment = "Left"
 
-    TableColumn([Parameter(Mandatory)][string]$key, [Parameter(Mandatory)][string]$header, [Parameter(Mandatory)][object]$width) {
+    TableColumn([string]$key, [string]$header, [object]$width) {
+        if ([string]::IsNullOrWhiteSpace($key)) { throw [System.ArgumentException]::new("Parameter 'key' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($header)) { throw [System.ArgumentException]::new("Parameter 'header' cannot be null or empty.") }
+        if ($null -eq $width) { throw [System.ArgumentNullException]::new("width") }
+
         $this.Key = $key
         $this.Header = $header
         $this.Width = $width
@@ -33,7 +37,7 @@ class Table : UIElement {
     [scriptblock]$OnSelectionChanged
     hidden [int]$_scrollOffset = 0 # The index of the first visible row
 
-    Table([Parameter(Mandatory)][string]$name) : base($name) {
+    Table([string]$name) : base($name) {
         $this.Columns = [System.Collections.Generic.List[TableColumn]]::new()
         $this.IsFocusable = $true
         $this.Width = 60
@@ -41,8 +45,9 @@ class Table : UIElement {
         Write-Verbose "Table: Constructor called for '$($this.Name)'"
     }
 
-    [void] SetColumns([Parameter(Mandatory)][TableColumn[]]$columns) {
+    [void] SetColumns([TableColumn[]]$columns) {
         try {
+            if ($null -eq $columns) { throw [System.ArgumentNullException]::new("columns") }
             $this.Columns.Clear()
             foreach ($col in $columns) {
                 $this.Columns.Add($col)
@@ -56,8 +61,9 @@ class Table : UIElement {
         }
     }
 
-    [void] SetData([Parameter(Mandatory)][object[]]$data) {
+    [void] SetData([object[]]$data) {
         try {
+            if ($null -eq $data) { throw [System.ArgumentNullException]::new("data") }
             $this.Data = @($data) # Consistently cast to an array
             if ($this.SelectedIndex -ge $this.Data.Count) {
                 $this.SelectedIndex = [Math]::Max(0, $this.Data.Count - 1)
@@ -165,7 +171,8 @@ class Table : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
         try {
             switch ($keyInfo.Key) {
                 ([ConsoleKey]::UpArrow) { 

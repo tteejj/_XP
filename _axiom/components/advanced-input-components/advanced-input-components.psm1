@@ -20,7 +20,7 @@ class MultilineTextBoxComponent : UIElement {
     hidden [int]$_scrollOffsetY = 0
     hidden [int]$_scrollOffsetX = 0
 
-    MultilineTextBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    MultilineTextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 40
         $this.Height = 8
@@ -94,7 +94,8 @@ class MultilineTextBoxComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         try {
             $handled = $true
             $currentLine = $this.Lines[$this.CurrentLine]
@@ -271,7 +272,7 @@ class NumericInputComponent : UIElement {
     [int]$CursorPosition = 0
     [scriptblock]$OnChange
 
-    NumericInputComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    NumericInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 20
         $this.Height = 3
@@ -331,7 +332,8 @@ class NumericInputComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         try {
             $handled = $true
             $originalValue = $this.Value
@@ -446,7 +448,7 @@ class DateInputComponent : UIElement {
     [bool]$ShowCalendar = $false
     [scriptblock]$OnChange
 
-    DateInputComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    DateInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 25
         $this.Height = 3
@@ -499,7 +501,8 @@ class DateInputComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         try {
             $handled = $true
             $originalValue = $this.Value
@@ -611,7 +614,7 @@ class ComboBoxComponent : UIElement {
     hidden [TuiBuffer]$_dropdownBuffer = $null
     hidden [string[]]$_filteredItems = @()
 
-    ComboBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+    ComboBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 30
         $this.Height = 3
@@ -719,7 +722,8 @@ class ComboBoxComponent : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
         try {
             $handled = $true
             $originalSelection = $this.SelectedItem
