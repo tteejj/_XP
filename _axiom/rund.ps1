@@ -1,19 +1,32 @@
-# run.ps1 - Main entry point for the Axiom-Phoenix application
-# FINAL VERSION - Using proper module manifests for all components
-
-# --- PARAMETERS & GLOBAL SETTINGS ---
 param(
     [switch]$Debug,
     [switch]$SkipLogo
-)
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+)# Point PSModulePath at your modules folder, not the repo root:
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$env:PSModulePath = "$PSScriptRoot\modules;$env:PSModulePath"
 
-# --- MODULE SOURCING ---
+# run.ps1 - Main entry point for the Axiom-Phoenix application
+# FINAL v2 - With PSModulePath fix for dependency resolution
+
+# --- PARAMETERS & GLOBAL SETTINGS ---
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
-# The load order now points to the .psd1 manifests.
-# The order is still critical for class dependencies.
+# Make your local modules folder transparently available for `using module`.
+$env:PSModulePath = "$PSScriptRoot\modules;$env:PSModulePath"
+
+# --- CRITICAL FIX: Add project root to the PSModulePath ---
+# This allows PowerShell's module loader to find local dependencies (RequiredModules).
+# We prepend it so our project's modules are found first.
+$originalModulePath = $env:PSModulePath
+$env:PSModulePath = "$PSScriptRoot;$originalModulePath"
+Write-Host "Temporarily added '$PSScriptRoot' to PSModulePath." -ForegroundColor DarkGray
+
+# --- MODULE SOURCING ---
+# The load order should still respect class inheritance dependencies.
 $FileLoadOrder = @(
     'modules/logger/logger.psd1',
     'modules/exceptions/exceptions.psd1',
@@ -23,7 +36,7 @@ $FileLoadOrder = @(
     'components/tui-primitives/tui-primitives.psd1',
     'modules/theme-manager/theme-manager.psd1',
     'components/ui-classes/ui-classes.psd1',
-    'layout/panels-class/panels-class.psd1',
+    'layout/panels-class/panels-class.psd1', # This will now find its dependencies
     'services/service-container/service-container.psd1',
     'services/action-service/action-service.psd1',
     'services/keybinding-service-class/keybinding-service-class.psd1',
@@ -44,18 +57,21 @@ $FileLoadOrder = @(
 
 Write-Host "🚀 Loading Axiom-Phoenix modules via Import-Module..."
 foreach ($filePath in $FileLoadOrder) {
+    # Since the root is now in PSModulePath, we can use simpler names,
+    # but using the full path is more explicit and safer.
     $fullPath = Join-Path $PSScriptRoot $filePath
     if (Test-Path $fullPath) {
         try {
-            # Use Import-Module, which correctly handles manifests and scopes.
             Import-Module $fullPath -Force -ErrorAction Stop
         } catch {
             Write-Error "FATAL: Failed to import module '$fullPath'. Error: $($_.Exception.Message)"
             Write-Error $_.ScriptStackTrace
+            $env:PSModulePath = $originalModulePath # Restore path on failure
             exit 1
         }
     } else {
         Write-Error "FATAL: Required module not found: '$fullPath'. Aborting."
+        $env:PSModulePath = $originalModulePath # Restore path on failure
         exit 1
     }
 }
@@ -143,4 +159,8 @@ try {
     } catch {
         Write-Warning "Error during TUI engine cleanup: $($_.Exception.Message)"
     }
+    
+    # Restore the original module path when the script exits
+    $env:PSModulePath = $originalModulePath
+    Write-Host "Restored original PSModulePath." -ForegroundColor DarkGray
 }
