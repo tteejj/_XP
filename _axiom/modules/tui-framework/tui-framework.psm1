@@ -3,7 +3,12 @@
 # PURPOSE: Provides helper functions and services for interacting with the TUI engine.
 # This version is updated for the class-based, lifecycle-aware architecture.
 # ==============================================================================
-#Requires -Modules ThreadJob
+
+using module ui-classes
+using module tui-primitives
+using module theme-manager
+using module logger
+using module exceptions
 
 # The TuiFrameworkService class encapsulates utility functions and can be
 # registered with the service container for easy access by other components.

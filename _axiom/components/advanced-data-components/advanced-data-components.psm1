@@ -3,6 +3,9 @@
 # High-performance, theme-aware data display components for TUI applications
 # ==============================================================================
 
+using module ui-classes
+using module tui-primitives
+using module theme-manager
 using namespace System.Collections.Generic
 
 #region Table Classes

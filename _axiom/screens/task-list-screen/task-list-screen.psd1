@@ -30,12 +30,12 @@
     # This screen depends on types and services defined in these core modules.
     RequiredModules = @(
         @{ ModuleName = 'ui-classes'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'ui-components'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'tui-components'; ModuleVersion = '1.0.0' },
         @{ ModuleName = 'data-manager'; ModuleVersion = '1.0.0' },
         @{ ModuleName = 'theme-manager'; ModuleVersion = '1.0.0' },
         @{ ModuleName = 'action-service'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'keybinding-service'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'navigation-service'; ModuleVersion = '1.0.0' }
+        @{ ModuleName = 'keybinding-service-class'; ModuleVersion = '1.0.0' },
+        @{ ModuleName = 'navigation-service-class'; ModuleVersion = '1.0.0' }
     )
     
     # Assemblies that must be loaded prior to importing this module

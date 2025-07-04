@@ -3,6 +3,9 @@
 # Sophisticated input controls with theme integration and overlay rendering
 # ==============================================================================
 
+using module ui-classes
+using module tui-primitives
+using module theme-manager
 using namespace System.Management.Automation
 using namespace System.Collections.Generic
 

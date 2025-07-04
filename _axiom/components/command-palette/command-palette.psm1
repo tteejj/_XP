@@ -3,6 +3,9 @@
 # Advanced command palette with fuzzy search and action execution
 # ==============================================================================
 
+using module ui-classes
+using module tui-primitives
+using module theme-manager
 using namespace System.Management.Automation
 
 #region Command Palette Class

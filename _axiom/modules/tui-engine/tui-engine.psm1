@@ -3,6 +3,11 @@
 # Core engine providing complete lifecycle management and high-performance rendering
 # ==============================================================================
 
+using module ui-classes
+using module tui-primitives
+using module theme-manager
+using module logger
+using module exceptions
 using namespace System.Collections.Generic
 using namespace System.Collections.Concurrent
 using namespace System.Management.Automation

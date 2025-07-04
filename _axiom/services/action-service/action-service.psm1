@@ -1,218 +1,198 @@
-# ==============================================================================
-# Axiom-Phoenix v4.0 - Service Container
-# Provides a robust, centralized dependency injection container with lifecycle management.
-# ==============================================================================
-#Requires -Version 7.2
+# MODULE: action-service/action-service.psm1
+# PURPOSE: Provides a central registry for application-wide actions/commands.
 
-function Initialize-ServiceContainer {
+# ------------------------------------------------------------------------------
+# Public Functions
+# ------------------------------------------------------------------------------
+
+function Initialize-ActionService {
     <#
     .SYNOPSIS
-    Creates and returns a new instance of the ServiceContainer.
+    Initializes the central ActionService for the application.
+    .DESCRIPTION
+    This function creates and returns a new instance of the ActionService class,
+    which manages the registration, unregistration, and execution of application-wide commands.
     #>
     [CmdletBinding()]
     param()
-    
-    return Invoke-WithErrorHandling -Component "ServiceContainer.Initialize" -Context "Creating new service container instance" -ScriptBlock {
-        Write-Verbose "ServiceContainer: Initializing new instance."
-        return [ServiceContainer]::new()
+
+    # Wrap the core logic in Invoke-WithErrorHandling for application-wide error consistency.
+    # This also ensures centralized logging of the initialization process.
+    return Invoke-WithErrorHandling -Component "ActionService.Initialize" -Context "Initializing action service" -ScriptBlock {
+        Write-Verbose "ActionService: Initializing a new instance of ActionService."
+        $service = [ActionService]::new()
+        Write-Log -Level Info -Message "ActionService initialized."
+        return $service
     }
 }
 
-# The ServiceContainer is a central registry for application-wide services.
-# It supports lazy initialization, singleton/transient lifestyles, circular
-# dependency detection, and managed resource cleanup.
-class ServiceContainer {
-    #region Private State
-    hidden [hashtable] $_services = @{}
-    hidden [hashtable] $_serviceFactories = @{}
-    #endregion
-
-    #region Constructor
-    ServiceContainer() {
-        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Info -Message "ServiceContainer created."
-        }
-        Write-Verbose "ServiceContainer: Instance constructed."
-    }
-    #endregion
-
-    #region Public Methods
-    # Registers an already created service instance (eager loading).
-    [void] Register(
-        # FIX: Removed [Parameter] and [Validate] attributes
-        [string]$name,
-        [object]$serviceInstance
-    ) {
-        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "Register" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
-            # FIX: Added manual validation
-            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
-            if ($null -eq $serviceInstance) { throw [System.ArgumentNullException]::new("serviceInstance") }
-
-            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
-                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
-            }
-
-            $this.{_services}[$name] = $serviceInstance
-            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-                Write-Log -Level Debug -Message "Registered eager service instance: '$name'."
-            }
-            Write-Verbose "ServiceContainer: Registered eager instance for '$name' of type '$($serviceInstance.GetType().Name)'."
-        }
-    }
-
-    # Registers a factory scriptblock used to create the service on-demand (lazy loading).
-    [void] RegisterFactory(
-        # FIX: Removed [Parameter] and [Validate] attributes
-        [string]$name,
-        [scriptblock]$factory,
-        [bool]$isSingleton = $true
-    ) {
-        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "RegisterFactory" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
-            # FIX: Added manual validation
-            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
-            if ($null -eq $factory) { throw [System.ArgumentNullException]::new("factory") }
-
-            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
-                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
-            }
-            
-            $this.{_serviceFactories}[$name] = @{
-                Factory = $factory
-                IsSingleton = $isSingleton
-                Instance = $null # To hold the singleton instance once created
-            }
-            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-                Write-Log -Level Debug -Message "Registered service factory: '$name' (Singleton: $isSingleton)."
-            }
-            Write-Verbose "ServiceContainer: Registered factory for '$name' (Singleton: $isSingleton)."
-        }
-    }
-
-    # Retrieves a service by its name.
-    [object] GetService([string]$name) {
-        return Invoke-WithErrorHandling -Component "ServiceContainer" -Context "GetService" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
-            # FIX: Added manual validation
-            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
-
-            # 1. Return from eager-loaded services
-            if ($this.{_services}.ContainsKey($name)) {
-                Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."
-                return $this.{_services}[$name]
-            }
-
-            # 2. Check for a factory
-            if ($this.{_serviceFactories}.ContainsKey($name)) {
-                return $this._InitializeServiceFromFactory($name, [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase))
-            }
-
-            # 3. If not found, throw a detailed error
-            $available = $this.GetAllRegisteredServices() | Select-Object -ExpandProperty Name
-            throw [System.InvalidOperationException]::new("Service '$name' not found. Available services: $($available -join ', ')")
-        }
-    }
+# ------------------------------------------------------------------------------
+# ActionService Class
+# ------------------------------------------------------------------------------
+# The core component that manages the registry of application actions.
+class ActionService {
+    # Stores action definitions, mapping action names (string) to action details (hashtable).
+    [hashtable] $ActionRegistry = @{}
     
-    # Retrieves a list of all registered services and their status.
-    [object[]] GetAllRegisteredServices() {
-        $list = [System.Collections.Generic.List[object]]::new()
-        
-        foreach ($key in $this.{_services}.Keys) {
-            $list.Add([pscustomobject]@{
-                Name = $key
-                Type = 'Instance'
-                Initialized = $true
-                Lifestyle = 'Singleton' # Eager instances are always singletons
-            })
-        }
-        
-        foreach ($key in $this.{_serviceFactories}.Keys) {
-            $factoryInfo = $this.{_serviceFactories}[$key]
-            $list.Add([pscustomobject]@{
-                Name = $key
-                Type = 'Factory'
-                Initialized = ($null -ne $factoryInfo.Instance)
-                Lifestyle = if ($factoryInfo.IsSingleton) { 'Singleton' } else { 'Transient' }
-            })
-        }
-        
-        return $list.ToArray() | Sort-Object Name
+    # Manages internal event subscriptions made by ActionService itself for cleanup purposes.
+    # Maps event names (string) to handler IDs (string).
+    [hashtable] $EventSubscriptions = @{} 
+
+    # Constructor: Called when a new instance of ActionService is created.
+    ActionService() {
+        Write-Verbose "ActionService: Constructor called."
+        # Register default application-level actions.
+        # These actions typically publish events for other services to handle.
+        $this.RegisterAction("app.exit", "Exits the PMC Terminal application.", {
+            # This script block will be executed when 'app.exit' action is called.
+            # It expects the global 'Publish-Event' function to be available.
+            Publish-Event -EventName "Application.Exit" -Data @{ Source = "ActionService"; Action = "AppExit" }
+        }, "Application", $true) # Force overwrite if called multiple times in tests
+
+        $this.RegisterAction("app.help", "Displays application help.", {
+            Publish-Event -EventName "App.HelpRequested" -Data @{ Source = "ActionService"; Action = "Help" }
+        }, "Application", $true) # Force overwrite
+
+        Write-Log -Level Info -Message "ActionService initialized with default actions."
+        Write-Verbose "ActionService: Default actions registered."
     }
 
-    # Cleans up all managed singleton services that implement IDisposable.
+    # RegisterAction: Registers a new action with the service.
+    # Actions are identified by a unique name and associated with a script block to execute.
+    [void] RegisterAction(
+        [string]$name, 
+        [string]$description, 
+        [scriptblock]$scriptBlock, 
+        [string]$category = "General", 
+        [switch]$Force 
+    ) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($description)) { throw [System.ArgumentException]::new("Parameter 'description' cannot be null or empty.") }
+        if ($null -eq $scriptBlock) { throw [System.ArgumentNullException]::new("scriptBlock") }
+
+        if ($this.ActionRegistry.ContainsKey($name)) {
+            if (-not $Force) {
+                Write-Log -Level Warning -Message "Action '$name' already registered. Use -Force to overwrite."
+                Write-Verbose "ActionService: Skipping registration of '$name' as it already exists (no -Force)."
+                return # Do not overwrite if not forced
+            } else {
+                Write-Log -Level Info -Message "Action '$name' already registered. Overwriting due to -Force."
+                Write-Verbose "ActionService: Overwriting action '$name'."
+            }
+        }
+
+        # Store action details in the registry.
+        $this.ActionRegistry[$name] = @{
+            Name = $name;
+            Description = $description;
+            ScriptBlock = $scriptBlock;
+            Category = $category;
+            RegisteredAt = (Get-Date);
+        }
+        Write-Log -Level Debug -Message "Action '$name' registered."
+        Write-Verbose "ActionService: Action '$name' successfully registered."
+    }
+
+    # UnregisterAction: Removes an action from the service.
+    [void] UnregisterAction([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
+        if ($this.ActionRegistry.ContainsKey($name)) {
+            $this.ActionRegistry.Remove($name)
+            Write-Log -Level Debug -Message "Action '$name' unregistered."
+            Write-Verbose "ActionService: Action '$name' successfully unregistered."
+        } else {
+            Write-Log -Level Warning -Message "Action '$name' not found, cannot unregister."
+            Write-Verbose "ActionService: Action '$name' not found for unregistration."
+        }
+    }
+
+    # ExecuteAction: Executes a registered action.
+    # The parameters hashtable is passed to the action's script block as $ActionParameters.
+    [void] ExecuteAction(
+        [string]$name, 
+        [hashtable]$parameters = @{}
+    ) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
+        if (-not $this.ActionRegistry.ContainsKey($name)) {
+            $errorMessage = "Attempted to execute unknown action: $name"
+            Write-Log -Level Error -Message $errorMessage -Data @{ ActionName = $name; Parameters = $parameters }
+            Write-Verbose "ActionService: Failed to execute action '$name' - not found."
+            throw [System.ArgumentException]::new($errorMessage, "name")
+        }
+
+        $action = $this.ActionRegistry[$name]
+        Write-Log -Level Info -Message "Executing action: $name" -Data @{ ActionName = $name; Parameters = $parameters }
+        Write-Verbose "ActionService: Preparing to execute action '$name'."
+
+        try {
+            # Pass parameters to the action's script block via a named parameter ($ActionParameters).
+            # This ensures a consistent contract for all action script blocks.
+            & $action.ScriptBlock -ActionParameters $parameters
+            Write-Verbose "ActionService: Action '$name' executed successfully."
+        } catch {
+            $errorMessage = "Action '$name' failed: $($_.Exception.Message)"
+            Write-Log -Level Error -Message $errorMessage -Data @{ ActionName = $name; ActionParameters = $parameters; ErrorDetails = $_.Exception.Message; FullError = $_ }
+            Write-Verbose "ActionService: Action '$name' execution failed: $($_.Exception.Message)."
+            throw # Re-throw to propagate the error, allowing Invoke-WithErrorHandling to catch it.
+        }
+    }
+
+    # GetAction: Retrieves the definition of a specific action.
+    [hashtable] GetAction([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        
+        Write-Verbose "ActionService: Retrieving action '$name'."
+        return $this.ActionRegistry[$name]
+    }
+
+    # GetAllActions: Retrieves a list of all registered action definitions.
+    # Returns a list of hashtables, each representing an action.
+    [System.Collections.Generic.List[hashtable]] GetAllActions() {
+        Write-Verbose "ActionService: Retrieving all registered actions."
+        # Filter out any null values (shouldn't happen with proper registration) and sort by name.
+        return @($this.ActionRegistry.Values | Where-Object { $_ -ne $null } | Sort-Object Name)
+    }
+
+    # AddEventSubscription: Internal method to track event subscriptions made by ActionService.
+    # This allows for proper cleanup in the Cleanup method.
+    hidden [void] AddEventSubscription([string]$eventName, [string]$handlerId) {
+        if ([string]::IsNullOrWhiteSpace($eventName)) { throw [System.ArgumentException]::new("Parameter 'eventName' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($handlerId)) { throw [System.ArgumentException]::new("Parameter 'handlerId' cannot be null or empty.") }
+
+        $this.EventSubscriptions[$eventName] = $handlerId
+        Write-Log -Level Debug -Message "ActionService: Tracking event subscription for '$eventName' (HandlerId: $handlerId)."
+        Write-Verbose "ActionService: Added event subscription tracking for '$eventName'."
+    }
+
+    # Cleanup: Performs necessary cleanup operations when the ActionService is no longer needed.
+    # This includes unsubscribing from any events it subscribed to and clearing its action registry.
     [void] Cleanup() {
-        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Info -Message "ServiceContainer cleanup initiated."
-        }
-        Write-Verbose "ServiceContainer: Initiating cleanup of disposable singleton services."
-        
-        # Collect all singleton instances
-        $instancesToClean = [System.Collections.Generic.List[object]]::new()
-        $this.{_services}.Values | ForEach-Object { $instancesToClean.Add($_) }
-        $this.{_serviceFactories}.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
-
-        foreach ($service in $instancesToClean) {
-            if ($service -is [System.IDisposable]) {
-                try {
-                    Write-Verbose "ServiceContainer: Disposing service of type '$($service.GetType().FullName)'."
-                    $service.Dispose()
-                } catch {
-                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-                        Write-Log -Level Error -Message "Error disposing service of type '$($service.GetType().FullName)': $($_.Exception.Message)"
-                    }
-                }
+        # Unsubscribe from any events ActionService itself subscribed to.
+        # Assumes 'Unsubscribe-Event' from EventSystem module is globally available.
+        Write-Verbose "ActionService: Starting cleanup process."
+        foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
+            try {
+                Unsubscribe-Event -EventName $kvp.Key -HandlerId $kvp.Value
+                Write-Log -Level Debug -Message "ActionService: Unsubscribed from event '$($kvp.Key)' (HandlerId: $($kvp.Value))."
+                Write-Verbose "ActionService: Unsubscribed from event '$($kvp.Key)'."
+            } catch {
+                Write-Log -Level Warning -Message "ActionService: Failed to unsubscribe from event '$($kvp.Key)' (HandlerId: $($kvp.Value)): $($_.Exception.Message)"
+                Write-Verbose "ActionService: Failed to unsubscribe from event '$($kvp.Key)'. Error: $($_.Exception.Message)."
             }
         }
+        $this.EventSubscriptions.Clear() # Clear tracking after attempting unsubscriptions.
         
-        $this.{_services}.Clear()
-        $this.{_serviceFactories}.Clear()
-        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Info -Message "ServiceContainer cleanup complete."
-        }
-        Write-Verbose "ServiceContainer: Cleanup complete. All service registries cleared."
+        # Clear the action registry.
+        $this.ActionRegistry.Clear()
+        Write-Log -Level Info -Message "ActionService cleaned up."
+        Write-Verbose "ActionService: ActionRegistry cleared. Cleanup complete."
     }
-    #endregion
-
-    #region Private Methods
-    # The core logic for instantiating a service from its factory.
-    hidden [object] _InitializeServiceFromFactory([string]$name, [System.Collections.Generic.HashSet[string]]$resolutionChain) {
-        $factoryInfo = $this.{_serviceFactories}[$name]
-        
-        # For singletons, if an instance already exists, return it immediately.
-        if ($factoryInfo.IsSingleton -and $null -ne $factoryInfo.Instance) {
-            Write-Verbose "ServiceContainer: Returning cached singleton instance of '$name'."
-            return $factoryInfo.Instance
-        }
-
-        # Circular dependency detection
-        if ($resolutionChain.Contains($name)) {
-            $chain = ($resolutionChain -join ' -> ') + " -> $name"
-            throw [System.InvalidOperationException]::new("Circular dependency detected while resolving service '$name'. Chain: $chain")
-        }
-        [void]$resolutionChain.Add($name)
-        
-        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Debug -Message "Instantiating service '$name' from factory."
-        }
-        Write-Verbose "ServiceContainer: Invoking factory to create instance of '$name'."
-        
-        # Invoke the factory, passing the container itself as an argument.
-        $serviceInstance = & $factoryInfo.Factory $this
-
-        # If it's a singleton, cache the new instance.
-        if ($factoryInfo.IsSingleton) {
-            $factoryInfo.Instance = $serviceInstance
-            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-                Write-Log -Level Debug -Message "Cached singleton instance of service '$name'."
-            }
-            Write-Verbose "ServiceContainer: Cached new singleton instance of '$name'."
-        }
-
-        # Unwind the resolution chain
-        [void]$resolutionChain.Remove($name)
-        
-        return $serviceInstance
-    }
-    #endregion
 }
 
-# Export the factory function
-Export-ModuleMember -Function Initialize-ServiceContainer
+# ------------------------------------------------------------------------------
+# Module Export
+# ------------------------------------------------------------------------------
+# FIX: Removed the invalid -Class parameter. The ActionService class is exported automatically.
+Export-ModuleMember -Function Initialize-ActionService

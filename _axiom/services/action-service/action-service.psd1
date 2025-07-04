@@ -9,7 +9,7 @@
     CompatiblePSEditions = @('Core')
     
     # ID used to uniquely identify this module
-    GUID = 'e1f2g3h4-1234-5678-9abc-def012345678'
+    GUID = '4e9a3b1f-8c7d-4a6e-9f0a-1b2c3d4e5f6a'
     
     # Author of this module
     Author = 'PMC Terminal Team'
@@ -27,11 +27,11 @@
     PowerShellVersion = '7.0'
     
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules = @(
-        @{ ModuleName = 'logging'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'exceptions'; ModuleVersion = '1.0.0' },
-        @{ ModuleName = 'event-system'; ModuleVersion = '1.0.0' }
-    )
+#    RequiredModules = @(
+#        @{ ModuleName = 'logging'; ModuleVersion = '1.0.0' },
+#        @{ ModuleName = 'exceptions'; ModuleVersion = '1.0.0' },
+#        @{ ModuleName = 'event-system'; ModuleVersion = '1.0.0' }
+#    )
     
     # Assemblies that must be loaded prior to importing this module
     RequiredAssemblies = @()
