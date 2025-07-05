@@ -107,8 +107,9 @@ class TuiCell {
         $this.Bold = $bold
         $this.Underline = $underline
     }
-    # FIX: Removed invalid attributes from constructor
-    TuiCell([TuiCell]$other) {
+    # FIX: Removed the [TuiCell] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    TuiCell([object]$other) {
         $this.Char = $other.Char
         $this.ForegroundColor = $other.ForegroundColor
         $this.BackgroundColor = $other.BackgroundColor
@@ -133,14 +134,17 @@ class TuiCell {
         return $copy
     }
 
-    # FIX: Removed invalid attributes from method parameter
-    [TuiCell] BlendWith([TuiCell]$other) {
+    # FIX: Removed the [TuiCell] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    [TuiCell] BlendWith([object]$other) {
         if ($other.ZIndex -gt $this.ZIndex) { return $other }
         if ($other.ZIndex -eq $this.ZIndex -and $other.Char -ne ' ') { return $other }
         return $this
     }
 
-    [bool] DiffersFrom([TuiCell]$other) {
+    # FIX: Removed the [TuiCell] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    [bool] DiffersFrom([object]$other) {
         if ($null -eq $other) { return $true }
         return ($this.Char -ne $other.Char -or 
                 $this.ForegroundColor -ne $other.ForegroundColor -or 
@@ -179,7 +183,6 @@ class TuiBuffer {
     [string] $Name            
     [bool] $IsDirty = $true  
 
-    # FIX: Removed invalid attributes from constructor
     TuiBuffer([int]$width, [int]$height, [string]$name = "Unnamed") {
         if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
         if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
@@ -193,7 +196,6 @@ class TuiBuffer {
 
     [void] Clear() { $this.Clear([TuiCell]::new()) }
 
-    # FIX: Removed invalid attributes from method parameter
     [void] Clear([TuiCell]$fillCell) {
         for ($y = 0; $y -lt $this.Height; $y++) {
             for ($x = 0; $x -lt $this.Width; $x++) {
@@ -209,7 +211,6 @@ class TuiBuffer {
         return $this.Cells[$y, $x]
     }
 
-    # FIX: Removed invalid attributes from method parameter
     [void] SetCell([int]$x, [int]$y, [TuiCell]$cell) {
         if ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height) {
             $this.Cells[$y, $x] = $cell
@@ -219,7 +220,6 @@ class TuiBuffer {
         }
     }
 
-    # FIX: Removed invalid attributes from method parameter
     [void] WriteString([int]$x, [int]$y, [string]$text, $fg, $bg) {
         if ($y -lt 0 -or $y -ge $this.Height) {
             Write-Warning "Skipping WriteString: Y coordinate ($y) out of bounds for buffer '$($this.Name)' (0..$($this.Height-1)). Text: '$text'."
@@ -237,8 +237,9 @@ class TuiBuffer {
         Write-Verbose "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
     }
 
-    # FIX: Removed invalid attributes from method parameter
-    [void] BlendBuffer([TuiBuffer]$other, [int]$offsetX, [int]$offsetY) {
+    # FIX: Removed the [TuiBuffer] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    [void] BlendBuffer([object]$other, [int]$offsetX, [int]$offsetY) {
         for ($y = 0; $y -lt $other.Height; $y++) {
             for ($x = 0; $x -lt $other.Width; $x++) {
                 $targetX = $offsetX + $x
@@ -255,7 +256,6 @@ class TuiBuffer {
         Write-Verbose "BlendBuffer: Blended buffer '$($other.Name)' onto '$($this.Name)' at ($offsetX, $offsetY)."
     }
 
-    # FIX: Removed invalid attributes from method parameters
     [TuiBuffer] GetSubBuffer([int]$x, [int]$y, [int]$width, [int]$height) {
         if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
         if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
@@ -270,7 +270,6 @@ class TuiBuffer {
         return $subBuffer
     }
 
-    # FIX: Removed invalid attributes from method parameters
     [void] Resize([int]$newWidth, [int]$newHeight) {
         if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
         if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
@@ -299,7 +298,6 @@ class TuiBuffer {
 #endregion
 
 #region Drawing Primitives - High-Level Drawing Functions with Truecolor Support
-# NOTE: These are standard functions, so [CmdletBinding()] and parameter attributes are VALID here.
 function Write-TuiText {
     [CmdletBinding()]
     param(
@@ -432,6 +430,3 @@ function Get-TuiBorderChars {
     }
 }
 #endregion
-
-# Export all public classes and functions
-# This is handled by the .psd1 manifest

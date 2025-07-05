@@ -62,7 +62,9 @@ class UIElement {
         return @{ X = $absX; Y = $absY }
     }
 
-    [void] AddChild([UIElement]$child) {
+    # FIX: Removed the [UIElement] type hint from the $child parameter
+    # to prevent cross-module type conversion errors.
+    [void] AddChild([object]$child) {
         try {
             if ($child -eq $this) { throw [System.ArgumentException]::new("Cannot add an element as its own child.") }
             if ($this.Children.Contains($child)) {
@@ -83,7 +85,9 @@ class UIElement {
         }
     }
 
-    [void] RemoveChild([UIElement]$child) {
+    # FIX: Removed the [UIElement] type hint from the $child parameter
+    # to prevent cross-module type conversion errors.
+    [void] RemoveChild([object]$child) {
         try {
             if ($this.Children.Remove($child)) {
                 $child.Parent = $null
@@ -149,7 +153,8 @@ class UIElement {
         return ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height)
     }
 
-    [UIElement] GetChildAtPoint([int]$x, [int]$y) {
+    # FIX: Removed the [UIElement] return type hint to prevent cross-module type conversion errors.
+    [object] GetChildAtPoint([int]$x, [int]$y) {
         for ($i = $this.Children.Count - 1; $i -ge 0; $i--) {
             $child = $this.Children[$i]
             if ($child.Visible -and $child.ContainsPoint($x - $child.X, $y - $child.Y)) {
@@ -326,7 +331,9 @@ class Screen : UIElement {
         }
     }
 
-    [void] AddPanel([UIElement]$panel) {
+    # FIX: Removed the [UIElement] type hint from the $panel parameter
+    # to prevent cross-module type conversion errors.
+    [void] AddPanel([object]$panel) {
         try {
             $this.Panels.Add($panel)
             $this.AddChild($panel) 

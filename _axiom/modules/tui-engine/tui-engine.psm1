@@ -88,42 +88,18 @@ function Initialize-TuiEngine {
 function Initialize-InputThread {
     <#
     .SYNOPSIS
-    Initializes the asynchronous input processing thread.
+    Initializes the input processing system (simplified synchronous approach).
     #>
     [CmdletBinding()]
     param()
     
     try {
-        $global:TuiState.CancellationTokenSource = [CancellationTokenSource]::new()
-        $global:TuiState.InputRunspace = [RunspaceFactory]::CreateRunspace()
-        $global:TuiState.InputRunspace.Open()
-        
-        $global:TuiState.InputRunspace.SessionStateProxy.SetVariable("InputQueue", $global:TuiState.InputQueue)
-        $global:TuiState.InputRunspace.SessionStateProxy.SetVariable("CancellationToken", $global:TuiState.CancellationTokenSource.Token)
-        
-        $inputScript = {
-            param($InputQueue, $CancellationToken)
-            while (-not $CancellationToken.IsCancellationRequested) {
-                try {
-                    if ([Console]::KeyAvailable) {
-                        $key = [Console]::ReadKey($true)
-                        $InputQueue.Enqueue($key)
-                    }
-                    Start-Sleep -Milliseconds 10
-                }
-                catch { break }
-            }
-        }
-        
-        $global:TuiState.InputPowerShell = [PowerShell]::Create()
-        $global:TuiState.InputPowerShell.Runspace = $global:TuiState.InputRunspace
-        [void]$global:TuiState.InputPowerShell.AddScript($inputScript).AddArgument($global:TuiState.InputQueue).AddArgument($global:TuiState.CancellationTokenSource.Token)
-        $global:TuiState.InputAsyncResult = $global:TuiState.InputPowerShell.BeginInvoke()
-        
-        Write-Log -Level Debug -Message "Input thread initialized successfully"
+        # Simplified approach - no background thread needed
+        # Input will be processed directly in the main loop
+        Write-Log -Level Debug -Message "Input system initialized (synchronous mode)"
     }
     catch {
-        Write-Error "Failed to initialize input thread: $($_.Exception.Message)"
+        Write-Error "Failed to initialize input system: $($_.Exception.Message)"
         throw
     }
 }
@@ -233,17 +209,20 @@ function Check-ForResize {
 function Process-TuiInput {
     <#
     .SYNOPSIS
-    Processes input from the input queue.
+    Processes input directly from the console (synchronous approach).
     #>
     [CmdletBinding()]
     param()
     
     $hadInput = $false
-    $keyInfo = [System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::None, $false, $false, $false)
     
     try {
-        while ($global:TuiState.InputQueue.TryDequeue([ref]$keyInfo)) {
+        # Process all available input directly
+        while ([Console]::KeyAvailable) {
             $hadInput = $true
+            $keyInfo = [Console]::ReadKey($true)
+            
+            # Handle input immediately
             if (Handle-GlobalShortcuts -KeyInfo $keyInfo) { continue }
             if ($global:TuiState.OverlayStack.Count -gt 0) {
                 if ($global:TuiState.OverlayStack[-1].HandleInput($keyInfo)) { continue }
@@ -371,14 +350,6 @@ function Cleanup-TuiEngine {
         while ($global:TuiState.ScreenStack.Count -gt 0) { $global:TuiState.ScreenStack.Pop().Cleanup() }
         foreach ($overlay in $global:TuiState.OverlayStack) { $overlay.Cleanup() }
         $global:TuiState.OverlayStack.Clear()
-        
-        if ($global:TuiState.CancellationTokenSource -and -not $global:TuiState.CancellationTokenSource.IsCancellationRequested) { $global:TuiState.CancellationTokenSource.Cancel() }
-        if ($global:TuiState.InputPowerShell) {
-            try { $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult) } catch {}
-            $global:TuiState.InputPowerShell.Dispose()
-        }
-        if ($global:TuiState.InputRunspace) { $global:TuiState.InputRunspace.Dispose() }
-        if ($global:TuiState.CancellationTokenSource) { $global:TuiState.CancellationTokenSource.Dispose() }
         
         [Console]::CursorVisible = $true
         [Console]::TreatControlCAsInput = $false
