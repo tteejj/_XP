@@ -83,7 +83,8 @@ class DataManager : IDisposable {
                 if ($jsonData.ContainsKey('Tasks')) {
                     $this.{_dataStore}.Tasks.Clear()
                     foreach ($taskData in $jsonData.Tasks) {
-                        $task = [PmcTask]::new($taskData)
+                        # FIX: Use FromLegacyFormat instead of constructor with hashtable
+                        $task = [PmcTask]::FromLegacyFormat($taskData)
                         [void]$this.{_dataStore}.Tasks.Add($task)
                     }
                 }
@@ -91,7 +92,8 @@ class DataManager : IDisposable {
                 if ($jsonData.ContainsKey('Projects')) {
                     $this.{_dataStore}.Projects.Clear()
                     foreach ($projectData in $jsonData.Projects) {
-                        $project = [PmcProject]::new($projectData)
+                        # FIX: Use FromLegacyFormat instead of constructor with hashtable
+                        $project = [PmcProject]::FromLegacyFormat($projectData)
                         [void]$this.{_dataStore}.Projects.Add($project)
                     }
                 }
@@ -161,13 +163,13 @@ class DataManager : IDisposable {
                 SavedAt = [datetime]::Now
             }
             
-            # Convert objects to serializable format
+            # Convert objects to serializable format using ToLegacyFormat
             foreach ($task in $this.{_dataStore}.Tasks) {
-                $saveData.Tasks += $task.ToHashtable()
+                $saveData.Tasks += $task.ToLegacyFormat()
             }
             
             foreach ($project in $this.{_dataStore}.Projects) {
-                $saveData.Projects += $project.ToHashtable()
+                $saveData.Projects += $project.ToLegacyFormat()
             }
             
             # Save to file

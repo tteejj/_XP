@@ -612,18 +612,24 @@ function Push-Screen {
         [object]$Screen
     )
     
-    if (-not $Screen) { return }
+    # FIX: Enhanced null checking to prevent null method calls
+    if (-not $Screen) { 
+        Write-Error "Push-Screen: Screen parameter is null"
+        return 
+    }
     
     try {
-        Write-Log -Level Debug -Message "Pushing screen: $($Screen.Name)"
+        # FIX: Safe property access with null coalescing
+        $screenName = $Screen.Name ?? "UnknownScreen"
+        Write-Log -Level Debug -Message "Pushing screen: $screenName"
         
-        # Blur current focused component
-        if ($global:TuiState.FocusedComponent) {
+        # FIX: Null check before calling methods
+        if ($global:TuiState.FocusedComponent -and $global:TuiState.FocusedComponent.PSObject.Methods['OnBlur']) {
             $global:TuiState.FocusedComponent.OnBlur()
         }
         
-        # Handle current screen
-        if ($global:TuiState.CurrentScreen) {
+        # Handle current screen with null checks
+        if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.PSObject.Methods['OnExit']) {
             $global:TuiState.CurrentScreen.OnExit()
             $global:TuiState.ScreenStack.Push($global:TuiState.CurrentScreen)
         }
@@ -632,24 +638,42 @@ function Push-Screen {
         $global:TuiState.CurrentScreen = $Screen
         $global:TuiState.FocusedComponent = $null
         
-        # Resize screen to current dimensions
-        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        # FIX: Null check before calling Resize
+        if ($Screen.PSObject.Methods['Resize']) {
+            $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        }
         
-        # LIFECYCLE INTEGRATION: Initialize the screen
-        $Screen.Initialize()
+        # FIX: Enhanced null checking for Initialize method
+        if ($Screen.PSObject.Methods['Initialize']) {
+            $Screen.Initialize()
+        } else {
+            Write-Warning "Screen '$screenName' does not have an Initialize method"
+        }
         
-        # Call OnEnter hook
-        $Screen.OnEnter()
+        # FIX: Null check before calling OnEnter
+        if ($Screen.PSObject.Methods['OnEnter']) {
+            $Screen.OnEnter()
+        }
         
-        $Screen.RequestRedraw()
+        # FIX: Null check before calling RequestRedraw
+        if ($Screen.PSObject.Methods['RequestRedraw']) {
+            $Screen.RequestRedraw()
+        }
+        
         Request-TuiRefresh
         
-        Publish-Event -EventName "Screen.Pushed" -Data @{ ScreenName = $Screen.Name }
+        Publish-Event -EventName "Screen.Pushed" -Data @{ ScreenName = $screenName }
         
-        Write-Log -Level Debug -Message "Screen pushed successfully: $($Screen.Name)"
+        Write-Log -Level Debug -Message "Screen pushed successfully: $screenName"
     }
     catch {
-        Write-Error "Error pushing screen '$($Screen.Name)': $($_.Exception.Message)"
+        # FIX: Prevent infinite loops in error handling by avoiding complex object string conversion
+        $errorMsg = $_.Exception.Message ?? "Unknown error"
+        $screenName = if ($Screen -and $Screen.PSObject.Properties['Name']) { $Screen.Name } else { "UnknownScreen" }
+        Write-Error "Error pushing screen '$screenName': $errorMsg"
+        
+        # FIX: Stop the TUI loop on critical errors to prevent infinite loops
+        $global:TuiState.Running = $false
     }
 }
 
