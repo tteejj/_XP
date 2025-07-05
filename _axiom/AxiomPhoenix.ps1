@@ -1,0 +1,9467 @@
+# --- HARD-CODED USING STATEMENTS ---
+using namespace System.Collections.Concurrent
+using namespace System.Collections.Generic
+using namespace System.Management.Automation
+using namespace System.Threading
+using namespace System.Threading.Tasks
+# --- END USING STATEMENTS ---
+
+param(
+    [switch]$Debug,
+    [switch]$SkipLogo
+)
+
+####modules\exceptions\exceptions.psm1
+# MODULE: exceptions.psm1
+# PURPOSE: Provides custom exception types and a centralized error handling wrapper.
+# This module integrates closely with the logging system to provide detailed error diagnostics.
+
+# ------------------------------------------------------------------------------
+# Module-Scoped State Variables
+# ------------------------------------------------------------------------------
+
+$script:ErrorHistory = [System.Collections.Generic.List[object]]::new() # In-memory history of detailed error records
+$script:MaxErrorHistory = 100 # Maximum number of error records to keep in history
+
+# ------------------------------------------------------------------------------
+# Custom Exception Type Definition
+# ------------------------------------------------------------------------------
+
+try {
+    # Check if the custom type already exists to prevent errors on re-import/re-execution
+    if (-not ('Helios.HeliosException' -as [type])) {
+        Add-Type -TypeDefinition @"
+
+        namespace Helios {
+            // Base custom exception for PMC Terminal.
+            // Inherits from RuntimeException to be caught by PowerShell's error pipeline.
+            public class HeliosException : System.Management.Automation.RuntimeException {
+                public Hashtable DetailedContext { get; set; } // Simplified context for the exception object itself
+                public string Component { get; set; }
+                public DateTime Timestamp { get; set; }
+
+                public HeliosException(string message, string component, Hashtable detailedContext, Exception innerException)
+                    : base(message, innerException) {
+                    this.Component = component ?? "Unknown";
+                    this.DetailedContext = detailedContext ?? new Hashtable();
+                    this.Timestamp = DateTime.Now;
+                }
+            }
+
+            // Specific exception types for different error domains within the application.
+            public class NavigationException : HeliosException { public NavigationException(string m, string c, Hashtable ctx, Exception i) : base(m, c, ctx, i) { } }
+            public class ServiceInitializationException : HeliosException { public ServiceInitializationException(string m, string c, Hashtable ctx, Exception i) : base(m, c, ctx, i) { } }
+            public class ComponentRenderException : HeliosException { public ComponentRenderException(string m, string c, Hashtable ctx, Exception i) : base(m, c, ctx, i) { } }
+            public class StateMutationException : HeliosException { public StateMutationException(string m, string c, Hashtable ctx, Exception i) : base(m, c, ctx, i) { } }
+            public class InputHandlingException : HeliosException { public InputHandlingException(string m, string c, Hashtable ctx, Exception i) : base(m, c, ctx, i) { } }
+            public class DataLoadException : HeliosException { public DataLoadException(string m, string c, Hashtable ctx, Exception i) : base(m, c, ctx, i) { } }
+        }
+"@ -ErrorAction Stop # Use ErrorAction Stop to ensure failure is caught by the try/catch
+        Write-Verbose "Custom Helios exception types compiled and loaded."
+    }
+} catch {
+    # This is a critical failure. Application might not function correctly without custom exceptions.
+    Write-Warning "CRITICAL: Failed to compile custom Helios exception types: $($_.Exception.Message). The application will lack detailed error information and custom error handling features."
+}
+
+# ------------------------------------------------------------------------------
+# Private Helper Functions
+# ------------------------------------------------------------------------------
+
+# Identifies the PMC Terminal component where an error originated based on the call stack.
+function _Identify-HeliosComponent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNull()][System.Management.Automation.ErrorRecord]$ErrorRecord
+    )
+    
+    try {
+        $scriptPath = $null
+        # Prioritize the script name from the immediate invocation info.
+        if ($ErrorRecord.InvocationInfo.ScriptName) {
+            $scriptPath = $ErrorRecord.InvocationInfo.ScriptName
+        } else {
+            # If not available there, search the PSCallStack for the first script with a name.
+            # This is more robust for errors originating deeper in calls from interactive console or other modules.
+            $callStack = Get-PSCallStack
+            foreach ($call in $callStack) {
+                if ($call.ScriptName) {
+                    $scriptPath = $call.ScriptName
+                    break
+                }
+            }
+        }
+
+        if (-not $scriptPath) {
+            Write-Verbose "_Identify-HeliosComponent: Could not determine script path from error record or call stack. Returning 'Interactive/Unknown'."
+            return "Interactive/Unknown"
+        }
+
+        # Extract file name without extension for mapping.
+        $fileName = [System.IO.Path]::GetFileNameWithoutExtension($scriptPath)
+
+        # Map file names/patterns to user-friendly component names.
+        $componentMap = @{
+            'tui-engine' = 'TUI Engine'; 'navigation' = 'Navigation Service'; 'keybindings' = 'Keybinding Service'
+            'task-service' = 'Task Service'; 'helios-components' = 'Helios UI Components'; 'helios-panels' = 'Helios UI Panels'
+            'dashboard-screen' = 'Dashboard Screen'; 'task-screen' = 'Task Screen'; 'exceptions' = 'Exception Module'
+            'logger' = 'Logger Module'; 'Start-PMCTerminal' = 'Application Entry'; 'models' = 'Data Models'
+            'data-manager' = 'Data Manager'; 'dialog-system' = 'Dialog System'; 'theme-manager' = 'Theme Manager'
+            'ui-classes' = 'UI Base Classes'; 'tui-primitives' = 'TUI Primitives'; 'service-container' = 'Service Container'
+            'action-service' = 'Action Service'; 'command-palette' = 'Command Palette'; 'panic-handler' = 'Panic Handler'
+        }
+
+        foreach ($pattern in $componentMap.Keys) {
+            if ($fileName -like "*$pattern*") {
+                Write-Verbose "_Identify-HeliosComponent: Identified component '$($componentMap[$pattern])' from script '$fileName'."
+                return $componentMap[$pattern]
+            }
+        }
+        
+        Write-Verbose "_Identify-HeliosComponent: No specific component map found for script '$fileName'. Returning 'Unknown ($fileName)'."
+        return "Unknown ($fileName)" # Fallback if no specific mapping
+    } catch {
+        # Log the internal failure of component identification itself.
+        Write-Warning "Failed to identify component for error: $($_.Exception.Message). Returning 'Component Identification Failed'."
+        return "Component Identification Failed"
+    }
+}
+
+# Gathers detailed information about an error record for logging and context.
+function _Get-DetailedError {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNull()][System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [hashtable]$AdditionalContext = @{} # Additional context provided by the caller (e.g., operation name)
+    )
+    
+    try {
+        $errorInfo = [PSCustomObject]@{
+            Timestamp = (Get-Date -Format "o"); # ISO 8601 format
+            Summary = $ErrorRecord.Exception.Message;
+            Type = $ErrorRecord.Exception.GetType().FullName;
+            Category = $ErrorRecord.CategoryInfo.Category.ToString();
+            TargetObject = $ErrorRecord.TargetObject; # Object that caused the error, if applicable
+            InvocationInfo = @{ # Detailed info about where the error occurred in the script
+                ScriptName = $ErrorRecord.InvocationInfo.ScriptName;
+                LineNumber = $ErrorRecord.InvocationInfo.ScriptLineNumber;
+                Line = $ErrorRecord.InvocationInfo.Line;
+                PositionMessage = $ErrorRecord.InvocationInfo.PositionMessage;
+                BoundParameters = $ErrorRecord.InvocationInfo.BoundParameters # Capture bound parameters
+            };
+            StackTrace = $ErrorRecord.Exception.StackTrace;
+            InnerExceptions = [System.Collections.Generic.List[object]]::new(); # List to hold inner exception details
+            AdditionalContext = $AdditionalContext; # Context provided by the wrapping function
+            SystemContext = @{ # System-level context for diagnostics
+                ProcessId = $PID;
+                ThreadId = [System.Threading.Thread]::CurrentThread.ManagedThreadId;
+                PowerShellVersion = $PSVersionTable.PSVersion.ToString();
+                OS = $PSVersionTable.OS;
+                HostName = $Host.Name;
+                HostVersion = $Host.Version.ToString();
+            }
+        }
+
+        # Recursively collect inner exception details.
+        $innerEx = $ErrorRecord.Exception.InnerException
+        while ($innerEx) {
+            [void]$errorInfo.InnerExceptions.Add([PSCustomObject]@{
+                Message = $innerEx.Message;
+                Type = $innerEx.GetType().FullName;
+                StackTrace = $innerEx.StackTrace;
+            })
+            $innerEx = $innerEx.InnerException
+        }
+        Write-Verbose "_Get-DetailedError: Successfully processed error for logging."
+        return $errorInfo
+    } catch {
+        # If error analysis itself fails, return a simplified error object.
+        Write-Warning "CRITICAL: Error analysis failed for an original error: $($_.Exception.Message). Original error was: '$($ErrorRecord.Exception.Message)'."
+        return [PSCustomObject]@{
+            Timestamp = (Get-Date -Format "o");
+            Summary = "CRITICAL: Error analysis failed for an original error.";
+            OriginalErrorMessage = $ErrorRecord.Exception.Message;
+            AnalysisErrorMessage = $_.Exception.Message; # The error that occurred during analysis
+            Type = "ErrorAnalysisFailure";
+            AdditionalContext = $AdditionalContext;
+        }
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Public Functions
+# ------------------------------------------------------------------------------
+
+function Invoke-WithErrorHandling {
+    <#
+    .SYNOPSIS
+    Executes a script block within a robust error handling wrapper.
+    .DESCRIPTION
+    This function catches any errors thrown by the provided script block,
+    logs them in detail using the application's logger, stores them in an
+    in-memory history, and then re-throws them as a custom HeliosException
+    for structured error propagation.
+    .PARAMETER Component
+    A string identifying the application component (e.g., "NavigationService", "DashboardScreen")
+    where the operation is taking place. This is used for error logging and context.
+    .PARAMETER Context
+    A string describing the specific operation or context (e.g., "Loading data", "Rendering panel")
+    that is being executed. Used for error logging and user messages.
+    .PARAMETER ScriptBlock
+    The script block containing the code to be executed. Any errors thrown within this
+    script block will be caught and processed by this wrapper.
+    .PARAMETER AdditionalData
+    Optional hashtable to provide additional context-specific data that should be included
+    in the detailed error log. This data will be serialized by the logger.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Component,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Context,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [scriptblock]$ScriptBlock,
+        
+        [hashtable]$AdditionalData = @{}
+    )
+
+    if (-not $ScriptBlock) {
+        throw [System.ArgumentNullException]::new("ScriptBlock", "Invoke-WithErrorHandling: ScriptBlock parameter cannot be null.")
+    }
+    $Component = [string]::IsNullOrWhiteSpace($Component) ? "Unknown Component" : $Component
+    $Context = [string]::IsNullOrWhiteSpace($Context) ? "Unknown Operation" : $Context
+    
+    Write-Verbose "Invoke-WithErrorHandling: Entering wrapper for Component '$Component', Context '$Context'."
+
+    try {
+        return & $ScriptBlock # Execute the provided script block
+    }
+    catch {
+        $originalErrorRecord = $_ # Capture the raw error record
+        
+        # Identify the component more accurately if it wasn't explicitly provided or if it's 'Unknown'.
+        $identifiedComponent = _Identify-HeliosComponent -ErrorRecord $originalErrorRecord
+        $finalComponent = if ($Component -ne "Unknown Component") { $Component } else { $identifiedComponent }
+
+        # Prepare context for detailed error.
+        $errorContextForDetail = @{ Operation = $Context }
+        # Merge AdditionalData into error context, prioritizing simple types for context hashtable
+        foreach ($key in $AdditionalData.Keys) {
+            $value = $AdditionalData[$key]
+            # Prioritize primitive types for the DetailedContext of the HeliosException itself
+            if ($value -is [string] -or $value -is [int] -or $value -is [bool] -or $value -is [datetime] -or $value -is [enum]) {
+                $errorContextForDetail[$key] = $value
+            } else {
+                # For complex types, ensure they are handled by the logger's serialization.
+                # The _Get-DetailedError will include this in its 'AdditionalContext' property.
+                $errorContextForDetail["Raw_$key"] = $value # Prefix to differentiate from primitives in HeliosException's context
+            }
+        }
+        
+        # Get the full detailed error object for comprehensive logging.
+        $detailedError = _Get-DetailedError -ErrorRecord $originalErrorRecord -AdditionalContext $errorContextForDetail
+
+        # Log the error using the application's logger (if available).
+        # Write-Log is expected to be globally available from logger.psm1
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+            Write-Log -Level Error -Message "Error in '$finalComponent' during '$Context': $($originalErrorRecord.Exception.Message)" -Data $detailedError
+        } else {
+            Write-Error "CRITICAL: Logger not available. Error in '$finalComponent' during '$Context': $($originalErrorRecord.Exception.Message). Full Error: $_"
+        }
+
+        # Add the detailed error object to the in-memory error history.
+        [void]$script:ErrorHistory.Add($detailedError)
+        # Manage the size of the error history.
+        if ($script:ErrorHistory.Count -gt $script:MaxErrorHistory) {
+            $script:ErrorHistory.RemoveAt(0) # Efficiently remove oldest entry
+        }
+        
+        # Re-throw as a custom HeliosException for structured error propagation.
+        # The HeliosException itself gets a simplified context, while the full details go to the logger.
+        $heliosException = New-Object Helios.HeliosException(
+            $originalErrorRecord.Exception.Message,
+            $finalComponent,
+            $errorContextForDetail, # Pass the detailed context to the exception
+            $originalErrorRecord.Exception # Pass the original exception as the inner exception
+        )
+        Write-Verbose "Invoke-WithErrorHandling: Re-throwing HeliosException for Component '$finalComponent', Context '$Context'."
+        throw $heliosException
+    }
+}
+
+function Get-ErrorHistory {
+    <#
+    .SYNOPSIS
+    Retrieves recent entries from the in-memory error history.
+    .PARAMETER Count
+    The maximum number of recent error entries to retrieve. Defaults to 25.
+    #>
+    [CmdletBinding()]
+    param(
+        [int]$Count = 25
+    )
+    
+    try {
+        # Take a snapshot of the error history list before getting a range.
+        $historySnapshot = $script:ErrorHistory.ToArray()
+        
+        $total = $historySnapshot.Count
+        if ($Count -ge $total) {
+            Write-Verbose "Get-ErrorHistory: Returning all $total error entries."
+            return $historySnapshot
+        }
+        $start = $total - $Count
+        Write-Verbose "Get-ErrorHistory: Returning last $Count error entries from $total total."
+        return $historySnapshot | Select-Object -Last $Count # Use Select-Object -Last for simplicity and consistency
+    }
+    catch {
+        Write-Warning "Error getting error history: $($_.Exception.Message)"
+        return @() # Return empty array on error
+    }
+}
+
+# Export all public functions from this module.
+# Custom exception classes are defined via Add-Type and are globally available once added.
+Export-ModuleMember -Function Invoke-WithErrorHandling, Get-ErrorHistory
+
+####modules\logger\logger.psm1
+# MODULE: logger.psm1
+# PURPOSE: Provides a robust, granular logging system for the PMC Terminal application.
+# This module is self-contained and manages its own state for logging configuration and in-memory log queues.
+#
+
+# ------------------------------------------------------------------------------
+# Module-Scoped State Variables
+# ------------------------------------------------------------------------------
+$script:LogPath = $null
+$script:LogLevel = "Info" # Default log level.
+$script:LogQueue = [System.Collections.Generic.List[object]]::new() # In-memory log buffer
+$script:MaxLogSize = 5MB # Maximum size for a log file before rolling
+$script:LogInitialized = $false # Flag to ensure logger is ready
+$script:CallDepth = 0 # Used for tracing function call depth
+$script:TraceAllCalls = $false # Flag to enable/disable extensive call tracing
+
+# ------------------------------------------------------------------------------
+# Private Helper Functions
+# ------------------------------------------------------------------------------
+
+# Converts a complex PowerShell object into a simpler, serializable hashtable or primitive.
+# Handles common types, circular references, and limits recursion/array size to prevent huge log data.
+function ConvertTo-SerializableObject {
+    param(
+        [Parameter(Mandatory)][object]$Object # The object to convert  <--- FIX #1: UNCOMMENTED THIS LINE
+    )
+
+    if ($null -eq $Object) { return $null }
+
+    # Keep track of visited objects to prevent infinite loops from circular references.
+    $visited = New-Object 'System.Collections.Generic.HashSet[object]'
+
+    # Internal recursive function to perform the conversion.
+    function Convert-Internal {
+        param(
+            [Parameter(Mandatory)][object]$InputObject, # Current object to convert
+            [int]$Depth # Current recursion depth
+        )
+
+        # Base cases for recursion and known non-serializable types.
+        if ($null -eq $InputObject) { return $null }
+        if ($Depth -gt 5) { return '<MaxDepthExceeded>' } # Limit recursion depth
+        if ($InputObject -is [System.Management.Automation.ScriptBlock]) { return '<ScriptBlock>' } # Represent script blocks as string
+        
+        # Detect and handle circular references.
+        if (-not $InputObject.GetType().IsValueType -and -not ($InputObject -is [string])) {
+            if ($visited.Contains($InputObject)) { return '<CircularReference>' }
+            [void]$visited.Add($InputObject) # Mark as visited
+        }
+        
+        # Convert based on object type.
+        switch ($InputObject.GetType().Name) {
+            'Hashtable' {
+                $r = @{}
+                foreach ($k in $InputObject.Keys) {
+                    try { $r[$k] = Convert-Internal $InputObject[$k] ($Depth+1) }
+                    catch { $r[$k] = "<Err: $($_.Exception.Message)>" }
+                }
+                return $r
+            }
+            'PSCustomObject' {
+                $r = @{}
+                foreach ($p in $InputObject.PSObject.Properties) {
+                    try {
+                        if ($p.MemberType -ne 'ScriptMethod') { # Exclude script methods to avoid serialization issues
+                            $r[$p.Name] = Convert-Internal $p.Value ($Depth+1)
+                        }
+                    } catch { $r[$p.Name] = "<Err: $($_.Exception.Message)>" }
+                }
+                return $r
+            }
+            'Object[]' {
+                $r = [System.Collections.Generic.List[object]]::new() # Use List for efficient adding
+                for ($i=0; $i -lt [Math]::Min($InputObject.Count,10); $i++) { # Limit array elements to 10
+                    try { [void]$r.Add((Convert-Internal $InputObject[$i] ($Depth+1))) }
+                    catch { [void]$r.Add("<Err: $($_.Exception.Message)>") }
+                }
+                if($InputObject.Count -gt 10) { [void]$r.Add("<...>") } # Indicate truncation
+                return $r.ToArray()
+            }
+            default {
+                # Return value types, strings, and DateTime directly. For others, try ToString().
+                try {
+                    if ($InputObject -is [ValueType] -or $InputObject -is [string] -or $InputObject -is [datetime]) {
+                        return $InputObject
+                    } else {
+                        return $InputObject.ToString()
+                    }
+                } catch {
+                    return "<Err: $($_.Exception.Message)>" # Return error if ToString() fails
+                }
+            }
+        }
+    }
+    
+    # Start the recursive conversion process.
+    return Convert-Internal -InputObject $Object -Depth 0
+}
+
+# ------------------------------------------------------------------------------
+# Public Functions
+# ------------------------------------------------------------------------------
+
+function Initialize-Logger {
+    <#
+    .SYNOPSIS
+    Initializes the logger configuration, setting up log file path and minimum log level.
+    .PARAMETER LogDirectory
+    The directory where log files will be stored. Defaults to a 'PMCTerminal' folder in TEMP.
+    .PARAMETER LogFileName
+    The naming convention for log files. Defaults to 'pmc_terminal_YYYY-MM-DD.log'.
+    .PARAMETER Level
+    The minimum log level to capture. Messages below this level will be ignored.
+    Valid levels: Debug, Verbose, Info, Warning, Error, Fatal, Trace.
+    #>
+    [CmdletBinding()]
+    param(
+        [ValidateNotNullOrEmpty()]
+        [string]$LogDirectory = (Join-Path $env:TEMP "PMCTerminal"),
+        
+        [ValidateNotNullOrEmpty()]
+        [string]$LogFileName = "pmc_terminal_{0:yyyy-MM-dd}.log" -f (Get-Date),
+        
+        # [Parameter(Mandatory)] #<-- FIX #2: REMOVED THIS LINE
+        [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")]
+        [string]$Level = "Info"
+    )
+
+    try {
+        if (-not (Test-Path $LogDirectory)) {
+            # Use ErrorAction Stop to ensure directory creation failures are caught by the try/catch.
+            New-Item -ItemType Directory -Path $LogDirectory -Force -ErrorAction Stop | Out-Null
+        }
+        $script:LogPath = Join-Path $LogDirectory $LogFileName
+        $script:LogLevel = $Level
+        $script:LogInitialized = $true
+        
+        # Log initialization message using Write-Log itself, forcing it to be written.
+        Write-Log -Level Info -Message "Logger initialized" -Data @{
+            LogPath = $script:LogPath;
+            LogLevel = $script:LogLevel;
+            PowerShellVersion = $PSVersionTable.PSVersion.ToString();
+            OS = $PSVersionTable.OS;
+            PID = $PID
+        } -Force
+    } catch {
+        # Log initialization failures using Write-Warning.
+        Write-Warning "Failed to initialize logger: $($_.Exception.Message)"
+        $script:LogInitialized = $false # Ensure flag is reset on failure
+    }
+}
+
+function Write-Log {
+    <#
+    .SYNOPSIS
+    Writes a log entry with a specified level, message, and optional data.
+    .DESCRIPTION
+    Log entries are added to an in-memory queue and, if configured, appended to a file.
+    The function respects the configured global log level.
+    .PARAMETER Level
+    The severity level of the log entry. Valid levels: Debug, Verbose, Info, Warning, Error, Fatal, Trace.
+    .PARAMETER Message
+    The primary text message of the log entry.
+    .PARAMETER Data
+    Optional, additional structured data to include with the log entry. Can be any PowerShell object,
+    which will be converted to a serializable format (hashtable, PSCustomObject, array, etc.).
+    If an Exception object, it is specially formatted.
+    .PARAMETER Force
+    If specified, the log entry will be written regardless of whether the logger is initialized or
+    if its level is below the configured minimum log level. Useful for critical startup/shutdown messages.
+    #>
+    [CmdletBinding()]
+    param(
+        [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")]
+        [string]$Level = "Info",
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Message,
+        
+        [object]$Data, # Allow any object type for data
+        
+        [switch]$Force
+    )
+    
+    # Early exit if logger is not initialized and 'Force' is not specified.
+    if (-not $script:LogInitialized -and -not $Force) { return }
+
+    # Define log level priorities.
+    $levelPriority = @{ Debug=0; Trace=0; Verbose=1; Info=2; Warning=3; Error=4; Fatal=5 }
+
+    # Check if the current log entry's level is high enough to be processed.
+    if (-not $Force -and $levelPriority[$Level] -lt $levelPriority[$script:LogLevel]) { return }
+
+    try {
+        # Get caller information from the PowerShell call stack.
+        # [1] is typically the direct caller of Write-Log.
+        $caller = (Get-PSCallStack)[1]
+        
+        # Initialize the log context hashtable with core information.
+        $logContext = @{
+            Timestamp = (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff");
+            Level = $Level;
+            ThreadId = [System.Threading.Thread]::CurrentThread.ManagedThreadId;
+            CallDepth = $script:CallDepth;
+            Message = $Message;
+            Caller = @{
+                Command = $caller.Command;
+                Location = $caller.Location;
+                ScriptName = $caller.ScriptName;
+                LineNumber = $caller.ScriptLineNumber;
+            }
+        }
+        
+        # Add UserData to logContext if the 'Data' parameter was provided.
+        if ($PSBoundParameters.ContainsKey('Data')) {
+            # Special handling for Exception objects for better error logging.
+            $logContext.UserData = if ($Data -is [Exception]) {
+                # Recursively extract inner exceptions for comprehensive error data.
+                $innerExceptions = [System.Collections.Generic.List[object]]::new()
+                $currentInner = $Data.InnerException
+                while ($currentInner) {
+                    [void]$innerExceptions.Add(@{ Message = $currentInner.Message; Type = $currentInner.GetType().FullName; StackTrace = $currentInner.StackTrace })
+                    $currentInner = $currentInner.InnerException
+                }
+                @{
+                    Type = $Data.GetType().FullName;
+                    Message = $Data.Message;
+                    StackTrace = $Data.StackTrace;
+                    TargetSite = $Data.TargetSite.Name;
+                    InnerExceptions = $innerExceptions.ToArray()
+                }
+            } else {
+                # Convert other data objects to a serializable format.
+                ConvertTo-SerializableObject -Object $Data
+            }
+
+            # If the original Data parameter contained a 'Component' property, promote it to top-level Caller context.
+            # This is specifically for integration with Invoke-WithErrorHandling in the monolith.
+            if ($Data -is [hashtable] -and $Data.ContainsKey('Component')) {
+                $logContext.Caller.Command = $Data.Component # Override command with provided component name
+                $logContext.Caller.Location = "" # Clear specific location if component name is provided
+                $logContext.Caller.ScriptName = ""
+                $logContext.Caller.LineNumber = 0
+            }
+            elseif ($logContext.UserData -is [hashtable] -and $logContext.UserData.ContainsKey('Component')) {
+                 $logContext.Caller.Command = $logContext.UserData.Component # If Component is nested in UserData
+                 $logContext.Caller.Location = ""
+                 $logContext.Caller.ScriptName = ""
+                 $logContext.Caller.LineNumber = 0
+            }
+        }
+
+        # Format the log entry string for console and file output.
+        $indent = "  " * $script:CallDepth # Visual indentation for call tracing
+        $callerInfo = if ($logContext.Caller.ScriptName) {
+            "$([System.IO.Path]::GetFileName($logContext.Caller.ScriptName)):$($logContext.Caller.LineNumber)"
+        } elseif ($logContext.Caller.Command) {
+            $logContext.Caller.Command
+        } else {
+            "UnknownCaller"
+        }
+        
+        $logEntry = "$($logContext.Timestamp) [$($Level.PadRight(7))] $indent [$callerInfo] $Message"
+        
+        # Append serialized data to the log entry string if available.
+        if ($PSBoundParameters.ContainsKey('Data')) {
+            if ($Data -is [Exception]) {
+                $logEntry += "`n${indent}  Exception: $($Data.Message)`n${indent}  StackTrace: $($Data.StackTrace)"
+                if ($Data.InnerException) { $logEntry += "`n${indent}  InnerException: $($Data.InnerException.Message)" }
+            } else {
+                try {
+                    # Convert UserData to JSON for structured logging output.
+                    $logEntry += "`n${indent}  Data: $(ConvertTo-SerializableObject -Object $Data | ConvertTo-Json -Compress -Depth 4 -WarningAction SilentlyContinue)"
+                } catch {
+                    # Fallback if JSON conversion fails.
+                    $logEntry += "`n${indent}  Data: $($Data.ToString()) (JSON conversion failed: $($_.Exception.Message))"
+                }
+            }
+        }
+        
+        # Add the full log context object to the in-memory queue.
+        $script:LogQueue.Add($logContext)
+        
+        # Manage the size of the in-memory log queue.
+        if ($script:LogQueue.Count -gt 2000) {
+            $script:LogQueue.RemoveRange(0, 1000) # Remove oldest 1000 entries efficiently
+        }
+        
+        # Write to log file if a path is configured.
+        if ($script:LogPath) {
+            try {
+                # Implement log file rolling: if file exceeds MaxLogSize, rename it.
+                if ((Test-Path $script:LogPath) -and (Get-Item $script:LogPath).Length -gt $script:MaxLogSize) {
+                    $newLogFileName = ($script:LogPath -replace '\.log$', "_$(Get-Date -Format 'yyyyMMdd_HHmmss').log")
+                    Move-Item -Path $script:LogPath -Destination $newLogFileName -Force -ErrorAction SilentlyContinue
+                    Write-Host "Log file '$([System.IO.Path]::GetFileName($script:LogPath))' rolled to '$([System.IO.Path]::GetFileName($newLogFileName))'." -ForegroundColor DarkYellow
+                }
+                Add-Content -Path $script:LogPath -Value $logEntry -Encoding UTF8 -Force
+            } catch {
+                # Critical: If log file write fails, log to console directly.
+                Write-Host "LOG FILE WRITE FAILED FOR '$($script:LogPath)': $logEntry`nError: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+        
+        # Output to console for certain log levels for immediate feedback.
+        if ($Level -in @('Error', 'Fatal')) {
+            Write-Host $logEntry -ForegroundColor Red
+        } elseif ($Level -eq 'Warning') {
+            Write-Host $logEntry -ForegroundColor Yellow
+        }
+
+    } catch {
+        # CRITICAL: Last-ditch error handling if Write-Log itself fails.
+        try {
+            $errorEntry = "$(Get-Date -Format 'o') [CRITICAL LOGGER ERROR] Failed to log: $($_.Exception.Message)"
+            if ($script:LogPath) { Add-Content -Path $script:LogPath -Value $errorEntry -Encoding UTF8 -Force }
+            Write-Host $errorEntry -ForegroundColor Red
+        } catch {
+            Write-Host "CRITICAL: Logger failed completely, cannot log its own failure: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+}
+
+function Trace-FunctionEntry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$FunctionName,
+        [object]$Parameters
+    )
+    if (-not $script:TraceAllCalls) { return }
+    $script:CallDepth++; # Increment call depth before logging
+    Write-Log -Level Trace -Message "ENTER: $FunctionName" -Data @{ Parameters = ConvertTo-SerializableObject $Parameters; Action = "FunctionEntry" }
+}
+
+function Trace-FunctionExit {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$FunctionName,
+        [object]$ReturnValue,
+        [switch]$WithError
+    )
+    if (-not $script:TraceAllCalls) { return }
+    # Decrement call depth after logging
+    $script:CallDepth = [Math]::Max(0, $script:CallDepth - 1)
+    Write-Log -Level Trace -Message "EXIT: $FunctionName" -Data @{ ReturnValue = ConvertTo-SerializableObject $ReturnValue; Action = ($WithError ? "FunctionExitWithError" : "FunctionExit"); HasError = $WithError.IsPresent }
+}
+
+function Trace-Step {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$StepName,
+        [object]$StepData,
+        [string]$Module # Optional module name for categorization
+    )
+    $caller = (Get-PSCallStack)[1] # Get immediate caller for context
+    $moduleInfo = $Module ?? ($caller.ScriptName ? [System.IO.Path]::GetFileNameWithoutExtension($caller.ScriptName) : "Unknown");
+    Write-Log -Level Debug -Message "STEP: $StepName" -Data @{ StepData = ConvertTo-SerializableObject $StepData; Module = $moduleInfo; Action = "Step" }
+}
+
+function Trace-StateChange {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$StateType,
+        [object]$OldValue,
+        [object]$NewValue,
+        [string]$PropertyPath # Path to the changed property (e.g., "Settings.Theme")
+    )
+    Write-Log -Level Debug -Message "STATE: $StateType changed" -Data @{ StateType = $StateType; PropertyPath = $PropertyPath; OldValue = ConvertTo-SerializableObject $OldValue; NewValue = ConvertTo-SerializableObject $NewValue; Action = "StateChange" }
+}
+
+function Trace-ComponentLifecycle {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ComponentType,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ComponentId,
+        [Parameter(Mandatory)][ValidateSet('Create','Initialize','Render','Update','Destroy')][string]$Phase,
+        [object]$ComponentData
+    )
+    Write-Log -Level Debug -Message "COMPONENT: $ComponentType [$ComponentId] $Phase" -Data @{ ComponentType = $ComponentType; ComponentId = $ComponentId; Phase = $Phase; ComponentData = ConvertTo-SerializableObject $ComponentData; Action = "ComponentLifecycle" }
+}
+
+function Trace-ServiceCall {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ServiceName,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$MethodName,
+        [object]$Parameters,
+        [object]$Result,
+        [switch]$IsError
+    )
+    Write-Log -Level Debug -Message "SERVICE: $ServiceName.$MethodName" -Data @{ ServiceName = $ServiceName; MethodName = $MethodName; Parameters = ConvertTo-SerializableObject $Parameters; Result = ConvertTo-SerializableObject $Result; Action = ($IsError ? "ServiceCallError" : "ServiceCall"); IsError = $IsError.IsPresent }
+}
+
+function Get-LogEntries {
+    <#
+    .SYNOPSIS
+    Retrieves entries from the in-memory log queue.
+    .PARAMETER Count
+    The maximum number of log entries to retrieve. Defaults to 100.
+    .PARAMETER Level
+    Optional. Filters entries by log level (e.g., "Error", "Debug").
+    .PARAMETER Module
+    Optional. Filters entries by the script name (or module name) of the caller. Supports wildcard matching.
+    .PARAMETER Action
+    Optional. Filters entries by the 'Action' property in their UserData (common in trace functions).
+    #>
+    [CmdletBinding()]
+    param(
+        [int]$Count = 100,
+        [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")][string]$Level,
+        [string]$Module,
+        [string]$Action
+    )
+    try {
+        # Take a snapshot of the log queue for safe iteration.
+        $entries = $script:LogQueue.ToArray()
+        
+        # Apply filters if specified.
+        if ($Level) { $entries = $entries | Where-Object { $_.Level -eq $Level } }
+        if ($Module) { $entries = $entries | Where-Object { $_.Caller.ScriptName -and ([System.IO.Path]::GetFileNameWithoutExtension($_.Caller.ScriptName) -like "*$Module*") } }
+        if ($Action) { $entries = $entries | Where-Object { $_.UserData.Action -eq $Action } }
+        
+        # Return the requested number of most recent entries.
+        return $entries | Select-Object -Last $Count
+    } catch {
+        Write-Warning "Error getting log entries: $($_.Exception.Message)"
+        return @() # Return empty array on error
+    }
+}
+
+function Get-CallTrace {
+    <#
+    .SYNOPSIS
+    Retrieves a portion of the current PowerShell call stack.
+    .PARAMETER Depth
+    The maximum depth of the call stack to retrieve. Defaults to 10.
+    #>
+    [CmdletBinding()]
+    param(
+        [int]$Depth = 10
+    )
+    try {
+        $callStack = Get-PSCallStack
+        $trace = [System.Collections.Generic.List[object]]::new() # Use List for efficient adding
+        
+        # Start from index 1 to exclude Get-CallTrace itself from the trace.
+        for ($i = 1; $i -lt [Math]::Min($callStack.Count, $Depth + 1); $i++) {
+            $call = $callStack[$i]
+            [void]$trace.Add(@{
+                Level = $i - 1; # Adjust level to be 0-based relative to the caller
+                Command = $call.Command;
+                Location = $call.Location;
+                ScriptName = $call.ScriptName;
+                LineNumber = $call.ScriptLineNumber
+            })
+        }
+        return $trace.ToArray()
+    } catch {
+        Write-Warning "Error getting call trace: $($_.Exception.Message)"
+        return @()
+    }
+}
+
+function Clear-LogQueue {
+    <#
+    .SYNOPSIS
+    Clears all entries from the in-memory log queue.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess("in-memory log queue", "Clear")) {
+        try {
+            $script:LogQueue.Clear() # Clear the List efficiently
+            Write-Verbose "In-memory log queue cleared."
+        } catch {
+            Write-Warning "Error clearing log queue: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Set-LogLevel {
+    <#
+    .SYNOPSIS
+    Sets the minimum log level for the logger.
+    .PARAMETER Level
+    The new minimum log level. Valid levels: Debug, Verbose, Info, Warning, Error, Fatal, Trace.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet("Debug","Verbose","Info","Warning","Error","Fatal","Trace")]
+        [string]$Level
+    )
+    try {
+        $oldLevel = $script:LogLevel
+        $script:LogLevel = $Level
+        Write-Log -Level Info -Message "Log level changed from '$oldLevel' to '$Level'" -Force
+        Write-Verbose "Log level set to '$Level'."
+    } catch {
+        Write-Warning "Error setting log level to '$Level': $($_.Exception.Message)"
+    }
+}
+
+function Enable-CallTracing {
+    <#
+    .SYNOPSIS
+    Enables extensive function call tracing.
+    #>
+    [CmdletBinding()]
+    param()
+    $script:TraceAllCalls = $true
+    Write-Log -Level Info -Message "Call tracing enabled" -Force
+}
+
+function Disable-CallTracing {
+    <#
+    .SYNOPSIS
+    Disables extensive function call tracing.
+    #>
+    [CmdletBinding()]
+    param()
+    $script:TraceAllCalls = $false
+    $script:CallDepth = 0 # Reset call depth
+    Write-Log -Level Info -Message "Call tracing disabled" -Force
+}
+
+function Get-LogPath {
+    <#
+    .SYNOPSIS
+    Gets the current path of the log file.
+    #>
+    [CmdletBinding()]
+    param()
+    return $script:LogPath
+}
+
+function Get-LogStatistics {
+    <#
+    .SYNOPSIS
+    Retrieves various statistics about the in-memory log queue and logger configuration.
+    #>
+    [CmdletBinding()]
+    param()
+    try {
+        $stats = [PSCustomObject]@{
+            TotalEntries = $script:LogQueue.Count;
+            LogPath = $script:LogPath;
+            LogLevel = $script:LogLevel;
+            CallTracingEnabled = $script:TraceAllCalls;
+            LogFileSize = ($script:LogPath -and (Test-Path $script:LogPath) ? (Get-Item $script:LogPath).Length : 0);
+            EntriesByLevel = @{};
+            EntriesByModule = @{};
+            EntriesByAction = @{}
+        }
+        
+        # Populate statistics by iterating through the log queue.
+        foreach ($entry in $script:LogQueue) {
+            # Count by Level
+            $level = $entry.Level;
+            if (-not $stats.EntriesByLevel.ContainsKey($level)) { $stats.EntriesByLevel[$level]=0 }
+            $stats.EntriesByLevel[$level]++
+
+            # Count by Module (derived from ScriptName)
+            if ($entry.Caller.ScriptName) {
+                $module = [System.IO.Path]::GetFileNameWithoutExtension($entry.Caller.ScriptName);
+                if (-not $stats.EntriesByModule.ContainsKey($module)) { $stats.EntriesByModule[$module]=0 }
+                $stats.EntriesByModule[$module]++
+            }
+
+            # Count by Action (from UserData)
+            if ($entry.UserData -is [hashtable] -and $entry.UserData.ContainsKey('Action')) {
+                $action = $entry.UserData.Action;
+                if (-not $stats.EntriesByAction.ContainsKey($action)) { $stats.EntriesByAction[$action]=0 }
+                $stats.EntriesByAction[$action]++
+            }
+        }
+        Write-Verbose "Retrieved logger statistics."
+        return $stats
+    } catch {
+        Write-Warning "Error getting log statistics: $($_.Exception.Message)"
+        return [PSCustomObject]@{} # Return empty object on error
+    }
+}
+
+# Export all public functions, making them available when the module is imported.
+Export-ModuleMember -Function Initialize-Logger, Write-Log, Trace-FunctionEntry, Trace-FunctionExit, Trace-Step, Trace-StateChange, Trace-ComponentLifecycle, Trace-ServiceCall, Get-LogEntries, Get-CallTrace, Clear-LogQueue, Set-LogLevel, Enable-CallTracing, Disable-CallTracing, Get-LogPath, Get-LogStatistics
+
+####modules\event-system\event-system.psm1
+# Event System Module
+# Provides pub/sub event functionality for decoupled communication
+
+# Module-scoped state variables for the event system
+# $script:EventHandlers stores eventName -> [System.Collections.Generic.List[object]] of handlers
+$script:EventHandlers = @{} 
+$script:EventHistory = [System.Collections.Generic.List[object]]::new()
+$script:MaxEventHistory = 100
+
+function Initialize-EventSystem {
+    <#
+    .SYNOPSIS
+    Initializes or resets the event system for the application.
+    This clears all registered handlers and the event history.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $script:EventHandlers.Clear() # Use Clear() method for Hashtable
+    $script:EventHistory.Clear()  # Use Clear() method for List
+    Write-Verbose "Event system initialized."
+}
+
+function Publish-Event {
+    <#
+    .SYNOPSIS
+    Publishes an event to all registered handlers for the specified event name.
+    .PARAMETER EventName
+    The name of the event to publish. Must be a non-empty string.
+    .PARAMETER Data
+    Optional data to pass to event handlers. This should be a hashtable.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter()]
+        [hashtable]$Data = @{}
+    )
+    
+    try {
+        $eventRecord = @{
+            EventName = $EventName
+            Data = $Data
+            Timestamp = (Get-Date)
+        }
+        
+        # Add to history, managing the maximum size
+        $script:EventHistory.Add($eventRecord)
+        if ($script:EventHistory.Count -gt $script:MaxEventHistory) {
+            $script:EventHistory.RemoveAt(0) # Efficient for List
+        }
+        
+        # Call handlers
+        if ($script:EventHandlers.ContainsKey($EventName)) {
+            # Create a copy of the list of handlers to iterate over.
+            # This prevents issues if a handler unsubscribes itself or others during iteration.
+            $handlersToCall = $script:EventHandlers[$EventName].ToArray()
+            
+            foreach ($handler in $handlersToCall) {
+                try {
+                    # Prepare the event data for the handler
+                    $eventData = @{
+                        EventName = $EventName
+                        Data = $Data
+                        Timestamp = $eventRecord.Timestamp
+                    }
+                    # Invoke the handler script block, passing $eventData as a named parameter
+                    & $handler.ScriptBlock -EventData $eventData
+                }
+                catch {
+                    # Log errors from individual handlers without stopping the publishing process
+                    Write-Warning "Error in event handler for '$EventName' (ID: $($handler.HandlerId)): $($_.Exception.Message)"
+                    Write-Debug "Full error details for handler ID '$($handler.HandlerId)' on event '$EventName': $_"
+                }
+            }
+        }
+        
+        Write-Verbose "Published event: $EventName."
+    }
+    catch {
+        Write-Error "Failed to publish event '$EventName': $($_.Exception.Message)"
+        throw # Re-throw to allow calling script to handle critical publishing errors
+    }
+}
+
+function Subscribe-Event {
+    <#
+    .SYNOPSIS
+    Subscribes to an event with a handler.
+    .PARAMETER EventName
+    The name of the event to subscribe to. Must be a non-empty string.
+    .PARAMETER Handler
+    The script block to execute when the event is published.
+    This script block will receive a hashtable via the '-EventData' parameter,
+    containing 'EventName', 'Data', and 'Timestamp'.
+    .PARAMETER HandlerId
+    Optional unique identifier for the handler. If not provided, a GUID will be generated.
+    This ID can be used to unsubscribe the handler later.
+    .PARAMETER Source
+    Optional source component ID. This allows for bulk removal of handlers associated
+    with a specific component, e.g., when a component is disposed.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter(Mandatory)]
+        [scriptblock]$Handler,
+        
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$HandlerId = [Guid]::NewGuid().ToString(),
+        
+        [Parameter()]
+        [string]$Source
+    )
+    
+    try {
+        # Ensure the list of handlers for this event exists, creating it if necessary
+        if (-not $script:EventHandlers.ContainsKey($EventName)) {
+            $script:EventHandlers[$EventName] = [System.Collections.Generic.List[object]]::new()
+        }
+        
+        # Check for duplicate HandlerId for the same event to prevent unintentional double subscriptions
+        if ($script:EventHandlers[$EventName].Where({$_.HandlerId -eq $HandlerId}).Count -gt 0) {
+            Write-Warning "Handler with ID '$HandlerId' is already subscribed to event '$EventName'. Skipping subscription."
+            return $HandlerId # Return existing ID
+        }
+
+        $handlerInfo = @{
+            HandlerId = $HandlerId
+            ScriptBlock = $Handler
+            SubscribedAt = (Get-Date)
+            Source = $Source
+        }
+        
+        # Add the handler information to the List (efficient)
+        $script:EventHandlers[$EventName].Add($handlerInfo)
+        
+        Write-Verbose "Subscribed to event: $EventName (Handler: $HandlerId, Source: $($Source -replace '^$', '<None>')). Returned HandlerId: $HandlerId"
+        return $HandlerId
+    }
+    catch {
+        Write-Error "Failed to subscribe to event '$EventName' for handler '$HandlerId': $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Unsubscribe-Event {
+    <#
+    .SYNOPSIS
+    Unsubscribes a specific handler from an event or searches all events.
+    .PARAMETER EventName
+    The name of the event from which to unsubscribe. Optional, but providing it
+    improves performance by targeting the search.
+    .PARAMETER HandlerId
+    The unique identifier of the handler to remove. This parameter is mandatory.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$HandlerId
+    )
+    
+    try {
+        if ($PSCmdlet.ShouldProcess("handler '$HandlerId'", "Unsubscribe event handler")) {
+            $removedCount = 0
+            if ($EventName) {
+                # Unsubscribe from a specific event (more efficient)
+                if ($script:EventHandlers.ContainsKey($EventName)) {
+                    $handlersList = $script:EventHandlers[$EventName]
+                    # Remove all matching handlers using RemoveAll (efficient)
+                    $removedCount = $handlersList.RemoveAll({param($h) $h.HandlerId -eq $HandlerId})
+                    
+                    # Clean up: If no handlers remain for this event, remove the event entry
+                    if ($handlersList.Count -eq 0) {
+                        $script:EventHandlers.Remove($EventName)
+                    }
+                    
+                    if ($removedCount -gt 0) {
+                        Write-Verbose "Unsubscribed $removedCount handler(s) from event: $EventName (Handler: $HandlerId)."
+                    } else {
+                        Write-Warning "Handler ID '$HandlerId' not found for event '$EventName'."
+                    }
+                } else {
+                    Write-Warning "Event '$EventName' has no registered handlers. Nothing to unsubscribe."
+                }
+            }
+            else {
+                # Search all events for the handler (less efficient, use EventName if known)
+                $found = $false
+                # Iterate over a copy of the keys as the dictionary might be modified
+                foreach ($eventKey in @($script:EventHandlers.Keys)) {
+                    $handlersList = $script:EventHandlers[$eventKey]
+                    $currentRemoved = $handlersList.RemoveAll({param($h) $h.HandlerId -eq $HandlerId})
+                    
+                    if ($currentRemoved -gt 0) {
+                        $removedCount += $currentRemoved
+                        $found = $true
+                        # Clean up: If no handlers remain for this event, remove the event entry
+                        if ($handlersList.Count -eq 0) {
+                            $script:EventHandlers.Remove($eventKey)
+                        }
+                        Write-Verbose "Unsubscribed $currentRemoved handler(s) from event: $eventKey (Handler: $HandlerId)."
+                        break # Handler IDs are unique, so we can stop after the first removal
+                    }
+                }
+                
+                if (-not $found) {
+                    Write-Warning "Handler ID not found across all events: $HandlerId."
+                }
+            }
+        }
+    }
+    catch {
+        Write-Error "Failed to unsubscribe handler '$HandlerId': $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Get-EventHandlers {
+    <#
+    .SYNOPSIS
+    Gets information about registered event handlers.
+    .PARAMETER EventName
+    Optional event name to filter handlers. If omitted, returns all handlers grouped by event.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName
+    )
+    
+    if ($EventName) {
+        # Return specific handlers as PSCustomObjects, excluding the ScriptBlock itself
+        $handlers = $script:EventHandlers[$EventName]
+        if ($handlers) {
+            $handlers | ForEach-Object { 
+                [pscustomobject]@{
+                    HandlerId = $_.HandlerId
+                    EventName = $EventName # Add EventName to each handler object for context
+                    SubscribedAt = $_.SubscribedAt
+                    Source = $_.Source
+                    # Uncomment below line if you need to see the raw script block content for debugging
+                    # ScriptBlock = $_.ScriptBlock 
+                }
+            }
+        } else {
+            return @() # Return empty array if no handlers for the specified event
+        }
+    }
+    else {
+        # Return a custom hashtable where keys are event names and values are arrays of handler info
+        $output = [System.Collections.Generic.Hashtable]::new()
+        foreach ($eventKey in $script:EventHandlers.Keys) {
+            $handlers = $script:EventHandlers[$eventKey]
+            # Convert internal List<object> to an array of PSCustomObjects
+            $handlerList = @($handlers | ForEach-Object { 
+                [pscustomobject]@{
+                    HandlerId = $_.HandlerId
+                    EventName = $eventKey # Add EventName to each handler object for context
+                    SubscribedAt = $_.SubscribedAt
+                    Source = $_.Source
+                    # Uncomment below line if you need to see the raw script block content for debugging
+                    # ScriptBlock = $_.ScriptBlock 
+                }
+            })
+            $output[$eventKey] = $handlerList
+        }
+        return $output
+    }
+}
+
+function Clear-EventHandlers {
+    <#
+    .SYNOPSIS
+    Clears all event handlers for a specific event or all events.
+    .PARAMETER EventName
+    Optional event name to clear handlers for. If omitted, all event handlers are cleared.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName
+    )
+    
+    if ($PSCmdlet.ShouldProcess($EventName, "Clear event handlers")) {
+        if ($EventName) {
+            if ($script:EventHandlers.ContainsKey($EventName)) {
+                $script:EventHandlers.Remove($EventName)
+                Write-Verbose "Cleared all handlers for event: $EventName."
+            } else {
+                Write-Warning "No handlers found for event: $EventName. Nothing to clear."
+            }
+        }
+        else {
+            $script:EventHandlers.Clear() # Clear all entries in the hashtable
+            Write-Verbose "Cleared all event handlers across all events."
+        }
+    }
+}
+
+function Get-EventHistory {
+    <#
+    .SYNOPSIS
+    Gets the event history.
+    .PARAMETER EventName
+    Optional event name to filter history entries.
+    .PARAMETER Last
+    Number of recent events to return. If 0 (default), returns all available history.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EventName,
+        
+        [Parameter()]
+        [int]$Last = 0
+    )
+    
+    # Get a snapshot of the current history to avoid collection modification issues
+    $history = $script:EventHistory.ToArray()
+    
+    if ($EventName) {
+        $history = $history | Where-Object { $_.EventName -eq $EventName }
+    }
+    
+    if ($Last -gt 0) {
+        $history = $history | Select-Object -Last $Last
+    }
+    
+    return $history
+}
+
+function Remove-ComponentEventHandlers {
+    <#
+    .SYNOPSIS
+    Removes all event handlers associated with a specific component ID.
+    This is useful for cleaning up resources when a component is no longer needed.
+    .PARAMETER ComponentId
+    The component ID whose handlers should be removed. Must be a non-empty string.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ComponentId
+    )
+    
+    try {
+        if ($PSCmdlet.ShouldProcess("component '$ComponentId'", "Remove all associated event handlers")) {
+            $removedCount = 0
+            
+            # Iterate over a copy of the keys because the dictionary might be modified during iteration
+            foreach ($eventName in @($script:EventHandlers.Keys)) {
+                $handlersList = $script:EventHandlers[$eventName]
+                
+                # Remove all handlers whose 'Source' matches the ComponentId (efficient)
+                $currentRemoved = $handlersList.RemoveAll({param($h) $h.Source -ne $null -and $h.Source -eq $ComponentId})
+                $removedCount += $currentRemoved
+                
+                if ($currentRemoved -gt 0) {
+                    Write-Verbose "Removed $currentRemoved handlers for component '$ComponentId' from event '$eventName'."
+                }
+
+                # If no handlers remain for this event, remove the event entry from the main hashtable
+                if ($handlersList.Count -eq 0) {
+                    $script:EventHandlers.Remove($eventName)
+                    Write-Verbose "Event '$eventName' now has no handlers and was removed from the system."
+                }
+            }
+            
+            Write-Verbose "Total removed $removedCount event handlers for component: $ComponentId."
+        }
+    }
+    catch {
+        Write-Error "Failed to remove handlers for component '$ComponentId': $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Export all public functions to make them available when the module is imported
+Export-ModuleMember -Function Initialize-EventSystem, Publish-Event, Subscribe-Event, Unsubscribe-Event, Get-EventHandlers, Clear-EventHandlers, Get-EventHistory, Remove-ComponentEventHandlers
+
+####modules\models\models.psm1
+# ==============================================================================
+# PMC Terminal v5 - Core Data Models
+# Defines all core business entity classes with built-in validation and improved diagnostics.
+# ==============================================================================
+
+#region Enums
+
+enum TaskStatus {
+    Pending
+    InProgress
+    Completed
+    Cancelled
+}
+
+enum TaskPriority {
+    Low
+    Medium
+    High
+}
+
+enum BillingType {
+    Billable
+    NonBillable
+}
+
+#endregion
+
+#region Base Validation Class
+
+# Provides common validation methods used across model classes.
+class ValidationBase {
+    # Validates that a string value is not null, empty, or whitespace.
+    # Throws an ArgumentException if the validation fails.
+    static [void] ValidateNotEmpty(
+        # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes. They are not valid on method parameters.
+        [string]$value,
+        [string]$parameterName
+    ) {
+        try {
+            if ([string]::IsNullOrWhiteSpace($value)) {
+                $errorMessage = "Parameter '$($parameterName)' cannot be null or empty."
+                # Write-Error is not appropriate here, as this is a library class. Throwing is correct.
+                throw [System.ArgumentException]::new($errorMessage, $parameterName)
+            }
+            # Write-Verbose is for cmdlets, not ideal for class methods. The throw is sufficient.
+        }
+        catch {
+            # Re-throw to ensure calling context handles the exception
+            throw
+        }
+    }
+}
+
+#endregion
+
+#region Core Model Classes
+
+# Represents a single task with various attributes and lifecycle methods.
+class PmcTask : ValidationBase {
+    [string]$Id = [Guid]::NewGuid().ToString() # Unique identifier for the task
+    [string]$Title                            # Short descriptive title
+    [string]$Description                      # Detailed description
+    [TaskStatus]$Status = [TaskStatus]::Pending # Current status of the task
+    [TaskPriority]$Priority = [TaskPriority]::Medium # Importance level
+    [string]$ProjectKey = "General"           # Associated project (key)
+    [string]$Category                         # Alias for ProjectKey, for broader use
+    [datetime]$CreatedAt = [datetime]::Now   # Timestamp of creation
+    [datetime]$UpdatedAt = [datetime]::Now   # Last update timestamp
+    [Nullable[datetime]]$DueDate             # Optional due date
+    [string[]]$Tags = @()                     # Array of tags
+    [int]$Progress = 0                        # Progress percentage (0-100)
+    [bool]$Completed = $false                 # Convenience flag for completed status
+
+    # Default constructor: Initializes a new task with default values.
+    PmcTask() {}
+    
+    # Constructor: Initializes a new task with a title.
+    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes from the constructor parameter.
+    PmcTask([string]$title) {
+        [ValidationBase]::ValidateNotEmpty($title, "Title")
+        $this.Title = $title
+    }
+    
+    # Constructor: Initializes a new task with common detailed properties.
+    # FIX: Removed all cmdlet-style attributes from the constructor parameters.
+    PmcTask(
+        [string]$title,
+        [string]$description,
+        [TaskPriority]$priority,
+        [string]$projectKey
+    ) {
+        [ValidationBase]::ValidateNotEmpty($title, "Title")
+        [ValidationBase]::ValidateNotEmpty($projectKey, "ProjectKey")
+
+        $this.Title = $title
+        $this.Description = $description
+        $this.Priority = $priority
+        $this.ProjectKey = $projectKey
+        $this.Category = $projectKey # Category is often an alias for ProjectKey
+    }
+
+    # Complete: Marks the task as completed, setting progress to 100% and updating timestamp.
+    [void] Complete() {
+        $this.Status = [TaskStatus]::Completed
+        $this.Completed = $true
+        $this.Progress = 100
+        $this.UpdatedAt = [datetime]::Now
+    }
+
+    # UpdateProgress: Updates the task's progress and adjusts status accordingly.
+    # Throws an ArgumentOutOfRangeException if newProgress is outside 0-100.
+    # FIX: Removed [Parameter(Mandatory)] and [ValidateRange(0,100)]. The validation is done manually inside.
+    [void] UpdateProgress([int]$newProgress) {
+        if ($newProgress -lt 0 -or $newProgress -gt 100) {
+            throw [System.ArgumentOutOfRangeException]::new("newProgress", $newProgress, "Progress must be between 0 and 100.")
+        }
+
+        $this.Progress = $newProgress
+        # Update status based on progress: Completed (100), InProgress (>0), Pending (0)
+        $this.Status = switch ($newProgress) {
+            100 { [TaskStatus]::Completed }
+            { $_ -gt 0 } { [TaskStatus]::InProgress }
+            default { [TaskStatus]::Pending }
+        }
+        $this.Completed = ($this.Status -eq [TaskStatus]::Completed)
+        $this.UpdatedAt = [datetime]::Now
+    }
+
+    # GetDueDateString: Returns the due date as a formatted string, or "N/A" if null.
+    [string] GetDueDateString() {
+        return $this.DueDate ? $this.DueDate.Value.ToString("yyyy-MM-dd") : "N/A"
+    }
+
+    # ToLegacyFormat: Converts the PmcTask object to a hashtable compatible with older data structures.
+    [hashtable] ToLegacyFormat() {
+        return @{
+            id = $this.Id
+            title = $this.Title
+            description = $this.Description
+            completed = $this.Completed
+            priority = $this.Priority.ToString().ToLower() # Convert enum to lowercase string
+            project = $this.ProjectKey
+            due_date = $this.DueDate ? $this.GetDueDateString() : $null
+            created_at = $this.CreatedAt.ToString("o") # ISO 8601 format
+            updated_at = $this.UpdatedAt.ToString("o")
+        }
+    }
+
+    # FromLegacyFormat: Static method to create a PmcTask object from a legacy hashtable format.
+    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNull()] attributes.
+    static [PmcTask] FromLegacyFormat([hashtable]$legacyData) {
+        $task = [PmcTask]::new() # Start with a default PmcTask instance
+        
+        # Populate properties, using null-coalescing where appropriate
+        $task.Id = $legacyData.id ?? $task.Id
+        $task.Title = $legacyData.title ?? "" # Ensure title is not null
+        $task.Description = $legacyData.description ?? ""
+
+        # Handle priority conversion with error handling
+        if ($legacyData.priority) {
+            try {
+                $task.Priority = [TaskPriority]::$($legacyData.priority)
+            } catch {
+                # Silently fallback to default, logging should be handled by a higher-level system if needed
+                $task.Priority = [TaskPriority]::Medium
+            }
+        }
+        
+        $task.ProjectKey = $legacyData.project ?? $legacyData.Category ?? "General"
+        $task.Category = $task.ProjectKey
+        
+        if ($legacyData.created_at) {
+            try { $task.CreatedAt = [datetime]::Parse($legacyData.created_at) }
+            catch { $task.CreatedAt = [datetime]::Now }
+        }
+        
+        if ($legacyData.updated_at) {
+            try { $task.UpdatedAt = [datetime]::Parse($legacyData.updated_at) }
+            catch { $task.UpdatedAt = $task.CreatedAt }
+        }
+        
+        if ($legacyData.due_date -and $legacyData.due_date -ne "N/A") {
+            try { $task.DueDate = [datetime]::Parse($legacyData.due_date) }
+            catch { $task.DueDate = $null }
+        }
+        
+        if ($legacyData.completed -is [bool] -and $legacyData.completed) {
+            $task.Complete()
+        } else {
+            $task.UpdateProgress($task.Progress)
+        }
+        return $task
+    }
+
+    # ToString: Provides a human-readable string representation of the PmcTask object.
+    [string] ToString() {
+        return "PmcTask(ID: $($this.Id.Substring(0, 8)), Title: '$($this.Title)', Status: $($this.Status), Priority: $($this.Priority))"
+    }
+}
+
+# Represents a project with various attributes.
+class PmcProject : ValidationBase {
+    [string]$Key = ([Guid]::NewGuid().ToString().Split('-')[0]).ToUpper() # Unique short key (e.g., "ABCD123")
+    [string]$Name                                                    # Full project name
+    [string]$Client                                                  # Client associated with the project
+    [BillingType]$BillingType = [BillingType]::NonBillable           # Billing status
+    [double]$Rate = 0.0                                             # Billing rate per hour/unit
+    [double]$Budget = 0.0                                           # Project budget
+    [bool]$Active = $true                                           # Is the project currently active?
+    [datetime]$CreatedAt = [datetime]::Now                         # Timestamp of creation
+    [datetime]$UpdatedAt = [datetime]::Now                         # Last update timestamp
+
+    # Default constructor: Initializes a new project with default values.
+    PmcProject() {}
+    
+    # Constructor: Initializes a new project with a key and name.
+    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes.
+    PmcProject(
+        [string]$key,
+        [string]$name
+    ) {
+        [ValidationBase]::ValidateNotEmpty($key, "Key")
+        [ValidationBase]::ValidateNotEmpty($name, "Name")
+        $this.Key = $key.ToUpper() # Ensure key is always uppercase
+        $this.Name = $name
+    }
+
+    # ToLegacyFormat: Converts the PmcProject object to a hashtable compatible with older data structures.
+    [hashtable] ToLegacyFormat() {
+        return @{
+            Key = $this.Key
+            Name = $this.Name
+            Client = $this.Client
+            BillingType = $this.BillingType.ToString() # Convert enum to string
+            Rate = $this.Rate
+            Budget = $this.Budget
+            Active = $this.Active
+            CreatedAt = $this.CreatedAt.ToString("o") # ISO 8601 format
+            UpdatedAt = $this.UpdatedAt.ToString("o") # Include UpdatedAt for consistency
+        }
+    }
+
+    # FromLegacyFormat: Static method to create a PmcProject object from a legacy hashtable format.
+    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNull()] attributes.
+    static [PmcProject] FromLegacyFormat([hashtable]$legacyData) {
+        $project = [PmcProject]::new() # Start with a default PmcProject instance
+        
+        $project.Key = ($legacyData.Key ?? $project.Key).ToUpper()
+        $project.Name = $legacyData.Name ?? ""
+        $project.Client = $legacyData.Client ?? ""
+        
+        if ($legacyData.Rate) {
+            try { $project.Rate = [double]$legacyData.Rate } catch {}
+        }
+        
+        if ($legacyData.Budget) {
+            try { $project.Budget = [double]$legacyData.Budget } catch {}
+        }
+        
+        if ($legacyData.Active -is [bool]) {
+            $project.Active = $legacyData.Active
+        }
+        
+        if ($legacyData.BillingType) {
+            try { $project.BillingType = [BillingType]::$($legacyData.BillingType) }
+            catch { $project.BillingType = [BillingType]::NonBillable }
+        }
+        
+        if ($legacyData.CreatedAt) {
+            try { $project.CreatedAt = [datetime]::Parse($legacyData.CreatedAt) }
+            catch { $project.CreatedAt = [datetime]::Now }
+        }
+        
+        if ($legacyData.UpdatedAt) {
+             try { $project.UpdatedAt = [datetime]::Parse($legacyData.UpdatedAt) }
+             catch { $project.UpdatedAt = $project.CreatedAt }
+        } else {
+            $project.UpdatedAt = $project.CreatedAt
+        }
+        
+        return $project
+    }
+
+    # ToString: Provides a human-readable string representation of the PmcProject object.
+    [string] ToString() {
+        return "PmcProject(Key: $($this.Key), Name: '$($this.Name)', Active: $($this.Active))"
+    }
+}
+
+#endregion
+
+# Export all public classes and enums so they are available when the module is imported.
+# This part is handled by the .psd1 manifest, but leaving it here for clarity.
+# Export-ModuleMember -Class PmcTask, PmcProject -Enum TaskStatus, TaskPriority, BillingType
+
+####components\tui-primitives\tui-primitives.psm1
+# ==============================================================================
+# MODULE: tui-primitives (Axiom-Phoenix v4.0 - Truecolor Edition)
+# PURPOSE: Provides core TuiCell class and primitive drawing operations
+#          with support for 24-bit truecolor.
+# ==============================================================================
+
+#region TuiAnsiHelper - ANSI Code Generation with Truecolor Support
+class TuiAnsiHelper {
+    hidden static [System.Collections.Concurrent.ConcurrentDictionary[string, string]] $_fgCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
+    hidden static [System.Collections.Concurrent.ConcurrentDictionary[string, string]] $_bgCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
+
+    static [hashtable] $ColorMap = @{
+        Black = 30; DarkBlue = 34; DarkGreen = 32; DarkCyan = 36
+        DarkRed = 31; DarkMagenta = 35; DarkYellow = 33; Gray = 37
+        DarkGray = 90; Blue = 94; Green = 92; Cyan = 96
+        Red = 91; Magenta = 95; Yellow = 93; White = 97
+    }
+
+    static [int[]] ParseHexColor([string]$hexColor) {
+        if ([string]::IsNullOrWhiteSpace($hexColor) -or -not $hexColor.StartsWith("#")) { return $null }
+        $hex = $hexColor.Substring(1)
+        if ($hex.Length -eq 3) { $hex = "$($hex[0])$($hex[0])$($hex[1])$($hex[1])$($hex[2])$($hex[2])" }
+        if ($hex.Length -ne 6) { return $null }
+        try {
+            $r = [System.Convert]::ToInt32($hex.Substring(0, 2), 16)
+            $g = [System.Convert]::ToInt32($hex.Substring(2, 2), 16)
+            $b = [System.Convert]::ToInt32($hex.Substring(4, 2), 16)
+            return @($r, $g, $b)
+        } catch { return $null }
+    }
+
+    static [string] GetForegroundCode($color) {
+        if ($color -is [ConsoleColor]) {
+            return "`e[$([TuiAnsiHelper]::ColorMap[$color.ToString()] ?? 37)m"
+        } elseif ($color -is [string] -and $color.StartsWith("#")) {
+            return [TuiAnsiHelper]::GetForegroundSequence($color)
+        } else {
+            return "`e[37m" 
+        }
+    }
+
+    static [string] GetBackgroundCode($color) {
+        if ($color -is [ConsoleColor]) {
+            $code = ([TuiAnsiHelper]::ColorMap[$color.ToString()] ?? 30) + 10
+            return "`e[${code}m"
+        } elseif ($color -is [string] -and $color.StartsWith("#")) {
+            return [TuiAnsiHelper]::GetBackgroundSequence($color)
+        } else {
+            return "`e[40m" 
+        }
+    }
+
+    static [string] GetForegroundSequence([string]$hexColor) {
+        if ([string]::IsNullOrEmpty($hexColor)) { return "" }
+        if ([TuiAnsiHelper]::_fgCache.ContainsKey($hexColor)) { 
+            return [TuiAnsiHelper]::_fgCache[$hexColor] 
+        }
+        $rgb = [TuiAnsiHelper]::ParseHexColor($hexColor)
+        if (-not $rgb) { return "" }
+        $sequence = "`e[38;2;$($rgb[0]);$($rgb[1]);$($rgb[2])m"
+        [TuiAnsiHelper]::_fgCache[$hexColor] = $sequence
+        return $sequence
+    }
+    
+    static [string] GetBackgroundSequence([string]$hexColor) {
+        if ([string]::IsNullOrEmpty($hexColor)) { return "" }
+        if ([TuiAnsiHelper]::_bgCache.ContainsKey($hexColor)) { 
+            return [TuiAnsiHelper]::_bgCache[$hexColor] 
+        }
+        $rgb = [TuiAnsiHelper]::ParseHexColor($hexColor)
+        if (-not $rgb) { return "" }
+        $sequence = "`e[48;2;$($rgb[0]);$($rgb[1]);$($rgb[2])m"
+        [TuiAnsiHelper]::_bgCache[$hexColor] = $sequence
+        return $sequence
+    }
+    
+    static [string] Reset() { return "`e[0m" }
+    static [string] Bold() { return "`e[1m" }
+    static [string] Underline() { return "`e[4m" }
+    static [string] Italic() { return "`e[3m" }
+}
+#endregion
+
+#region TuiCell Class - Core Compositor Unit with Truecolor Support
+class TuiCell {
+    [char] $Char = ' '
+    $ForegroundColor = [ConsoleColor]::White
+    $BackgroundColor = [ConsoleColor]::Black
+    [bool] $Bold = $false
+    [bool] $Underline = $false
+    [bool] $Italic = $false
+    [string] $StyleFlags = "" 
+    [int] $ZIndex = 0        
+    [object] $Metadata = $null 
+
+    TuiCell() { }
+    TuiCell([char]$char) { $this.Char = $char }
+    TuiCell([char]$char, $fg, $bg) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+    }
+    TuiCell([char]$char, $fg, $bg, [bool]$bold, [bool]$underline) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+        $this.Underline = $underline
+    }
+    # FIX: Removed the [TuiCell] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    TuiCell([object]$other) {
+        $this.Char = $other.Char
+        $this.ForegroundColor = $other.ForegroundColor
+        $this.BackgroundColor = $other.BackgroundColor
+        $this.Bold = $other.Bold
+        $this.Underline = $other.Underline
+        $this.Italic = $other.Italic
+        $this.StyleFlags = $other.StyleFlags
+        $this.ZIndex = $other.ZIndex
+        $this.Metadata = $other.Metadata
+    }
+
+    [TuiCell] WithStyle($fg, $bg) {
+        $copy = [TuiCell]::new($this)
+        $copy.ForegroundColor = $fg
+        $copy.BackgroundColor = $bg
+        return $copy
+    }
+
+    [TuiCell] WithChar([char]$char) {
+        $copy = [TuiCell]::new($this)
+        $copy.Char = $char
+        return $copy
+    }
+
+    # FIX: Removed the [TuiCell] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    [TuiCell] BlendWith([object]$other) {
+        if ($null -eq $other) { return $this }
+        
+        # Always replace with source cell if it has a higher z-index
+        if ($other.ZIndex -gt $this.ZIndex) { 
+            return [TuiCell]::new($other)  # Return a copy to prevent reference issues
+        }
+        
+        # For equal z-index, blend based on content
+        if ($other.ZIndex -eq $this.ZIndex) {
+            # If other cell has actual content (non-space) or styling, use it
+            if ($other.Char -ne ' ' -or $other.Bold -or $other.Underline -or $other.Italic) {
+                return [TuiCell]::new($other)
+            }
+            # If other cell has different background color, use it (for filled backgrounds)
+            if ($other.BackgroundColor -ne $this.BackgroundColor) {
+                return [TuiCell]::new($other)
+            }
+        }
+        
+        return $this
+    }
+
+    # FIX: Removed the [TuiCell] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    [bool] DiffersFrom([object]$other) {
+        if ($null -eq $other) { return $true }
+        
+        # Check all properties for differences
+        return ($this.Char -ne $other.Char -or 
+                $this.ForegroundColor -ne $other.ForegroundColor -or 
+                $this.BackgroundColor -ne $other.BackgroundColor -or
+                $this.Bold -ne $other.Bold -or
+                $this.Underline -ne $other.Underline -or
+                $this.Italic -ne $other.Italic -or
+                $this.ZIndex -ne $other.ZIndex)  # Also check z-index for overlay changes
+    }
+
+    [string] ToAnsiString() {
+        $sb = [System.Text.StringBuilder]::new()
+        $fgCode = [TuiAnsiHelper]::GetForegroundCode($this.ForegroundColor)
+        $bgCode = [TuiAnsiHelper]::GetBackgroundCode($this.BackgroundColor)
+        [void]$sb.Append($fgCode).Append($bgCode)
+        if ($this.Bold) { [void]$sb.Append([TuiAnsiHelper]::Bold()) }
+        if ($this.Underline) { [void]$sb.Append([TuiAnsiHelper]::Underline()) }
+        if ($this.Italic) { [void]$sb.Append([TuiAnsiHelper]::Italic()) }
+        [void]$sb.Append($this.Char)
+        return $sb.ToString()
+    }
+
+    [hashtable] ToLegacyFormat() {
+        return @{ Char = $this.Char; FG = $this.ForegroundColor; BG = $this.BackgroundColor }
+    }
+    [string] ToString() {
+        return "TuiCell(Char='$($this.Char)', FG='$($this.ForegroundColor)', BG='$($this.BackgroundColor)', Bold=$($this.Bold), Underline=$($this.Underline), Italic=$($this.Italic), ZIndex=$($this.ZIndex))"
+    }
+}
+#endregion
+
+#region TuiBuffer Class - 2D Array of TuiCells
+class TuiBuffer {
+    [TuiCell[,]] $Cells       
+    [int] $Width             
+    [int] $Height            
+    [string] $Name            
+    [bool] $IsDirty = $true  
+
+    TuiBuffer([int]$width, [int]$height, [string]$name = "Unnamed") {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.Width = $width
+        $this.Height = $height
+        $this.Name = $name
+        $this.Cells = New-Object 'TuiCell[,]' $height, $width
+        $this.Clear()
+        Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
+    }
+
+    [void] Clear() { $this.Clear([TuiCell]::new()) }
+
+    [void] Clear([TuiCell]$fillCell) {
+        for ($y = 0; $y -lt $this.Height; $y++) {
+            for ($x = 0; $x -lt $this.Width; $x++) {
+                $this.Cells[$y, $x] = [TuiCell]::new($fillCell) 
+            }
+        }
+        $this.IsDirty = $true
+        Write-Verbose "TuiBuffer '$($this.Name)' cleared with specified cell."
+    }
+
+    [TuiCell] GetCell([int]$x, [int]$y) {
+        if ($x -lt 0 -or $x -ge $this.Width -or $y -lt 0 -or $y -ge $this.Height) { return [TuiCell]::new() }
+        return $this.Cells[$y, $x]
+    }
+
+    [void] SetCell([int]$x, [int]$y, [TuiCell]$cell) {
+        if ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height) {
+            $this.Cells[$y, $x] = $cell
+            $this.IsDirty = $true
+        } else {
+            Write-Warning "Attempted to set cell out of bounds in TuiBuffer '$($this.Name)': ($x, $y) is outside 0..$($this.Width-1), 0..$($this.Height-1). Cell: '$($cell.Char)'."
+        }
+    }
+
+    [void] WriteString([int]$x, [int]$y, [string]$text, $fg, $bg) {
+        if ($y -lt 0 -or $y -ge $this.Height) {
+            Write-Warning "Skipping WriteString: Y coordinate ($y) out of bounds for buffer '$($this.Name)' (0..$($this.Height-1)). Text: '$text'."
+            return
+        }
+        $currentX = $x
+        foreach ($char in $text.ToCharArray()) {
+            if ($currentX -ge $this.Width) { break } 
+            if ($currentX -ge 0) {
+                $this.SetCell($currentX, $y, [TuiCell]::new($char, $fg, $bg))
+            }
+            $currentX++
+        }
+        $this.IsDirty = $true
+        Write-Verbose "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
+    }
+
+    # FIX: Removed the [TuiBuffer] type hint from the $other parameter
+    # to prevent cross-module type conversion errors.
+    [void] BlendBuffer([object]$other, [int]$offsetX, [int]$offsetY) {
+        for ($y = 0; $y -lt $other.Height; $y++) {
+            for ($x = 0; $x -lt $other.Width; $x++) {
+                $targetX = $offsetX + $x
+                $targetY = $offsetY + $y
+                if ($targetX -ge 0 -and $targetX -lt $this.Width -and $targetY -ge 0 -and $targetY -lt $this.Height) {
+                    $sourceCell = $other.GetCell($x, $y)
+                    $targetCell = $this.GetCell($targetX, $targetY)
+                    $blendedCell = $targetCell.BlendWith($sourceCell)
+                    $this.SetCell($targetX, $targetY, $blendedCell)
+                }
+            }
+        }
+        $this.IsDirty = $true
+        Write-Verbose "BlendBuffer: Blended buffer '$($other.Name)' onto '$($this.Name)' at ($offsetX, $offsetY)."
+    }
+
+    [TuiBuffer] GetSubBuffer([int]$x, [int]$y, [int]$width, [int]$height) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $subBuffer = [TuiBuffer]::new($width, $height, "$($this.Name).Sub")
+        for ($sy = 0; $sy -lt $height; $sy++) {
+            for ($sx = 0; $sx -lt $width; $sx++) {
+                $sourceCell = $this.GetCell($x + $sx, $y + $sy)
+                $subBuffer.SetCell($sx, $sy, [TuiCell]::new($sourceCell))
+            }
+        }
+        Write-Verbose "GetSubBuffer: Created sub-buffer '$($subBuffer.Name)' from '$($this.Name)' at ($x, $y) with dimensions $($width)x$($height)."
+        return $subBuffer
+    }
+
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
+        if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
+        $oldCells = $this.Cells
+        $oldWidth = $this.Width
+        $oldHeight = $this.Height
+        $this.Width = $newWidth
+        $this.Height = $newHeight
+        $this.Cells = New-Object 'TuiCell[,]' $newHeight, $newWidth
+        $this.Clear()
+        $copyWidth = [Math]::Min($oldWidth, $newWidth)
+        $copyHeight = [Math]::Min($oldHeight, $newHeight)
+        for ($y = 0; $y -lt $copyHeight; $y++) {
+            for ($x = 0; $x -lt $copyWidth; $x++) {
+                $this.Cells[$y, $x] = $oldCells[$y, $x]
+            }
+        }
+        $this.IsDirty = $true
+        Write-Verbose "TuiBuffer '$($this.Name)' resized from $($oldWidth)x$($oldHeight) to $($newWidth)x$($newHeight)."
+    }
+
+    [string] ToString() {
+        return "TuiBuffer(Name='$($this.Name)', Width=$($this.Width), Height=$($this.Height), IsDirty=$($this.IsDirty))"
+    }
+}
+#endregion
+
+#region Drawing Primitives - High-Level Drawing Functions with Truecolor Support
+function Write-TuiText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][TuiBuffer]$Buffer,
+        [Parameter(Mandatory)][int]$X,
+        [Parameter(Mandatory)][int]$Y,
+        [Parameter(Mandatory)][string]$Text,
+        $ForegroundColor = [ConsoleColor]::White,
+        $BackgroundColor = [ConsoleColor]::Black,
+        [bool]$Bold = $false,
+        [bool]$Underline = $false,
+        [bool]$Italic = $false
+    )
+    try {
+        if ($Y -lt 0 -or $Y -ge $Buffer.Height) {
+            Write-Warning "Skipping Write-TuiText: Y coordinate ($Y) for text '$Text' is out of buffer '$($Buffer.Name)' vertical bounds (0..$($Buffer.Height-1))."
+            return
+        }
+        $baseCell = [TuiCell]::new(' ', $ForegroundColor, $BackgroundColor)
+        $baseCell.Bold = $Bold
+        $baseCell.Underline = $Underline
+        $baseCell.Italic = $Italic
+        # Preserve z-index from existing buffer content for proper overlay rendering
+        if ($X -ge 0 -and $X -lt $Buffer.Width -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
+            $existingCell = $Buffer.GetCell($X, $Y)
+            if ($existingCell -and $existingCell.ZIndex -gt 0) {
+                $baseCell.ZIndex = $existingCell.ZIndex
+            }
+        }
+        $currentX = $X
+        foreach ($char in $Text.ToCharArray()) {
+            if ($currentX -ge $Buffer.Width) { break } 
+            if ($currentX -ge 0) {
+                $charCell = [TuiCell]::new($baseCell)
+                $charCell.Char = $char
+                $Buffer.SetCell($currentX, $Y, $charCell)
+            }
+            $currentX++
+        }
+        Write-Verbose "Write-TuiText: Wrote '$Text' to buffer '$($Buffer.Name)' at ($X, $Y)."
+    }
+    catch {
+        Write-Error "Failed to write text to TUI buffer '$($Buffer.Name)' at ($X, $Y): $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Write-TuiBox {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][TuiBuffer]$Buffer,
+        [Parameter(Mandatory)][int]$X,
+        [Parameter(Mandatory)][int]$Y,
+        [Parameter(Mandatory)][ValidateRange(1, [int]::MaxValue)][int]$Width,
+        [Parameter(Mandatory)][ValidateRange(1, [int]::MaxValue)][int]$Height,
+        [ValidateSet("Single", "Double", "Rounded", "Thick")][string]$BorderStyle = "Single",
+        $BorderColor = [ConsoleColor]::White,
+        $BackgroundColor = [ConsoleColor]::Black,
+        [string]$Title = ""
+    )
+    try {
+        if ($X -ge $Buffer.Width -or ($X + $Width) -le 0 -or $Y -ge $Buffer.Height -or ($Y + $Height) -le 0) {
+            Write-Verbose "Skipping Write-TuiBox: Box at ($X, $Y) with dimensions $($Width)x$($Height) is entirely outside buffer '$($Buffer.Name)'."
+            return
+        }
+        $borders = Get-TuiBorderChars -Style $BorderStyle
+        $drawStartX = [Math]::Max(0, $X)
+        $drawStartY = [Math]::Max(0, $Y)
+        $drawEndX = [Math]::Min($Buffer.Width, $X + $Width)
+        $drawEndY = [Math]::Min($Buffer.Height, $Y + $Height)
+        $effectiveWidth = $drawEndX - $drawStartX
+        $effectiveHeight = $drawEndY - $drawStartY
+        if ($effectiveWidth -le 0 -or $effectiveHeight -le 0) {
+            Write-Verbose "Write-TuiBox: Effective drawing area is invalid after clipping. Skipping."
+            return
+        }
+        $fillCell = [TuiCell]::new(' ', $BorderColor, $BackgroundColor)
+        # Preserve z-index from existing buffer content for proper overlay rendering
+        $existingCell = $Buffer.GetCell($drawStartX, $drawStartY)
+        if ($existingCell -and $existingCell.ZIndex -gt 0) {
+            $fillCell.ZIndex = $existingCell.ZIndex
+        }
+        for ($currentY = $drawStartY; $currentY -lt $drawEndY; $currentY++) {
+            for ($currentX = $drawStartX; $currentX -lt $drawEndX; $currentX++) {
+                $Buffer.SetCell($currentX, $currentY, [TuiCell]::new($fillCell))
+            }
+        }
+        if ($X -ge 0 -and $Y -ge 0) { 
+            $borderCell = [TuiCell]::new($borders.TopLeft, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X, $Y, $borderCell) 
+        }
+        if (($X + $Width - 1) -lt $Buffer.Width -and $Y -ge 0) { 
+            $borderCell = [TuiCell]::new($borders.TopRight, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X + $Width - 1, $Y, $borderCell) 
+        }
+        if ($X -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { 
+            $borderCell = [TuiCell]::new($borders.BottomLeft, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X, $Y + $Height - 1, $borderCell) 
+        }
+        if (($X + $Width - 1) -lt $Buffer.Width -and ($Y + $Height - 1) -lt $Buffer.Height) { 
+            $borderCell = [TuiCell]::new($borders.BottomRight, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, $borderCell) 
+        }
+        for ($cx = 1; $cx -lt ($Width - 1); $cx++) {
+            if (($X + $cx) -ge 0 -and ($X + $cx) -lt $Buffer.Width) {
+                if ($Y -ge 0 -and $Y -lt $Buffer.Height) { $Buffer.SetCell($X + $cx, $Y, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor)) }
+                if ($Height -gt 1 -and ($Y + $Height - 1) -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { $Buffer.SetCell($X + $cx, $Y + $Height - 1, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor)) }
+            }
+        }
+        for ($cy = 1; $cy -lt ($Height - 1); $cy++) {
+            if (($Y + $cy) -ge 0 -and ($Y + $cy) -lt $Buffer.Height) {
+                if ($X -ge 0 -and $X -lt $Buffer.Width) { $Buffer.SetCell($X, $Y + $cy, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor)) }
+                if ($Width -gt 1 -and ($X + $Width - 1) -ge 0 -and ($X + $Width - 1) -lt $Buffer.Width) { $Buffer.SetCell($X + $Width - 1, $Y + $cy, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor)) }
+            }
+        }
+        if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
+            $titleText = " $Title "
+            if ($titleText.Length -le ($Width - 2)) { 
+                $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
+                Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -ForegroundColor $BorderColor -BackgroundColor $BackgroundColor
+            }
+        }
+        Write-Verbose "Write-TuiBox: Drew '$BorderStyle' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
+    }
+    catch {
+        Write-Error "Failed to draw TUI box on buffer '$($Buffer.Name)' at ($X, $Y), $($Width)x$($Height): $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Get-TuiBorderChars {
+    [CmdletBinding()]
+    param(
+        [ValidateSet("Single", "Double", "Rounded", "Thick")][string]$Style = "Single"
+    )
+    try {
+        $styles = @{
+            Single = @{ TopLeft = '┌'; TopRight = '┐'; BottomLeft = '└'; BottomRight = '┘'; Horizontal = '─'; Vertical = '│' }
+            Double = @{ TopLeft = '╔'; TopRight = '╗'; BottomLeft = '╚'; BottomRight = '╝'; Horizontal = '═'; Vertical = '║' }
+            Rounded = @{ TopLeft = '╭'; TopRight = '╮'; BottomLeft = '╰'; BottomRight = '╯'; Horizontal = '─'; Vertical = '│' }
+            Thick = @{ TopLeft = '┏'; TopRight = '┓'; BottomLeft = '┗'; BottomRight = '┛'; Horizontal = '━'; Vertical = '┃' }
+        }
+        $selectedStyle = $styles[$Style]
+        if ($null -eq $selectedStyle) {
+            Write-Warning "Get-TuiBorderChars: Border style '$Style' not found. Returning 'Single' style."
+            return $styles.Single
+        }
+        Write-Verbose "Get-TuiBorderChars: Retrieved TUI border characters for style: $Style."
+        return $selectedStyle
+    }
+    catch {
+        Write-Error "Failed to get TUI border characters for style '$Style': $($_.Exception.Message)"
+        throw
+    }
+}
+#endregion
+
+####modules\theme-manager\theme-manager.psm1
+# FILE: modules/theme-manager.psm1
+# PURPOSE: Provides advanced theming and color management for the TUI with truecolor support.
+
+# ------------------------------------------------------------------------------
+# Module-Scoped State Variables
+# ------------------------------------------------------------------------------
+# Stores the currently active theme (a hashtable defining its name and colors/styles).
+$script:CurrentTheme = $null 
+
+# Stores all predefined themes for backward compatibility
+$script:BuiltinThemes = @{
+    Modern = @{ Name="Modern"; Colors=@{ Background=[ConsoleColor]::Black; Foreground=[ConsoleColor]::White; Primary=[ConsoleColor]::White; Secondary=[ConsoleColor]::Gray; Accent=[ConsoleColor]::Cyan; Success=[ConsoleColor]::Green; Warning=[ConsoleColor]::Yellow; Error=[ConsoleColor]::Red; Info=[ConsoleColor]::Blue; Header=[ConsoleColor]::Cyan; Border=[ConsoleColor]::DarkGray; Selection=[ConsoleColor]::Yellow; Highlight=[ConsoleColor]::Cyan; Subtle=[ConsoleColor]::DarkGray; Keyword=[ConsoleColor]::Blue; String=[ConsoleColor]::Green; Number=[ConsoleColor]::Magenta; Comment=[ConsoleColor]::DarkGray } }
+    Dark   = @{ Name="Dark"; Colors=@{ Background=[ConsoleColor]::Black; Foreground=[ConsoleColor]::Gray; Primary=[ConsoleColor]::Gray; Secondary=[ConsoleColor]::DarkGray; Accent=[ConsoleColor]::DarkCyan; Success=[ConsoleColor]::DarkGreen; Warning=[ConsoleColor]::DarkYellow; Error=[ConsoleColor]::DarkRed; Info=[ConsoleColor]::DarkBlue; Header=[ConsoleColor]::DarkCyan; Border=[ConsoleColor]::DarkGray; Selection=[ConsoleColor]::Yellow; Highlight=[ConsoleColor]::Cyan; Subtle=[ConsoleColor]::DarkGray; Keyword=[ConsoleColor]::DarkBlue; String=[ConsoleColor]::DarkGreen; Number=[ConsoleColor]::DarkMagenta; Comment=[ConsoleColor]::DarkGray } }
+    Light  = @{ Name="Light"; Colors=@{ Background=[ConsoleColor]::White; Foreground=[ConsoleColor]::Black; Primary=[ConsoleColor]::Black; Secondary=[ConsoleColor]::DarkGray; Accent=[ConsoleColor]::Blue; Success=[ConsoleColor]::Green; Warning=[ConsoleColor]::DarkYellow; Error=[ConsoleColor]::Red; Info=[ConsoleColor]::Blue; Header=[ConsoleColor]::Blue; Border=[ConsoleColor]::Gray; Selection=[ConsoleColor]::Cyan; Highlight=[ConsoleColor]::Yellow; Subtle=[ConsoleColor]::Gray; Keyword=[ConsoleColor]::Blue; String=[ConsoleColor]::Green; Number=[ConsoleColor]::Magenta; Comment=[ConsoleColor]::Gray } }
+    Retro  = @{ Name="Retro"; Colors=@{ Background=[ConsoleColor]::Black; Foreground=[ConsoleColor]::Green; Primary=[ConsoleColor]::Green; Secondary=[ConsoleColor]::DarkGreen; Accent=[ConsoleColor]::Yellow; Success=[ConsoleColor]::Green; Warning=[ConsoleColor]::Yellow; Error=[ConsoleColor]::Red; Info=[ConsoleColor]::Cyan; Header=[ConsoleColor]::Yellow; Border=[ConsoleColor]::DarkGreen; Selection=[ConsoleColor]::Yellow; Highlight=[ConsoleColor]::White; Subtle=[ConsoleColor]::DarkGreen; Keyword=[ConsoleColor]::Yellow; String=[ConsoleColor]::Cyan; Number=[ConsoleColor]::White; Comment=[ConsoleColor]::DarkGreen } }
+}
+
+# External themes directory for advanced JSON themes
+$script:ExternalThemesDirectory = $null
+
+# ------------------------------------------------------------------------------
+# Private Helper Functions
+# ------------------------------------------------------------------------------
+
+# Resolves a color value, supporting both ConsoleColor enums and hex strings
+function _Resolve-ThemeColor {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        $ColorValue,
+        
+        [hashtable]$Palette = @{}
+    )
+    
+    # Handle palette reference (starts with $)
+    if ($ColorValue -is [string] -and $ColorValue.StartsWith('$')) {
+        $paletteKey = $ColorValue.Substring(1)
+        if ($Palette.ContainsKey($paletteKey)) {
+            return $Palette[$paletteKey]
+        } else {
+            Write-Warning "Palette key '$paletteKey' not found in theme palette."
+            return "#FF00FF" # Magenta as error indicator
+        }
+    }
+    
+    # Return as-is (ConsoleColor enum or hex string)
+    return $ColorValue
+}
+
+# Validates if a string is a valid hex color
+function _Test-HexColor {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [string]$HexColor
+    )
+    
+    return $HexColor -match '^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$'
+}
+
+# ------------------------------------------------------------------------------
+# Public Functions
+# ------------------------------------------------------------------------------
+
+function Initialize-ThemeManager {
+    <#
+    .SYNOPSIS
+    Initializes the theme manager, setting the default theme and external themes directory.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$ExternalThemesDirectory = (Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PMCTerminal\Themes")
+    )
+
+    try {
+        # Set up external themes directory
+        $script:ExternalThemesDirectory = $ExternalThemesDirectory
+        if (-not (Test-Path $script:ExternalThemesDirectory)) {
+            try {
+                New-Item -ItemType Directory -Path $script:ExternalThemesDirectory -Force -ErrorAction Stop | Out-Null
+                Write-Verbose "ThemeManager: Created external themes directory: $script:ExternalThemesDirectory"
+            } catch {
+                Write-Warning "ThemeManager: Could not create external themes directory: $($_.Exception.Message). External themes will not be available."
+                $script:ExternalThemesDirectory = $null
+            }
+        }
+        
+        # Attempt to set the default theme.
+        Set-TuiTheme -ThemeName "Modern"
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "Theme manager initialized." -Data @{
+                ExternalThemesDirectory = $script:ExternalThemesDirectory
+                BuiltinThemes = ($script:BuiltinThemes.Keys -join ', ')
+            }
+        }
+        Write-Verbose "ThemeManager: Successfully initialized."
+    } catch {
+        Write-Error "ThemeManager: Failed to initialize: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Set-TuiTheme {
+    <#
+    .SYNOPSIS
+    Sets the active theme for the TUI.
+    .PARAMETER ThemeName
+    The name of the theme to activate. Can be a builtin theme or external JSON theme.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ThemeName
+    )
+
+    if ($PSCmdlet.ShouldProcess("theme '$ThemeName'", "Set active theme")) {
+        try {
+            $themeFound = $false
+            
+            # Try builtin themes first
+            if ($script:BuiltinThemes.ContainsKey($ThemeName)) {
+                $script:CurrentTheme = $script:BuiltinThemes[$ThemeName]
+                $themeFound = $true
+                Write-Verbose "ThemeManager: Loaded builtin theme '$ThemeName'."
+            }
+            # Try external JSON themes
+            elseif ($script:ExternalThemesDirectory) {
+                $themePath = Join-Path $script:ExternalThemesDirectory "$ThemeName.theme.json"
+                if (Test-Path $themePath) {
+                    try {
+                        $themeContent = Get-Content $themePath -Raw | ConvertFrom-Json -AsHashtable
+                        
+                        # Validate advanced theme structure
+                        if ($themeContent.ContainsKey('palette') -and $themeContent.ContainsKey('styles')) {
+                            # Advanced theme format
+                            $script:CurrentTheme = @{
+                                Name = $ThemeName
+                                Type = 'Advanced'
+                                Palette = $themeContent.palette
+                                Styles = $themeContent.styles
+                            }
+                        } elseif ($themeContent.ContainsKey('Colors')) {
+                            # Simple theme format (backward compatibility)
+                            $script:CurrentTheme = @{
+                                Name = $ThemeName
+                                Type = 'Simple'
+                                Colors = $themeContent.Colors
+                            }
+                        } else {
+                            throw "Invalid theme format. Theme must contain 'Colors' or both 'palette' and 'styles' keys."
+                        }
+                        
+                        $themeFound = $true
+                        Write-Verbose "ThemeManager: Loaded external theme '$ThemeName' from '$themePath'."
+                    } catch {
+                        throw "Failed to load external theme '$ThemeName': $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            if ($themeFound) {
+                # Apply console colors for immediate effect if it's a simple theme
+                if ($script:CurrentTheme.Type -ne 'Advanced' -and $Host.UI.RawUI) {
+                    $bgColor = Get-ThemeColor -ColorName 'Background' -Default ([ConsoleColor]::Black)
+                    $fgColor = Get-ThemeColor -ColorName 'Foreground' -Default ([ConsoleColor]::White)
+                    
+                    if ($bgColor -is [ConsoleColor]) { $Host.UI.RawUI.BackgroundColor = $bgColor }
+                    if ($fgColor -is [ConsoleColor]) { $Host.UI.RawUI.ForegroundColor = $fgColor }
+                    Write-Verbose "ThemeManager: Applied console colors for theme '$ThemeName'."
+                }
+                
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Debug -Message "Theme set to: $ThemeName"
+                }
+                
+                # Publish an event so other components can react to theme changes.
+                if (Get-Command 'Publish-Event' -ErrorAction SilentlyContinue) {
+                    Publish-Event -EventName "Theme.Changed" -Data @{ ThemeName = $ThemeName; Theme = $script:CurrentTheme }
+                }
+                Write-Verbose "ThemeManager: Theme '$ThemeName' activated and 'Theme.Changed' event published."
+            } else {
+                # Theme not found
+                $availableThemes = Get-AvailableThemes
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Warning -Message "Theme not found: $ThemeName. Available themes: $($availableThemes -join ', '). Active theme remains unchanged."
+                }
+                Write-Verbose "ThemeManager: Theme '$ThemeName' not found."
+            }
+        } catch {
+            Write-Error "ThemeManager: Failed to set theme '$ThemeName': $($_.Exception.Message)"
+            throw
+        }
+    }
+}
+
+function Get-ThemeColor {
+    <#
+    .SYNOPSIS
+    Retrieves a specific color from the currently active theme.
+    .PARAMETER ColorName
+    The name of the color to retrieve (e.g., "Background", "Accent") or style path for advanced themes.
+    .PARAMETER Default
+    A default value to return if the specified color name is not found.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ColorName,
+        
+        $Default = [ConsoleColor]::Gray
+    )
+    
+    try {
+        if ($null -eq $script:CurrentTheme) {
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Warning -Message "No active theme set. Returning default color for '$ColorName'."
+            }
+            Write-Verbose "ThemeManager: No active theme, returning default color '$Default' for '$ColorName'."
+            return $Default
+        }
+        
+        # Handle different theme types
+        if ($script:CurrentTheme.Type -eq 'Advanced') {
+            # Advanced theme with styles and palette
+            $styleValue = $script:CurrentTheme.Styles.$ColorName
+            if ($null -ne $styleValue) {
+                $resolvedColor = _Resolve-ThemeColor -ColorValue $styleValue -Palette $script:CurrentTheme.Palette
+                Write-Verbose "ThemeManager: Retrieved advanced style '$ColorName' as '$resolvedColor'."
+                return $resolvedColor
+            }
+        } else {
+            # Simple theme or builtin theme
+            $colors = $script:CurrentTheme.Colors
+            if ($colors -and $colors.ContainsKey($ColorName)) {
+                $color = $colors[$ColorName]
+                Write-Verbose "ThemeManager: Retrieved color '$ColorName' as '$color'."
+                return $color
+            }
+        }
+        
+        # Color not found, return default
+        Write-Verbose "ThemeManager: Color '$ColorName' not found in current theme, returning default '$Default'."
+        return $Default
+    } catch {
+        # Log any unexpected errors during color retrieval.
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Warning -Message "Error in Get-ThemeColor for '$ColorName'. Returning default '$Default'. Error: $($_.Exception.Message)"
+        }
+        Write-Verbose "ThemeManager: Failed to get color '$ColorName', returning default. Error: $($_.Exception.Message)."
+        return $Default
+    }
+}
+
+function Get-TuiTheme {
+    <#
+    .SYNOPSIS
+    Gets the currently active theme configuration.
+    #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        Write-Verbose "ThemeManager: Retrieving current theme."
+        return $script:CurrentTheme
+    } catch {
+        Write-Error "ThemeManager: Failed to get current theme: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Get-AvailableThemes {
+    <#
+    .SYNOPSIS
+    Gets a list of names of all available themes (builtin and external).
+    #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $themes = [System.Collections.Generic.List[string]]::new()
+        
+        # Add builtin themes
+        $themes.AddRange($script:BuiltinThemes.Keys)
+        
+        # Add external themes
+        if ($script:ExternalThemesDirectory -and (Test-Path $script:ExternalThemesDirectory)) {
+            $externalThemes = Get-ChildItem -Path $script:ExternalThemesDirectory -Filter "*.theme.json" -ErrorAction SilentlyContinue | 
+                ForEach-Object { $_.BaseName -replace '\.theme$' }
+            $themes.AddRange($externalThemes)
+        }
+        
+        Write-Verbose "ThemeManager: Found $($themes.Count) available themes."
+        return $themes.ToArray() | Sort-Object -Unique
+    } catch {
+        Write-Error "ThemeManager: Failed to get available themes: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Module Export
+# ------------------------------------------------------------------------------
+# Export all public functions to make them available when the module is imported.
+Export-ModuleMember -Function Initialize-ThemeManager, Set-TuiTheme, Get-ThemeColor, Get-TuiTheme, Get-AvailableThemes
+
+####components\ui-classes\ui-classes.psm1
+#using module 'tui-primitives'
+# ==============================================================================
+# PMC Terminal v5 - Base UI Class Hierarchy
+# Provides the foundational classes for all UI components with NCurses compositor support.
+# ==============================================================================
+
+#region UIElement - Base Class for all UI Components
+class UIElement {
+    [string] $Name = "UIElement" 
+    [int] $X = 0               
+    [int] $Y = 0               
+    [int] $Width = 10          
+    [int] $Height = 3          
+    [bool] $Visible = $true    
+    [bool] $Enabled = $true    
+    [bool] $IsFocusable = $false 
+    [bool] $IsFocused = $false  
+    [int] $TabIndex = 0        
+    [int] $ZIndex = 0          
+    [UIElement] $Parent = $null 
+    [System.Collections.Generic.List[UIElement]] $Children 
+    
+    hidden [TuiBuffer] $_private_buffer = $null
+    hidden [bool] $_needs_redraw = $true
+    
+    [hashtable] $Metadata = @{} 
+
+    UIElement() {
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        Write-Verbose "UIElement 'Unnamed' created with default size ($($this.Width)x$($this.Height))."
+    }
+
+    UIElement([string]$name) {
+        $this.Name = $name
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        Write-Verbose "UIElement '$($this.Name)' created with default size ($($this.Width)x$($this.Height))."
+    }
+
+    UIElement([int]$x, [int]$y, [int]$width, [int]$height) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.X = $x
+        $this.Y = $y
+        $this.Width = $width
+        $this.Height = $height
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._private_buffer = [TuiBuffer]::new($width, $height, "Unnamed.Buffer")
+        Write-Verbose "UIElement 'Unnamed' created at ($x, $y) with dimensions $($width)x$($height)."
+    }
+
+    [hashtable] GetAbsolutePosition() {
+        $absX = $this.X
+        $absY = $this.Y
+        $current = $this.Parent
+        while ($null -ne $current) {
+            $absX += $current.X
+            $absY += $current.Y
+            $current = $current.Parent
+        }
+        return @{ X = $absX; Y = $absY }
+    }
+
+    # FIX: Removed the [UIElement] type hint from the $child parameter
+    # to prevent cross-module type conversion errors.
+    [void] AddChild([object]$child) {
+        try {
+            if ($child -eq $this) { throw [System.ArgumentException]::new("Cannot add an element as its own child.") }
+            if ($this.Children.Contains($child)) {
+                Write-Warning "Child '$($child.Name)' is already a child of '$($this.Name)'. Skipping addition."
+                return
+            }
+            if ($child.Parent -ne $null) {
+                Write-Warning "Child '$($child.Name)' already has a parent ('$($child.Parent.Name)'). Consider removing it from its current parent first."
+            }
+            $child.Parent = $this
+            $this.Children.Add($child)
+            $this.RequestRedraw()
+            Write-Verbose "Added child '$($child.Name)' to parent '$($this.Name)'."
+        }
+        catch {
+            Write-Error "Failed to add child '$($child.Name)' to '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    # FIX: Removed the [UIElement] type hint from the $child parameter
+    # to prevent cross-module type conversion errors.
+    [void] RemoveChild([object]$child) {
+        try {
+            if ($this.Children.Remove($child)) {
+                $child.Parent = $null
+                $this.RequestRedraw()
+                Write-Verbose "Removed child '$($child.Name)' from parent '$($this.Name)'."
+            } else {
+                Write-Warning "Child '$($child.Name)' not found in parent '$($this.Name)' for removal. No action taken."
+            }
+        }
+        catch {
+            Write-Error "Failed to remove child '$($child.Name)' from '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] RequestRedraw() {
+        $this._needs_redraw = $true
+        if ($null -ne $this.Parent) {
+            $this.Parent.RequestRedraw()
+        }
+        Write-Verbose "Redraw requested for '$($this.Name)'."
+    }
+
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
+        if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
+        try {
+            if ($this.Width -eq $newWidth -and $this.Height -eq $newHeight) {
+                Write-Verbose "Resize: Component '$($this.Name)' already has target dimensions ($($newWidth)x$($newHeight)). No change."
+                return
+            }
+            $this.Width = $newWidth
+            $this.Height = $newHeight
+            if ($null -ne $this._private_buffer) {
+                $this._private_buffer.Resize($newWidth, $newHeight)
+            } else {
+                $this._private_buffer = [TuiBuffer]::new($newWidth, $newHeight, "$($this.Name).Buffer")
+                Write-Verbose "Re-initialized buffer for '$($this.Name)' due to null buffer."
+            }
+            $this.RequestRedraw()
+            $this.OnResize($newWidth, $newHeight)
+            Write-Verbose "Component '$($this.Name)' resized to $($newWidth)x$($newHeight)."
+        }
+        catch {
+            Write-Error "Failed to resize component '$($this.Name)' to $($newWidth)x$($newHeight): $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] Move([int]$newX, [int]$newY) {
+        if ($this.X -eq $newX -and $this.Y -eq $newY) {
+            Write-Verbose "Move: Component '$($this.Name)' already at target position ($($newX), $($newY)). No change."
+            return
+        }
+        $this.X = $newX
+        $this.Y = $newY
+        $this.RequestRedraw()
+        $this.OnMove($newX, $newY)
+        Write-Verbose "Component '$($this.Name)' moved to ($newX, $newY)."
+    }
+
+    [bool] ContainsPoint([int]$x, [int]$y) {
+        return ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height)
+    }
+
+    # FIX: Removed the [UIElement] return type hint to prevent cross-module type conversion errors.
+    [object] GetChildAtPoint([int]$x, [int]$y) {
+        for ($i = $this.Children.Count - 1; $i -ge 0; $i--) {
+            $child = $this.Children[$i]
+            if ($child.Visible -and $child.ContainsPoint($x - $child.X, $y - $child.Y)) {
+                return $child
+            }
+        }
+        return $null
+    }
+
+    [void] OnRender() {
+        if ($null -ne $this._private_buffer) {
+            $this._private_buffer.Clear()
+        }
+        Write-Verbose "OnRender called for '$($this.Name)': Default buffer clear."
+    }
+
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        Write-Verbose "OnResize called for '$($this.Name)': No custom resize logic."
+    }
+
+    [void] OnMove([int]$newX, [int]$newY) {
+        Write-Verbose "OnMove called for '$($this.Name)': No custom move logic."
+    }
+
+    [void] OnFocus() { Write-Verbose "OnFocus called for '$($this.Name)'." }
+    [void] OnBlur() { Write-Verbose "OnBlur called for '$($this.Name)'." }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Write-Verbose "HandleInput called for '$($this.Name)': Key: $($keyInfo.Key)."
+        return $false
+    }
+
+    [void] Render() {
+        if (-not $this.Visible) { 
+            Write-Verbose "Skipping Render for '$($this.Name)': Not visible."
+            return 
+        }
+        $this._RenderContent() 
+    }
+
+    hidden [void] _RenderContent() {
+        if (-not $this.Visible) { return }
+        if ($this._needs_redraw -or ($null -eq $this._private_buffer)) {
+            if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
+                $bufferWidth = [Math]::Max(1, $this.Width)
+                $bufferHeight = [Math]::Max(1, $this.Height)
+                $this._private_buffer = [TuiBuffer]::new($bufferWidth, $bufferHeight, "$($this.Name).Buffer")
+                Write-Verbose "Re-initialized buffer for '$($this.Name)' due to null or dimension mismatch ($($bufferWidth)x$($bufferHeight))."
+            }
+            $this.OnRender()
+            $this._needs_redraw = $false
+            Write-Verbose "Rendered own content for '$($this.Name)'."
+        }
+        foreach ($child in $this.Children | Sort-Object ZIndex) { 
+            if ($child.Visible) {
+                $child.Render()
+                if ($null -ne $child._private_buffer) {
+                    $this._private_buffer.BlendBuffer($child._private_buffer, $child.X, $child.Y)
+                    Write-Verbose "Blended child '$($child.Name)' onto '$($this.Name)' at ($($child.X), $($child.Y))."
+                }
+            }
+        }
+    }
+
+    [TuiBuffer] GetBuffer() { return $this._private_buffer }
+    
+    [string] ToString() {
+        return "$($this.GetType().Name)(Name='$($this.Name)', X=$($this.X), Y=$($this.Y), Width=$($this.Width), Height=$($this.Height), Visible=$($this.Visible))"
+    }
+}
+#endregion
+
+#region Component - A generic container component
+class Component : UIElement {
+    Component([string]$name) : base($name) {
+        $this.Name = $name
+        Write-Verbose "Component '$($this.Name)' created."
+    }
+
+    hidden [void] _RenderContent() {
+        ([UIElement]$this)._RenderContent()
+        Write-Verbose "_RenderContent called for Component '$($this.Name)' (delegating to base UIElement)."
+    }
+
+    [string] ToString() {
+        return "Component(Name='$($this.Name)', Children=$($this.Children.Count))"
+    }
+}
+#endregion
+
+#region Screen - Top-level Container for Application Views
+class Screen : UIElement {
+    [hashtable]$Services
+    [object]$ServiceContainer 
+    [System.Collections.Generic.Dictionary[string, object]]$State
+    [System.Collections.Generic.List[UIElement]] $Panels
+    
+    # FIX: Removed the [UIElement] type hint to prevent cross-module conversion errors.
+    $LastFocusedComponent
+    
+    hidden [System.Collections.Generic.Dictionary[string, string]] $EventSubscriptions 
+
+    Screen([string]$name, [hashtable]$services) : base($name) {
+        $this.Services = $services
+        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
+        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+        $this.ServiceContainer = $null
+        Write-Verbose "Screen '$($this.Name)' created with hashtable services."
+    }
+
+    Screen([string]$name, [object]$serviceContainer) : base($name) {
+        $this.ServiceContainer = $serviceContainer
+        $this.Services = [hashtable]::new()
+        if ($this.ServiceContainer.PSObject.Methods['GetAllRegisteredServices'] -and $this.ServiceContainer.PSObject.Methods['GetService']) { 
+            try {
+                $registeredServices = $this.ServiceContainer.GetAllRegisteredServices()
+                foreach ($service in $registeredServices) {
+                    try {
+                        $this.Services[$service.Name] = $this.ServiceContainer.GetService($service.Name)
+                    } catch {
+                        Write-Warning "Screen '$($this.Name)': Failed to resolve service '$($service.Name)' from container: $($_.Exception.Message)"
+                    }
+                }
+                Write-Verbose "Screen '$($this.Name)' populated Services hashtable from ServiceContainer."
+            } catch {
+                Write-Warning "Screen '$($this.Name)': Failed to enumerate services from container: $($_.Exception.Message)"
+            }
+        } else {
+            Write-Warning "Screen '$($this.Name)' received a non-ServiceContainer object for DI. Services hashtable might be incomplete or inaccurate."
+        }
+        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
+        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+        Write-Verbose "Screen '$($this.Name)' created with ServiceContainer."
+    }
+
+    [void] Initialize() { Write-Verbose "Initialize called for Screen '$($this.Name)': Default (no-op)." }
+    [void] OnEnter() { Write-Verbose "OnEnter called for Screen '$($this.Name)': Default (no-op)." }
+    [void] OnExit() { Write-Verbose "OnExit called for Screen '$($this.Name)': Default (no-op)." }
+    [void] OnResume() { Write-Verbose "OnResume called for Screen '$($this.Name)': Default (no-op)." }
+
+    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Write-Verbose "HandleInput called for Screen '$($this.Name)': Key: $($keyInfo.Key). Default (no-op)."
+    }
+
+    [void] Cleanup() {
+        try {
+            Write-Verbose "Cleanup called for Screen '$($this.Name)'."
+            foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
+                try {
+                    if (Get-Command 'Unsubscribe-Event' -ErrorAction SilentlyContinue) {
+                        Unsubscribe-Event -EventName $kvp.Key -HandlerId $kvp.Value
+                        Write-Verbose "Unsubscribed event '$($kvp.Key)' (HandlerId: $($kvp.Value)) for screen '$($this.Name)'."
+                    }
+                }
+                catch {
+                    Write-Warning "Failed to unsubscribe event '$($kvp.Key)' (HandlerId: $($kvp.Value)) for screen '$($this.Name)': $($_.Exception.Message)"
+                }
+            }
+            $this.EventSubscriptions.Clear()
+            foreach ($child in $this.Children) {
+                if ($child.PSObject.Methods['Cleanup']) {
+                    try { $child.Cleanup() } catch { Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" }
+                }
+            }
+            $this.Panels.Clear()
+            $this.Children.Clear()
+            Write-Verbose "Cleaned up resources for screen: $($this.Name)."
+        }
+        catch {
+            Write-Error "Error during Cleanup for screen '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    # FIX: Removed the [UIElement] type hint from the $panel parameter
+    # to prevent cross-module type conversion errors.
+    [void] AddPanel([object]$panel) {
+        try {
+            $this.Panels.Add($panel)
+            $this.AddChild($panel) 
+            Write-Verbose "Added panel '$($panel.Name)' to screen '$($this.Name)'."
+        }
+        catch {
+            Write-Error "Failed to add panel '$($panel.Name)' to screen '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] SubscribeToEvent([string]$eventName, [scriptblock]$action) {
+        try {
+            if (Get-Command 'Subscribe-Event' -ErrorAction SilentlyContinue) {
+                $subscriptionId = Subscribe-Event -EventName $eventName -Handler $action -Source $this.Name
+                $this.EventSubscriptions[$eventName] = $subscriptionId
+                Write-Verbose "Screen '$($this.Name)' subscribed to event '$eventName' with HandlerId: $subscriptionId."
+            } else {
+                Write-Warning "Subscribe-Event function not available. Event subscription for '$eventName' failed."
+            }
+        }
+        catch {
+            Write-Error "Failed for screen '$($this.Name)' to subscribe to event '$eventName': $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    hidden [void] _RenderContent() {
+        ([UIElement]$this)._RenderContent()
+        Write-Verbose "_RenderContent called for Screen '$($this.Name)' (rendering UIElement children, including panels)."
+    }
+
+    [string] ToString() {
+        return "Screen(Name='$($this.Name)', Panels=$($this.Panels.Count), Visible=$($this.Visible))"
+    }
+}
+#endregion
+
+####layout\panels-class\panels-class.psm1
+# Explicitly declare dependencies for the parser
+#using module '../ui-classes/ui-classes.psd1'
+#using module '../tui-primitives/tui-primitives.psd1'
+#using module '../../modules/theme-manager/theme-manager.psd1'
+#change these to this method as root is set in run at op
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+
+
+# ==============================================================================
+# Panel Classes v5.2 - Axiom-Phoenix Layout Foundation
+# Provides Panel base class for layout management and specialized panel types.
+# ==============================================================================
+
+
+#region Panel Class - A specialized UIElement
+class Panel : UIElement {
+    [string] $Title = ""
+    [string] $BorderStyle = "Single"
+    [ConsoleColor] $BorderColor = [ConsoleColor]::Gray
+    [ConsoleColor] $BackgroundColor = [ConsoleColor]::Black
+    [ConsoleColor] $TitleColor = [ConsoleColor]::White
+    [bool] $HasBorder = $true
+    [bool] $CanFocus = $false
+    [int] $ContentX = 0
+    [int] $ContentY = 0
+    [int] $ContentWidth = 0
+    [int] $ContentHeight = 0
+    [string] $LayoutType = "Manual"
+
+    Panel() : base() {
+        $this.Name = "Panel_$(Get-Random -Maximum 1000)"
+        $this.IsFocusable = $false
+        $this.UpdateContentBounds()
+        Write-Verbose "Panel: Default constructor called for '$($this.Name)'."
+    }
+
+    # FIX: Removed invalid attributes
+    Panel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) {
+        $this.Name = "Panel_$(Get-Random -Maximum 1000)"
+        $this.IsFocusable = $false
+        $this.UpdateContentBounds()
+        Write-Verbose "Panel: Constructor with dimensions called for '$($this.Name)' at ($x, $y) with $($width)x$($height)."
+    }
+
+    # FIX: Removed invalid attributes
+    Panel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height) {
+        $this.Name = "Panel_$(Get-Random -Maximum 1000)"
+        $this.Title = $title
+        $this.IsFocusable = $false
+        $this.UpdateContentBounds()
+        Write-Verbose "Panel: Constructor with title called for '$($this.Name)' ('$title') at ($x, $y) with $($width)x$($height)."
+    }
+
+    [void] UpdateContentBounds() {
+        if ($this.HasBorder) {
+            $this.ContentX = 1
+            $this.ContentY = 1
+            $this.ContentWidth = [Math]::Max(0, $this.Width - 2)
+            $this.ContentHeight = [Math]::Max(0, $this.Height - 2)
+        } else {
+            $this.ContentX = 0
+            $this.ContentY = 0
+            $this.ContentWidth = $this.Width
+            $this.ContentHeight = $this.Height
+        }
+        Write-Verbose "Panel '$($this.Name)': Content bounds updated to ($($this.ContentX), $($this.ContentY)) - $($this.ContentWidth)x$($this.ContentHeight) (HasBorder: $($this.HasBorder))."
+    }
+
+    # FIX: Removed invalid attributes
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        ([UIElement]$this).OnResize($newWidth, $newHeight) 
+        $this.UpdateContentBounds()
+        $this.PerformLayout()
+        Write-Verbose "Panel '$($this.Name)': OnResize triggered, new content bounds calculated and layout performed."
+    }
+
+    [void] PerformLayout() {
+        try {
+            if ($this.Children.Count -eq 0) {
+                Write-Verbose "Panel '$($this.Name)': No children to lay out."
+                return
+            }
+            switch ($this.LayoutType) {
+                "Vertical" { $this.LayoutVertical() }
+                "Horizontal" { $this.LayoutHorizontal() }
+                "Grid" { $this.LayoutGrid() }
+                "Manual" { Write-Verbose "Panel '$($this.Name)': LayoutType is Manual, skipping auto-layout." }
+                default { Write-Warning "Panel '$($this.Name)': Unknown LayoutType '$($this.LayoutType)'. Skipping auto-layout." }
+            }
+            Write-Verbose "Panel '$($this.Name)': Layout performed for type '$($this.LayoutType)'."
+        }
+        catch {
+            Write-Error "Panel '$($this.Name)': Error during PerformLayout for type '$($this.LayoutType)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    hidden [void] LayoutVertical() {
+        if ($this.Children.Count -eq 0) { return }
+        if ($this.ContentHeight -eq 0) { Write-Warning "Panel '$($this.Name)': ContentHeight is 0 for vertical layout. Children will have 0 height." }
+        $currentY = $this.ContentY
+        $childWidth = $this.ContentWidth
+        $availableHeight = $this.ContentHeight
+        $childHeight = [Math]::Max(1, [Math]::Floor($availableHeight / $this.Children.Count)) 
+        for ($i = 0; $i -lt $this.Children.Count; $i++) {
+            $child = $this.Children[$i]
+            $child.X = $this.ContentX
+            $child.Y = $currentY
+            if ($i -eq ($this.Children.Count - 1)) {
+                $remainingHeight = $this.ContentY + $this.ContentHeight - $currentY
+                $child.Resize($childWidth, [Math]::Max(1, $remainingHeight))
+            } else {
+                $child.Resize($childWidth, $childHeight)
+            }
+            $currentY += $child.Height
+        }
+        Write-Verbose "Panel '$($this.Name)': Performed Vertical Layout for $($this.Children.Count) children."
+    }
+
+    hidden [void] LayoutHorizontal() {
+        if ($this.Children.Count -eq 0) { return }
+        if ($this.ContentWidth -eq 0) { Write-Warning "Panel '$($this.Name)': ContentWidth is 0 for horizontal layout. Children will have 0 width." }
+        $currentX = $this.ContentX
+        $childHeight = $this.ContentHeight
+        $availableWidth = $this.ContentWidth
+        $childWidth = [Math]::Max(1, [Math]::Floor($availableWidth / $this.Children.Count))
+        for ($i = 0; $i -lt $this.Children.Count; $i++) {
+            $child = $this.Children[$i]
+            $child.X = $currentX
+            $child.Y = $this.ContentY
+            if ($i -eq ($this.Children.Count - 1)) {
+                $remainingWidth = $this.ContentX + $this.ContentWidth - $currentX
+                $child.Resize([Math]::Max(1, $remainingWidth), $childHeight)
+            } else {
+                $child.Resize($childWidth, $childHeight)
+            }
+            $currentX += $child.Width
+        }
+        Write-Verbose "Panel '$($this.Name)': Performed Horizontal Layout for $($this.Children.Count) children."
+    }
+
+    hidden [void] LayoutGrid() {
+        if ($this.Children.Count -eq 0) { return }
+        if ($this.ContentWidth -eq 0 -or $this.ContentHeight -eq 0) { Write-Warning "Panel '$($this.Name)': Content dimensions are zero for grid layout. Children will have 0 dimensions." }
+        $childCount = $this.Children.Count
+        $cols = [Math]::Ceiling([Math]::Sqrt($childCount))
+        $rows = [Math]::Ceiling($childCount / $cols)
+        $cellWidth = [Math]::Max(1, [Math]::Floor($this.ContentWidth / $cols))
+        $cellHeight = [Math]::Max(1, [Math]::Floor($this.ContentHeight / $rows))
+        for ($i = 0; $i -lt $this.Children.Count; $i++) {
+            $child = $this.Children[$i]
+            $row = [Math]::Floor($i / $cols)
+            $col = $i % $cols
+            $x = $this.ContentX + ($col * $cellWidth)
+            $y = $this.ContentY + ($row * $cellHeight)
+            $width = if ($col -eq ($cols - 1)) { $this.ContentX + $this.ContentWidth - $x } else { $cellWidth }
+            $height = if ($row -eq ($rows - 1)) { $this.ContentY + $this.ContentHeight - $y } else { $cellHeight }
+            $child.Move($x, $y)
+            $child.Resize([Math]::Max(1, $width), [Math]::Max(1, $height))
+        }
+        Write-Verbose "Panel '$($this.Name)': Performed Grid Layout for $($this.Children.Count) children ($rows x $cols grid)."
+    }
+
+    # FIX: Removed invalid attributes
+    [void] SetBorderStyle([string]$style, [ConsoleColor]$color) {
+        $this.BorderStyle = $style
+        $this.BorderColor = $color
+        $this.RequestRedraw()
+        Write-Verbose "Panel '$($this.Name)': Border style set to '$style' with color '$color'."
+    }
+
+    # FIX: Removed invalid attributes
+    [void] SetBorder([bool]$hasBorder) {
+        if ($this.HasBorder -eq $hasBorder) {
+            Write-Verbose "Panel '$($this.Name)': Border status already $($hasBorder). No change."
+            return
+        }
+        $this.HasBorder = $hasBorder
+        $this.UpdateContentBounds()
+        $this.PerformLayout()
+        $this.RequestRedraw()
+        Write-Verbose "Panel '$($this.Name)': Border set to '$hasBorder'. Content bounds updated and layout performed."
+    }
+
+    # FIX: Removed invalid attributes
+    [void] SetTitle([string]$title) {
+        if ($this.Title -eq $title) {
+            Write-Verbose "Panel '$($this.Name)': Title already set to '$title'. No change."
+            return
+        }
+        $this.Title = $title
+        $this.RequestRedraw()
+        Write-Verbose "Panel '$($this.Name)': Title set to '$title'."
+    }
+
+    # FIX: Removed invalid attributes
+    [bool] ContainsContentPoint([int]$x, [int]$y) {
+        return ($x -ge $this.ContentX -and $x -lt ($this.ContentX + $this.ContentWidth) -and 
+                $y -ge $this.ContentY -and $y -lt ($this.ContentY + $this.ContentHeight))
+    }
+
+    [hashtable] GetContentBounds() { return @{ X = $this.ContentX; Y = $this.ContentY; Width = $this.ContentWidth; Height = $this.ContentHeight } }
+    [hashtable] GetContentArea() { return $this.GetContentBounds() }
+    
+    # FIX: Removed invalid attributes
+    [void] WriteToBuffer([int]$x, [int]$y, [string]$text, [ConsoleColor]$fg, [ConsoleColor]$bg) {
+        if ($null -eq $this._private_buffer) { 
+            Write-Warning "Panel '$($this.Name)': Internal buffer is null, cannot write text. (Call OnRender first)."
+            return 
+        }
+        Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $text -ForegroundColor $fg -BackgroundColor $bg
+        Write-Verbose "Panel '$($this.Name)': Wrote text to buffer at ($x, $y)."
+    }
+    
+    # FIX: Removed invalid attributes
+    [void] DrawBoxToBuffer([int]$x, [int]$y, [int]$width, [int]$height, [ConsoleColor]$borderColor, [ConsoleColor]$bgColor) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        if ($null -eq $this._private_buffer) { 
+            Write-Warning "Panel '$($this.Name)': Internal buffer is null, cannot draw box. (Call OnRender first)."
+            return 
+        }
+        Write-TuiBox -Buffer $this._private_buffer -X $x -Y $y -Width $width -Height $height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+        Write-Verbose "Panel '$($this.Name)': Drew sub-box on buffer at ($x, $y) with $($width)x$($height)."
+    }
+
+    [void] ClearContent() {
+        if ($null -eq $this._private_buffer) { return }
+        $clearCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
+        for ($y = $this.ContentY; $y -lt ($this.ContentY + $this.ContentHeight); $y++) {
+            for ($x = $this.ContentX; $x -lt ($this.ContentX + $this.ContentWidth); $x++) {
+                $this._private_buffer.SetCell($x, $y, $clearCell)
+            }
+        }
+        $this.RequestRedraw()
+        Write-Verbose "Panel '$($this.Name)': Content area cleared."
+    }
+
+    [void] OnRender() {
+        if ($null -eq $this._private_buffer) { 
+            Write-Warning "Panel '$($this.Name)': OnRender called but internal buffer is null. Skipping render."
+            return 
+        }
+        $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
+        $this._private_buffer.Clear($bgCell)
+        if ($this.HasBorder) {
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle $this.BorderStyle -BorderColor $this.BorderColor -BackgroundColor $this.BackgroundColor -Title $this.Title
+        }
+        Write-Verbose "Panel '$($this.Name)': OnRender completed (background and border)."
+    }
+
+    [void] OnFocus() {
+        ([UIElement]$this).OnFocus()
+        if ($this.CanFocus) {
+            $this.BorderColor = Get-ThemeColor 'Accent'
+            $this.RequestRedraw()
+            Write-Verbose "Panel '$($this.Name)': Gained focus, border color set to theme accent."
+        }
+    }
+
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        if ($this.CanFocus) {
+            $this.BorderColor = Get-ThemeColor 'Border'
+            $this.RequestRedraw()
+            Write-Verbose "Panel '$($this.Name)': Lost focus, border color set to theme border."
+        }
+    }
+
+    [UIElement] GetFirstFocusableChild() {
+        foreach ($child in $this.Children | Sort-Object TabIndex) {
+            if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
+                Write-Verbose "Panel '$($this.Name)': Found first focusable child '$($child.Name)'."
+                return $child
+            }
+            if ($child -is [Panel]) {
+                $nestedChild = $child.GetFirstFocusableChild()
+                if ($null -ne $nestedChild) {
+                    Write-Verbose "Panel '$($this.Name)': Found nested focusable child '$($nestedChild.Name)'."
+                    return $nestedChild
+                }
+            }
+        }
+        Write-Verbose "Panel '$($this.Name)': No focusable children found."
+        return $null
+    }
+
+    [System.Collections.Generic.List[UIElement]] GetFocusableChildren() {
+        $focusable = [System.Collections.Generic.List[UIElement]]::new()
+        foreach ($child in $this.Children | Sort-Object TabIndex) {
+            if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
+                [void]$focusable.Add($child)
+            }
+            if ($child -is [Panel]) {
+                $nestedFocusable = $child.GetFocusableChildren()
+                $focusable.AddRange($nestedFocusable)
+            }
+        }
+        Write-Verbose "Panel '$($this.Name)': Collected $($focusable.Count) focusable children."
+        return $focusable
+    }
+
+    # FIX: Removed invalid attributes
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        try {
+            ([UIElement]$this).HandleInput($keyInfo)
+            if ($this.CanFocus -and $this.IsFocused) {
+                switch ($keyInfo.Key) {
+                    ([ConsoleKey]::Tab) {
+                        $firstChild = $this.GetFirstFocusableChild()
+                        if ($null -ne $firstChild) {
+                            $this.IsFocused = $false
+                            Write-Verbose "Panel '$($this.Name)': Redirecting focus to first child '$($firstChild.Name)' on Tab press."
+                            return $true
+                        }
+                    }
+                    ([ConsoleKey]::Enter) {
+                        $firstChild = $this.GetFirstFocusableChild()
+                        if ($null -ne $firstChild) {
+                            $this.IsFocused = $false
+                            Write-Verbose "Panel '$($this.Name)': Redirecting focus to first child '$($firstChild.Name)' on Enter press."
+                            return $true
+                        }
+                    }
+                }
+            }
+            foreach ($child in $this.Children | Sort-Object TabIndex) {
+                if ($child.Visible -and $child.Enabled) {
+                    if ($child.HandleInput($keyInfo)) {
+                        Write-Verbose "Panel '$($this.Name)': Child '$($child.Name)' handled input."
+                        return $true
+                    }
+                }
+            }
+            Write-Verbose "Panel '$($this.Name)': Did not handle input. Key: $($keyInfo.Key)."
+        }
+        catch {
+            Write-Error "Panel '$($this.Name)': Error handling input (Key: $($keyInfo.Key)): $($_.Exception.Message)"
+            throw
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "Panel(Name='$($this.Name)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height), HasBorder=$($this.HasBorder), Children=$($this.Children.Count))"
+    }
+}
+#endregion
+
+#region Specialized Panel Types
+class ScrollablePanel : Panel {
+    [int] $ScrollX = 0 
+    [int] $ScrollY = 0 
+    [int] $VirtualWidth = 0 
+    [int] $VirtualHeight = 0 
+    [bool] $ShowScrollbars = $true 
+    hidden [TuiBuffer] $_virtual_buffer = $null
+
+    ScrollablePanel() : base() {
+        $this.Name = "ScrollablePanel_$(Get-Random -Maximum 1000)"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+        Write-Verbose "ScrollablePanel: Default constructor called for '$($this.Name)'."
+    }
+
+    # FIX: Removed invalid attributes
+    ScrollablePanel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) {
+        $this.Name = "ScrollablePanel_$(Get-Random -Maximum 1000)"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+        Write-Verbose "ScrollablePanel: Constructor with dimensions called for '$($this.Name)'."
+    }
+
+    # FIX: Removed invalid attributes
+    [void] SetVirtualSize([int]$width, [int]$height) {
+        if ($width -lt 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width cannot be negative.") }
+        if ($height -lt 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height cannot be negative.") }
+        try {
+            if ($this.VirtualWidth -eq $width -and $this.VirtualHeight -eq $height) {
+                Write-Verbose "ScrollablePanel '$($this.Name)': Virtual size already set to $($width)x$($height). No change."
+                return
+            }
+            $this.VirtualWidth = $width
+            $this.VirtualHeight = $height
+            if ($width -gt 0 -and $height -gt 0) {
+                if ($null -ne $this._virtual_buffer -and $this._virtual_buffer.Width -eq $width -and $this._virtual_buffer.Height -eq $height) {
+                    Write-Verbose "ScrollablePanel '$($this.Name)': Virtual buffer already correct size."
+                } else {
+                    $this._virtual_buffer = [TuiBuffer]::new($width, $height, "$($this.Name).Virtual")
+                    Write-Verbose "ScrollablePanel '$($this.Name)': Virtual buffer re-initialized to $($width)x$($height)."
+                }
+            } else {
+                $this._virtual_buffer = $null
+                Write-Verbose "ScrollablePanel '$($this.Name)': Virtual size set to 0, clearing virtual buffer."
+            }
+            $this.ScrollTo($this.ScrollX, $this.ScrollY)
+            $this.RequestRedraw()
+            Write-Verbose "ScrollablePanel '$($this.Name)': Virtual size set to $($width)x$($height)."
+        }
+        catch {
+            Write-Error "ScrollablePanel '$($this.Name)': Error setting virtual size to $($width)x$($height): $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    # FIX: Removed invalid attributes
+    [void] ScrollTo([int]$x, [int]$y) {
+        $maxScrollX = [Math]::Max(0, $this.VirtualWidth - $this.ContentWidth)
+        $maxScrollY = [Math]::Max(0, $this.VirtualHeight - $this.ContentHeight)
+        $newScrollX = [Math]::Max(0, [Math]::Min($x, $maxScrollX))
+        $newScrollY = [Math]::Max(0, [Math]::Min($y, $maxScrollY))
+        if ($this.ScrollX -eq $newScrollX -and $this.ScrollY -eq $newScrollY) {
+            Write-Verbose "ScrollablePanel '$($this.Name)': Scroll position already at ($newScrollX, $newScrollY). No change."
+            return
+        }
+        $this.ScrollX = $newScrollX
+        $this.ScrollY = $newScrollY
+        $this.RequestRedraw()
+        Write-Verbose "ScrollablePanel '$($this.Name)': Scrolled to ($($this.ScrollX), $($this.ScrollY))."
+    }
+
+    # FIX: Removed invalid attributes
+    [void] ScrollBy([int]$deltaX, [int]$deltaY) {
+        $this.ScrollTo($this.ScrollX + $deltaX, $this.ScrollY + $deltaY)
+        Write-Verbose "ScrollablePanel '$($this.Name)': Scrolled by ($deltaX, $deltaY)."
+    }
+
+    # FIX: Removed invalid attributes
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        try {
+            ([Panel]$this).HandleInput($keyInfo)
+            if ($this.IsFocused) {
+                switch ($keyInfo.Key) {
+                    ([ConsoleKey]::UpArrow) { $this.ScrollBy(0, -1); return $true }
+                    ([ConsoleKey]::DownArrow) { $this.ScrollBy(0, 1); return $true }
+                    ([ConsoleKey]::LeftArrow) { $this.ScrollBy(-1, 0); return $true }
+                    ([ConsoleKey]::RightArrow) { $this.ScrollBy(1, 0); return $true }
+                    ([ConsoleKey]::PageUp) { $this.ScrollBy(0, -$this.ContentHeight); return $true }
+                    ([ConsoleKey]::PageDown) { $this.ScrollBy(0, $this.ContentHeight); return $true }
+                    ([ConsoleKey]::Home) { $this.ScrollTo(0, 0); return $true }
+                    ([ConsoleKey]::End) { $this.ScrollTo(0, $this.VirtualHeight); return $true }
+                }
+            }
+            Write-Verbose "ScrollablePanel '$($this.Name)': Did not handle input. Key: $($keyInfo.Key)."
+        }
+        catch {
+            Write-Error "ScrollablePanel '$($this.Name)': Error handling input (Key: $($keyInfo.Key)): $($_.Exception.Message)"
+            throw
+        }
+        return $false
+    }
+
+    [void] OnRender() {
+        ([Panel]$this).OnRender()
+        Write-Verbose "ScrollablePanel '$($this.Name)': Base Panel OnRender completed."
+        if ($null -ne $this._virtual_buffer -and $this.ContentWidth -gt 0 -and $this.ContentHeight -gt 0) {
+            $visibleBuffer = $this._virtual_buffer.GetSubBuffer($this.ScrollX, $this.ScrollY, $this.ContentWidth, $this.ContentHeight)
+            $this._private_buffer.BlendBuffer($visibleBuffer, $this.ContentX, $this.ContentY)
+            Write-Verbose "ScrollablePanel '$($this.Name)': Blended virtual content."
+        } else {
+            Write-Verbose "ScrollablePanel '$($this.Name)': No virtual content to blend or content area is zero."
+        }
+        if ($this.ShowScrollbars -and $this.HasBorder) {
+            $this.DrawScrollbars()
+            Write-Verbose "ScrollablePanel '$($this.Name)': Scrollbars drawn."
+        }
+    }
+
+    hidden [void] DrawScrollbars() {
+        if ($null -eq $this._private_buffer) { return }
+        if ($this.VirtualHeight -gt $this.ContentHeight -and $this.Width -gt 1) {
+            $scrollbarX = $this.Width - 1
+            $scrollbarTrackHeight = $this.Height - 2
+            $scrollRatioY = ($this.ScrollY / [Math]::Max(1, $this.VirtualHeight - $this.ContentHeight))
+            $thumbPositionInTrack = [Math]::Floor($scrollRatioY * ($scrollbarTrackHeight - 1))
+            for ($y = 1; $y -lt ($this.Height - 1); $y++) {
+                $char = if ($y -eq ($thumbPositionInTrack + 1)) { '█' } else { '▒' }
+                $cell = [TuiCell]::new($char, (Get-ThemeColor 'Subtle'), $this.BackgroundColor)
+                $this._private_buffer.SetCell($scrollbarX, $y, $cell)
+            }
+            Write-Verbose "ScrollablePanel '$($this.Name)': Vertical scrollbar drawn."
+        }
+        if ($this.VirtualWidth -gt $this.ContentWidth -and $this.Height -gt 1) {
+            $scrollbarY = $this.Height - 1
+            $scrollbarTrackWidth = $this.Width - 2
+            $scrollRatioX = ($this.ScrollX / [Math]::Max(1, $this.VirtualWidth - $this.ContentWidth))
+            $thumbPositionInTrack = [Math]::Floor($scrollRatioX * ($scrollbarTrackWidth - 1))
+            for ($x = 1; $x -lt ($this.Width - 1); $x++) {
+                $char = if ($x -eq ($thumbPositionInTrack + 1)) { '█' } else { '▒' }
+                $cell = [TuiCell]::new($char, (Get-ThemeColor 'Subtle'), $this.BackgroundColor)
+                $this._private_buffer.SetCell($x, $scrollbarY, $cell)
+            }
+            Write-Verbose "ScrollablePanel '$($this.Name)': Horizontal scrollbar drawn."
+        }
+    }
+
+    [TuiBuffer] GetVirtualBuffer() { return $this._virtual_buffer }
+
+    [string] ToString() {
+        return "ScrollablePanel(Name='$($this.Name)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height), VirtualSize=$($this.VirtualWidth)x$($this.VirtualHeight), Scroll=($($this.ScrollX),$($this.ScrollY)))"
+    }
+}
+
+class GroupPanel : Panel {
+    [bool] $IsCollapsed = $false
+    [int] $ExpandedHeight = 0
+    [int] $HeaderHeight = 1
+    [ConsoleColor] $HeaderColor = [ConsoleColor]::DarkBlue
+    [string] $CollapseChar = "▼"
+    [string] $ExpandChar = "▶"
+
+    GroupPanel() : base() {
+        $this.Name = "GroupPanel_$(Get-Random -Maximum 1000)"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+        $this.ExpandedHeight = $this.Height
+        Write-Verbose "GroupPanel: Default constructor called for '$($this.Name)'."
+    }
+
+    # FIX: Removed invalid attributes
+    GroupPanel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height, $title) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.Name = "GroupPanel_$(Get-Random -Maximum 1000)"
+        $this.IsFocusable = $true
+        $this.CanFocus = $true
+        $this.ExpandedHeight = $height
+        Write-Verbose "GroupPanel: Constructor with dimensions and title called for '$($this.Name)' ('$title')."
+    }
+
+    [void] ToggleCollapsed() {
+        try {
+            $this.IsCollapsed = -not $this.IsCollapsed
+            if ($this.IsCollapsed) {
+                $this.ExpandedHeight = $this.Height
+                $this.Resize($this.Width, [Math]::Max(1, $this.HeaderHeight + 2))
+                Write-Verbose "GroupPanel '$($this.Name)': Collapsed. Resized to $($this.Width)x$($this.Height)."
+            } else {
+                $this.Resize($this.Width, [Math]::Max(1, $this.ExpandedHeight))
+                Write-Verbose "GroupPanel '$($this.Name)': Expanded. Resized to $($this.Width)x$($this.Height)."
+            }
+            foreach ($child in $this.Children) {
+                $child.Visible = -not $this.IsCollapsed
+            }
+            $this.RequestRedraw()
+            Write-Verbose "GroupPanel '$($this.Name)': Toggled collapsed state to $($this.IsCollapsed). Children visibility updated."
+        }
+        catch {
+            Write-Error "GroupPanel '$($this.Name)': Error toggling collapsed state: $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    # FIX: Removed invalid attributes
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        try {
+            ([Panel]$this).HandleInput($keyInfo)
+            if ($this.IsFocused) {
+                switch ($keyInfo.Key) {
+                    ([ConsoleKey]::Enter) { $this.ToggleCollapsed(); return $true }
+                    ([ConsoleKey]::Spacebar) { $this.ToggleCollapsed(); return $true }
+                }
+            }
+            if (-not $this.IsCollapsed) {
+                Write-Verbose "GroupPanel '$($this.Name)': Not collapsed, delegating input to children."
+                return ([Panel]$this).HandleInput($keyInfo)
+            }
+            Write-Verbose "GroupPanel '$($this.Name)': Did not handle input. Key: $($keyInfo.Key)."
+        }
+        catch {
+            Write-Error "GroupPanel '$($this.Name)': Error handling input (Key: $($keyInfo.Key)): $($_.Exception.Message)"
+            throw
+        }
+        return $false
+    }
+
+    [void] OnRender() {
+        ([Panel]$this).OnRender()
+        Write-Verbose "GroupPanel '$($this.Name)': Base Panel OnRender completed."
+        if ($this.HasBorder -and -not [string]::IsNullOrEmpty($this.Title)) {
+            $indicator = if ($this.IsCollapsed) { $this.ExpandChar } else { $this.CollapseChar }
+            $indicatorCell = [TuiCell]::new($indicator, $this.TitleColor, $this.BackgroundColor)
+            if (3 -lt ($this.Width - 1)) {
+                $this._private_buffer.SetCell(2, 0, $indicatorCell)
+                Write-Verbose "GroupPanel '$($this.Name)': Indicator '$indicator' drawn."
+            }
+        }
+    }
+
+    [string] ToString() {
+        return "GroupPanel(Name='$($this.Name)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height), Collapsed=$($this.IsCollapsed))"
+    }
+}
+#endregion
+
+#region Module Exports
+# This is handled by the .psd1 manifest.
+#endregion
+
+####services\service-container\service-container.psm1
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Service Container
+# Provides a robust, centralized dependency injection container with lifecycle management.
+# ==============================================================================
+#Requires -Version 7.2
+
+function Initialize-ServiceContainer {
+    <#
+    .SYNOPSIS
+    Creates and returns a new instance of the ServiceContainer.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    return Invoke-WithErrorHandling -Component "ServiceContainer.Initialize" -Context "Creating new service container instance" -ScriptBlock {
+        Write-Verbose "ServiceContainer: Initializing new instance."
+        return [ServiceContainer]::new()
+    }
+}
+
+# The ServiceContainer is a central registry for application-wide services.
+# It supports lazy initialization, singleton/transient lifestyles, circular
+# dependency detection, and managed resource cleanup.
+class ServiceContainer {
+    #region Private State
+    hidden [hashtable] $_services = @{}
+    hidden [hashtable] $_serviceFactories = @{}
+    #endregion
+
+    #region Constructor
+    ServiceContainer() {
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer created."
+        }
+        Write-Verbose "ServiceContainer: Instance constructed."
+    }
+    #endregion
+
+    #region Public Methods
+    # Registers an already created service instance (eager loading).
+    [void] Register(
+        # FIX: Removed [Parameter] and [Validate] attributes which are invalid on class method parameters.
+        [string]$name,
+        [object]$serviceInstance
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "Register" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # FIX: Added manual validation to replace the removed attributes.
+            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+            if ($null -eq $serviceInstance) { throw [System.ArgumentNullException]::new("serviceInstance") }
+
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+
+            $this.{_services}[$name] = $serviceInstance
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Registered eager service instance: '$name'."
+            }
+            Write-Verbose "ServiceContainer: Registered eager instance for '$name' of type '$($serviceInstance.GetType().Name)'."
+        }
+    }
+
+    # Registers a factory scriptblock used to create the service on-demand (lazy loading).
+    [void] RegisterFactory(
+        # FIX: Removed [Parameter] and [Validate] attributes.
+        [string]$name,
+        [scriptblock]$factory,
+        [bool]$isSingleton = $true
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "RegisterFactory" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # FIX: Added manual validation.
+            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+            if ($null -eq $factory) { throw [System.ArgumentNullException]::new("factory") }
+
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+            
+            $this.{_serviceFactories}[$name] = @{
+                Factory = $factory
+                IsSingleton = $isSingleton
+                Instance = $null # To hold the singleton instance once created
+            }
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Registered service factory: '$name' (Singleton: $isSingleton)."
+            }
+            Write-Verbose "ServiceContainer: Registered factory for '$name' (Singleton: $isSingleton)."
+        }
+    }
+
+    # Retrieves a service by its name.
+    [object] GetService(
+        # FIX: Removed [Parameter] and [Validate] attributes.
+        [string]$name
+    ) {
+        return Invoke-WithErrorHandling -Component "ServiceContainer" -Context "GetService" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # FIX: Added manual validation.
+            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
+            # 1. Return from eager-loaded services
+            if ($this.{_services}.ContainsKey($name)) {
+                Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."
+                return $this.{_services}[$name]
+            }
+
+            # 2. Check for a factory
+            if ($this.{_serviceFactories}.ContainsKey($name)) {
+                return $this._InitializeServiceFromFactory($name, [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase))
+            }
+
+            # 3. If not found, throw a detailed error
+            $available = $this.GetAllRegisteredServices() | Select-Object -ExpandProperty Name
+            throw [System.InvalidOperationException]::new("Service '$name' not found. Available services: $($available -join ', ')")
+        }
+    }
+    
+    # Retrieves a list of all registered services and their status.
+    [object[]] GetAllRegisteredServices() {
+        $list = [System.Collections.Generic.List[object]]::new()
+        
+        foreach ($key in $this.{_services}.Keys) {
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Instance'
+                Initialized = $true
+                Lifestyle = 'Singleton' # Eager instances are always singletons
+            })
+        }
+        
+        foreach ($key in $this.{_serviceFactories}.Keys) {
+            $factoryInfo = $this.{_serviceFactories}[$key]
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Factory'
+                Initialized = ($null -ne $factoryInfo.Instance)
+                Lifestyle = if ($factoryInfo.IsSingleton) { 'Singleton' } else { 'Transient' }
+            })
+        }
+        
+        return $list.ToArray() | Sort-Object Name
+    }
+
+    # Cleans up all managed singleton services that implement IDisposable.
+    [void] Cleanup() {
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer cleanup initiated."
+        }
+        Write-Verbose "ServiceContainer: Initiating cleanup of disposable singleton services."
+        
+        # Collect all singleton instances
+        $instancesToClean = [System.Collections.Generic.List[object]]::new()
+        $this.{_services}.Values | ForEach-Object { $instancesToClean.Add($_) }
+        $this.{_serviceFactories}.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
+
+        foreach ($service in $instancesToClean) {
+            if ($service -is [System.IDisposable]) {
+                try {
+                    Write-Verbose "ServiceContainer: Disposing service of type '$($service.GetType().FullName)'."
+                    $service.Dispose()
+                } catch {
+                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                        Write-Log -Level Error -Message "Error disposing service of type '$($service.GetType().FullName)': $($_.Exception.Message)"
+                    }
+                }
+            }
+        }
+        
+        $this.{_services}.Clear()
+        $this.{_serviceFactories}.Clear()
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer cleanup complete."
+        }
+        Write-Verbose "ServiceContainer: Cleanup complete. All service registries cleared."
+    }
+    #endregion
+
+    #region Private Methods
+    # The core logic for instantiating a service from its factory.
+    hidden [object] _InitializeServiceFromFactory([string]$name, [System.Collections.Generic.HashSet[string]]$resolutionChain) {
+        $factoryInfo = $this.{_serviceFactories}[$name]
+        
+        # For singletons, if an instance already exists, return it immediately.
+        if ($factoryInfo.IsSingleton -and $null -ne $factoryInfo.Instance) {
+            Write-Verbose "ServiceContainer: Returning cached singleton instance of '$name'."
+            return $factoryInfo.Instance
+        }
+
+        # Circular dependency detection
+        if ($resolutionChain.Contains($name)) {
+            $chain = ($resolutionChain -join ' -> ') + " -> $name"
+            throw [System.InvalidOperationException]::new("Circular dependency detected while resolving service '$name'. Chain: $chain")
+        }
+        [void]$resolutionChain.Add($name)
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Instantiating service '$name' from factory."
+        }
+        Write-Verbose "ServiceContainer: Invoking factory to create instance of '$name'."
+        
+        # Invoke the factory, passing the container itself as an argument.
+        $serviceInstance = & $factoryInfo.Factory $this
+
+        # If it's a singleton, cache the new instance.
+        if ($factoryInfo.IsSingleton) {
+            $factoryInfo.Instance = $serviceInstance
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Cached singleton instance of service '$name'."
+            }
+            Write-Verbose "ServiceContainer: Cached new singleton instance of '$name'."
+        }
+
+        # Unwind the resolution chain
+        [void]$resolutionChain.Remove($name)
+        
+        return $serviceInstance
+    }
+    #endregion
+}
+
+# Export the factory function
+Export-ModuleMember -Function Initialize-ServiceContainer
+
+####services\action-service\action-service.psm1
+# MODULE: action-service/action-service.psm1
+# PURPOSE: Provides a central registry for application-wide actions/commands.
+
+# ------------------------------------------------------------------------------
+# Public Functions
+# ------------------------------------------------------------------------------
+
+function Initialize-ActionService {
+    <#
+    .SYNOPSIS
+    Initializes the central ActionService for the application.
+    .DESCRIPTION
+    This function creates and returns a new instance of the ActionService class,
+    which manages the registration, unregistration, and execution of application-wide commands.
+    #>
+    [CmdletBinding()]
+    param()
+
+    # Wrap the core logic in Invoke-WithErrorHandling for application-wide error consistency.
+    # This also ensures centralized logging of the initialization process.
+    return Invoke-WithErrorHandling -Component "ActionService.Initialize" -Context "Initializing action service" -ScriptBlock {
+        Write-Verbose "ActionService: Initializing a new instance of ActionService."
+        $service = [ActionService]::new()
+        Write-Log -Level Info -Message "ActionService initialized."
+        return $service
+    }
+}
+
+# ------------------------------------------------------------------------------
+# ActionService Class
+# ------------------------------------------------------------------------------
+# The core component that manages the registry of application actions.
+class ActionService {
+    # Stores action definitions, mapping action names (string) to action details (hashtable).
+    [hashtable] $ActionRegistry = @{}
+    
+    # Manages internal event subscriptions made by ActionService itself for cleanup purposes.
+    # Maps event names (string) to handler IDs (string).
+    [hashtable] $EventSubscriptions = @{} 
+
+    # Constructor: Called when a new instance of ActionService is created.
+    ActionService() {
+        Write-Verbose "ActionService: Constructor called."
+        # Register default application-level actions.
+        # These actions typically publish events for other services to handle.
+        $this.RegisterAction(
+            "app.exit", 
+            "Exits the PMC Terminal application.", 
+            {
+                # This script block will be executed when 'app.exit' action is called.
+                # It expects the global 'Publish-Event' function to be available.
+                Publish-Event -EventName "Application.Exit" -Data @{ Source = "ActionService"; Action = "AppExit" }
+            }, 
+            "Application", 
+            $true # Force overwrite if called multiple times in tests
+        )
+
+        $this.RegisterAction(
+            "app.help", 
+            "Displays application help.", 
+            {
+                Publish-Event -EventName "App.HelpRequested" -Data @{ Source = "ActionService"; Action = "Help" }
+            }, 
+            "Application", 
+            $true # Force overwrite
+        )
+
+        Write-Log -Level Info -Message "ActionService initialized with default actions."
+        Write-Verbose "ActionService: Default actions registered."
+    }
+
+    # RegisterAction: Registers a new action with the service.
+    # Actions are identified by a unique name and associated with a script block to execute.
+    [void] RegisterAction(
+        [string]$name, 
+        [string]$description, 
+        [scriptblock]$scriptBlock, 
+        [string]$category = "General", 
+        [switch]$Force 
+    ) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($description)) { throw [System.ArgumentException]::new("Parameter 'description' cannot be null or empty.") }
+        if ($null -eq $scriptBlock) { throw [System.ArgumentNullException]::new("scriptBlock") }
+
+        if ($this.ActionRegistry.ContainsKey($name)) {
+            if (-not $Force) {
+                Write-Log -Level Warning -Message "Action '$name' already registered. Use -Force to overwrite."
+                Write-Verbose "ActionService: Skipping registration of '$name' as it already exists (no -Force)."
+                return # Do not overwrite if not forced
+            } else {
+                Write-Log -Level Info -Message "Action '$name' already registered. Overwriting due to -Force."
+                Write-Verbose "ActionService: Overwriting action '$name'."
+            }
+        }
+
+        # Store action details in the registry.
+        $this.ActionRegistry[$name] = @{
+            Name = $name;
+            Description = $description;
+            ScriptBlock = $scriptBlock;
+            Category = $category;
+            RegisteredAt = (Get-Date);
+        }
+        Write-Log -Level Debug -Message "Action '$name' registered."
+        Write-Verbose "ActionService: Action '$name' successfully registered."
+    }
+
+    # UnregisterAction: Removes an action from the service.
+    [void] UnregisterAction([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
+        if ($this.ActionRegistry.ContainsKey($name)) {
+            $this.ActionRegistry.Remove($name)
+            Write-Log -Level Debug -Message "Action '$name' unregistered."
+            Write-Verbose "ActionService: Action '$name' successfully unregistered."
+        } else {
+            Write-Log -Level Warning -Message "Action '$name' not found, cannot unregister."
+            Write-Verbose "ActionService: Action '$name' not found for unregistration."
+        }
+    }
+
+    # ExecuteAction: Executes a registered action.
+    # The parameters hashtable is passed to the action's script block as $ActionParameters.
+    [void] ExecuteAction(
+        [string]$name, 
+        [hashtable]$parameters = @{}
+    ) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
+        if (-not $this.ActionRegistry.ContainsKey($name)) {
+            $errorMessage = "Attempted to execute unknown action: $name"
+            Write-Log -Level Error -Message $errorMessage -Data @{ ActionName = $name; Parameters = $parameters }
+            Write-Verbose "ActionService: Failed to execute action '$name' - not found."
+            throw [System.ArgumentException]::new($errorMessage, "name")
+        }
+
+        $action = $this.ActionRegistry[$name]
+        Write-Log -Level Info -Message "Executing action: $name" -Data @{ ActionName = $name; Parameters = $parameters }
+        Write-Verbose "ActionService: Preparing to execute action '$name'."
+
+        try {
+            # Pass parameters to the action's script block via a named parameter ($ActionParameters).
+            # This ensures a consistent contract for all action script blocks.
+            & $action.ScriptBlock -ActionParameters $parameters
+            Write-Verbose "ActionService: Action '$name' executed successfully."
+        } catch {
+            $errorMessage = "Action '$name' failed: $($_.Exception.Message)"
+            Write-Log -Level Error -Message $errorMessage -Data @{ ActionName = $name; ActionParameters = $parameters; ErrorDetails = $_.Exception.Message; FullError = $_ }
+            Write-Verbose "ActionService: Action '$name' execution failed: $($_.Exception.Message)."
+            throw # Re-throw to propagate the error, allowing Invoke-WithErrorHandling to catch it.
+        }
+    }
+
+    # GetAction: Retrieves the definition of a specific action.
+    [hashtable] GetAction([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        
+        Write-Verbose "ActionService: Retrieving action '$name'."
+        return $this.ActionRegistry[$name]
+    }
+
+    # GetAllActions: Retrieves a list of all registered action definitions.
+    # Returns a list of hashtables, each representing an action.
+    [System.Collections.Generic.List[hashtable]] GetAllActions() {
+        Write-Verbose "ActionService: Retrieving all registered actions."
+        # Filter out any null values (shouldn't happen with proper registration) and sort by name.
+        return @($this.ActionRegistry.Values | Where-Object { $_ -ne $null } | Sort-Object Name)
+    }
+
+    # AddEventSubscription: Internal method to track event subscriptions made by ActionService.
+    # This allows for proper cleanup in the Cleanup method.
+    hidden [void] AddEventSubscription([string]$eventName, [string]$handlerId) {
+        if ([string]::IsNullOrWhiteSpace($eventName)) { throw [System.ArgumentException]::new("Parameter 'eventName' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($handlerId)) { throw [System.ArgumentException]::new("Parameter 'handlerId' cannot be null or empty.") }
+
+        $this.EventSubscriptions[$eventName] = $handlerId
+        Write-Log -Level Debug -Message "ActionService: Tracking event subscription for '$eventName' (HandlerId: $handlerId)."
+        Write-Verbose "ActionService: Added event subscription tracking for '$eventName'."
+    }
+
+    # Cleanup: Performs necessary cleanup operations when the ActionService is no longer needed.
+    # This includes unsubscribing from any events it subscribed to and clearing its action registry.
+    [void] Cleanup() {
+        # Unsubscribe from any events ActionService itself subscribed to.
+        # Assumes 'Unsubscribe-Event' from EventSystem module is globally available.
+        Write-Verbose "ActionService: Starting cleanup process."
+        foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
+            try {
+                Unsubscribe-Event -EventName $kvp.Key -HandlerId $kvp.Value
+                Write-Log -Level Debug -Message "ActionService: Unsubscribed from event '$($kvp.Key)' (HandlerId: $($kvp.Value))."
+                Write-Verbose "ActionService: Unsubscribed from event '$($kvp.Key)'."
+            } catch {
+                Write-Log -Level Warning -Message "ActionService: Failed to unsubscribe from event '$($kvp.Key)' (HandlerId: $($kvp.Value)): $($_.Exception.Message)"
+                Write-Verbose "ActionService: Failed to unsubscribe from event '$($kvp.Key)'. Error: $($_.Exception.Message)."
+            }
+        }
+        $this.EventSubscriptions.Clear() # Clear tracking after attempting unsubscriptions.
+        
+        # Clear the action registry.
+        $this.ActionRegistry.Clear()
+        Write-Log -Level Info -Message "ActionService cleaned up."
+        Write-Verbose "ActionService: ActionRegistry cleared. Cleanup complete."
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Module Export
+# ------------------------------------------------------------------------------
+# FIX: Removed the invalid -Class parameter. The ActionService class is exported automatically.
+Export-ModuleMember -Function Initialize-ActionService
+
+####services\keybinding-service-class\keybinding-service-class.psm1
+# keybinding-service-class.psm1
+# FIX: Consolidated SetBinding and improved type safety.
+
+
+class KeybindingService {
+    [hashtable] $KeyMap = @{}
+    [hashtable] $GlobalHandlers = @{}
+    [System.Collections.Generic.List[string]] $ContextStack
+    [bool] $EnableChords = $false
+
+    KeybindingService() {
+        $this.ContextStack = [System.Collections.Generic.List[string]]::new()
+        $this.InitializeDefaultBindings()
+        Write-Log -Level Info -Message "KeybindingService initialized"
+    }
+
+    KeybindingService([bool]$enableChords) {
+        $this.ContextStack = [System.Collections.Generic.List[string]]::new()
+        $this.EnableChords = $enableChords
+        $this.InitializeDefaultBindings()
+        Write-Log -Level Info -Message "KeybindingService initialized with chords: $enableChords"
+    }
+
+    hidden [void] InitializeDefaultBindings() {
+        $this.KeyMap = @{
+            "app.exit" = @{ Key = [System.ConsoleKey]::Q; Modifiers = @("Ctrl") }
+            "app.help" = @{ Key = [System.ConsoleKey]::F1; Modifiers = @() }
+            "nav.back" = @{ Key = [System.ConsoleKey]::Escape; Modifiers = @() }
+            "nav.up" = @{ Key = [System.ConsoleKey]::UpArrow; Modifiers = @() }
+            "nav.down" = @{ Key = [System.ConsoleKey]::DownArrow; Modifiers = @() }
+            "nav.left" = @{ Key = [System.ConsoleKey]::LeftArrow; Modifiers = @() }
+            "nav.right" = @{ Key = [System.ConsoleKey]::RightArrow; Modifiers = @() }
+            "nav.select" = @{ Key = [System.ConsoleKey]::Enter; Modifiers = @() }
+            "nav.pageup" = @{ Key = [System.ConsoleKey]::PageUp; Modifiers = @() }
+            "nav.pagedown" = @{ Key = [System.ConsoleKey]::PageDown; Modifiers = @() }
+            "nav.home" = @{ Key = [System.ConsoleKey]::Home; Modifiers = @() }
+            "nav.end" = @{ Key = [System.ConsoleKey]::End; Modifiers = @() }
+            "nav.tab" = @{ Key = [System.ConsoleKey]::Tab; Modifiers = @() }
+            "nav.shifttab" = @{ Key = [System.ConsoleKey]::Tab; Modifiers = @("Shift") }
+            "edit.delete" = @{ Key = [System.ConsoleKey]::Delete; Modifiers = @() }
+            "edit.backspace" = @{ Key = [System.ConsoleKey]::Backspace; Modifiers = @() }
+            "edit.new" = @{ Key = [System.ConsoleKey]::N; Modifiers = @() }
+            "edit.save" = @{ Key = [System.ConsoleKey]::S; Modifiers = @("Ctrl") }
+            "app.refresh" = @{ Key = [System.ConsoleKey]::F5; Modifiers = @() }
+        }
+    }
+
+    # FIX: Consolidated SetBinding into a single method to remove ambiguity.
+    [void] SetBinding([string]$actionName, [object]$key, [string[]]$modifiers) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "SetBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName")
+            }
+            if ($null -eq $key) {
+                throw [System.ArgumentNullException]::new("key", "Key cannot be null")
+            }
+
+            $binding = @{
+                Modifiers = if ($modifiers) { @($modifiers) } else { @() }
+            }
+
+            # Intelligently handle the key type.
+            if ($key -is [System.ConsoleKey]) {
+                $binding.Key = $key
+            } elseif ($key -is [char]) {
+                $binding.KeyChar = $key
+            } else {
+                # Attempt to parse as ConsoleKey if it's a string.
+                try {
+                    $binding.Key = [System.ConsoleKey]::$key
+                } catch {
+                    throw [System.ArgumentException]::new("The provided key '$key' is not a valid [System.ConsoleKey] or [char].")
+                }
+            }
+
+            $this.KeyMap[$actionName.ToLower()] = $binding
+            Write-Log -Level Debug -Message "Set keybinding: $actionName -> $($this.GetBindingDescription($actionName))"
+        }
+    }
+    
+    [void] SetBinding([string]$actionName, [System.ConsoleKeyInfo]$keyInfo) {
+        if ([string]::IsNullOrWhiteSpace($actionName)) {
+            throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName")
+        }
+
+        $modifiers = @()
+        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Control) { $modifiers += "Ctrl" }
+        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Alt) { $modifiers += "Alt" }
+        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Shift) { $modifiers += "Shift" }
+
+        $this.KeyMap[$actionName.ToLower()] = @{
+            Key = $keyInfo.Key
+            KeyChar = $keyInfo.KeyChar
+            Modifiers = $modifiers
+        }
+        Write-Log -Level Debug -Message "Set keybinding for '$actionName': $($this.GetBindingDescription($actionName))"
+    }
+
+    [void] RemoveBinding([string]$actionName) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "RemoveBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                return
+            }
+
+            $normalizedName = $actionName.ToLower()
+            if ($this.KeyMap.ContainsKey($normalizedName)) {
+                $this.KeyMap.Remove($normalizedName)
+                Write-Log -Level Debug -Message "Removed keybinding: $actionName"
+            }
+        }
+    }
+
+    [bool] IsAction([string]$actionName, [System.ConsoleKeyInfo]$keyInfo) {
+        return $this.IsAction($actionName, $keyInfo, $null)
+    }
+
+    [bool] IsAction([string]$actionName, [System.ConsoleKeyInfo]$keyInfo, [string]$context) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "IsAction:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                return $false
+            }
+
+            $normalizedName = $actionName.ToLower()
+            if (-not $this.KeyMap.ContainsKey($normalizedName)) {
+                return $false
+            }
+
+            $binding = $this.KeyMap[$normalizedName]
+
+            # FIX: Unified key matching logic
+            $keyMatches = $false
+            if ($binding.ContainsKey('KeyChar')) {
+                # KeyChar binding is more specific.
+                # KeyChar matching should be case-sensitive.
+                if ($keyInfo.KeyChar -eq $binding.KeyChar) {
+                    $keyMatches = $true
+                }
+            }
+            if (-not $keyMatches -and $binding.ContainsKey('Key')) {
+                 # Fallback to ConsoleKey if KeyChar doesn't match or isn't present
+                if ($keyInfo.Key -eq $binding.Key) {
+                    $keyMatches = $true
+                }
+            }
+            
+            if (-not $keyMatches) {
+                return $false
+            }
+
+            # Check modifiers
+            $hasCtrl = ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Control) -ne 0
+            $hasAlt = ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Alt) -ne 0
+            $hasShift = ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Shift) -ne 0
+
+            $expectedCtrl = $binding.Modifiers -contains "Ctrl"
+            $expectedAlt = $binding.Modifiers -contains "Alt"
+            $expectedShift = $binding.Modifiers -contains "Shift"
+
+            return ($hasCtrl -eq $expectedCtrl) -and ($hasAlt -eq $expectedAlt) -and ($hasShift -eq $expectedShift)
+        }
+    }
+
+    [string] GetAction([System.ConsoleKeyInfo]$keyInfo) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "GetAction" -ScriptBlock {
+            foreach ($actionName in $this.KeyMap.Keys) {
+                if ($this.IsAction($actionName, $keyInfo)) {
+                    return $actionName
+                }
+            }
+            return $null
+        }
+    }
+
+    [void] RegisterGlobalHandler([string]$actionName, [scriptblock]$handler) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "RegisterGlobalHandler:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) {
+                throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName")
+            }
+            if ($null -eq $handler) {
+                throw [System.ArgumentNullException]::new("handler", "Handler cannot be null")
+            }
+
+            $this.GlobalHandlers[$actionName.ToLower()] = $handler
+            Write-Log -Level Debug -Message "Registered global handler: $actionName"
+        }
+    }
+
+    [object] HandleKey([System.ConsoleKeyInfo]$keyInfo) {
+        return $this.HandleKey($keyInfo, $null)
+    }
+
+    [object] HandleKey([System.ConsoleKeyInfo]$keyInfo, [string]$context) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "HandleKey" -ScriptBlock {
+            foreach ($action in $this.KeyMap.Keys) {
+                if ($this.IsAction($action, $keyInfo, $context)) {
+                    if ($this.GlobalHandlers.ContainsKey($action)) {
+                        Write-Log -Level Debug -Message "Executing global handler: $action"
+                        try {
+                            return & $this.GlobalHandlers[$action] -KeyInfo $keyInfo -Context $context
+                        }
+                        catch {
+                            Write-Log -Level Error -Message "Global handler failed for '$action': $_"
+                            return $null
+                        }
+                    }
+                    return $action
+                }
+            }
+            return $null
+        }
+    }
+
+    [void] PushContext([string]$context) {
+        if (-not [string]::IsNullOrWhiteSpace($context)) {
+            $this.ContextStack.Add($context)
+            Write-Log -Level Debug -Message "Pushed keybinding context: $context (Stack depth: $($this.ContextStack.Count))"
+        }
+    }
+
+    [string] PopContext() {
+        if ($this.ContextStack.Count -gt 0) {
+            $context = $this.ContextStack[-1]
+            $this.ContextStack.RemoveAt($this.ContextStack.Count - 1)
+            Write-Log -Level Debug -Message "Popped keybinding context: $context (Stack depth: $($this.ContextStack.Count))"
+            return $context
+        }
+        return $null
+    }
+
+    [string] GetCurrentContext() {
+        if ($this.ContextStack.Count -gt 0) {
+            return $this.ContextStack[-1]
+        }
+        return "global"
+    }
+
+    [string] GetBindingDescription([string]$actionName) {
+        if ([string]::IsNullOrWhiteSpace($actionName)) {
+            return $null
+        }
+
+        $normalizedName = $actionName.ToLower()
+        if (-not $this.KeyMap.ContainsKey($normalizedName)) {
+            return "Unbound"
+        }
+
+        $binding = $this.KeyMap[$normalizedName]
+        $keyStr = ""
+        if ($binding.ContainsKey('KeyChar')) {
+            $keyStr = $binding.KeyChar.ToString().ToUpper()
+        } elseif ($binding.ContainsKey('Key')) {
+            $keyStr = $binding.Key.ToString()
+        }
+
+        if ($binding.Modifiers.Count -gt 0) {
+            return "$($binding.Modifiers -join '+') + $keyStr"
+        }
+
+        return $keyStr
+    }
+
+    [hashtable] GetAllBindings() {
+        return $this.GetAllBindings($false)
+    }
+
+    [hashtable] GetAllBindings([bool]$groupByCategory) {
+        if (-not $groupByCategory) {
+            return $this.KeyMap.Clone()
+        }
+        
+        $grouped = @{}
+        foreach ($action in $this.KeyMap.Keys) {
+            $parts = $action.Split('.')
+            $category = if ($parts.Count -gt 1) { $parts[0] } else { "General" }
+            if (-not $grouped.ContainsKey($category)) {
+                $grouped[$category] = @{}
+            }
+            $grouped[$category][$action] = $this.KeyMap[$action]
+        }
+        return $grouped
+    }
+
+    [void] ExportBindings([string]$path) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "ExportBindings" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) {
+                throw [System.ArgumentException]::new("Path cannot be null or empty", "path")
+            }
+            $this.KeyMap | ConvertTo-Json -Depth 3 | Out-File -FilePath $path -Encoding UTF8
+            Write-Log -Level Info -Message "Exported keybindings to: $path"
+        }
+    }
+
+    [void] ImportBindings([string]$path) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "ImportBindings" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) {
+                throw [System.ArgumentException]::new("Path cannot be null or empty", "path")
+            }
+            if (-not (Test-Path $path)) {
+                Write-Log -Level Warning -Message "Keybindings file not found: $path"
+                return
+            }
+            try {
+                $imported = Get-Content $path -Raw | ConvertFrom-Json
+                foreach ($prop in $imported.PSObject.Properties) {
+                    $bindingData = @{
+                        Modifiers = $prop.Value.Modifiers
+                    }
+                    if ($prop.Value.PSObject.Properties.Name -contains 'KeyChar') {
+                        $bindingData['KeyChar'] = $prop.Value.KeyChar
+                    }
+                    if ($prop.Value.PSObject.Properties.Name -contains 'Key') {
+                        $bindingData['Key'] = $prop.Value.Key
+                    }
+                    $this.KeyMap[$prop.Name] = $bindingData
+                }
+                Write-Log -Level Info -Message "Imported keybindings from: $path"
+            }
+            catch {
+                Write-Log -Level Error -Message "Failed to import keybindings from '$path': $_"
+                throw
+            }
+        }
+    }
+}
+
+####services\navigation-service-class\navigation-service-class.psm1
+# navigation-service-class.psm1
+
+# Contains only the NavigationService and ScreenFactory class definitions.
+
+
+class ScreenFactory {
+
+    hidden [hashtable] $Services
+    hidden [hashtable] $ScreenTypes = @{}
+
+    ScreenFactory([hashtable]$services) {
+        $this.Services = $services ?? (throw [System.ArgumentNullException]::new("services"))
+        Write-Log -Level Debug -Message "ScreenFactory initialized"
+    }
+
+    [void] RegisterScreen([string]$name, [type]$screenType) {
+        # Debug information
+        Write-Log -Level Debug -Message "RegisterScreen: $name with type $($screenType.Name)"
+        Write-Log -Level Debug -Message "BaseType: $($screenType.BaseType?.Name)"
+        Write-Log -Level Debug -Message "BaseType.BaseType: $($screenType.BaseType?.BaseType?.Name)"
+
+        # More flexible inheritance check
+        $isScreenType = $screenType.Name -eq 'Screen' -or 
+                       $screenType.BaseType.Name -eq 'Screen' -or 
+                       ($screenType.BaseType -and $screenType.BaseType.BaseType -and $screenType.BaseType.BaseType.Name -eq 'Screen')
+
+        if (-not $isScreenType) {
+            throw "Screen type '$($screenType.Name)' must inherit from the Screen class."
+        }
+
+        $this.ScreenTypes[$name] = $screenType
+        Write-Log -Level Info -Message "Registered screen factory: $name -> $($screenType.Name)"
+    }
+
+    # FIX: Removed the [Screen] return type constraint.
+    # This prevents the fatal type conversion error across module scopes.
+    [object] CreateScreen([string]$screenName, [hashtable]$parameters) {
+        $screenType = $this.ScreenTypes[$screenName]
+        if (-not $screenType) {
+            throw "Unknown screen type: '$screenName'. Available screens: $($this.ScreenTypes.Keys -join ', ')"
+        }
+
+        try {
+            $serviceContainer = $this.Services['ServiceContainer']
+            if (-not $serviceContainer) {
+                Write-Log -Level Warning -Message "ServiceContainer not found in Services, passing Services hashtable instead"
+                $screen = $screenType::new($this.Services)
+            } else {
+                # Pass the ServiceContainer object, not the Services hashtable
+                $screen = $screenType::new($serviceContainer)
+            }
+            
+            if ($parameters) {
+                foreach ($key in $parameters.Keys) {
+                    $screen.State[$key] = $parameters[$key]
+                }
+            }
+            Write-Log -Level Info -Message "Created screen: $screenName"
+            return $screen
+        } catch {
+            Write-Log -Level Error -Message "Failed to create screen '$screenName': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [string[]] GetRegisteredScreens() {
+        return @($this.ScreenTypes.Keys)
+    }
+}
+
+class NavigationService {
+
+    [System.Collections.Generic.Stack[Screen]] $ScreenStack
+    [ScreenFactory] $ScreenFactory
+    [Screen] $CurrentScreen
+    [hashtable] $Services
+    [hashtable] $RouteMap = @{}
+
+    NavigationService([hashtable]$services) {
+        $this.Services = $services ?? (throw [System.ArgumentNullException]::new("services"))
+        $this.ScreenStack = [System.Collections.Generic.Stack[Screen]]::new()
+        $this.ScreenFactory = [ScreenFactory]::new($services)
+        $this.InitializeRoutes()
+        Write-Log -Level Info -Message "NavigationService initialized"
+    }
+
+    hidden [void] InitializeRoutes() {
+        $this.RouteMap = @{
+            "/" = "DashboardScreen"
+            "/dashboard" = "DashboardScreen"
+            "/tasks" = "TaskListScreen"
+        }
+        Write-Log -Level Debug -Message "Routes initialized: $($this.RouteMap.Keys -join ', ')"
+    }
+
+    [void] RegisterScreenClass([string]$name, [type]$screenType) {
+        $this.ScreenFactory.RegisterScreen($name, $screenType)
+    }
+
+    [void] GoTo([string]$path, [hashtable]$parameters = @{}) {
+        Invoke-WithErrorHandling -Component "NavigationService" -Context "GoTo:$path" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) {
+                throw [System.ArgumentException]::new("Path cannot be empty.")
+            }
+            if ($path -eq "/exit") {
+                $this.RequestExit()
+                return
+            }
+
+            $screenName = $this.RouteMap[$path]
+            if (-not $screenName) {
+                $availableRoutes = $this.RouteMap.Keys -join ', '
+                throw "Unknown route: '$path'. Available routes: $availableRoutes"
+            }
+
+            Write-Log -Level Info -Message "Navigating to: $path -> $screenName"
+            $this.PushScreen($screenName, $parameters)
+        }
+    }
+
+    [void] PushScreen([string]$screenName, [hashtable]$parameters = @{}) {
+        Invoke-WithErrorHandling -Component "NavigationService" -Context "PushScreen:$screenName" -ScriptBlock {
+            Write-Log -Level Info -Message "Pushing screen: $screenName"
+
+            if ($this.CurrentScreen) {
+                Write-Log -Level Debug -Message "Exiting current screen: $($this.CurrentScreen.Name)"
+                $this.CurrentScreen.OnExit()
+                [void]$this.ScreenStack.Push($this.CurrentScreen)
+            }
+
+            Write-Log -Level Debug -Message "Creating new screen: $screenName"
+            $newScreen = $this.ScreenFactory.CreateScreen($screenName, $parameters)
+            $this.CurrentScreen = $newScreen
+
+            Write-Log -Level Debug -Message "Initializing screen: $screenName"
+            if($newScreen.PSObject.Methods['Initialize']) {
+                $newScreen.Initialize()
+            }
+            if($newScreen.PSObject.Methods['OnEnter']) {
+                $newScreen.OnEnter()
+            }
+
+            if (Get-Command "Push-Screen" -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Pushing screen to TUI engine"
+                Push-Screen -Screen $newScreen
+            } else {
+                if ($global:TuiState) {
+                    $global:TuiState.CurrentScreen = $newScreen
+                    Request-TuiRefresh
+                }
+            }
+
+            Publish-Event -EventName "Navigation.ScreenChanged" -Data @{ Screen = $screenName; Action = "Push" }
+            Write-Log -Level Info -Message "Successfully pushed screen: $screenName"
+        }
+    }
+
+    [bool] PopScreen() {
+        return Invoke-WithErrorHandling -Component "NavigationService" -Context "PopScreen" -ScriptBlock {
+            if ($this.ScreenStack.Count -eq 0) {
+                Write-Log -Level Warning -Message "Cannot pop screen: stack is empty"
+                return $false
+            }
+
+            Write-Log -Level Info -Message "Popping screen"
+            $this.CurrentScreen?.OnExit()
+            $this.CurrentScreen = $this.ScreenStack.Pop()
+            $this.CurrentScreen?.OnResume()
+
+            if (Get-Command "Pop-Screen" -ErrorAction SilentlyContinue) {
+                Pop-Screen
+            } else {
+                if ($global:TuiState) {
+                    $global:TuiState.CurrentScreen = $this.CurrentScreen
+                    Request-TuiRefresh
+                }
+            }
+
+            Publish-Event -EventName "Navigation.ScreenPopped" -Data @{ Screen = $this.CurrentScreen.Name }
+            return $true
+        }
+    }
+
+    [void] RequestExit() {
+        Write-Log -Level Info -Message "Exit requested"
+        while ($this.PopScreen()) {} # Pop all screens
+        $this.CurrentScreen?.OnExit()
+        if (Get-Command "Stop-TuiEngine" -ErrorAction SilentlyContinue) {
+            Stop-TuiEngine
+        }
+        Publish-Event -EventName "Application.Exit"
+    }
+
+    [Screen] GetCurrentScreen() { return $this.CurrentScreen }
+    [bool] IsValidRoute([string]$path) { return $this.RouteMap.ContainsKey($path) }
+
+    [void] ListRegisteredScreens() {
+        $screens = $this.ScreenFactory.GetRegisteredScreens()
+        Write-Log -Level Info -Message "Registered screens: $($screens -join ', ')"
+        Write-Host "Registered screens: $($screens -join ', ')" -ForegroundColor Green
+    }
+
+    [void] ListAvailableRoutes() {
+        $routes = $this.RouteMap.Keys
+        Write-Log -Level Info -Message "Available routes: $($routes -join ', ')"
+        Write-Host "Available routes: $($routes -join ', ')" -ForegroundColor Green
+    }
+}
+
+####components\tui-components\tui-components.psm1
+# ==============================================================================
+# TUI Components Module v5.0
+# Core interactive UI components with theme integration and advanced features
+# ==============================================================================
+
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Management.Automation
+
+#region Core UI Components
+
+class LabelComponent : UIElement {
+    [string]$Text = ""
+    [object]$ForegroundColor
+
+    LabelComponent([string]$name) : base($name) {
+        $this.IsFocusable = $false
+        $this.Width = 10
+        $this.Height = 1
+        Write-Verbose "LabelComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear()
+            $fg = $this.ForegroundColor ?? (Get-ThemeColor 'Foreground')
+            $bg = Get-ThemeColor 'Background'
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -ForegroundColor $fg -BackgroundColor $bg
+            Write-Verbose "LabelComponent '$($this.Name)': Rendered text '$($this.Text)'"
+        }
+        catch {
+            Write-Error "LabelComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        return $false # Labels don't handle input
+    }
+
+    [string] ToString() {
+        return "LabelComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class ButtonComponent : UIElement {
+    [string]$Text = "Button"
+    [bool]$IsPressed = $false
+    [scriptblock]$OnClick
+
+    ButtonComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 10
+        $this.Height = 3
+        Write-Verbose "ButtonComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Determine state for theme colors
+            $state = if ($this.IsPressed) { "pressed" } elseif ($this.IsFocused) { "focus" } else { "normal" }
+            
+            # Get theme colors based on state
+            $bgColor = Get-ThemeColor "button.$state.background"
+            $borderColor = Get-ThemeColor "button.$state.border"
+            $fgColor = Get-ThemeColor "button.$state.foreground"
+            
+            # Fallback to basic theme colors if specific button colors not available
+            if (-not $bgColor) {
+                $bgColor = if ($this.IsPressed) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Background' }
+            }
+            if (-not $borderColor) {
+                $borderColor = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Border' }
+            }
+            if (-not $fgColor) {
+                $fgColor = if ($this.IsPressed) { Get-ThemeColor 'Background' } else { Get-ThemeColor 'Foreground' }
+            }
+
+            # Clear buffer and draw button
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Center text
+            $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
+            $textY = [Math]::Floor(($this.Height - 1) / 2)
+            Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -ForegroundColor $fgColor -BackgroundColor $bgColor
+            
+            Write-Verbose "ButtonComponent '$($this.Name)': Rendered in state '$state'"
+        }
+        catch {
+            Write-Error "ButtonComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                $this.IsPressed = $true
+                $this.RequestRedraw()
+                
+                if ($this.OnClick) {
+                    try {
+                        & $this.OnClick
+                    } catch {
+                        Write-Error "ButtonComponent '$($this.Name)': Error in OnClick handler: $($_.Exception.Message)"
+                    }
+                }
+                
+                # Brief visual feedback
+                Start-Sleep -Milliseconds 50
+                $this.IsPressed = $false
+                $this.RequestRedraw()
+                
+                Write-Verbose "ButtonComponent '$($this.Name)': Click event handled"
+                return $true
+            }
+            catch {
+                Write-Error "ButtonComponent '$($this.Name)': Error handling click: $($_.Exception.Message)"
+                $this.IsPressed = $false
+                $this.RequestRedraw()
+            }
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "ButtonComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class TextBoxComponent : UIElement {
+    [string]$Text = ""
+    [string]$Placeholder = ""
+    [ValidateRange(1, [int]::MaxValue)][int]$MaxLength = 100
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+    hidden [int]$_scrollOffset = 0 # Tracks the start of the visible text window
+
+    TextBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 3
+        Write-Verbose "TextBoxComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'Background'
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Border' }
+            $textColor = Get-ThemeColor 'Foreground'
+            $placeholderColor = Get-ThemeColor 'Subtle'
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $textColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+
+            $textAreaWidth = $this.Width - 2
+            $displayText = $this.Text ?? ""
+            $currentTextColor = $textColor
+
+            # Show placeholder if empty and not focused
+            if ([string]::IsNullOrEmpty($displayText) -and -not $this.IsFocused) {
+                $displayText = $this.Placeholder ?? ""
+                $currentTextColor = $placeholderColor
+            }
+
+            # Apply viewport scrolling
+            if ($displayText.Length -gt $textAreaWidth) {
+                $displayText = $displayText.Substring($this._scrollOffset, [Math]::Min($textAreaWidth, $displayText.Length - $this._scrollOffset))
+            }
+
+            # Draw text
+            if (-not [string]::IsNullOrEmpty($displayText)) {
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayText -ForegroundColor $currentTextColor -BackgroundColor $bgColor
+            }
+
+            # Render non-destructive block cursor
+            if ($this.IsFocused) {
+                $cursorX = 1 + ($this.CursorPosition - $this._scrollOffset)
+                if ($cursorX -ge 1 -and $cursorX -lt ($this.Width - 1)) {
+                    $cell = $this._private_buffer.GetCell($cursorX, 1)
+                    if ($null -ne $cell) {
+                        $cell.BackgroundColor = Get-ThemeColor 'Accent'
+                        $cell.ForegroundColor = Get-ThemeColor 'Background'
+                        $this._private_buffer.SetCell($cursorX, 1, $cell)
+                    }
+                }
+            }
+            
+            Write-Verbose "TextBoxComponent '$($this.Name)': Rendered text (length: $($this.Text.Length), cursor: $($this.CursorPosition))"
+        }
+        catch {
+            Write-Error "TextBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        try {
+            $currentText = $this.Text ?? ""
+            $cursorPos = $this.CursorPosition
+            $originalText = $currentText
+            $handled = $true
+
+            switch ($key.Key) {
+                ([ConsoleKey]::Backspace) {
+                    if ($cursorPos -gt 0) {
+                        $this.Text = $currentText.Remove($cursorPos - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($cursorPos -lt $currentText.Length) {
+                        $this.Text = $currentText.Remove($cursorPos, 1)
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($cursorPos -gt 0) {
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($cursorPos -lt $this.Text.Length) {
+                        $this.CursorPosition++
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $this.Text.Length
+                }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentText.Length -lt $this.MaxLength) {
+                        $this.Text = $currentText.Insert($cursorPos, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+
+            if ($handled) {
+                $this._UpdateScrollOffset()
+                
+                # Trigger change event if text changed
+                if ($this.Text -ne $originalText -and $this.OnChange) {
+                    try {
+                        & $this.OnChange -NewValue $this.Text
+                    } catch {
+                        Write-Error "TextBoxComponent '$($this.Name)': Error in OnChange handler: $($_.Exception.Message)"
+                    }
+                }
+                
+                $this.RequestRedraw()
+                Write-Verbose "TextBoxComponent '$($this.Name)': Input handled, new text: '$($this.Text)'"
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "TextBoxComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    # Update scroll offset to keep cursor visible
+    hidden [void] _UpdateScrollOffset() {
+        $textAreaWidth = $this.Width - 2
+        
+        # Scroll right if cursor is beyond visible area
+        if ($this.CursorPosition -gt ($this._scrollOffset + $textAreaWidth - 1)) {
+            $this._scrollOffset = $this.CursorPosition - $textAreaWidth + 1
+        }
+        
+        # Scroll left if cursor is before visible area
+        if ($this.CursorPosition -lt $this._scrollOffset) {
+            $this._scrollOffset = $this.CursorPosition
+        }
+        
+        # Ensure scroll offset is within bounds
+        $maxScroll = [Math]::Max(0, $this.Text.Length - $textAreaWidth)
+        $this._scrollOffset = [Math]::Min($this._scrollOffset, $maxScroll)
+        $this._scrollOffset = [Math]::Max(0, $this._scrollOffset)
+    }
+
+    [string] ToString() {
+        return "TextBoxComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class CheckBoxComponent : UIElement {
+    [string]$Text = "Checkbox"
+    [bool]$Checked = $false
+    [scriptblock]$OnChange
+
+    CheckBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+        Write-Verbose "CheckBoxComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear()
+            $fg = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Foreground' }
+            $bg = Get-ThemeColor 'Background'
+            
+            $checkbox = if ($this.Checked) { "[X]" } else { "[ ]" }
+            $displayText = "$checkbox $($this.Text)"
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg -BackgroundColor $bg
+            Write-Verbose "CheckBoxComponent '$($this.Name)': Rendered (Checked: $($this.Checked))"
+        }
+        catch {
+            Write-Error "CheckBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                $this.Checked = -not $this.Checked
+                
+                if ($this.OnChange) {
+                    try {
+                        & $this.OnChange -NewValue $this.Checked
+                    } catch {
+                        Write-Error "CheckBoxComponent '$($this.Name)': Error in OnChange handler: $($_.Exception.Message)"
+                    }
+                }
+                
+                $this.RequestRedraw()
+                Write-Verbose "CheckBoxComponent '$($this.Name)': State changed to $($this.Checked)"
+                return $true
+            }
+            catch {
+                Write-Error "CheckBoxComponent '$($this.Name)': Error handling toggle: $($_.Exception.Message)"
+            }
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "CheckBoxComponent(Name='$($this.Name)', Text='$($this.Text)', Checked=$($this.Checked), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class RadioButtonComponent : UIElement {
+    [string]$Text = "Option"
+    [bool]$Selected = $false
+    [string]$GroupName = ""
+    [scriptblock]$OnChange
+
+    RadioButtonComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+        Write-Verbose "RadioButtonComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $this._private_buffer.Clear()
+            $fg = if ($this.IsFocused) { Get-ThemeColor 'Accent' } else { Get-ThemeColor 'Foreground' }
+            $bg = Get-ThemeColor 'Background'
+            
+            $radio = if ($this.Selected) { "(●)" } else { "( )" }
+            $displayText = "$radio $($this.Text)"
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -ForegroundColor $fg -BackgroundColor $bg
+            Write-Verbose "RadioButtonComponent '$($this.Name)': Rendered (Selected: $($this.Selected))"
+        }
+        catch {
+            Write-Error "RadioButtonComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                if (-not $this.Selected) {
+                    $this.Selected = $true
+                    
+                    # Unselect other radio buttons in the same group
+                    if ($this.Parent -and $this.GroupName) {
+                        $this.Parent.Children | Where-Object { 
+                            $_ -is [RadioButtonComponent] -and $_.GroupName -eq $this.GroupName -and $_ -ne $this 
+                        } | ForEach-Object {
+                            $_.Selected = $false
+                            $_.RequestRedraw()
+                        }
+                    }
+                    
+                    if ($this.OnChange) {
+                        try {
+                            & $this.OnChange -NewValue $this.Selected
+                        } catch {
+                            Write-Error "RadioButtonComponent '$($this.Name)': Error in OnChange handler: $($_.Exception.Message)"
+                        }
+                    }
+                    
+                    $this.RequestRedraw()
+                    Write-Verbose "RadioButtonComponent '$($this.Name)': Selected in group '$($this.GroupName)'"
+                }
+                return $true
+            }
+            catch {
+                Write-Error "RadioButtonComponent '$($this.Name)': Error handling selection: $($_.Exception.Message)"
+            }
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "RadioButtonComponent(Name='$($this.Name)', Text='$($this.Text)', Selected=$($this.Selected), Group='$($this.GroupName)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+#endregion
+
+#region Factory Functions
+
+function New-TuiLabel {
+    <#
+    .SYNOPSIS
+    Creates a new Label component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a LabelComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the label component.
+    
+    .EXAMPLE
+    $label = New-TuiLabel -Props @{
+        Name = "StatusLabel"
+        Text = "Ready"
+        ForegroundColor = [ConsoleColor]::Green
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $labelName = $Props.Name ?? "Label_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $label = [LabelComponent]::new($labelName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($label.PSObject.Properties.Match($_.Name)) {
+                $label.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created label '$labelName' with $($Props.Count) properties"
+        return $label
+    }
+    catch {
+        Write-Error "Failed to create label: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiButton {
+    <#
+    .SYNOPSIS
+    Creates a new Button component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a ButtonComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the button component.
+    
+    .EXAMPLE
+    $button = New-TuiButton -Props @{
+        Name = "SubmitButton"
+        Text = "Submit"
+        OnClick = { Write-Host "Submitted!" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $buttonName = $Props.Name ?? "Button_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $button = [ButtonComponent]::new($buttonName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($button.PSObject.Properties.Match($_.Name)) {
+                $button.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created button '$buttonName' with $($Props.Count) properties"
+        return $button
+    }
+    catch {
+        Write-Error "Failed to create button: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiTextBox {
+    <#
+    .SYNOPSIS
+    Creates a new TextBox component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a TextBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the textbox component.
+    
+    .EXAMPLE
+    $textBox = New-TuiTextBox -Props @{
+        Name = "InputField"
+        Placeholder = "Enter text here"
+        MaxLength = 50
+        OnChange = { param($NewValue) Write-Host "Text changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $textBoxName = $Props.Name ?? "TextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $textBox = [TextBoxComponent]::new($textBoxName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($textBox.PSObject.Properties.Match($_.Name)) {
+                $textBox.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created textbox '$textBoxName' with $($Props.Count) properties"
+        return $textBox
+    }
+    catch {
+        Write-Error "Failed to create textbox: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiCheckBox {
+    <#
+    .SYNOPSIS
+    Creates a new CheckBox component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a CheckBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the checkbox component.
+    
+    .EXAMPLE
+    $checkBox = New-TuiCheckBox -Props @{
+        Name = "AgreeCheckbox"
+        Text = "I agree to the terms"
+        OnChange = { param($NewValue) Write-Host "Checkbox changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $checkBoxName = $Props.Name ?? "CheckBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $checkBox = [CheckBoxComponent]::new($checkBoxName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($checkBox.PSObject.Properties.Match($_.Name)) {
+                $checkBox.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created checkbox '$checkBoxName' with $($Props.Count) properties"
+        return $checkBox
+    }
+    catch {
+        Write-Error "Failed to create checkbox: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiRadioButton {
+    <#
+    .SYNOPSIS
+    Creates a new RadioButton component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a RadioButtonComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the radio button component.
+    
+    .EXAMPLE
+    $radioButton = New-TuiRadioButton -Props @{
+        Name = "Option1"
+        Text = "Option 1"
+        GroupName = "MyGroup"
+        OnChange = { param($NewValue) Write-Host "Radio button changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $radioButtonName = $Props.Name ?? "RadioButton_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $radioButton = [RadioButtonComponent]::new($radioButtonName)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($radioButton.PSObject.Properties.Match($_.Name)) {
+                $radioButton.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created radio button '$radioButtonName' with $($Props.Count) properties"
+        return $radioButton
+    }
+    catch {
+        Write-Error "Failed to create radio button: $($_.Exception.Message)"
+        throw
+    }
+}
+
+#endregion
+
+#region Module Exports
+
+# Export public functions
+Export-ModuleMember -Function New-TuiLabel, New-TuiButton, New-TuiTextBox, New-TuiCheckBox, New-TuiRadioButton
+
+# Classes are automatically exported in PowerShell 7+
+# LabelComponent, ButtonComponent, TextBoxComponent, CheckBoxComponent, RadioButtonComponent classes are available when module is imported
+
+#endregion
+
+####components\advanced-data-components\advanced-data-components.psm1
+# ==============================================================================
+# Advanced Data Components Module v3.0
+# High-performance, theme-aware data display components for TUI applications
+# ==============================================================================
+
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Collections.Generic
+
+#region Table Classes
+
+class TableColumn {
+    [string]$Key
+    [string]$Header
+    [object]$Width # Can be [int] or the string 'Auto'
+    [string]$Alignment = "Left"
+
+    TableColumn([string]$key, [string]$header, [object]$width) {
+        if ([string]::IsNullOrWhiteSpace($key)) { throw [System.ArgumentException]::new("Parameter 'key' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($header)) { throw [System.ArgumentException]::new("Parameter 'header' cannot be null or empty.") }
+        if ($null -eq $width) { throw [System.ArgumentNullException]::new("width") }
+
+        $this.Key = $key
+        $this.Header = $header
+        $this.Width = $width
+    }
+
+    [string] ToString() {
+        return "TableColumn(Key='$($this.Key)', Header='$($this.Header)', Width=$($this.Width))"
+    }
+}
+
+class Table : UIElement {
+    [System.Collections.Generic.List[TableColumn]]$Columns
+    [object[]]$Data = @()
+    [int]$SelectedIndex = 0
+    [bool]$ShowBorder = $true
+    [bool]$ShowHeader = $true
+    [scriptblock]$OnSelectionChanged
+    hidden [int]$_scrollOffset = 0 # The index of the first visible row
+
+    Table([string]$name) : base($name) {
+        $this.Columns = [System.Collections.Generic.List[TableColumn]]::new()
+        $this.IsFocusable = $true
+        $this.Width = 60
+        $this.Height = 15
+        Write-Verbose "Table: Constructor called for '$($this.Name)'"
+    }
+
+    [void] SetColumns([TableColumn[]]$columns) {
+        try {
+            if ($null -eq $columns) { throw [System.ArgumentNullException]::new("columns") }
+            $this.Columns.Clear()
+            foreach ($col in $columns) {
+                $this.Columns.Add($col)
+            }
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Set $($columns.Count) columns"
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error setting columns: $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] SetData([object[]]$data) {
+        try {
+            if ($null -eq $data) { throw [System.ArgumentNullException]::new("data") }
+            $this.Data = @($data) # Consistently cast to an array
+            if ($this.SelectedIndex -ge $this.Data.Count) {
+                $this.SelectedIndex = [Math]::Max(0, $this.Data.Count - 1)
+            }
+            $this._scrollOffset = 0 # Reset scroll on new data
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Set data with $($this.Data.Count) items"
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error setting data: $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] SelectNext() {
+        if ($this.SelectedIndex -lt ($this.Data.Count - 1)) {
+            $this.SelectedIndex++
+            $this._EnsureVisible()
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Selected next item (index $($this.SelectedIndex))"
+        }
+    }
+
+    [void] SelectPrevious() {
+        if ($this.SelectedIndex -gt 0) {
+            $this.SelectedIndex--
+            $this._EnsureVisible()
+            $this.RequestRedraw()
+            Write-Verbose "Table '$($this.Name)': Selected previous item (index $($this.SelectedIndex))"
+        }
+    }
+
+    [object] GetSelectedItem() {
+        if ($this.Data.Count -gt 0 -and $this.SelectedIndex -in (0..($this.Data.Count - 1))) {
+            return $this.Data[$this.SelectedIndex]
+        }
+        return $null
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Clear buffer with theme-aware colors
+            $bgColor = Get-ThemeColor 'Background'
+            $fgColor = Get-ThemeColor 'Foreground'
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            
+            # Draw border if enabled
+            if ($this.ShowBorder) {
+                $borderColor = Get-ThemeColor 'Border'
+                Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            }
+
+            $contentWidth = if ($this.ShowBorder) { $this.Width - 2 } else { $this.Width }
+            $contentHeight = $this._GetContentHeight()
+            $renderX = if ($this.ShowBorder) { 1 } else { 0 }
+            $currentY = if ($this.ShowBorder) { 1 } else { 0 }
+            
+            # Resolve auto-sized column widths
+            $resolvedColumns = $this._ResolveColumnWidths($contentWidth)
+            
+            # Header
+            if ($this.ShowHeader -and $resolvedColumns.Count -gt 0) {
+                $headerColor = Get-ThemeColor 'Header'
+                $xOffset = 0
+                foreach ($col in $resolvedColumns) {
+                    $headerText = $this._FormatCell($col.Header, $col.ResolvedWidth, $col.Alignment)
+                    Write-TuiText -Buffer $this._private_buffer -X ($renderX + $xOffset) -Y $currentY -Text $headerText -ForegroundColor $headerColor -BackgroundColor $bgColor
+                    $xOffset += $col.ResolvedWidth
+                }
+                $currentY++
+            }
+            
+            # Data rows (respecting scroll offset)
+            for ($i = 0; $i -lt $contentHeight; $i++) {
+                $dataIndex = $i + $this._scrollOffset
+                if ($dataIndex -ge $this.Data.Count) { break }
+                $row = $this.Data[$dataIndex]
+                if (-not $row) { continue }
+
+                $isSelected = ($dataIndex -eq $this.SelectedIndex)
+                $bg = if ($isSelected -and $this.IsFocused) { Get-ThemeColor 'Selection' } else { $bgColor }
+                $fg = if ($isSelected -and $this.IsFocused) { Get-ThemeColor 'Background' } else { $fgColor }
+
+                $xOffset = 0
+                foreach ($col in $resolvedColumns) {
+                    $propValue = $row | Select-Object -ExpandProperty $col.Key -ErrorAction SilentlyContinue
+                    $cellValue = if ($propValue) { $propValue.ToString() } else { "" }
+                    $cellText = $this._FormatCell($cellValue, $col.ResolvedWidth, $col.Alignment)
+                    Write-TuiText -Buffer $this._private_buffer -X ($renderX + $xOffset) -Y $currentY -Text $cellText -ForegroundColor $fg -BackgroundColor $bg
+                    $xOffset += $col.ResolvedWidth
+                }
+                $currentY++
+            }
+
+            # Show message if no data
+            if ($this.Data.Count -eq 0) {
+                $subtleColor = Get-ThemeColor 'Subtle'
+                Write-TuiText -Buffer $this._private_buffer -X $renderX -Y $currentY -Text " (No data to display) " -ForegroundColor $subtleColor -BackgroundColor $bgColor
+            }
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
+        try {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) { 
+                    $this.SelectPrevious()
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) { 
+                    $this.SelectNext()
+                    return $true
+                }
+                ([ConsoleKey]::PageUp) { 
+                    0..($this._GetContentHeight() - 1) | ForEach-Object { $this.SelectPrevious() }
+                    return $true
+                }
+                ([ConsoleKey]::PageDown) { 
+                    0..($this._GetContentHeight() - 1) | ForEach-Object { $this.SelectNext() }
+                    return $true
+                }
+                ([ConsoleKey]::Home) { 
+                    $this.SelectedIndex = 0
+                    $this._EnsureVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::End) { 
+                    $this.SelectedIndex = $this.Data.Count - 1
+                    $this._EnsureVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    if ($this.OnSelectionChanged) {
+                        $item = $this.GetSelectedItem()
+                        if ($item) {
+                            Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -ScriptBlock {
+                                & $this.OnSelectionChanged -SelectedItem $item
+                            }
+                        }
+                    }
+                    return $true
+                }
+            }
+        }
+        catch {
+            Write-Error "Table '$($this.Name)': Error handling input: $($_.Exception.Message)"
+        }
+        return $false
+    }
+    
+    # Ensure the selected item is visible in the viewport
+    hidden [void] _EnsureVisible() {
+        $contentHeight = $this._GetContentHeight()
+        
+        # Scroll down if selected item is below visible area
+        if ($this.SelectedIndex -ge ($this._scrollOffset + $contentHeight)) {
+            $this._scrollOffset = $this.SelectedIndex - $contentHeight + 1
+        }
+        
+        # Scroll up if selected item is above visible area
+        if ($this.SelectedIndex -lt $this._scrollOffset) {
+            $this._scrollOffset = $this.SelectedIndex
+        }
+        
+        # Ensure scroll offset is within bounds
+        $this._scrollOffset = [Math]::Max(0, $this._scrollOffset)
+    }
+    
+    # Calculate available height for content (excluding border and header)
+    hidden [int] _GetContentHeight() {
+        $h = $this.Height
+        if ($this.ShowBorder) { $h -= 2 }
+        if ($this.ShowHeader) { $h -= 1 }
+        return [Math]::Max(0, $h)
+    }
+
+    # Format cell content with proper alignment and overflow handling
+    hidden [string] _FormatCell([string]$text, [int]$width, [string]$alignment) {
+        if ([string]::IsNullOrEmpty($text)) { return ' ' * $width }
+        
+        # Handle overflow with ellipsis
+        if ($text.Length -gt $width) { 
+            $text = $text.Substring(0, $width - 1) + '…' 
+        }
+        
+        # Apply alignment
+        $result = switch ($alignment.ToLower()) {
+            'right' { $text.PadLeft($width) }
+            'center' { 
+                $pad = [Math]::Max(0, ($width - $text.Length) / 2)
+                $padded = (' ' * $pad) + $text
+                $padded.PadRight($width)
+            }
+            default { $text.PadRight($width) }
+        }
+        return $result
+    }
+    
+    # Resolve column widths, handling 'Auto' sizing
+    hidden [object[]] _ResolveColumnWidths([int]$totalWidth) {
+        $fixedWidth = 0
+        $autoCols = @()
+        $resolved = @()
+
+        # First pass: calculate fixed widths and identify auto columns
+        foreach ($col in $this.Columns) {
+            if ($col.Width -is [int]) {
+                $fixedWidth += $col.Width
+                $resolved += [pscustomobject]@{ 
+                    Original = $col
+                    ResolvedWidth = $col.Width
+                    Key = $col.Key
+                    Header = $col.Header
+                    Alignment = $col.Alignment
+                }
+            } else {
+                $autoCols += $col
+            }
+        }
+
+        # Second pass: distribute remaining width among auto columns
+        if ($autoCols.Count -gt 0) {
+            $remainingWidth = $totalWidth - $fixedWidth
+            $autoWidth = [Math]::Max(1, [Math]::Floor($remainingWidth / $autoCols.Count))
+            
+            foreach ($col in $autoCols) {
+                $resolved += [pscustomobject]@{ 
+                    Original = $col
+                    ResolvedWidth = $autoWidth
+                    Key = $col.Key
+                    Header = $col.Header
+                    Alignment = $col.Alignment
+                }
+            }
+        }
+
+        # Return in original column order
+        $orderedResolved = @()
+        foreach ($originalCol in $this.Columns) {
+            $matchedCol = $resolved | Where-Object { $_.Original -eq $originalCol } | Select-Object -First 1
+            if ($matchedCol) {
+                $orderedResolved += $matchedCol
+            }
+        }
+        
+        return $orderedResolved
+    }
+
+    [string] ToString() {
+        return "Table(Name='$($this.Name)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height), Data=$($this.Data.Count) items, Selected=$($this.SelectedIndex))"
+    }
+}
+
+#endregion
+
+#region Factory Functions
+
+function New-TuiTable {
+    <#
+    .SYNOPSIS
+    Creates a new Table component with specified properties.
+    
+    .DESCRIPTION
+    Factory function to create a Table component with configurable properties.
+    The table supports scrolling, theme integration, and event-driven selection.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the table component.
+    
+    .EXAMPLE
+    $table = New-TuiTable -Props @{
+        Name = "MyTable"
+        Width = 60
+        Height = 15
+        ShowBorder = $true
+        OnSelectionChanged = { param($SelectedItem) Write-Host "Selected: $($SelectedItem.Name)" }
+    }
+    #>
+    [CmdletBinding()]
+    param(
+        [hashtable]$Props = @{}
+    )
+    
+    try {
+        $tableName = $Props.Name ?? "Table_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $table = [Table]::new($tableName)
+        
+        # Apply properties
+        $Props.GetEnumerator() | ForEach-Object {
+            $propertyName = $_.Name
+            $propertyValue = $_.Value
+            
+            if ($table.PSObject.Properties.Match($propertyName)) {
+                $table.($propertyName) = $propertyValue
+            }
+        }
+        
+        # Special handling for columns and data
+        if ($Props.Columns) {
+            $table.SetColumns($Props.Columns)
+        }
+        if ($Props.Data) {
+            $table.SetData($Props.Data)
+        }
+        
+        Write-Verbose "Created table '$tableName' with $($Props.Count) properties"
+        return $table
+    }
+    catch {
+        Write-Error "Failed to create table: $($_.Exception.Message)"
+        throw
+    }
+}
+
+#endregion
+
+#region Module Exports
+
+# Export public functions
+Export-ModuleMember -Function New-TuiTable
+
+# Classes are automatically exported in PowerShell 7+
+# Table, TableColumn classes are available when module is imported
+
+#endregion
+
+####components\advanced-input-components\advanced-input-components.psm1
+# ==============================================================================
+# Advanced Input Components Module v5.0
+# Sophisticated input controls with theme integration and overlay rendering
+# ==============================================================================
+
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Management.Automation
+#using namespace System.Collections.Generic
+
+#region Advanced Input Classes
+
+class MultilineTextBoxComponent : UIElement {
+    [string[]]$Lines = @("")
+    [string]$Placeholder = "Enter text..."
+    [ValidateRange(1, 100)][int]$MaxLines = 10
+    [ValidateRange(1, 1000)][int]$MaxLineLength = 100
+    [int]$CurrentLine = 0
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+    
+    hidden [int]$_scrollOffsetY = 0
+    hidden [int]$_scrollOffsetX = 0
+
+    MultilineTextBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 40
+        $this.Height = 8
+        Write-Verbose "MultilineTextBoxComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Default (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Default (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Default (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Default (Get-ThemeColor 'Foreground')
+            $placeholderColor = Get-ThemeColor 'input.placeholder' -Default (Get-ThemeColor 'Subtle')
+            $cursorColor = Get-ThemeColor 'input.cursor' -Default (Get-ThemeColor 'Accent')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+
+            $textAreaHeight = $this.Height - 2
+            $textAreaWidth = $this.Width - 2
+            
+            # Render visible lines
+            for ($i = 0; $i -lt $textAreaHeight; $i++) {
+                $lineIndex = $i + $this._scrollOffsetY
+                if ($lineIndex -ge $this.Lines.Count) { break }
+                
+                $lineText = $this.Lines[$lineIndex]
+                $displayLine = ""
+                
+                if ($lineText.Length -gt $this._scrollOffsetX) {
+                    $displayLine = $lineText.Substring($this._scrollOffsetX, [Math]::Min($textAreaWidth, $lineText.Length - $this._scrollOffsetX))
+                }
+                
+                if (-not [string]::IsNullOrEmpty($displayLine)) {
+                    Write-TuiText -Buffer $this._private_buffer -X 1 -Y ($i + 1) -Text $displayLine -ForegroundColor $fgColor -BackgroundColor $bgColor
+                }
+            }
+
+            # Show placeholder if empty and not focused
+            if ($this.Lines.Count -eq 1 -and [string]::IsNullOrEmpty($this.Lines[0]) -and -not $this.IsFocused) {
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $this.Placeholder -ForegroundColor $placeholderColor -BackgroundColor $bgColor
+            }
+
+            # Render cursor
+            if ($this.IsFocused) {
+                $cursorLineY = $this.CurrentLine - $this._scrollOffsetY
+                if ($cursorLineY -ge 0 -and $cursorLineY -lt $textAreaHeight) {
+                    $cursorX = 1 + ($this.CursorPosition - $this._scrollOffsetX)
+                    if ($cursorX -ge 1 -and $cursorX -le $textAreaWidth) {
+                        $cell = $this._private_buffer.GetCell($cursorX, $cursorLineY + 1)
+                        if ($null -ne $cell) {
+                            $cell.BackgroundColor = $cursorColor
+                            $cell.ForegroundColor = $bgColor
+                            $this._private_buffer.SetCell($cursorX, $cursorLineY + 1, $cell)
+                        }
+                    }
+                }
+            }
+            
+            Write-Verbose "MultilineTextBoxComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "MultilineTextBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        try {
+            $handled = $true
+            $currentLineText = $this.Lines[$this.CurrentLine]
+            $originalText = $this.Lines -join "`n"
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::Enter) {
+                    if ($this.Lines.Count -lt $this.MaxLines) {
+                        $beforeCursor = $currentLineText.Substring(0, $this.CursorPosition)
+                        $afterCursor = $currentLineText.Substring($this.CursorPosition)
+                        
+                        $this.Lines[$this.CurrentLine] = $beforeCursor
+                        $this.Lines = $this.Lines[0..$this.CurrentLine] + @($afterCursor) + $this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)]
+                        
+                        $this.CurrentLine++
+                        $this.CursorPosition = 0
+                    }
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    }
+                    elseif ($this.CurrentLine -gt 0) {
+                        $this.CursorPosition = $this.Lines[$this.CurrentLine - 1].Length
+                        $this.Lines[$this.CurrentLine - 1] += $currentLineText
+                        $this.Lines = $this.Lines[0..($this.CurrentLine - 1)] + $this.Lines[($this.CurrentLine + 1)..($this.Lines.Count - 1)]
+                        $this.CurrentLine--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
+                        $this.Lines[$this.CurrentLine] = $currentLineText.Remove($this.CursorPosition, 1)
+                    }
+                    elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.Lines[$this.CurrentLine] += $this.Lines[$this.CurrentLine + 1]
+                        $this.Lines = $this.Lines[0..$this.CurrentLine] + $this.Lines[($this.CurrentLine + 2)..($this.Lines.Count - 1)]
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.CursorPosition--
+                    }
+                    elseif ($this.CurrentLine -gt 0) {
+                        $this.CurrentLine--
+                        $this.CursorPosition = $this.Lines[$this.CurrentLine].Length
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $currentLineText.Length) {
+                        $this.CursorPosition++
+                    }
+                    elseif ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.CurrentLine++
+                        $this.CursorPosition = 0
+                    }
+                }
+                ([ConsoleKey]::UpArrow) {
+                    if ($this.CurrentLine -gt 0) {
+                        $this.CurrentLine--
+                        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                    }
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this.CurrentLine -lt ($this.Lines.Count - 1)) {
+                        $this.CurrentLine++
+                        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $currentLineText.Length
+                }
+                ([ConsoleKey]::PageUp) {
+                    $this.CurrentLine = [Math]::Max(0, $this.CurrentLine - ($this.Height - 2))
+                    $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                }
+                ([ConsoleKey]::PageDown) {
+                    $this.CurrentLine = [Math]::Min($this.Lines.Count - 1, $this.CurrentLine + ($this.Height - 2))
+                    $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.Lines[$this.CurrentLine].Length)
+                }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
+                        $newLine = $currentLineText.Insert($this.CursorPosition, $key.KeyChar)
+                        if ($newLine.Length -le $this.MaxLineLength) {
+                            $this.Lines[$this.CurrentLine] = $newLine
+                            $this.CursorPosition++
+                        }
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                $this._UpdateScrolling()
+                
+                # Fire change event if text changed
+                $newText = $this.Lines -join "`n"
+                if ($newText -ne $originalText -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $newText
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "MultilineTextBoxComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    hidden [void] _UpdateScrolling() {
+        $textAreaHeight = $this.Height - 2
+        $textAreaWidth = $this.Width - 2
+        
+        # Vertical scrolling
+        if ($this.CurrentLine -lt $this._scrollOffsetY) {
+            $this._scrollOffsetY = $this.CurrentLine
+        }
+        elseif ($this.CurrentLine -ge ($this._scrollOffsetY + $textAreaHeight)) {
+            $this._scrollOffsetY = $this.CurrentLine - $textAreaHeight + 1
+        }
+        
+        # Horizontal scrolling
+        if ($this.CursorPosition -lt $this._scrollOffsetX) {
+            $this._scrollOffsetX = $this.CursorPosition
+        }
+        elseif ($this.CursorPosition -ge ($this._scrollOffsetX + $textAreaWidth)) {
+            $this._scrollOffsetX = $this.CursorPosition - $textAreaWidth + 1
+        }
+        
+        # Ensure scroll offsets are within bounds
+        $this._scrollOffsetY = [Math]::Max(0, $this._scrollOffsetY)
+        $this._scrollOffsetX = [Math]::Max(0, $this._scrollOffsetX)
+    }
+
+    [string] GetText() {
+        return $this.Lines -join "`n"
+    }
+
+    [void] SetText([string]$text) {
+        if ([string]::IsNullOrEmpty($text)) {
+            $this.Lines = @("")
+        } else {
+            $this.Lines = $text -split "`n"
+        }
+        $this.CurrentLine = 0
+        $this.CursorPosition = 0
+        $this._scrollOffsetY = 0
+        $this._scrollOffsetX = 0
+        $this.RequestRedraw()
+    }
+
+    [string] ToString() {
+        return "MultilineTextBoxComponent(Name='$($this.Name)', Lines=$($this.Lines.Count), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class NumericInputComponent : UIElement {
+    [double]$Value = 0
+    [double]$MinValue = [double]::MinValue
+    [double]$MaxValue = [double]::MaxValue
+    [double]$Step = 1
+    [int]$DecimalPlaces = 0
+    [string]$Suffix = ""
+    [string]$TextValue = "0"
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+
+    NumericInputComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 3
+        $this.TextValue = $this.Value.ToString()
+        Write-Verbose "NumericInputComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $suffixColor = Get-ThemeColor 'input.suffix' -Fallback (Get-ThemeColor 'Subtle')
+            $cursorColor = Get-ThemeColor 'input.cursor' -Fallback (Get-ThemeColor 'Accent')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw main value
+            $displayText = $this.TextValue
+            if (-not [string]::IsNullOrEmpty($this.Suffix)) {
+                $displayText += $this.Suffix
+            }
+            
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText -ForegroundColor $fgColor -BackgroundColor $bgColor
+            
+            # Draw spinner arrows
+            $spinnerColor = if ($this.IsFocused) { $borderColor } else { (Get-ThemeColor 'Subtle') }
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 0 -Text "▲" -ForegroundColor $spinnerColor -BackgroundColor $bgColor
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 2 -Text "▼" -ForegroundColor $spinnerColor -BackgroundColor $bgColor
+            
+            # Draw cursor
+            if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt ($this.Width - 4)) {
+                    $cell = $this._private_buffer.GetCell($cursorX, 1)
+                    if ($null -ne $cell) {
+                        $cell.BackgroundColor = $cursorColor
+                        $cell.ForegroundColor = $bgColor
+                        $this._private_buffer.SetCell($cursorX, 1, $cell)
+                    }
+                }
+            }
+            
+            Write-Verbose "NumericInputComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "NumericInputComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        try {
+            $handled = $true
+            $originalValue = $this.Value
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    $this.Value = [Math]::Min($this.MaxValue, $this.Value + $this.Step)
+                    $this._UpdateTextValue()
+                }
+                ([ConsoleKey]::DownArrow) {
+                    $this.Value = [Math]::Max($this.MinValue, $this.Value - $this.Step)
+                    $this._UpdateTextValue()
+                }
+                ([ConsoleKey]::Enter) {
+                    if ($this._ValidateAndSetValue($this.TextValue)) {
+                        # Value was valid and set
+                    }
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.CursorPosition++
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $this.TextValue.Length
+                }
+                default {
+                    if ($key.KeyChar -and $this._IsValidNumericChar($key.KeyChar)) {
+                        $this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                # Fire change event if value changed
+                if ($this.Value -ne $originalValue -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Value
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "NumericInputComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    hidden [bool] _IsValidNumericChar([char]$char) {
+        return [char]::IsDigit($char) -or $char -eq '.' -or $char -eq '-'
+    }
+
+    hidden [bool] _ValidateAndSetValue([string]$text) {
+        try {
+            $parsedValue = [double]::Parse($text)
+            if ($parsedValue -ge $this.MinValue -and $parsedValue -le $this.MaxValue) {
+                $this.Value = $parsedValue
+                $this._UpdateTextValue()
+                return $true
+            }
+        }
+        catch {
+            # Invalid format, revert to current value
+            $this._UpdateTextValue()
+        }
+        return $false
+    }
+
+    hidden [void] _UpdateTextValue() {
+        $this.TextValue = $this.Value.ToString("F$($this.DecimalPlaces)")
+        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.TextValue.Length)
+    }
+
+    [string] ToString() {
+        return "NumericInputComponent(Name='$($this.Name)', Value=$($this.Value), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class DateInputComponent : UIElement {
+    [DateTime]$Value = (Get-Date)
+    [DateTime]$MinDate = [DateTime]::MinValue
+    [DateTime]$MaxDate = [DateTime]::MaxValue
+    [string]$DateFormat = "yyyy-MM-dd"
+    [string]$TextValue = ""
+    [int]$CursorPosition = 0
+    [bool]$ShowCalendar = $false
+    [scriptblock]$OnChange
+
+    DateInputComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 25
+        $this.Height = 3
+        $this.TextValue = $this.Value.ToString($this.DateFormat)
+        Write-Verbose "DateInputComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $cursorColor = Get-ThemeColor 'input.cursor' -Fallback (Get-ThemeColor 'Accent')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw date value
+            Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $this.TextValue -ForegroundColor $fgColor -BackgroundColor $bgColor
+            
+            # Draw calendar icon
+            $iconColor = if ($this.IsFocused) { $borderColor } else { (Get-ThemeColor 'Subtle') }
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text "📅" -ForegroundColor $iconColor -BackgroundColor $bgColor
+            
+            # Draw cursor
+            if ($this.IsFocused -and $this.CursorPosition -le $this.TextValue.Length) {
+                $cursorX = 2 + $this.CursorPosition
+                if ($cursorX -lt ($this.Width - 4)) {
+                    $cell = $this._private_buffer.GetCell($cursorX, 1)
+                    if ($null -ne $cell) {
+                        $cell.BackgroundColor = $cursorColor
+                        $cell.ForegroundColor = $bgColor
+                        $this._private_buffer.SetCell($cursorX, 1, $cell)
+                    }
+                }
+            }
+            
+            Write-Verbose "DateInputComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "DateInputComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        try {
+            $handled = $true
+            $originalValue = $this.Value
+            
+            switch ($key.Key) {
+                ([ConsoleKey]::Enter) {
+                    if ($this._ValidateAndSetDate($this.TextValue)) {
+                        # Date was valid and set
+                    }
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.TextValue = $this.TextValue.Remove($this.CursorPosition, 1)
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($this.CursorPosition -gt 0) {
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($this.CursorPosition -lt $this.TextValue.Length) {
+                        $this.CursorPosition++
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $this.TextValue.Length
+                }
+                default {
+                    if ($key.KeyChar -and $this._IsValidDateChar($key.KeyChar)) {
+                        $this.TextValue = $this.TextValue.Insert($this.CursorPosition, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                # Fire change event if value changed
+                if ($this.Value -ne $originalValue -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Value
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "DateInputComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    hidden [bool] _IsValidDateChar([char]$char) {
+        return [char]::IsDigit($char) -or $char -eq '-' -or $char -eq '/' -or $char -eq '.'
+    }
+
+    hidden [bool] _ValidateAndSetDate([string]$text) {
+        try {
+            $date = [DateTime]::ParseExact($text, $this.DateFormat, $null)
+            if ($date -ge $this.MinDate -and $date -le $this.MaxDate) {
+                $this.Value = $date
+                $this._UpdateTextValue()
+                return $true
+            }
+        }
+        catch {
+            # Invalid format, revert to current value
+            $this._UpdateTextValue()
+        }
+        return $false
+    }
+
+    hidden [void] _UpdateTextValue() {
+        $this.TextValue = $this.Value.ToString($this.DateFormat)
+        $this.CursorPosition = [Math]::Min($this.CursorPosition, $this.TextValue.Length)
+    }
+
+    [string] ToString() {
+        return "DateInputComponent(Name='$($this.Name)', Value=$($this.Value), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class ComboBoxComponent : UIElement {
+    [string[]]$Items = @()
+    [int]$SelectedIndex = -1
+    [string]$SelectedItem = ""
+    [string]$DisplayText = ""
+    [string]$SearchText = ""
+    [bool]$IsDropDownOpen = $false
+    [bool]$AllowSearch = $true
+    [ValidateRange(3, 20)][int]$MaxDropDownHeight = 8
+    [int]$ScrollOffset = 0
+    [scriptblock]$OnSelectionChanged
+    
+    hidden [TuiBuffer]$_dropdownBuffer = $null
+    hidden [string[]]$_filteredItems = @()
+
+    ComboBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 30
+        $this.Height = 3
+        $this._filteredItems = $this.Items
+        Write-Verbose "ComboBoxComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = if ($this.IsFocused) { 
+                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+            } else { 
+                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+            }
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw current value or search text
+            $displayValue = if ($this.IsDropDownOpen -and $this.AllowSearch) { $this.SearchText } else { $this.DisplayText }
+            if (-not [string]::IsNullOrEmpty($displayValue)) {
+                $maxTextWidth = $this.Width - 6
+                if ($displayValue.Length -gt $maxTextWidth) {
+                    $displayValue = $displayValue.Substring(0, $maxTextWidth - 3) + "..."
+                }
+                Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayValue -ForegroundColor $fgColor -BackgroundColor $bgColor
+            }
+            
+            # Draw dropdown arrow
+            $arrow = if ($this.IsDropDownOpen) { "▲" } else { "▼" }
+            $arrowColor = if ($this.IsFocused) { $borderColor } else { (Get-ThemeColor 'Subtle') }
+            Write-TuiText -Buffer $this._private_buffer -X ($this.Width - 3) -Y 1 -Text $arrow -ForegroundColor $arrowColor -BackgroundColor $bgColor
+            
+            # Render dropdown overlay if open
+            if ($this.IsDropDownOpen) {
+                $this._RenderDropdownOverlay()
+            }
+            
+            Write-Verbose "ComboBoxComponent '$($this.Name)': Rendered successfully"
+        }
+        catch {
+            Write-Error "ComboBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    hidden [void] _RenderDropdownOverlay() {
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $borderColor = Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent')
+            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
+            $selectionBg = Get-ThemeColor 'input.selection' -Fallback (Get-ThemeColor 'Selection')
+            $selectionFg = Get-ThemeColor 'input.selection.foreground' -Fallback (Get-ThemeColor 'Background')
+            
+            $dropdownHeight = [Math]::Min($this.MaxDropDownHeight, $this._filteredItems.Count + 2)
+            
+            # Create or resize dropdown buffer
+            if (-not $this._dropdownBuffer -or $this._dropdownBuffer.Height -ne $dropdownHeight -or $this._dropdownBuffer.Width -ne $this.Width) {
+                $this._dropdownBuffer = [TuiBuffer]::new($this.Width, $dropdownHeight, "$($this.Name).Dropdown")
+            }
+            
+            # Clear and draw dropdown
+            $this._dropdownBuffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            Write-TuiBox -Buffer $this._dropdownBuffer -X 0 -Y 0 -Width $this.Width -Height $dropdownHeight -BorderStyle "Single" -BorderColor $borderColor -BackgroundColor $bgColor
+            
+            # Draw items
+            $visibleItems = [Math]::Min($this.MaxDropDownHeight - 2, $this._filteredItems.Count)
+            for ($i = 0; $i -lt $visibleItems; $i++) {
+                $itemIndex = $i + $this.ScrollOffset
+                if ($itemIndex -ge $this._filteredItems.Count) { break }
+                
+                $item = $this._filteredItems[$itemIndex]
+                $isSelected = ($itemIndex -eq $this.SelectedIndex)
+                
+                $itemBg = if ($isSelected) { $selectionBg } else { $bgColor }
+                $itemFg = if ($isSelected) { $selectionFg } else { $fgColor }
+                
+                # Draw selection background
+                $highlightText = ' ' * ($this.Width - 2)
+                Write-TuiText -Buffer $this._dropdownBuffer -X 1 -Y ($i + 1) -Text $highlightText -ForegroundColor $itemFg -BackgroundColor $itemBg
+                
+                # Draw item text
+                $itemText = " $item"
+                $maxItemWidth = $this.Width - 4
+                if ($itemText.Length -gt $maxItemWidth) {
+                    $itemText = $itemText.Substring(0, $maxItemWidth - 3) + "..."
+                }
+                Write-TuiText -Buffer $this._dropdownBuffer -X 2 -Y ($i + 1) -Text $itemText -ForegroundColor $itemFg -BackgroundColor $itemBg
+            }
+            
+            # Add dropdown to overlay stack for rendering
+            # Note: This would need integration with the TUI engine's overlay system
+            # For now, we'll blend it directly onto the current screen
+            
+            Write-Verbose "ComboBoxComponent '$($this.Name)': Dropdown overlay rendered"
+        }
+        catch {
+            Write-Error "ComboBoxComponent '$($this.Name)': Error rendering dropdown: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        try {
+            $handled = $true
+            $originalSelection = $this.SelectedItem
+            
+            if ($this.IsDropDownOpen) {
+                switch ($key.Key) {
+                    ([ConsoleKey]::Escape) {
+                        $this.IsDropDownOpen = $false
+                        $this.SearchText = ""
+                        $this._UpdateFilteredItems()
+                    }
+                    ([ConsoleKey]::Enter) {
+                        if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this._filteredItems.Count) {
+                            $this.SelectedItem = $this._filteredItems[$this.SelectedIndex]
+                            $this.DisplayText = $this.SelectedItem
+                            $this.IsDropDownOpen = $false
+                            $this.SearchText = ""
+                            $this._UpdateFilteredItems()
+                        }
+                    }
+                    ([ConsoleKey]::UpArrow) {
+                        if ($this.SelectedIndex -gt 0) {
+                            $this.SelectedIndex--
+                            $this._EnsureSelectedVisible()
+                        }
+                    }
+                    ([ConsoleKey]::DownArrow) {
+                        if ($this.SelectedIndex -lt ($this._filteredItems.Count - 1)) {
+                            $this.SelectedIndex++
+                            $this._EnsureSelectedVisible()
+                        }
+                    }
+                    ([ConsoleKey]::Backspace) {
+                        if ($this.AllowSearch -and $this.SearchText.Length -gt 0) {
+                            $this.SearchText = $this.SearchText.Substring(0, $this.SearchText.Length - 1)
+                            $this._UpdateFilteredItems()
+                        }
+                    }
+                    default {
+                        if ($this.AllowSearch -and $key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
+                            $this.SearchText += $key.KeyChar
+                            $this._UpdateFilteredItems()
+                        } else {
+                            $handled = $false
+                        }
+                    }
+                }
+            } else {
+                switch ($key.Key) {
+                    ([ConsoleKey]::Enter) {
+                        $this.IsDropDownOpen = $true
+                        $this.SelectedIndex = 0
+                        $this._UpdateFilteredItems()
+                    }
+                    ([ConsoleKey]::Spacebar) {
+                        $this.IsDropDownOpen = $true
+                        $this.SelectedIndex = 0
+                        $this._UpdateFilteredItems()
+                    }
+                    ([ConsoleKey]::DownArrow) {
+                        $this.IsDropDownOpen = $true
+                        $this.SelectedIndex = 0
+                        $this._UpdateFilteredItems()
+                    }
+                    default {
+                        $handled = $false
+                    }
+                }
+            }
+            
+            if ($handled) {
+                # Fire selection changed event
+                if ($this.SelectedItem -ne $originalSelection -and $this.OnSelectionChanged) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnSelectionChanged" -ScriptBlock {
+                        & $this.OnSelectionChanged -SelectedItem $this.SelectedItem
+                    }
+                }
+                
+                $this.RequestRedraw()
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "ComboBoxComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    hidden [void] _UpdateFilteredItems() {
+        if ([string]::IsNullOrWhiteSpace($this.SearchText)) {
+            $this._filteredItems = $this.Items
+        } else {
+            $this._filteredItems = $this.Items | Where-Object { $_ -like "*$($this.SearchText)*" }
+        }
+        
+        # Reset selection if current selection is no longer valid
+        if ($this.SelectedIndex -ge $this._filteredItems.Count) {
+            $this.SelectedIndex = [Math]::Max(0, $this._filteredItems.Count - 1)
+        }
+        
+        $this.ScrollOffset = 0
+    }
+
+    hidden [void] _EnsureSelectedVisible() {
+        $visibleItems = $this.MaxDropDownHeight - 2
+        
+        if ($this.SelectedIndex -lt $this.ScrollOffset) {
+            $this.ScrollOffset = $this.SelectedIndex
+        }
+        elseif ($this.SelectedIndex -ge ($this.ScrollOffset + $visibleItems)) {
+            $this.ScrollOffset = $this.SelectedIndex - $visibleItems + 1
+        }
+    }
+
+    [void] SetItems([string[]]$items) {
+        $this.Items = $items
+        $this._filteredItems = $items
+        $this.SelectedIndex = -1
+        $this.SelectedItem = ""
+        $this.DisplayText = ""
+        $this.RequestRedraw()
+    }
+
+    [string] ToString() {
+        return "ComboBoxComponent(Name='$($this.Name)', Items=$($this.Items.Count), Selected='$($this.SelectedItem)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+#endregion
+
+#region Factory Functions
+
+function New-TuiMultilineTextBox {
+    <#
+    .SYNOPSIS
+    Creates a new multiline text box component.
+    
+    .DESCRIPTION
+    Factory function to create a MultilineTextBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $multilineText = New-TuiMultilineTextBox -Props @{
+        Name = "Description"
+        Width = 60
+        Height = 10
+        MaxLines = 50
+        Placeholder = "Enter description..."
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "MultilineTextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [MultilineTextBoxComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created multiline text box '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create multiline text box: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiNumericInput {
+    <#
+    .SYNOPSIS
+    Creates a new numeric input component.
+    
+    .DESCRIPTION
+    Factory function to create a NumericInputComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $numericInput = New-TuiNumericInput -Props @{
+        Name = "Amount"
+        MinValue = 0
+        MaxValue = 1000
+        DecimalPlaces = 2
+        Step = 0.5
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "NumericInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [NumericInputComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created numeric input '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create numeric input: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiDateInput {
+    <#
+    .SYNOPSIS
+    Creates a new date input component.
+    
+    .DESCRIPTION
+    Factory function to create a DateInputComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $dateInput = New-TuiDateInput -Props @{
+        Name = "DueDate"
+        DateFormat = "yyyy-MM-dd"
+        MinDate = (Get-Date)
+        MaxDate = (Get-Date).AddYears(1)
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "DateInput_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [DateInputComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created date input '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create date input: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiComboBox {
+    <#
+    .SYNOPSIS
+    Creates a new combo box component.
+    
+    .DESCRIPTION
+    Factory function to create a ComboBoxComponent with configurable properties.
+    
+    .PARAMETER Props
+    Hashtable of properties to apply to the component.
+    
+    .EXAMPLE
+    $comboBox = New-TuiComboBox -Props @{
+        Name = "Priority"
+        Items = @("Low", "Medium", "High", "Critical")
+        AllowSearch = $true
+        MaxDropDownHeight = 6
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $name = $Props.Name ?? "ComboBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $component = [ComboBoxComponent]::new($name)
+        
+        $Props.GetEnumerator() | ForEach-Object {
+            if ($component.PSObject.Properties.Match($_.Name)) {
+                $component.($_.Name) = $_.Value
+            }
+        }
+        
+        Write-Verbose "Created combo box '$name' with $($Props.Count) properties"
+        return $component
+    }
+    catch {
+        Write-Error "Failed to create combo box: $($_.Exception.Message)"
+        throw
+    }
+}
+
+#endregion
+
+#region Module Exports
+
+# Export public functions
+Export-ModuleMember -Function New-TuiMultilineTextBox, New-TuiNumericInput, New-TuiDateInput, New-TuiComboBox
+
+# Classes are automatically exported in PowerShell 7+
+# MultilineTextBoxComponent, NumericInputComponent, DateInputComponent, ComboBoxComponent classes are available when module is imported
+
+#endregion
+
+####modules\dialog-system-class\dialog-system-class.psm1
+# ==============================================================================
+# Dialog System Class Module v5.0
+# Theme-aware, lifecycle-managed dialogs with modern promise-based API
+# ==============================================================================
+
+#using module ui-classes
+#using module tui-primitives
+#using module tui-components
+#using module theme-manager
+#using namespace System.Management.Automation
+#using namespace System.Threading.Tasks
+
+#region Base Dialog Class
+
+class Dialog : UIElement {
+    [string] $Title = "Dialog"
+    [string] $Message = ""
+    hidden [TaskCompletionSource[object]] $_tcs # For promise-based async result
+
+    Dialog([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 50
+        $this.Height = 10
+        $this._tcs = [TaskCompletionSource[object]]::new()
+        Write-Verbose "Dialog: Constructor called for '$($this.Name)'"
+    }
+
+    [Task[object]] Show() {
+        try {
+            # Center the dialog on screen
+            $this.X = [Math]::Floor(($global:TuiState.BufferWidth - $this.Width) / 2)
+            $this.Y = [Math]::Floor(($global:TuiState.BufferHeight - $this.Height) / 4)
+            
+            # Show as overlay and set focus
+            Show-TuiOverlay -Element $this
+            Set-ComponentFocus -Component $this
+            
+            Write-Verbose "Dialog '$($this.Name)': Shown at ($($this.X), $($this.Y))"
+            return $this._tcs.Task
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error showing dialog: $($_.Exception.Message)"
+            $this._tcs.TrySetException($_.Exception)
+            return $this._tcs.Task
+        }
+    }
+
+    [void] Close([object]$result, [bool]$wasCancelled = $false) {
+        try {
+            if ($wasCancelled) {
+                $this._tcs.TrySetCanceled()
+                Write-Verbose "Dialog '$($this.Name)': Closed with cancellation"
+            } else {
+                $this._tcs.TrySetResult($result)
+                Write-Verbose "Dialog '$($this.Name)': Closed with result: $result"
+            }
+            
+            # The engine will call Cleanup() on this dialog automatically
+            Close-TopTuiOverlay
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error closing dialog: $($_.Exception.Message)"
+            $this._tcs.TrySetException($_.Exception)
+        }
+    }
+
+    [void] OnRender() {
+        if (-not $this._private_buffer) { return }
+        
+        try {
+            # Get theme colors
+            $bgColor = Get-ThemeColor 'dialog.background' -Default (Get-ThemeColor 'Background')
+            $borderColor = Get-ThemeColor 'dialog.border' -Default (Get-ThemeColor 'Border')
+            $titleColor = Get-ThemeColor 'dialog.title' -Default (Get-ThemeColor 'Accent')
+            
+            # Clear buffer with higher z-index for proper overlay rendering
+            $clearCell = [TuiCell]::new(' ', $titleColor, $bgColor)
+            $clearCell.ZIndex = 100  # Ensure dialog is above background content
+            $this._private_buffer.Clear($clearCell)
+            
+            # Draw dialog box
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Title " $($this.Title) " -BorderStyle "Double" -BorderColor $borderColor -BackgroundColor $bgColor
+
+            # Render message if present
+            if (-not [string]::IsNullOrWhiteSpace($this.Message)) {
+                $this._RenderMessage()
+            }
+            
+            # Allow subclasses to render their specific content
+            $this.RenderDialogContent()
+            
+            Write-Verbose "Dialog '$($this.Name)': Rendered"
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    hidden [void] _RenderMessage() {
+        try {
+            $messageColor = Get-ThemeColor 'dialog.message' -Default (Get-ThemeColor 'Foreground')
+            $bgColor = Get-ThemeColor 'dialog.background' -Default (Get-ThemeColor 'Background')
+            
+            $messageY = 2
+            $messageX = 2
+            $maxWidth = $this.Width - 4
+            
+            $wrappedLines = Get-WordWrappedLines -Text $this.Message -MaxWidth $maxWidth
+            foreach ($line in $wrappedLines) {
+                if ($messageY -ge ($this.Height - 3)) { break }
+                Write-TuiText -Buffer $this._private_buffer -X $messageX -Y $messageY -Text $line -ForegroundColor $messageColor -BackgroundColor $bgColor
+                $messageY++
+            }
+        }
+        catch {
+            Write-Error "Dialog '$($this.Name)': Error rendering message: $($_.Exception.Message)"
+        }
+    }
+
+    # Virtual method for subclasses to render their specific content
+    [void] RenderDialogContent() { 
+        # Override in subclasses
+    }
+
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($key.Key -eq [ConsoleKey]::Escape) {
+            $this.Close($null, $true)
+            return $true
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "Dialog(Name='$($this.Name)', Title='$($this.Title)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+#endregion
+
+#region Specialized Dialogs
+
+class AlertDialog : Dialog {
+    AlertDialog([string]$title, [string]$message) : base("AlertDialog") {
+        $this.Title = $title
+        $this.Message = $message
+        $this.Height = 8
+        $this.Width = [Math]::Min(70, [Math]::Max(40, $message.Length + 10))
+        Write-Verbose "AlertDialog: Created with title '$title'"
+    }
+
+    [void] RenderDialogContent() {
+        try {
+            # Get theme colors for button
+            $buttonFg = Get-ThemeColor 'dialog.button.focus.foreground' -Default (Get-ThemeColor 'Background')
+            $buttonBg = Get-ThemeColor 'dialog.button.focus.background' -Default (Get-ThemeColor 'Accent')
+            
+            $buttonY = $this.Height - 2
+            $buttonLabel = " [ OK ] "
+            $buttonX = [Math]::Floor(($this.Width - $buttonLabel.Length) / 2)
+            
+            Write-TuiText -Buffer $this._private_buffer -X $buttonX -Y $buttonY -Text $buttonLabel -ForegroundColor $buttonFg -BackgroundColor $buttonBg
+        }
+        catch {
+            Write-Error "AlertDialog '$($this.Name)': Error rendering content: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            $this.Close($true)
+            return $true
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
+}
+
+class ConfirmDialog : Dialog {
+    hidden [int] $_selectedButton = 0
+
+    ConfirmDialog([string]$title, [string]$message) : base("ConfirmDialog") {
+        $this.Title = $title
+        $this.Message = $message
+        $this.Height = 8
+        $this.Width = [Math]::Min(70, [Math]::Max(50, $message.Length + 10))
+        Write-Verbose "ConfirmDialog: Created with title '$title'"
+    }
+
+    [void] RenderDialogContent() {
+        try {
+            # Get theme colors
+            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Default (Get-ThemeColor 'Foreground')
+            $normalBg = Get-ThemeColor 'dialog.button.normal.background' -Default (Get-ThemeColor 'Background')
+            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Default (Get-ThemeColor 'Background')
+            $focusBg = Get-ThemeColor 'dialog.button.focus.background' -Default (Get-ThemeColor 'Accent')
+            
+            $buttonY = $this.Height - 3
+            $buttons = @("  Yes  ", "  No   ")
+            $startX = [Math]::Floor(($this.Width - 24) / 2)
+            
+            for ($i = 0; $i -lt $buttons.Count; $i++) {
+                $isFocused = ($i -eq $this._selectedButton)
+                $label = if ($isFocused) { "[ $($buttons[$i].Trim()) ]" } else { $buttons[$i] }
+                $fg = if ($isFocused) { $focusFg } else { $normalFg }
+                $bg = if ($isFocused) { $focusBg } else { $normalBg }
+                
+                Write-TuiText -Buffer $this._private_buffer -X ($startX + ($i * 14)) -Y $buttonY -Text $label -ForegroundColor $fg -BackgroundColor $bg
+            }
+        }
+        catch {
+            Write-Error "ConfirmDialog '$($this.Name)': Error rendering content: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        switch ($key.Key) {
+            { $_ -in @([ConsoleKey]::LeftArrow, [ConsoleKey]::RightArrow, [ConsoleKey]::Tab) } {
+                $this._selectedButton = ($this._selectedButton + 1) % 2
+                $this.RequestRedraw()
+                return $true
+            }
+            ([ConsoleKey]::Enter) {
+                $result = ($this._selectedButton -eq 0) # True for Yes, False for No
+                $this.Close($result)
+                return $true
+            }
+        }
+        return ([Dialog]$this).HandleInput($key)
+    }
+}
+
+class InputDialog : Dialog {
+    hidden [TextBoxComponent] $_textBox
+    
+    InputDialog([string]$title, [string]$message, [string]$defaultValue = "") : base("InputDialog") {
+        $this.Title = $title
+        $this.Message = $message
+        $this.Height = 10
+        $this.Width = [Math]::Min(70, [Math]::Max(50, $message.Length + 20))
+        # Store default value in metadata for use during initialization
+        $this.Metadata.DefaultValue = $defaultValue
+        Write-Verbose "InputDialog: Created with title '$title'"
+    }
+
+    # Create child components during the Initialize lifecycle hook
+    [void] OnInitialize() {
+        try {
+            $this._textBox = New-TuiTextBox -Props @{ 
+                Name = 'DialogInput'
+                Text = $this.Metadata.DefaultValue
+                Width = $this.Width - 4
+                Height = 3
+                X = 2
+                Y = 4
+            }
+            $this.AddChild($this._textBox)
+            Write-Verbose "InputDialog '$($this.Name)': TextBox component initialized"
+        }
+        catch {
+            Write-Error "InputDialog '$($this.Name)': Error initializing: $($_.Exception.Message)"
+        }
+    }
+
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        if ($this._textBox) {
+            $this._textBox.Move(2, 4)
+            $this._textBox.Resize($newWidth - 4, 3)
+        }
+    }
+
+    [void] RenderDialogContent() {
+        try {
+            # The textbox is a child, so the base UIElement.Render() will handle it.
+            # We just need to render the buttons.
+            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Default (Get-ThemeColor 'Foreground')
+            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Default (Get-ThemeColor 'Accent')
+            $bgColor = Get-ThemeColor 'dialog.background' -Default (Get-ThemeColor 'Background')
+            
+            $buttonY = $this.Height - 2
+            $okLabel = "[ OK ]"
+            $cancelLabel = "[ Cancel ]"
+            $startX = $this.Width - $okLabel.Length - $cancelLabel.Length - 6
+            
+            Write-TuiText -Buffer $this._private_buffer -X $startX -Y $buttonY -Text $okLabel -ForegroundColor $focusFg -BackgroundColor $bgColor
+            Write-TuiText -Buffer $this._private_buffer -X ($startX + $okLabel.Length + 2) -Y $buttonY -Text $cancelLabel -ForegroundColor $normalFg -BackgroundColor $bgColor
+        }
+        catch {
+            Write-Error "InputDialog '$($this.Name)': Error rendering content: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([ConsoleKeyInfo]$key) {
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            $result = $this._textBox ? $this._textBox.Text : ""
+            $this.Close($result)
+            return $true
+        }
+        
+        # Let the textbox handle all other input
+        if ($this._textBox -and $this._textBox.HandleInput($key)) {
+            return $true
+        }
+        
+        return ([Dialog]$this).HandleInput($key)
+    }
+}
+
+#endregion
+
+#region Factory Functions (Promise-based API)
+
+function Show-AlertDialog {
+    <#
+    .SYNOPSIS
+    Shows an alert dialog with a message and OK button.
+    
+    .DESCRIPTION
+    Displays a modal alert dialog with the specified title and message.
+    Returns a Task that can be awaited for the user's acknowledgment.
+    
+    .PARAMETER Title
+    The title of the alert dialog.
+    
+    .PARAMETER Message
+    The message to display in the dialog.
+    
+    .EXAMPLE
+    $result = Show-AlertDialog -Title "Success" -Message "Operation completed successfully!"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message
+    )
+    
+    try {
+        $dialog = [AlertDialog]::new($Title, $Message)
+        Write-Verbose "Show-AlertDialog: Created alert dialog '$Title'"
+        return $dialog.Show()
+    }
+    catch {
+        Write-Error "Show-AlertDialog: Error creating alert dialog: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Show-ConfirmDialog {
+    <#
+    .SYNOPSIS
+    Shows a confirmation dialog with Yes/No buttons.
+    
+    .DESCRIPTION
+    Displays a modal confirmation dialog with the specified title and message.
+    Returns a Task that resolves to $true for Yes, $false for No.
+    
+    .PARAMETER Title
+    The title of the confirmation dialog.
+    
+    .PARAMETER Message
+    The message to display in the dialog.
+    
+    .EXAMPLE
+    $confirmed = Show-ConfirmDialog -Title "Delete" -Message "Are you sure you want to delete this item?"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message
+    )
+    
+    try {
+        $dialog = [ConfirmDialog]::new($Title, $Message)
+        Write-Verbose "Show-ConfirmDialog: Created confirm dialog '$Title'"
+        return $dialog.Show()
+    }
+    catch {
+        Write-Error "Show-ConfirmDialog: Error creating confirm dialog: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Show-InputDialog {
+    <#
+    .SYNOPSIS
+    Shows an input dialog for text entry.
+    
+    .DESCRIPTION
+    Displays a modal input dialog with the specified title, message, and optional default value.
+    Returns a Task that resolves to the entered text, or null if cancelled.
+    
+    .PARAMETER Title
+    The title of the input dialog.
+    
+    .PARAMETER Message
+    The message to display in the dialog.
+    
+    .PARAMETER DefaultValue
+    The default value to pre-fill in the text box.
+    
+    .EXAMPLE
+    $userInput = Show-InputDialog -Title "Name" -Message "Enter your name:" -DefaultValue "John Doe"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message,
+        [string]$DefaultValue = ""
+    )
+    
+    try {
+        $dialog = [InputDialog]::new($Title, $Message, $DefaultValue)
+        Write-Verbose "Show-InputDialog: Created input dialog '$Title'"
+        return $dialog.Show()
+    }
+    catch {
+        Write-Error "Show-InputDialog: Error creating input dialog: $($_.Exception.Message)"
+        throw
+    }
+}
+
+#endregion
+
+#region Utility Functions
+
+function Get-WordWrappedLines {
+    <#
+    .SYNOPSIS
+    Wraps text to fit within a specified width.
+    
+    .DESCRIPTION
+    Breaks text into lines that fit within the specified maximum width,
+    attempting to break at word boundaries when possible.
+    
+    .PARAMETER Text
+    The text to wrap.
+    
+    .PARAMETER MaxWidth
+    The maximum width for each line.
+    
+    .EXAMPLE
+    $lines = Get-WordWrappedLines -Text "This is a long message that needs to be wrapped" -MaxWidth 20
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][int]$MaxWidth
+    )
+    
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return @()
+    }
+    
+    $lines = @()
+    $words = $Text -split '\s+'
+    $currentLine = ""
+    
+    foreach ($word in $words) {
+        $testLine = if ($currentLine) { "$currentLine $word" } else { $word }
+        
+        if ($testLine.Length -le $MaxWidth) {
+            $currentLine = $testLine
+        } else {
+            if ($currentLine) {
+                $lines += $currentLine
+                $currentLine = $word
+            } else {
+                # Word is longer than max width, break it
+                while ($word.Length -gt $MaxWidth) {
+                    $lines += $word.Substring(0, $MaxWidth)
+                    $word = $word.Substring($MaxWidth)
+                }
+                $currentLine = $word
+            }
+        }
+    }
+    
+    if ($currentLine) {
+        $lines += $currentLine
+    }
+    
+    return $lines
+}
+
+#endregion
+
+#region Module Exports
+
+# Export public functions
+Export-ModuleMember -Function Show-AlertDialog, Show-ConfirmDialog, Show-InputDialog, Get-WordWrappedLines
+
+# Classes are automatically exported in PowerShell 7+
+# Dialog, AlertDialog, ConfirmDialog, InputDialog classes are available when module is imported
+
+#endregion
+
+####modules\panic-handler\panic-handler.psm1
+# MODULE: panic-handler/panic-handler.psm1
+# PURPOSE: Provides a robust error recovery and crash reporting system for the PMC Terminal application.
+# This module is designed to catch unhandled exceptions, restore the terminal, and generate detailed diagnostics.
+
+# ------------------------------------------------------------------------------
+# Module-Scoped State Variables
+# ------------------------------------------------------------------------------
+$script:CrashLogDirectory = $null # Directory where crash reports are saved
+$script:ScreenshotsDirectory = $null # Directory for last-frame screenshots
+$script:LogDirectoryForPanic = $null # The main application log directory, used for panic messages
+
+# ------------------------------------------------------------------------------
+# Private Helper Functions
+# ------------------------------------------------------------------------------
+
+# Gathers detailed system and application state information for crash reports.
+function Get-DetailedSystemInfo {
+    [CmdletBinding()]
+    param()
+
+    try {
+        $process = Get-Process -Id $PID -ErrorAction SilentlyContinue # Get current process info
+        
+        # Collect system and PowerShell environment details
+        $systemInfo = [PSCustomObject]@{
+            Timestamp = (Get-Date -Format "o");
+            PowerShellVersion = $PSVersionTable.PSVersion.ToString();
+            OS = $PSVersionTable.OS;
+            HostName = $Host.Name;
+            HostVersion = $Host.Version.ToString();
+            ProcessId = $PID;
+            ProcessName = $process?.ProcessName;
+            WorkingSetMB = if ($process) { [Math]::Round($process.WorkingSet64 / 1MB, 2) } else { $null };
+            CommandLine = ([Environment]::CommandLine);
+            CurrentDirectory = (Get-Location).Path;
+            ThreadId = [System.Threading.Thread]::CurrentThread.ManagedThreadId;
+            Culture = [System.Threading.Thread]::CurrentThread.CurrentCulture.Name;
+        }
+
+        # Add application-specific state if available (assuming global access)
+        if ($global:TuiState) {
+            $systemInfo | Add-Member -MemberType NoteProperty -Name "TUIState" -Value @{
+                Running = $global:TuiState.Running;
+                BufferWidth = $global:TuiState.BufferWidth;
+                BufferHeight = $global:TuiState.BufferHeight;
+                CurrentScreen = $global:TuiState.CurrentScreen?.Name;
+                OverlayCount = $global:TuiState.OverlayStack.Count;
+                IsDirty = $global:TuiState.IsDirty;
+                FocusedComponent = $global:TuiState.FocusedComponent?.Name;
+                FrameCount = $global:TuiState.RenderStats.FrameCount;
+            } -Force
+        }
+        if (Get-Variable -Name 'appStartTime' -ErrorAction SilentlyContinue) {
+            $appUptime = (Get-Date) - $global:appStartTime
+            $systemInfo | Add-Member -MemberType NoteProperty -Name "AppUptime" -Value $appUptime.ToString('hh\:mm\:ss\.fff') -Force
+        }
+        if (Get-Command 'Get-LogPath' -ErrorAction SilentlyContinue) {
+            $logPath = Get-LogPath
+            if ($logPath -and (Test-Path $logPath)) {
+                $systemInfo | Add-Member -MemberType NoteProperty -Name "LogFileSizeMB" -Value ([Math]::Round((Get-Item $logPath).Length / 1MB, 2)) -Force
+            }
+        }
+        if (Get-Command 'Get-LogEntries' -ErrorAction SilentlyContinue) {
+             $systemInfo | Add-Member -MemberType NoteProperty -Name "LogHistoryCount" -Value (Get-LogEntries -Count 1000).Count -Force
+        }
+        if (Get-Command 'Get-ErrorHistory' -ErrorAction SilentlyContinue) {
+             $systemInfo | Add-Member -MemberType NoteProperty -Name "ErrorHistoryCount" -Value (Get-ErrorHistory -Count 1000).Count -Force
+        }
+
+        Write-Verbose "PanicHandler: Detailed system info collected."
+        return $systemInfo
+    } catch {
+        Write-Warning "PanicHandler: Failed to collect all system information: $($_.Exception.Message)"
+        return [PSCustomObject]@{ Timestamp = (Get-Date -Format "o"); Error = "Failed to collect system info: $($_.Exception.Message)" }
+    }
+}
+
+# Captures the last rendered frame from the TUI Engine's compositor buffer as a screenshot (text-based).
+function Get-TerminalScreenshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$outputPath # Directory to save the screenshot
+    )
+
+    try {
+        if (-not $global:TuiState -or -not $global:TuiState.CompositorBuffer) {
+            Write-Warning "PanicHandler: TUI state or compositor buffer not available for screenshot."
+            return $null
+        }
+
+        # Ensure screenshot directory exists
+        if (-not (Test-Path $outputPath)) {
+            New-Item -ItemType Directory -Path $outputPath -Force -ErrorAction Stop | Out-Null
+            Write-Verbose "PanicHandler: Created screenshot directory: $outputPath"
+        }
+
+        $buffer = $global:TuiState.CompositorBuffer
+        $screenshotFileName = "screenshot_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+        $screenshotPath = Join-Path $outputPath $screenshotFileName
+        
+        $sb = [System.Text.StringBuilder]::new($buffer.Width * $buffer.Height * 2) # Estimate size
+        
+        # Build the screenshot string directly from the buffer's cells.
+        # This is a simplified text-based screenshot, not an actual graphical image.
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                [void]$sb.Append($buffer.GetCell($x, $y).Char)
+            }
+            [void]$sb.Append("`n") # New line after each row
+        }
+        
+        # Write the text screenshot to file.
+        $sb.ToString() | Out-File -FilePath $screenshotPath -Encoding UTF8 -Force
+        Write-Verbose "PanicHandler: Terminal screenshot saved to: $screenshotPath"
+        return $screenshotPath
+    } catch {
+        Write-Warning "PanicHandler: Failed to capture terminal screenshot: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+# Restores the terminal to a usable state after a crash.
+function Restore-Terminal {
+    [CmdletBinding()]
+    param()
+
+    try {
+        # Reset console colors and state
+        [Console]::ResetColor()
+        [Console]::Clear()
+        [Console]::CursorVisible = $true
+        [Console]::TreatControlCAsInput = $false # Ensure Ctrl+C doesn't just pass through
+
+        # Output to console directly, bypassing any potentially broken logger.
+        Write-Host ""
+        Write-Host "===============================================" -ForegroundColor Red
+        Write-Host "    A CRITICAL APPLICATION ERROR OCCURRED!   " -ForegroundColor Red
+        Write-Host "===============================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "The application has encountered an unrecoverable error and must close." -ForegroundColor White
+        Write-Host "A diagnostic crash report has been generated." -ForegroundColor White
+        Write-Host ""
+        Write-Host "  Crash Report Path: $($script:CrashLogDirectory)" -ForegroundColor Yellow
+        Write-Host ""
+
+        # Attempt to log to the application's main log file one last time if possible
+        if ($script:LogDirectoryForPanic) {
+            try {
+                $lastLogPath = Join-Path $script:LogDirectoryForPanic "pmc_terminal_$(Get-Date -Format 'yyyy-MM-dd').log"
+                if (Test-Path $lastLogPath) {
+                    Add-Content -Path $lastLogPath -Value "`n[CRITICAL PANIC] Application terminated due to unhandled error. See crash dump in $($script:CrashLogDirectory)" -Encoding UTF8 -Force
+                    Write-Host "  Last application log: $lastLogPath" -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Host "  (Failed to write last message to main application log: $($_.Exception.Message))" -ForegroundColor DarkRed
+            }
+        }
+        
+        Write-Host ""
+        Write-Host "Press any key to exit..." -ForegroundColor Gray
+        
+        # Wait for user input to keep the console window open.
+        if ($Host.UI.RawUI) {
+            $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        }
+        
+        Write-Verbose "PanicHandler: Terminal restoration complete."
+    } catch {
+        # Last ditch effort if terminal restoration itself fails.
+        Write-Host "CRITICAL: PanicHandler failed to restore terminal: $($_.Exception.Message)" -ForegroundColor Red
+        # Attempt a raw reset if supported
+        try { [Console]::Write("`e[0m`e[H`e[J") } catch {} # ANSI reset, home, clear screen
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Public Functions
+# ------------------------------------------------------------------------------
+
+function Initialize-PanicHandler {
+    <#
+    .SYNOPSIS
+    Initializes the Panic Handler, setting up directories for crash reports.
+    .DESCRIPTION
+    This function sets the paths for storing crash logs and screenshots, and ensures
+    these directories exist. It should be called early in the application startup.
+    .PARAMETER CrashLogDirectory
+    The base directory where individual crash reports (JSON files) will be saved.
+    Defaults to 'PMCTerminal\CrashDumps' in the user's Local Application Data folder.
+    .PARAMETER ScreenshotsDirectory
+    The directory where last-frame text screenshots will be saved.
+    Defaults to 'PMCTerminal\Screenshots' in the user's Local Application Data folder.
+    .PARAMETER ApplicationLogDirectory
+    The main application log directory, used for writing a final message to the main log file.
+    Defaults to 'PMCTerminal' in the user's Local Application Data folder.
+    #>
+    [CmdletBinding()]
+    param(
+        [ValidateNotNullOrEmpty()]
+        [string]$CrashLogDirectory = (Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PMCTerminal\CrashDumps"),
+        
+        [ValidateNotNullOrEmpty()]
+        [string]$ScreenshotsDirectory = (Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PMCTerminal\Screenshots"),
+        
+        [ValidateNotNullOrEmpty()]
+        [string]$ApplicationLogDirectory = (Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PMCTerminal")
+    )
+    
+    try {
+        $script:CrashLogDirectory = $CrashLogDirectory
+        $script:ScreenshotsDirectory = $ScreenshotsDirectory
+        $script:LogDirectoryForPanic = $ApplicationLogDirectory
+
+        # Ensure directories exist
+        if (-not (Test-Path $script:CrashLogDirectory)) {
+            New-Item -ItemType Directory -Path $script:CrashLogDirectory -Force -ErrorAction Stop | Out-Null
+        }
+        if (-not (Test-Path $script:ScreenshotsDirectory)) {
+            New-Item -ItemType Directory -Path $script:ScreenshotsDirectory -Force -ErrorAction Stop | Out-Null
+        }
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "Panic Handler initialized." -Data @{
+                CrashLogDir = $script:CrashLogDirectory;
+                ScreenshotsDir = $script:ScreenshotsDirectory;
+                AppLogDir = $script:LogDirectoryForPanic;
+            }
+        }
+        Write-Verbose "PanicHandler: Initialization complete."
+    } catch {
+        Write-Warning "PanicHandler: Failed to initialize: $($_.Exception.Message). Crash dumping might not work."
+    }
+}
+
+function Invoke-PanicHandler {
+    <#
+    .SYNOPSIS
+    Handles an unhandled critical error, generating a crash report and restoring the terminal.
+    .DESCRIPTION
+    This is the primary entry point for global exception handling. It should be called
+    when an unhandled error occurs in the main application loop. It collects diagnostic
+    information, saves it to a crash log, restores the terminal, and then exits the application.
+    .PARAMETER ErrorRecord
+    The System.Management.Automation.ErrorRecord object representing the unhandled error.
+    This is typically the automatic variable $_ from a catch block.
+    .PARAMETER AdditionalContext
+    Optional. A hashtable containing any extra context relevant to the crash (e.g., current screen, user input).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        
+        [hashtable]$AdditionalContext = @{}
+    )
+    
+    # Log the panic immediately
+    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+        Write-Log -Level Fatal -Message "Panic handler invoked due to unhandled error." -Data @{ 
+            ErrorMessage = $ErrorRecord.Exception.Message; 
+            Type = $ErrorRecord.Exception.GetType().FullName; 
+            Stage = "PanicHandlerEntry" 
+        } -Force
+    }
+
+    try {
+        $crashTimestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $crashReportFileName = "crash_report_${crashTimestamp}.json"
+        $crashReportPath = Join-Path $script:CrashLogDirectory $crashReportFileName
+
+        Write-Verbose "PanicHandler: Starting crash dump generation."
+
+        # Collect detailed error info using the helper from the Exceptions module.
+        # This assumes _Get-DetailedError is available in the session scope.
+        $detailedError = $null
+        if (Get-Command '_Get-DetailedError' -ErrorAction SilentlyContinue) {
+            $detailedError = _Get-DetailedError -ErrorRecord $ErrorRecord -AdditionalContext $AdditionalContext
+            Write-Verbose "PanicHandler: Detailed error record processed."
+        } else {
+            # Fallback if _Get-DetailedError is not available.
+            $detailedError = [PSCustomObject]@{
+                Timestamp = (Get-Date -Format "o");
+                Summary = $ErrorRecord.Exception.Message;
+                Type = $ErrorRecord.Exception.GetType().FullName;
+                StackTrace = $ErrorRecord.Exception.StackTrace;
+                RawErrorRecord = $ErrorRecord.ToString();
+                AdditionalContext = $AdditionalContext;
+                Warning = "Warning: _Get-DetailedError function was not available for full error context."
+            }
+            Write-Warning "PanicHandler: _Get-DetailedError not found. Using simplified error info."
+        }
+
+        # Get system and application state info.
+        $systemInfo = Get-DetailedSystemInfo
+
+        # Attempt to capture a screenshot of the last terminal state.
+        $screenshotPath = Get-TerminalScreenshot -outputPath $script:ScreenshotsDirectory
+
+        # Assemble the full crash report.
+        $crashReport = @{
+            Timestamp = (Get-Date -Format "o");
+            Event = "ApplicationPanic";
+            Reason = $ErrorRecord.Exception.Message;
+            ErrorDetails = $detailedError;
+            SystemInfo = $systemInfo;
+            ScreenshotFile = $screenshotPath;
+            LastLogEntries = if (Get-Command 'Get-LogEntries' -ErrorAction SilentlyContinue) { (Get-LogEntries -Count 50 | Select-Object -ExpandProperty UserData) } else { $null };
+            ErrorHistory = if (Get-Command 'Get-ErrorHistory' -ErrorAction SilentlyContinue) { Get-ErrorHistory -Count 25 } else { $null };
+        }
+
+        # Write the crash report to a JSON file.
+        $crashReport | ConvertTo-Json -Depth 10 | Out-File -FilePath $crashReportPath -Encoding UTF8 -Force
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Fatal -Message "Crash report saved to: $crashReportPath" -Data @{ Path = $crashReportPath } -Force
+        }
+        Write-Verbose "PanicHandler: Crash report saved to: $crashReportPath"
+
+    } catch {
+        # Critical: If crash dumping fails, log to file system directly and try to restore.
+        $criticalFailMessage = "$(Get-Date -Format 'o') [CRITICAL PANIC] PANIC HANDLER FAILED: $($_.Exception.Message)`nOriginal Error: $($ErrorRecord.Exception.Message)"
+        try {
+            $panicFailLogPath = Join-Path $script:CrashLogDirectory "panic_handler_fail_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+            Add-Content -Path $panicFailLogPath -Value $criticalFailMessage -Encoding UTF8 -Force
+            Write-Host "CRITICAL: Panic handler failed to create full report. Basic failure logged to: $panicFailLogPath" -ForegroundColor Red
+        } catch {
+            Write-Host "CRITICAL: Panic handler failed and could not log its own failure to disk. Error: $($_.Exception.Message)" -ForegroundColor DarkRed
+        }
+    } finally {
+        # Always attempt to restore the terminal, even if crash dumping failed.
+        Restore-Terminal
+        # Ensure the application process exits.
+        Write-Verbose "PanicHandler: Exiting application with code 1."
+        exit 1
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Module Export
+# ------------------------------------------------------------------------------
+# Export public functions from this module.
+Export-ModuleMember -Function Initialize-PanicHandler, Invoke-PanicHandler, Get-DetailedSystemInfo
+
+####services\keybinding-service\keybinding-service.psm1
+# keybinding-service.psm1
+
+# Contains only the factory function for creating KeybindingService instances.
+
+
+function New-KeybindingService {
+    <#
+    .SYNOPSIS
+    Creates a new instance of the KeybindingService class.
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$EnableChords
+    )
+    
+    if ($EnableChords) {
+        return [KeybindingService]::new($true)
+    }
+    else {
+        return [KeybindingService]::new()
+    }
+}
+
+Export-ModuleMember -Function New-KeybindingService
+
+####services\navigation-service\navigation-service.psm1
+# navigation-service-functions.psm1
+
+# Contains only the factory function for the NavigationService.
+
+
+function Initialize-NavigationService {
+    param([hashtable]$Services)
+    
+    if (-not $Services) { throw [System.ArgumentNullException]::new("Services") }
+    
+    return [NavigationService]::new($Services)
+}
+
+Export-ModuleMember -Function Initialize-NavigationService
+
+####modules\tui-framework\tui-framework.psm1
+# ==============================================================================
+# Axiom-Phoenix v4.0 - TUI Framework Integration Module
+# PURPOSE: Provides helper functions and services for interacting with the TUI engine.
+# This version is updated for the class-based, lifecycle-aware architecture.
+# ==============================================================================
+
+
+# The TuiFrameworkService class encapsulates utility functions and can be
+# registered with the service container for easy access by other components.
+class TuiFrameworkService {
+    hidden [System.Collections.Concurrent.ConcurrentDictionary[guid, object]] $_asyncJobs
+    
+    TuiFrameworkService() {
+        $this._asyncJobs = [System.Collections.Concurrent.ConcurrentDictionary[guid, object]]::new()
+        Write-Log -Level Info "TuiFrameworkService initialized."
+    }
+    
+    # Executes a script block asynchronously using a lightweight thread job.
+    # Ideal for I/O-bound operations like network requests or file access.
+    [System.Management.Automation.Job] StartAsync(
+        [scriptblock]$ScriptBlock,
+        [hashtable]$ArgumentList = @{}
+    ) {
+        return Invoke-WithErrorHandling -Component "TuiFramework.StartAsync" -Context "Starting async thread job" -ScriptBlock {
+            $job = Start-ThreadJob -ScriptBlock $ScriptBlock -ArgumentList @($ArgumentList)
+            $this._asyncJobs[$job.InstanceId] = $job
+            Write-Log -Level Debug -Message "Started async thread job: $($job.Name)" -Data @{ JobId = $job.InstanceId }
+            return $job
+        }
+    }
+
+    # Checks for completed async jobs and returns their results, cleaning them up by default.
+    [object[]] GetAsyncResults([switch]$RemoveCompleted = $true) {
+        return Invoke-WithErrorHandling -Component "TuiFramework.GetAsyncResults" -Context "Checking async job results" -ScriptBlock {
+            $results = @()
+            $completedJobs = $this._asyncJobs.Values | Where-Object { $_.State -in @('Completed', 'Failed', 'Stopped') }
+            
+            foreach ($job in $completedJobs) {
+                $jobResult = [pscustomobject]@{
+                    JobId = $job.InstanceId
+                    Name = $job.Name
+                    State = $job.State
+                    Output = if ($job.State -eq 'Completed') { Receive-Job -Job $job -Keep } else { $null }
+                    Error = if ($job.State -eq 'Failed') { $job.Error | Select-Object -First 1 } else { $null }
+                }
+                $results += $jobResult
+                
+                if ($RemoveCompleted) {
+                    $this._asyncJobs.TryRemove($job.InstanceId, [ref]$null) | Out-Null
+                    Remove-Job -Job $job -Force
+                }
+            }
+            return $results
+        }
+    }
+
+    # Stops all tracked asynchronous jobs. Should be called during application cleanup.
+    [void] StopAllAsyncJobs() {
+        Invoke-WithErrorHandling -Component "TuiFramework.StopAllAsync" -Context "Stopping all tracked async jobs" -ScriptBlock {
+            foreach ($job in $this._asyncJobs.Values) {
+                try {
+                    Stop-Job -Job $job -Force
+                    Remove-Job -Job $job -Force
+                } catch {
+                    Write-Log -Level Warning -Message "Failed to stop or remove job $($job.Name): $($_.Exception.Message)"
+                }
+            }
+            $this._asyncJobs.Clear()
+            Write-Log -Level Info -Message "All tracked TUI async jobs stopped."
+        }
+    }
+    
+    # Returns the global TUI state object for debugging or advanced scenarios.
+    [hashtable] GetState() {
+        return $global:TuiState
+    }
+
+    # Tests if the TUI is in a valid, running state.
+    [bool] IsRunning() {
+        return $global:TuiState -and $global:TuiState.Running -and $global:TuiState.CurrentScreen
+    }
+}
+
+# Factory function to create the TuiFrameworkService instance.
+# This is what gets registered with the service container.
+function Initialize-TuiFrameworkService {
+    [CmdletBinding()]
+    param()
+    
+    # Check for the ThreadJob module dependency
+    if (-not (Get-Module -Name 'ThreadJob' -ListAvailable)) {
+        Write-Warning "The 'ThreadJob' module is not installed. Asynchronous features will be limited. Please run 'Install-Module ThreadJob'."
+    }
+    
+    return [TuiFrameworkService]::new()
+}
+
+
+# --- DEPRECATED/REMOVED FUNCTIONS ---
+# The following functions from the original module have been removed as they are
+# either obsolete due to the class-based architecture or have been encapsulated
+# within the TuiFrameworkService class.
+
+# REMOVED: Invoke-TuiMethod
+# Rationale: Obsolete. With strongly-typed classes, we now use direct method
+# invocation (e.g., $component.HandleInput()), which is cleaner, more performant,
+# and provides better IntelliSense support.
+
+# REMOVED: Stop-AllTuiAsyncJobs, Get-TuiAsyncResults, Invoke-TuiAsync
+# Rationale: This logic is now encapsulated as methods within the TuiFrameworkService class,
+# allowing the service to manage the state of the jobs it creates and to use
+# modern, lightweight thread jobs instead of process-based jobs.
+
+# REMOVED: Get-TuiState, Test-TuiState
+# Rationale: Encapsulated as methods within TuiFrameworkService to promote
+# a service-based architecture over loose global function calls.
+
+Export-ModuleMember -Function Initialize-TuiFrameworkService
+
+####components\command-palette\command-palette.psm1
+# ==============================================================================
+# Command Palette Module v5.0
+# Advanced command palette with fuzzy search and action execution
+# ==============================================================================
+
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using module tui-components
+#using namespace System.Management.Automation
+
+#region Command Palette Class
+
+class CommandPalette : UIElement {
+    hidden [object] $_actionService
+    hidden [TextBoxComponent] $_searchBox
+    hidden [object[]] $_filteredActions
+    hidden [object[]] $_allActions
+    hidden [int] $_selectedIndex
+    hidden [int] $_scrollOffset
+    hidden [string] $_lastQuery
+
+    CommandPalette([object]$actionService) : base("CommandPalette") {
+        if (-not $actionService) {
+            throw [System.ArgumentNullException]::new('actionService')
+        }
+        
+        $this._actionService = $actionService
+        $this._filteredActions = @()
+        $this._allActions = @()
+        $this._selectedIndex = 0
+        $this._scrollOffset = 0
+        $this._lastQuery = ""
+        
+        $this.IsFocusable = $true
+        $this.Enabled = $true
+        $this.Visible = $false
+        $this.ZIndex = 1000
+        
+        Write-Verbose "CommandPalette: Constructor called"
+    }
+
+    [void] Initialize() {
+        Write-Verbose "CommandPalette: Initialize called"
+        
+        $this._searchBox = New-TuiTextBox -Props @{
+            Name = 'CommandPaletteSearch'
+            Placeholder = "Type to search actions..."
+            Width = 70
+            Height = 3
+        }
+        
+        $paletteInstance = $this
+        $this._searchBox.OnChange = {
+            param($NewValue)
+            $paletteInstance._UpdateFilter($NewValue)
+        }.GetNewClosure()
+        
+        $this.AddChild($this._searchBox)
+        
+        Subscribe-Event -EventName "CommandPalette.Open" -Handler {
+            [void]$paletteInstance.Show()
+        }.GetNewClosure() -Source "CommandPalette"
+        
+        Write-Verbose "CommandPalette: Initialization complete"
+    }
+
+    [void] Show() {
+        try {
+            Write-Log -Level Debug -Message "Opening Command Palette"
+            
+            $screenWidth = $global:TuiState.BufferWidth
+            $screenHeight = $global:TuiState.BufferHeight
+            
+            $this.Width = [Math]::Min(80, ($screenWidth - 10))
+            $this.Height = [Math]::Min(20, ($screenHeight - 6))
+            $this.X = [Math]::Floor(($screenWidth - $this.Width) / 2)
+            $this.Y = [Math]::Floor(($screenHeight - $this.Height) / 4)
+            
+            if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
+                $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+            }
+
+            $this._searchBox.Move(2, 2)
+            $this._searchBox.Resize(($this.Width - 4), 3)
+
+            $this.Visible = $true
+            $this._selectedIndex = 0
+            $this._scrollOffset = 0
+            $this._searchBox.Text = ""
+            $this._lastQuery = ""
+
+            $this._allActions = $this._actionService.GetAllActions()
+            $this._filteredActions = $this._allActions
+            
+            Show-TuiOverlay -Element $this
+            Set-ComponentFocus -Component $this._searchBox
+            Request-TuiRefresh
+            
+            Write-Verbose "CommandPalette: Shown successfully"
+        }
+        catch {
+            Write-Error "CommandPalette: Error showing palette: $($_.Exception.Message)"
+        }
+    }
+
+    [void] Hide() {
+        try {
+            Write-Log -Level Debug -Message "Closing Command Palette"
+            $this.Visible = $false
+            Close-TopTuiOverlay
+            if ($global:TuiState.FocusedComponent -eq $this._searchBox) { Set-ComponentFocus -Component $null }
+            Request-TuiRefresh
+            Write-Verbose "CommandPalette: Hidden successfully"
+        }
+        catch { Write-Error "CommandPalette: Error hiding palette: $($_.Exception.Message)" }
+    }
+
+    hidden [void] _UpdateFilter([string]$query) {
+        try {
+            $this._lastQuery = $query
+            $this._selectedIndex = 0
+            $this._scrollOffset = 0
+            if ([string]::IsNullOrWhiteSpace($query)) {
+                $this._filteredActions = $this._allActions
+            } else {
+                $this._filteredActions = $this._allActions | Where-Object { $_.Name -like "*$query*" -or $_.Description -like "*$query*" }
+            }
+            $this.RequestRedraw()
+            Write-Verbose "CommandPalette: Filter updated, $($this._filteredActions.Count) results"
+        }
+        catch { Write-Error "CommandPalette: Error updating filter: $($_.Exception.Message)" }
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or -not $this._private_buffer) { return }
+        
+        try {
+            $bgColor = Get-ThemeColor 'Background'
+            $borderColor = Get-ThemeColor 'Accent'
+            $fgColor = Get-ThemeColor 'Foreground'
+            $selectionBg = Get-ThemeColor 'Selection'
+            $selectionFg = Get-ThemeColor 'Background'
+            $subtleColor = Get-ThemeColor 'Subtle'
+            
+            # Clear buffer with higher z-index for proper overlay rendering
+            $clearCell = [TuiCell]::new(' ', $fgColor, $bgColor)
+            $clearCell.ZIndex = 100  # Ensure palette is above background content
+            $this._private_buffer.Clear($clearCell)
+            
+            $title = " Command Palette ($($this._filteredActions.Count)) "
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Title $title -BorderStyle "Double" -BorderColor $borderColor -BackgroundColor $bgColor
+
+            $helpText = " [↑↓] Navigate | [Enter] Execute | [Esc] Close "
+            if ($helpText.Length -lt ($this.Width - 2)) {
+                $helpX = $this.Width - $helpText.Length - 1
+                Write-TuiText -Buffer $this._private_buffer -X $helpX -Y ($this.Height - 1) -Text $helpText -ForegroundColor $subtleColor -BackgroundColor $bgColor
+            }
+
+            $listY = 5
+            $listHeight = $this.Height - 6
+            
+            for ($i = 0; $i -lt $listHeight; $i++) {
+                $dataIndex = $i + $this._scrollOffset
+                if ($dataIndex -ge $this._filteredActions.Count) { break }
+                $action = $this._filteredActions[$dataIndex]
+                $yPos = $listY + $i
+                $isSelected = ($dataIndex -eq $this._selectedIndex)
+                $itemBg = if ($isSelected) { $selectionBg } else { $bgColor }
+                $itemFg = if ($isSelected) { $selectionFg } else { $fgColor }
+                
+                $highlightText = ' ' * ($this.Width - 2)
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $yPos -Text $highlightText -ForegroundColor $itemFg -BackgroundColor $itemBg
+
+                $displayText = " $($action.Name)"
+                if ($action.Description) { $displayText += ": $($action.Description)" }
+                
+                $maxWidth = $this.Width - 4
+                if ($displayText.Length -gt $maxWidth) { $displayText = $displayText.Substring(0, $maxWidth - 3) + "..." }
+                
+                Write-TuiText -Buffer $this._private_buffer -X 2 -Y $yPos -Text $displayText -ForegroundColor $itemFg -BackgroundColor $itemBg
+            }
+
+            if ($this._filteredActions.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($this._lastQuery)) {
+                $noResultsText = "No actions match '$($this._lastQuery)'"
+                $centerX = [Math]::Floor(($this.Width - $noResultsText.Length) / 2)
+                $centerY = [Math]::Floor($this.Height / 2)
+                Write-TuiText -Buffer $this._private_buffer -X $centerX -Y $centerY -Text $noResultsText -ForegroundColor $subtleColor -BackgroundColor $bgColor
+            }
+            Write-Verbose "CommandPalette: Rendered successfully"
+        }
+        catch { Write-Error "CommandPalette: Error during render: $($_.Exception.Message)" }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if (-not $this.Visible) { return $false }
+        if ($null -eq $keyInfo) { return $false }
+        
+        try {
+            if ($this._searchBox.IsFocused) {
+                # This switch intercepts navigation keys, passing everything else to the text box.
+                switch ($keyInfo.Key) {
+                    { $_ -in @(
+                        [ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp,
+                        [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End,
+                        [ConsoleKey]::Enter, [ConsoleKey]::Escape
+                      ) } {
+                        # Do nothing, effectively "swallowing" the key press so it's not typed.
+                      }
+                    default {
+                        if ($this._searchBox.HandleInput($keyInfo)) {
+                            return $true
+                        }
+                    }
+                }
+            }
+            
+            # This switch handles navigation for the palette itself.
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Escape) { $this.Hide(); return $true }
+                ([ConsoleKey]::Enter) {
+                    if ($this._filteredActions.Count -gt 0 -and $this._selectedIndex -lt $this._filteredActions.Count) {
+                        $action = $this._filteredActions[$this._selectedIndex]
+                        $this.Hide()
+                        try {
+                            $this._actionService.ExecuteAction($action.Name)
+                            Write-Log -Level Info -Message "Executed action: $($action.Name)"
+                        }
+                        catch {
+                            Write-Error "Failed to execute action '$($action.Name)': $($_.Exception.Message)"
+                            if (Get-Command Show-AlertDialog -ErrorAction SilentlyContinue) { Show-AlertDialog -Title "Action Failed" -Message "Failed to execute action: $($_.Exception.Message)" }
+                        }
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::UpArrow) {
+                    if ($this._selectedIndex -gt 0) {
+                        $this._selectedIndex--
+                        $this._EnsureSelectedVisible()
+                        $this.RequestRedraw()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this._selectedIndex -lt ($this._filteredActions.Count - 1)) {
+                        $this._selectedIndex++
+                        $this._EnsureSelectedVisible()
+                        $this.RequestRedraw()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::PageUp) {
+                    $pageSize = $this.Height - 6
+                    $this._selectedIndex = [Math]::Max(0, ($this._selectedIndex - $pageSize))
+                    $this._EnsureSelectedVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::PageDown) {
+                    $pageSize = $this.Height - 6
+                    $this._selectedIndex = [Math]::Min(($this._filteredActions.Count - 1), ($this._selectedIndex + $pageSize))
+                    $this._EnsureSelectedVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::Home) {
+                    $this._selectedIndex = 0
+                    $this._EnsureSelectedVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::End) {
+                    $this._selectedIndex = $this._filteredActions.Count - 1
+                    $this._EnsureSelectedVisible()
+                    $this.RequestRedraw()
+                    return $true
+                }
+            }
+            return $false
+        }
+        catch {
+            Write-Error "CommandPalette: Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
+    
+    hidden [void] _EnsureSelectedVisible() {
+        $listHeight = $this.Height - 6
+        if ($this._selectedIndex -lt $this._scrollOffset) { $this._scrollOffset = $this._selectedIndex }
+        elseif ($this._selectedIndex -ge ($this._scrollOffset + $listHeight)) { $this._scrollOffset = $this._selectedIndex - $listHeight + 1 }
+        $this._scrollOffset = [Math]::Max(0, $this._scrollOffset)
+    }
+
+    [string] ToString() {
+        return "CommandPalette(Name='$($this.Name)', Actions=$($this._allActions.Count), Filtered=$($this._filteredActions.Count), Selected=$($this._selectedIndex))"
+    }
+}
+
+#endregion
+
+#region Factory Functions
+
+function Register-CommandPalette {
+    <#
+    .SYNOPSIS
+    Registers the Command Palette component with the application.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$ActionService,
+        [Parameter(Mandatory)]
+        [object]$KeybindingService
+    )
+
+    try {
+        Write-Log -Level Info -Message "Registering Command Palette"
+        $palette = [CommandPalette]::new($ActionService)
+        $palette.Initialize()
+        $ActionService.RegisterAction("app.showCommandPalette", "Show the command palette for quick action access", { Publish-Event -EventName "CommandPalette.Open" }, "Application", $false)
+        $KeybindingService.SetBinding("app.showCommandPalette", [System.ConsoleKey]::P, @('Ctrl'))
+        Write-Log -Level Info -Message "Command Palette registered successfully with Ctrl+P keybinding"
+        return $palette
+    }
+    catch {
+        Write-Error "Failed to register Command Palette: $($_.Exception.Message)"
+        throw
+    }
+}
+
+#endregion
+
+#region Module Exports
+
+Export-ModuleMember -Function Register-CommandPalette
+
+#endregion
+
+####modules\data-manager\data-manager.psm1
+# Data Manager Module - Axiom-Phoenix v4.0 Enhancement
+# High-performance, transaction-safe, and lifecycle-aware data service.
+
+#using module models
+
+function Initialize-DataManager {
+    <#
+    .SYNOPSIS
+    Initializes and returns a new DataManager instance.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    return Invoke-WithErrorHandling -Component "DataManager.Initialize" -Context "Creating DataManager instance" -ScriptBlock {
+        Write-Verbose "DataManager: Initializing new instance."
+        return [DataManager]::new()
+    }
+}
+
+class DataManager : IDisposable {
+    #region Private State
+    hidden [hashtable] $_dataStore
+    hidden [string] $_dataFilePath
+    hidden [string] $_backupPath
+    hidden [datetime] $_lastSaveTime
+    hidden [bool] $_dataModified = $false
+    
+    # High-performance indexes for fast lookups
+    hidden [System.Collections.Generic.Dictionary[string, object]] $_taskIndex
+    hidden [System.Collections.Generic.Dictionary[string, object]] $_projectIndex
+    
+    # For transactional updates
+    hidden [int] $_updateTransactionCount = 0
+    #endregion
+
+    #region Constructor and Initialization
+    DataManager() {
+        $this.{_dataStore} = @{
+            Projects = [System.Collections.ArrayList]::new()
+            Tasks = [System.Collections.ArrayList]::new()
+            Settings = @{ 
+                AutoSave = $true
+                BackupCount = 5
+                LastModified = [datetime]::MinValue
+            }
+        }
+        $this.{_taskIndex} = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.{_projectIndex} = [System.Collections.Generic.Dictionary[string, object]]::new()
+        
+        # Set up file paths
+        $baseDir = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PMCTerminal"
+        $this.{_dataFilePath} = Join-Path $baseDir "pmc-data.json"
+        $this.{_backupPath} = Join-Path $baseDir "backups"
+
+        # Ensure directories exist
+        if (-not (Test-Path $baseDir)) {
+            New-Item -ItemType Directory -Path $baseDir -Force | Out-Null
+        }
+        if (-not (Test-Path $this.{_backupPath})) {
+            New-Item -ItemType Directory -Path $this.{_backupPath} -Force | Out-Null
+        }
+
+        $this.LoadData()
+        $this.InitializeEventHandlers()
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "DataManager initialized successfully." -Data @{
+                DataPath = $this.{_dataFilePath}
+                BackupPath = $this.{_backupPath}
+                TaskCount = $this.{_dataStore}.Tasks.Count
+                ProjectCount = $this.{_dataStore}.Projects.Count
+            }
+        }
+        Write-Verbose "DataManager: Initialization complete."
+    }
+
+    hidden [void] LoadData() {
+        try {
+            if (Test-Path $this.{_dataFilePath}) {
+                $jsonData = Get-Content $this.{_dataFilePath} -Raw | ConvertFrom-Json -AsHashtable
+                
+                # Validate and load data structure
+                if ($jsonData.ContainsKey('Tasks')) {
+                    $this.{_dataStore}.Tasks.Clear()
+                    foreach ($taskData in $jsonData.Tasks) {
+                        # FIX: Use the correct FromLegacyFormat static method for deserialization.
+                        $task = [PmcTask]::FromLegacyFormat($taskData)
+                        [void]$this.{_dataStore}.Tasks.Add($task)
+                    }
+                }
+                
+                if ($jsonData.ContainsKey('Projects')) {
+                    $this.{_dataStore}.Projects.Clear()
+                    foreach ($projectData in $jsonData.Projects) {
+                        # FIX: Use the correct FromLegacyFormat static method for deserialization.
+                        $project = [PmcProject]::FromLegacyFormat($projectData)
+                        [void]$this.{_dataStore}.Projects.Add($project)
+                    }
+                }
+                
+                if ($jsonData.ContainsKey('Settings')) {
+                    foreach ($key in $jsonData.Settings.Keys) {
+                        $this.{_dataStore}.Settings[$key] = $jsonData.Settings[$key]
+                    }
+                }
+                
+                $this.{_lastSaveTime} = [datetime]::Now
+                Write-Verbose "DataManager: Loaded data from '$($this.{_dataFilePath})'."
+            } else {
+                Write-Verbose "DataManager: No existing data file found. Starting with empty data store."
+            }
+        } catch {
+            Write-Warning "DataManager: Failed to load data from '$($this.{_dataFilePath})': $($_.Exception.Message). Starting with empty data store."
+            $this.{_dataStore}.Tasks.Clear()
+            $this.{_dataStore}.Projects.Clear()
+        }
+        
+        # Rebuild indexes after loading
+        $this._RebuildIndexes()
+    }
+    
+    hidden [void] _RebuildIndexes() {
+        $this.{_taskIndex}.Clear()
+        $this.{_projectIndex}.Clear()
+        
+        foreach ($task in $this.{_dataStore}.Tasks) {
+            if ($task.Id) {
+                $this.{_taskIndex}[$task.Id] = $task
+            }
+        }
+        
+        foreach ($project in $this.{_dataStore}.Projects) {
+            if ($project.Key) {
+                $this.{_projectIndex}[$project.Key] = $project
+            }
+        }
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Rebuilt data indexes." -Data @{
+                TaskIndexCount = $this.{_taskIndex}.Count
+                ProjectIndexCount = $this.{_projectIndex}.Count
+            }
+        }
+        Write-Verbose "DataManager: Rebuilt data indexes for $($this.{_taskIndex}.Count) tasks and $($this.{_projectIndex}.Count) projects."
+    }
+    
+    hidden [void] SaveData() {
+        if ($this.{_updateTransactionCount} -gt 0) {
+            Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this.{_updateTransactionCount}))."
+            return
+        }
+        
+        try {
+            $this.CreateBackup()
+            
+            $saveData = @{
+                Tasks = @()
+                Projects = @()
+                Settings = $this.{_dataStore}.Settings.Clone()
+                SavedAt = [datetime]::Now
+            }
+            
+            foreach ($task in $this.{_dataStore}.Tasks) {
+                $saveData.Tasks += $task.ToLegacyFormat()
+            }
+            
+            foreach ($project in $this.{_dataStore}.Projects) {
+                $saveData.Projects += $project.ToLegacyFormat()
+            }
+            
+            $saveData | ConvertTo-Json -Depth 10 | Set-Content -Path $this.{_dataFilePath} -Encoding UTF8 -Force
+            $this.{_lastSaveTime} = [datetime]::Now
+            $this.{_dataModified} = $false
+            
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Data saved successfully." -Data @{
+                    FilePath = $this.{_dataFilePath}
+                    TaskCount = $saveData.Tasks.Count
+                    ProjectCount = $saveData.Projects.Count
+                }
+            }
+            Write-Verbose "DataManager: Data saved to '$($this.{_dataFilePath})'."
+        } catch {
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Error -Message "Failed to save data: $($_.Exception.Message)"
+            }
+            throw
+        }
+    }
+    
+    hidden [void] CreateBackup() {
+        try {
+            if (Test-Path $this.{_dataFilePath}) {
+                $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
+                $backupFileName = "pmc-data-$timestamp.json"
+                $backupFilePath = Join-Path $this.{_backupPath} $backupFileName
+                
+                Copy-Item -Path $this.{_dataFilePath} -Destination $backupFilePath -Force
+                
+                $backupLimit = $this.{_dataStore}.Settings.BackupCount
+                if ($backupLimit -is [int] -and $backupLimit -gt 0) {
+                    $backups = Get-ChildItem -Path $this.{_backupPath} -Filter "pmc-data-*.json" | Sort-Object LastWriteTime -Descending
+                    if ($backups.Count -gt $backupLimit) {
+                        $backupsToDelete = $backups | Select-Object -Skip $backupLimit
+                        foreach ($backup in $backupsToDelete) {
+                            Remove-Item -Path $backup.FullName -Force
+                            Write-Verbose "DataManager: Removed old backup '$($backup.Name)'."
+                        }
+                    }
+                }
+                
+                Write-Verbose "DataManager: Created backup '$backupFileName'."
+            }
+        } catch {
+            Write-Warning "DataManager: Failed to create backup: $($_.Exception.Message)"
+        }
+    }
+    
+    hidden [void] InitializeEventHandlers() {
+        Write-Verbose "DataManager: Event handlers initialized."
+    }
+    #endregion
+    
+    #region Lifecycle Management
+    [void] Dispose() {
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "DataManager disposing. Checking for unsaved data."
+        }
+        Write-Verbose "DataManager: Disposing - checking for unsaved data."
+        
+        if ($this.{_dataModified}) {
+            $originalTransactionCount = $this.{_updateTransactionCount}
+            $this.{_updateTransactionCount} = 0
+            try {
+                $this.SaveData()
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Info -Message "Performed final save of modified data during dispose."
+                }
+                Write-Verbose "DataManager: Performed final save during dispose."
+            } catch {
+                Write-Warning "DataManager: Failed to save data during dispose: $($_.Exception.Message)"
+            } finally {
+                $this.{_updateTransactionCount} = $originalTransactionCount
+            }
+        }
+    }
+    #endregion
+
+    #region Transactional Updates
+    [void] BeginUpdate() {
+        $this.{_updateTransactionCount}++
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Began data update transaction." -Data @{ Depth = $this.{_updateTransactionCount} }
+        }
+        Write-Verbose "DataManager: Began update transaction. Depth: $($this.{_updateTransactionCount})."
+    }
+
+    [void] EndUpdate() {
+        $this.EndUpdate($false)
+    }
+    
+    [void] EndUpdate([bool]$forceSave) {
+        if ($this.{_updateTransactionCount} -gt 0) {
+            $this.{_updateTransactionCount}--
+        }
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Ended data update transaction." -Data @{ Depth = $this.{_updateTransactionCount} }
+        }
+        Write-Verbose "DataManager: Ended update transaction. Depth: $($this.{_updateTransactionCount})."
+        
+        if ($this.{_updateTransactionCount} -eq 0 -and ($this.{_dataModified} -or $forceSave)) {
+            if ($this.{_dataStore}.Settings.AutoSave -or $forceSave) {
+                $this.SaveData()
+            }
+        }
+    }
+    #endregion
+
+    #region Task Management Methods
+    [PmcTask] AddTask([PmcTask]$newTask) {
+        return Invoke-WithErrorHandling -Component "DataManager.AddTask" -Context "Adding new task" -AdditionalData @{ TaskId = $newTask.Id; TaskTitle = $newTask.Title } -ScriptBlock {
+            if ([string]::IsNullOrEmpty($newTask.Id)) {
+                $newTask.Id = [guid]::NewGuid().ToString()
+            }
+            if ($newTask.CreatedAt -eq [datetime]::MinValue) {
+                $newTask.CreatedAt = [datetime]::Now
+            }
+            
+            if ($this.{_taskIndex}.ContainsKey($newTask.Id)) {
+                throw [System.InvalidOperationException]::new("Task with ID '$($newTask.Id)' already exists.")
+            }
+            
+            [void]$this.{_dataStore}.Tasks.Add($newTask)
+            $this.{_taskIndex}[$newTask.Id] = $newTask
+            $this.{_dataModified} = $true
+            
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
+                $this.SaveData()
+            }
+            
+            if (Get-Command 'Publish-Event' -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "Tasks.Changed" -Data @{ Action = "Created"; Task = $newTask }
+            }
+            
+            Write-Verbose "DataManager: Added task '$($newTask.Title)' with ID '$($newTask.Id)'."
+            return $newTask
+        }
+    }
+
+    [PmcTask] UpdateTask([PmcTask]$taskWithUpdates) {
+        return Invoke-WithErrorHandling -Component "DataManager.UpdateTask" -Context "Updating task" -AdditionalData @{ TaskId = $taskWithUpdates.Id } -ScriptBlock {
+            if (-not $this.{_taskIndex}.ContainsKey($taskWithUpdates.Id)) {
+                throw [System.InvalidOperationException]::new("Task with ID '$($taskWithUpdates.Id)' not found for update.")
+            }
+            
+            $managedTask = $this.{_taskIndex}[$taskWithUpdates.Id]
+            
+            $propertiesToUpdate = @('Title', 'Description', 'Status', 'Priority', 'ProjectKey', 'Tags', 'DueDate', 'CompletedAt')
+            foreach ($propName in $propertiesToUpdate) {
+                if ($taskWithUpdates.PSObject.Properties[$propName]) {
+                    $managedTask.$propName = $taskWithUpdates.$propName
+                }
+            }
+            $managedTask.UpdatedAt = [datetime]::Now
+            
+            $this.{_dataModified} = $true
+            
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
+                $this.SaveData()
+            }
+            
+            if (Get-Command 'Publish-Event' -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "Tasks.Changed" -Data @{ Action = "Updated"; Task = $managedTask }
+            }
+            
+            Write-Verbose "DataManager: Updated task '$($managedTask.Title)' with ID '$($managedTask.Id)'."
+            return $managedTask
+        }
+    }
+
+    [bool] RemoveTask([string]$taskId) {
+        return Invoke-WithErrorHandling -Component "DataManager.RemoveTask" -Context "Removing task" -AdditionalData @{ TaskId = $taskId } -ScriptBlock {
+            if (-not $this.{_taskIndex}.ContainsKey($taskId)) {
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Warning -Message "Task not found for removal: '$taskId'"
+                }
+                Write-Verbose "DataManager: Task '$taskId' not found for removal."
+                return $false
+            }
+            
+            $taskToRemove = $this.{_taskIndex}[$taskId]
+            [void]$this.{_dataStore}.Tasks.Remove($taskToRemove)
+            [void]$this.{_taskIndex}.Remove($taskId)
+            $this.{_dataModified} = $true
+            
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
+                $this.SaveData()
+            }
+            
+            if (Get-Command 'Publish-Event' -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "Tasks.Changed" -Data @{ Action = "Deleted"; TaskId = $taskId }
+            }
+            
+            Write-Verbose "DataManager: Removed task with ID '$taskId'."
+            return $true
+        }
+    }
+    
+    [PmcTask] GetTask([string]$taskId) {
+        if ($this.{_taskIndex}.ContainsKey($taskId)) {
+            return $this.{_taskIndex}[$taskId]
+        }
+        return $null
+    }
+    
+    [PmcTask[]] GetTasks() {
+        return $this.{_dataStore}.Tasks.ToArray()
+    }
+    #endregion
+    
+    #region Project Management Methods
+    [PmcProject] AddProject([PmcProject]$newProject) {
+        return Invoke-WithErrorHandling -Component "DataManager.AddProject" -Context "Adding new project" -AdditionalData @{ ProjectKey = $newProject.Key; ProjectName = $newProject.Name } -ScriptBlock {
+            if ([string]::IsNullOrEmpty($newProject.Key)) {
+                throw [System.ArgumentException]::new("Project Key is required.")
+            }
+            if ($newProject.CreatedAt -eq [datetime]::MinValue) {
+                $newProject.CreatedAt = [datetime]::Now
+            }
+            
+            if ($this.{_projectIndex}.ContainsKey($newProject.Key)) {
+                throw [System.InvalidOperationException]::new("Project with Key '$($newProject.Key)' already exists.")
+            }
+            
+            [void]$this.{_dataStore}.Projects.Add($newProject)
+            $this.{_projectIndex}[$newProject.Key] = $newProject
+            $this.{_dataModified} = $true
+            
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
+                $this.SaveData()
+            }
+            
+            if (Get-Command 'Publish-Event' -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "Projects.Changed" -Data @{ Action = "Created"; Project = $newProject }
+            }
+            
+            Write-Verbose "DataManager: Added project '$($newProject.Name)' with Key '$($newProject.Key)'."
+            return $newProject
+        }
+    }
+    
+    [PmcProject] UpdateProject([PmcProject]$projectWithUpdates) {
+        return Invoke-WithErrorHandling -Component "DataManager.UpdateProject" -Context "Updating project" -AdditionalData @{ ProjectKey = $projectWithUpdates.Key } -ScriptBlock {
+            if (-not $this.{_projectIndex}.ContainsKey($projectWithUpdates.Key)) {
+                throw [System.InvalidOperationException]::new("Project with Key '$($projectWithUpdates.Key)' not found for update.")
+            }
+            
+            $managedProject = $this.{_projectIndex}[$projectWithUpdates.Key]
+            
+            $propertiesToUpdate = @('Name', 'Description', 'Status', 'CompletedAt')
+            foreach ($propName in $propertiesToUpdate) {
+                if ($projectWithUpdates.PSObject.Properties[$propName]) {
+                    $managedProject.$propName = $projectWithUpdates.$propName
+                }
+            }
+            $managedProject.UpdatedAt = [datetime]::Now
+            
+            $this.{_dataModified} = $true
+            
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
+                $this.SaveData()
+            }
+            
+            if (Get-Command 'Publish-Event' -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "Projects.Changed" -Data @{ Action = "Updated"; Project = $managedProject }
+            }
+            
+            Write-Verbose "DataManager: Updated project '$($managedProject.Name)' with Key '$($managedProject.Key)'."
+            return $managedProject
+        }
+    }
+    
+    [bool] RemoveProject([string]$projectKey) {
+        return Invoke-WithErrorHandling -Component "DataManager.RemoveProject" -Context "Removing project" -AdditionalData @{ ProjectKey = $projectKey } -ScriptBlock {
+            if (-not $this.{_projectIndex}.ContainsKey($projectKey)) {
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Warning -Message "Project not found for removal: '$projectKey'"
+                }
+                Write-Verbose "DataManager: Project '$projectKey' not found for removal."
+                return $false
+            }
+            
+            $projectToRemove = $this.{_projectIndex}[$projectKey]
+            [void]$this.{_dataStore}.Projects.Remove($projectToRemove)
+            [void]$this.{_projectIndex}.Remove($projectKey)
+            $this.{_dataModified} = $true
+            
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
+                $this.SaveData()
+            }
+            
+            if (Get-Command 'Publish-Event' -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "Projects.Changed" -Data @{ Action = "Deleted"; ProjectKey = $projectKey }
+            }
+            
+            Write-Verbose "DataManager: Removed project with Key '$projectKey'."
+            return $true
+        }
+    }
+    
+    [PmcProject] GetProject([string]$projectKey) {
+        if ($this.{_projectIndex}.ContainsKey($projectKey)) {
+            return $this.{_projectIndex}[$projectKey]
+        }
+        return $null
+    }
+    
+    [PmcProject[]] GetProjects() {
+        return $this.{_dataStore}.Projects.ToArray()
+    }
+    #endregion
+    
+    #region Settings and Utility Methods
+    [bool] IsAutoSaveEnabled() {
+        return $this.{_dataStore}.Settings.AutoSave
+    }
+    
+    [void] SetAutoSave([bool]$enabled) {
+        $this.{_dataStore}.Settings.AutoSave = $enabled
+        $this.{_dataModified} = $true
+        Write-Verbose "DataManager: AutoSave set to '$enabled'."
+    }
+    
+    [datetime] GetLastSaveTime() {
+        return $this.{_lastSaveTime}
+    }
+    
+    [void] ForceSave() {
+        $this.SaveData()
+    }
+    #endregion
+}
+
+# Export the factory function
+Export-ModuleMember -Function Initialize-DataManager
+
+####screens\dashboard-screen\dashboard-screen.psm1
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Dashboard Screen
+# A modern, theme-aware, and event-driven dashboard.
+# ==============================================================================
+
+#using module ui-classes
+#using module panels-class
+#using module theme-manager
+#using module logger
+
+class DashboardScreen : Screen {
+    #region UI Components
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_summaryPanel
+    hidden [Panel] $_statusPanel
+    hidden [Panel] $_helpPanel
+    #endregion
+
+    #region State
+    hidden [int] $_totalTasks = 0
+    hidden [int] $_completedTasks = 0
+    hidden [int] $_pendingTasks = 0
+    #endregion
+
+    DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
+
+    [void] Initialize() {
+        if (-not $this.ServiceContainer) {
+            Write-Warning "DashboardScreen.Initialize: ServiceContainer is null"
+            return
+        }
+        
+        $this._mainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "Axiom-Phoenix Dashboard")
+        $this.AddChild($this._mainPanel)
+
+        $summaryWidth = [Math]::Floor($this.Width * 0.5)
+        $this._summaryPanel = [Panel]::new(1, 1, $summaryWidth, 12, "Task Summary")
+        $this._mainPanel.AddChild($this._summaryPanel)
+
+        $helpX = $summaryWidth + 2
+        $helpWidth = $this.Width - $helpX - 1
+        $this._helpPanel = [Panel]::new($helpX, 1, $helpWidth, 12, "Quick Start")
+        $this._mainPanel.AddChild($this._helpPanel)
+
+        $this._statusPanel = [Panel]::new(1, 14, $this.Width - 2, $this.Height - 15, "System Status")
+        $this._mainPanel.AddChild($this._statusPanel)
+        
+        if ($this.PSObject.Methods['SubscribeToEvent']) {
+            $this.SubscribeToEvent("Tasks.Changed", {
+                param($EventData)
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Debug "DashboardScreen detected Tasks.Changed event. Refreshing data."
+                }
+                if ($this.ServiceContainer) {
+                    $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
+                }
+            })
+        }
+    }
+
+    [void] OnEnter() {
+        Write-Verbose "DashboardScreen: OnEnter called"
+        
+        # Force a complete redraw of all panels
+        if ($this._summaryPanel) { $this._summaryPanel.RequestRedraw() }
+        if ($this._helpPanel) { $this._helpPanel.RequestRedraw() }
+        if ($this._statusPanel) { $this._statusPanel.RequestRedraw() }
+        if ($this._mainPanel) { $this._mainPanel.RequestRedraw() }
+        
+        if ($this.ServiceContainer) {
+            $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
+        } else {
+            Write-Warning "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
+            $this._RefreshData($null)
+        }
+        
+        # Force another redraw after data refresh
+        $this.RequestRedraw()
+        
+        if ($this._mainPanel -and (Get-Command Set-ComponentFocus -ErrorAction SilentlyContinue)) {
+            Set-ComponentFocus -Component $this._mainPanel
+        }
+    }
+
+    hidden [void] _RefreshData([object]$dataManager) {
+        if(-not $dataManager) {
+            Write-Warning "DashboardScreen: DataManager service not found."
+            $this._totalTasks = 0
+            $this._completedTasks = 0
+            $this._pendingTasks = 0
+        } else {
+            $allTasks = $dataManager.GetTasks()
+            $this._totalTasks = $allTasks.Count
+            $this._completedTasks = ($allTasks | Where-Object { $_.Completed }).Count
+            $this._pendingTasks = $this._totalTasks - $this._completedTasks
+        }
+        $this._UpdateDisplay()
+    }
+    
+    hidden [void] _UpdateDisplay() {
+        $this._UpdateSummaryPanel()
+        $this._UpdateHelpPanel()
+        $this._UpdateStatusPanel()
+        $this.RequestRedraw()
+    }
+    
+    hidden [void] _UpdateSummaryPanel() {
+        $panel = $this._summaryPanel
+        if (-not $panel) { return }
+        
+        Write-Verbose "DashboardScreen: Updating summary panel"
+        
+        # Clear the panel content completely
+        $panel.ClearContent()
+        
+        # Force the panel to render its background
+        $panel.OnRender()
+
+        $headerColor = Get-ThemeColor 'Header'
+        $subtleColor = Get-ThemeColor 'Subtle'
+        $defaultColor = Get-ThemeColor 'Foreground'
+        $highlightColor = Get-ThemeColor 'Highlight'
+        $bgColor = Get-ThemeColor 'Background'
+        
+        $buffer = $panel.GetBuffer()
+        $contentX = $panel.ContentX
+        $contentY = $panel.ContentY
+
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY) -Text "Task Overview" -ForegroundColor $headerColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * ($panel.ContentWidth - 2)) -ForegroundColor $subtleColor -BackgroundColor $bgColor
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        
+        $progress = $this._GetProgressBar()
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "Overall Progress:" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 8) -Text $progress -ForegroundColor $highlightColor -BackgroundColor $bgColor
+        
+        $panel.RequestRedraw()
+    }
+
+    hidden [void] _UpdateHelpPanel() {
+        $panel = $this._helpPanel
+        if (-not $panel) { return }
+        
+        Write-Verbose "DashboardScreen: Updating help panel"
+        
+        # Clear the panel content completely
+        $panel.ClearContent()
+        
+        # Force the panel to render its background
+        $panel.OnRender()
+        
+        $paletteHotkey = "Ctrl+P"
+        
+        $headerColor = Get-ThemeColor 'Header'
+        $subtleColor = Get-ThemeColor 'Subtle'
+        $defaultColor = Get-ThemeColor 'Foreground'
+        $accentColor = Get-ThemeColor 'Accent'
+        $bgColor = Get-ThemeColor 'Background'
+
+        $buffer = $panel.GetBuffer()
+        $contentX = $panel.ContentX
+        $contentY = $panel.ContentY
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 0) -Text "Welcome to Axiom-Phoenix!" -ForegroundColor $headerColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * ($panel.ContentWidth - 2)) -ForegroundColor $subtleColor -BackgroundColor $bgColor
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Press " -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 7) -Y ($contentY + 3) -Text $paletteHotkey -ForegroundColor $accentColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 7 + $paletteHotkey.Length) -Y ($contentY + 3) -Text " to open the" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Command Palette." -ForegroundColor $defaultColor -BackgroundColor $bgColor
+
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 6) -Text "All navigation and actions are" -ForegroundColor $subtleColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "now available from there." -ForegroundColor $subtleColor -BackgroundColor $bgColor
+        
+        $panel.RequestRedraw()
+    }
+    
+    hidden [void] _UpdateStatusPanel() {
+        $panel = $this._statusPanel
+        if (-not $panel) { return }
+        
+        Write-Verbose "DashboardScreen: Updating status panel"
+        
+        # Clear the panel content completely
+        $panel.ClearContent()
+        
+        # Force the panel to render its background
+        $panel.OnRender()
+
+        # FIX: Changed $PID to $global:PID to access the global automatic variable from within a class method.
+        $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
+
+        $headerColor = Get-ThemeColor 'Header'
+        $subtleColor = Get-ThemeColor 'Subtle'
+        $defaultColor = Get-ThemeColor 'Foreground'
+        $bgColor = Get-ThemeColor 'Background'
+        
+        $buffer = $panel.GetBuffer()
+        $contentX = $panel.ContentX
+        $contentY = $panel.ContentY
+
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 0) -Text "System Information" -ForegroundColor $headerColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * ($panel.ContentWidth - 2)) -ForegroundColor $subtleColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "PowerShell Version: $($global:PSVersionTable.PSVersion)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Platform:           $($global:PSVersionTable.Platform)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Memory Usage:       $($memoryMB) MB" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        
+        $panel.RequestRedraw()
+    }
+
+    hidden [string] _GetProgressBar() {
+        if ($this._totalTasks -eq 0) { return "No tasks defined." }
+        $percentage = [Math]::Round(($this._completedTasks / $this._totalTasks) * 100)
+        $barLength = $this._summaryPanel.ContentWidth - 6
+        if($barLength -lt 1) { $barLength = 1 }
+        $filledLength = [Math]::Floor(($percentage / 100) * $barLength)
+        $bar = '█' * $filledLength + '░' * ($barLength - $filledLength)
+        return "[$bar] $percentage%"
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($keyInfo.Key -eq [ConsoleKey]::F5) {
+            $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
+            return $true
+        }
+        return $false
+    }
+}
+
+####screens\task-list-screen\task-list-screen.psm1
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Task List Screen
+# A dynamic, action-driven, and theme-aware task management screen.
+# ==============================================================================
+
+#using module ui-classes
+#using module panels-class
+#using module theme-manager
+#using module logger
+#using module tui-components
+#using module models
+#using module advanced-data-components
+
+class TaskListScreen : Screen {
+    #region UI Components
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_headerPanel
+    hidden [Panel] $_tablePanel
+    hidden [Panel] $_footerPanel
+    hidden [Table] $_taskTable
+    #endregion
+
+    #region State
+    hidden [string] $_filterStatus = "All"
+    hidden [PmcTask] $_selectedTask
+    #endregion
+
+    # Constructor is minimal, only calling its base.
+    TaskListScreen([object]$serviceContainer) : base("TaskListScreen", $serviceContainer) {}
+
+    # OnInitialize creates the UI, registers context-specific actions, and subscribes to events.
+    [void] OnInitialize() {
+        # --- UI Construction ---
+        $this._mainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "Task Management")
+        $this.AddChild($this._mainPanel)
+
+        $this._headerPanel = [Panel]::new(1, 1, $this.Width - 2, 1)
+        $this._headerPanel.HasBorder = $false
+        $this._mainPanel.AddChild($this._headerPanel)
+
+        # The main panel for the table, which gives it a border.
+        $this._tablePanel = [Panel]::new(1, 2, $this.Width - 2, $this.Height - 4)
+        $this._mainPanel.AddChild($this._tablePanel)
+        
+        $this._footerPanel = [Panel]::new(1, $this.Height - 2, $this.Width - 2, 1)
+        $this._footerPanel.HasBorder = $false
+        $this._mainPanel.AddChild($this._footerPanel)
+
+        # --- Table Setup ---
+        $this._taskTable = [Table]::new("TaskTable")
+        $this._taskTable.Move(0,0)
+        $this._taskTable.Resize($this._tablePanel.ContentWidth, $this._tablePanel.ContentHeight)
+        $this._taskTable.ShowBorder = $false
+        $this._taskTable.SetColumns(@(
+            [TableColumn]::new('Title', 'Task Title', 'Auto'),
+            [TableColumn]::new('Status', 'Status', 15),
+            [TableColumn]::new('Priority', 'Priority', 12)
+        ))
+        # When the table selection changes, update our local state.
+        $this._taskTable.OnSelectionChanged = { param($SelectedItem) $this._selectedTask = $SelectedItem }.GetNewClosure()
+        $this._tablePanel.AddChild($this._taskTable)
+
+        # --- Register Actions & Keybindings for THIS screen's context ---
+        $this._RegisterActions()
+        
+        # --- Subscribe to global events ---
+        $this.SubscribeToEvent("Tasks.Changed", { $this._RefreshData() })
+    }
+
+    # OnEnter/OnExit manage the keybinding context for this screen.
+    [void] OnEnter() {
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $keybindingService.PushContext('tasklist')
+        $this._RefreshData()
+        Set-ComponentFocus -Component $this._taskTable
+    }
+
+    [void] OnExit() {
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $keybindingService.PopContext()
+    }
+
+    # Registers all actions and keybindings specific to this screen.
+    hidden [void] _RegisterActions() {
+        $actionService = $this.ServiceContainer.GetService('ActionService')
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $context = 'tasklist' # Define the context for these actions/bindings
+
+        # A helper closure to ensure an action isn't run if no task is selected.
+        $withSelectedTask = {
+            param($scriptblock)
+            if ($this._selectedTask) { . $scriptblock $this._selectedTask }
+            else { Show-AlertDialog -Title 'No Task Selected' -Message 'Please select a task first.' | Out-Null }
+        }
+
+        # New Task
+        $actionService.RegisterAction("task.new", "Create a new task", { $this._ShowNewTaskDialog() }, "Tasks")
+        $keybindingService.SetBinding("task.new", 'N', $context)
+
+        # Edit Task
+        $actionService.RegisterAction("task.edit", "Edit selected task", { . $withSelectedTask { param($task) $this._ShowEditTaskDialog($task) } }, "Tasks")
+        $keybindingService.SetBinding("task.edit", 'E', $context)
+        
+        # Delete Task
+        $actionService.RegisterAction("task.delete", "Delete selected task", { . $withSelectedTask { param($task) $this._ShowDeleteConfirmDialog($task) } }, "Tasks")
+        $keybindingService.SetBinding("task.delete", 'Delete', $context)
+
+        # Toggle Task Status
+        $actionService.RegisterAction("task.toggleStatus", "Toggle task status", { . $withSelectedTask { param($task) $this._ToggleTaskStatus($task) } }, "Tasks")
+        $keybindingService.SetBinding("task.toggleStatus", 'Spacebar', $context)
+
+        # Cycle Filter
+        $actionService.RegisterAction("task.cycleFilter", "Cycle task filter", { $this._CycleFilter() }, "Tasks")
+        $keybindingService.SetBinding("task.cycleFilter", 'F', $context)
+
+        # Navigate Back
+        $actionService.RegisterAction("task.back", "Return to dashboard", { $this.ServiceContainer.GetService('NavigationService').PopScreen() }, "Navigation")
+        $keybindingService.SetBinding("task.back", 'Escape', $context)
+    }
+
+    # Fetches tasks, applies filters, and updates the table and display.
+    hidden [void] _RefreshData() {
+        $dataManager = $this.ServiceContainer.GetService('DataManager')
+        $allTasks = $dataManager.GetTasks()
+        $filteredTasks = switch ($this._filterStatus) {
+            "Active"    { $allTasks | Where-Object { -not $_.Completed } }
+            "Completed" { $allTasks | Where-Object { $_.Completed } }
+            default     { $allTasks }
+        }
+        $this._taskTable.SetData($filteredTasks)
+        $this._UpdateDisplay()
+    }
+    
+    # Redraws the static parts of the screen like headers and footers.
+    hidden [void] _UpdateDisplay() {
+        $theme = $this.ServiceContainer.GetService('ThemeManager')
+        # Header
+        $this._headerPanel.ClearContent()
+        $headerText = " Filter: $($this._filterStatus) "
+        $this._headerPanel.WriteToBuffer(0, 0, $headerText, $theme.GetColor('header.foreground'), $theme.GetColor('header.background'))
+        
+        # Footer (Dynamic Help Text based on current keybindings)
+        $this._footerPanel.ClearContent()
+        $keybindingService = $this.ServiceContainer.GetService('KeybindingService')
+        $bindings = @(
+            "($($keybindingService.GetBindingDescription('task.toggleStatus')))-Toggle"
+            "($($keybindingService.GetBindingDescription('task.new')))-New"
+            "($($keybindingService.GetBindingDescription('task.edit')))-Edit"
+            "($($keybindingService.GetBindingDescription('task.cycleFilter')))-Filter"
+            "($($keybindingService.GetBindingDescription('task.back')))-Back"
+        )
+        $this._footerPanel.WriteToBuffer(0, 0, ($bindings -join ' | '), $theme.GetColor('statusbar.foreground'), $theme.GetColor('statusbar.background'))
+        
+        $this.RequestRedraw()
+    }
+    
+    # The screen's input handler delegates all input to the focused child (the table).
+    # The table will then translate keystrokes into actions via the KeybindingService.
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        return $this._taskTable.HandleInput($keyInfo)
+    }
+
+    #region Task Action Implementations
+    hidden [void] _ToggleTaskStatus([PmcTask]$task) {
+        # The logic is simple: update the task and let the DataManager notify everyone.
+        $task.UpdateProgress($task.Completed ? 0 : 100)
+        $this.ServiceContainer.GetService('DataManager').UpdateTask($task)
+    }
+
+    hidden [void] _CycleFilter() {
+        $this._filterStatus = switch ($this._filterStatus) {
+            "All"       { "Active" }
+            "Active"    { "Completed" }
+            default     { "All" }
+        }
+        # Refresh data, which will re-filter and trigger a display update.
+        $this._RefreshData() 
+    }
+    
+    hidden [void] _ShowNewTaskDialog() {
+        # Using the async/await dialog API for cleaner code.
+        $title = await Show-InputDialog -Title "New Task" -Message "Enter task title:"
+        if ($title) { # A non-null/non-empty result means the user pressed OK
+            $newTask = [PmcTask]::new($title)
+            $this.ServiceContainer.GetService('DataManager').AddTask($newTask)
+        }
+    }
+    
+    hidden [void] _ShowEditTaskDialog([PmcTask]$task) {
+        $newTitle = await Show-InputDialog -Title "Edit Task" -Message "New title:" -DefaultValue $task.Title
+        if ($newTitle) {
+            $task.Title = $newTitle
+            $this.ServiceContainer.GetService('DataManager').UpdateTask($task)
+        }
+    }
+    
+    hidden [void] _ShowDeleteConfirmDialog([PmcTask]$task) {
+        $confirmed = await Show-ConfirmDialog -Title "Delete Task" -Message "Delete task `"$($task.Title)`"?"
+        if ($confirmed) {
+            $this.ServiceContainer.GetService('DataManager').RemoveTask($task.Id)
+        }
+    }
+    #endregion
+}
+
+####modules\tui-engine\tui-engine.psm1
+# ==============================================================================
+# TUI Engine v5.3 - Lifecycle-Aware Compositor
+# Core engine providing complete lifecycle management and high-performance rendering
+# ==============================================================================
+
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using module logger
+#using module exceptions
+#using namespace System.Collections.Generic
+#using namespace System.Collections.Concurrent
+#using namespace System.Management.Automation
+#using namespace System.Threading
+
+#region Core TUI State
+
+# Global TUI state management
+$global:TuiState = @{
+    Running = $false
+    BufferWidth = 0
+    BufferHeight = 0
+    CompositorBuffer = $null
+    PreviousCompositorBuffer = $null
+    ScreenStack = [System.Collections.Stack]::new()
+    CurrentScreen = $null
+    OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
+    IsDirty = $true
+    RenderStats = @{
+        LastFrameTime = 0
+        FrameCount = 0
+        TargetFPS = 60
+        AverageFrameTime = 0
+    }
+    Components = @()
+    Layouts = @{}
+    FocusedComponent = $null
+    InputQueue = [System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]]::new()
+    InputRunspace = $null
+    InputPowerShell = $null
+    InputAsyncResult = $null
+    CancellationTokenSource = $null
+    EventHandlers = @{}
+    LastWindowWidth = 0
+    LastWindowHeight = 0
+}
+
+#endregion
+
+#region Engine Lifecycle & Main Loop
+
+function Initialize-TuiEngine {
+    <#
+    .SYNOPSIS
+    Initializes the TUI engine with specified dimensions.
+    #>
+    [CmdletBinding()]
+    param(
+        [int]$Width = [Console]::WindowWidth,
+        [int]$Height = [Console]::WindowHeight - 1
+    )
+    
+    try {
+        Write-Log -Level Info -Message "Initializing TUI Engine with dimensions $Width x $Height"
+        
+        $global:TuiState.BufferWidth = $Width
+        $global:TuiState.BufferHeight = $Height
+        $global:TuiState.LastWindowWidth = [Console]::WindowWidth
+        $global:TuiState.LastWindowHeight = [Console]::WindowHeight
+        
+        $global:TuiState.CompositorBuffer = [TuiBuffer]::new($Width, $Height, "CompositorBuffer")
+        $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($Width, $Height, "PreviousCompositorBuffer")
+        
+        [Console]::CursorVisible = $false
+        [Console]::TreatControlCAsInput = $true
+        
+        Initialize-InputThread
+        Initialize-PanicHandler
+        
+        Write-Log -Level Info -Message "TUI Engine initialized successfully"
+    }
+    catch {
+        Write-Error "Failed to initialize TUI Engine: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Initialize-InputThread {
+    <#
+    .SYNOPSIS
+    Initializes the input processing system (simplified synchronous approach).
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        # Simplified approach - no background thread needed
+        # Input will be processed directly in the main loop
+        Write-Log -Level Debug -Message "Input system initialized (synchronous mode)"
+    }
+    catch {
+        Write-Error "Failed to initialize input system: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function Start-TuiLoop {
+    <#
+    .SYNOPSIS
+    Starts the main TUI rendering and input processing loop.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$InitialScreen
+    )
+    
+    try {
+        if (-not $global:TuiState.BufferWidth) { Initialize-TuiEngine }
+        if ($InitialScreen) { Push-Screen -Screen $InitialScreen }
+        if (-not $global:TuiState.CurrentScreen) { throw "No screen available to start TUI loop" }
+        
+        $global:TuiState.Running = $true
+        $frameTimer = [System.Diagnostics.Stopwatch]::new()
+        $targetFrameTime = 1000.0 / $global:TuiState.RenderStats.TargetFPS
+        
+        Write-Log -Level Info -Message "Starting TUI main loop"
+        
+        while ($global:TuiState.Running) {
+            try {
+                $frameTimer.Restart()
+                Check-ForResize
+                $hadInput = Process-TuiInput
+                if ($global:TuiState.IsDirty -or $hadInput) {
+                    Render-Frame
+                    $global:TuiState.IsDirty = $false
+                }
+                $elapsed = $frameTimer.ElapsedMilliseconds
+                if ($elapsed -lt $targetFrameTime) {
+                    $sleepTime = [Math]::Max(1, [int]($targetFrameTime - $elapsed))
+                    Start-Sleep -Milliseconds $sleepTime
+                }
+                $global:TuiState.RenderStats.LastFrameTime = $frameTimer.ElapsedMilliseconds
+                $global:TuiState.RenderStats.FrameCount++
+                if ($global:TuiState.RenderStats.FrameCount % 60 -eq 0) {
+                    $global:TuiState.RenderStats.AverageFrameTime = $global:TuiState.RenderStats.LastFrameTime
+                }
+            }
+            catch {
+                Write-Error "Error in TUI main loop: $($_.Exception.Message)"
+                Invoke-PanicHandler -ErrorRecord $_ -AdditionalContext @{ Context = "TUI Main Loop" }
+                $global:TuiState.Running = $false
+                break
+            }
+        }
+        
+        Write-Log -Level Info -Message "TUI main loop ended"
+    }
+    catch {
+        Write-Error "Fatal error in TUI loop: $($_.Exception.Message)"
+        throw
+    }
+    finally {
+        Cleanup-TuiEngine
+    }
+}
+
+function Check-ForResize {
+    <#
+    .SYNOPSIS
+    Checks for terminal resize and handles resize events.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        $currentWidth = [Console]::WindowWidth
+        $currentHeight = [Console]::WindowHeight - 1
+        
+        if ($currentWidth -ne $global:TuiState.BufferWidth -or $currentHeight -ne $global:TuiState.BufferHeight) {
+            Write-Log -Level Info -Message "Terminal resized from $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight) to $($currentWidth)x$($currentHeight)"
+            
+            $global:TuiState.BufferWidth = $currentWidth
+            $global:TuiState.BufferHeight = $currentHeight
+            
+            $global:TuiState.CompositorBuffer.Resize($currentWidth, $currentHeight)
+            $global:TuiState.PreviousCompositorBuffer.Resize($currentWidth, $currentHeight)
+            
+            if ($global:TuiState.CurrentScreen) { $global:TuiState.CurrentScreen.Resize($currentWidth, $currentHeight) }
+            
+            foreach ($overlay in $global:TuiState.OverlayStack) {
+                if ($overlay -is [Dialog]) {
+                    $overlay.X = [Math]::Floor(($currentWidth - $overlay.Width) / 2)
+                    $overlay.Y = [Math]::Floor(($currentHeight - $overlay.Height) / 4)
+                }
+                $overlay.Resize($overlay.Width, $overlay.Height)
+            }
+            
+            Publish-Event -EventName "TUI.Resized" -Data @{ Width = $currentWidth; Height = $currentHeight; PreviousWidth = $global:TuiState.LastWindowWidth; PreviousHeight = $global:TuiState.LastWindowHeight }
+            
+            $global:TuiState.LastWindowWidth = $currentWidth
+            $global:TuiState.LastWindowHeight = $currentHeight
+            Request-TuiRefresh
+        }
+    }
+    catch { Write-Error "Error checking for resize: $($_.Exception.Message)" }
+}
+
+function Process-TuiInput {
+    <#
+    .SYNOPSIS
+    Processes input directly from the console (synchronous approach).
+    #>
+    [CmdletBinding()]
+    param()
+    
+    $hadInput = $false
+    
+    try {
+        # Process all available input directly
+        while ([Console]::KeyAvailable) {
+            $hadInput = $true
+            $keyInfo = [Console]::ReadKey($true)
+            
+            # Handle input immediately
+            if (Handle-GlobalShortcuts -KeyInfo $keyInfo) { continue }
+            if ($global:TuiState.OverlayStack.Count -gt 0) {
+                if ($global:TuiState.OverlayStack[-1].HandleInput($keyInfo)) { continue }
+            }
+            if ($global:TuiState.FocusedComponent) {
+                if ($global:TuiState.FocusedComponent.HandleInput($keyInfo)) { continue }
+            }
+            if ($global:TuiState.CurrentScreen) {
+                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) { continue }
+            }
+            Write-Verbose "Unhandled input: $($keyInfo.Key)"
+        }
+    }
+    catch { Write-Error "Error processing input: $($_.Exception.Message)" }
+    
+    return $hadInput
+}
+
+function Handle-GlobalShortcuts {
+    <#
+    .SYNOPSIS
+    Handles global keyboard shortcuts.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.ConsoleKeyInfo]$KeyInfo
+    )
+    
+    try {
+        if ($KeyInfo.Key -eq [ConsoleKey]::C -and $KeyInfo.Modifiers -band [ConsoleModifiers]::Control) {
+            Write-Log -Level Info -Message "Received Ctrl+C, initiating graceful shutdown"
+            $global:TuiState.Running = $false
+            return $true
+        }
+        if ($KeyInfo.Key -eq [ConsoleKey]::P -and $KeyInfo.Modifiers -band [ConsoleModifiers]::Control) {
+            if (Get-Command Publish-Event -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "CommandPalette.Open"
+                return $true
+            }
+        }
+        if ($KeyInfo.Key -eq [ConsoleKey]::F12) {
+            Show-DebugInfo
+            return $true
+        }
+        return $false
+    }
+    catch {
+        Write-Error "Error handling global shortcuts: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Render-Frame {
+    <#
+    .SYNOPSIS
+    Renders the current frame to the screen.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        # Clear the compositor buffer completely to prevent ghost text
+        $global:TuiState.CompositorBuffer.Clear()
+        
+        # Render current screen to its buffer
+        if ($global:TuiState.CurrentScreen) {
+            $global:TuiState.CurrentScreen.Render()
+            $global:TuiState.CompositorBuffer.BlendBuffer($global:TuiState.CurrentScreen.GetBuffer(), 0, 0)
+        }
+        
+        # Render overlays on top with proper z-ordering
+        foreach ($overlay in $global:TuiState.OverlayStack) {
+            # Clear the overlay area in the compositor first to prevent bleed-through
+            $overlayBuffer = $overlay.GetBuffer()
+            if ($overlayBuffer) {
+                # First clear the area where the overlay will be drawn
+                for ($y = 0; $y -lt $overlay.Height; $y++) {
+                    for ($x = 0; $x -lt $overlay.Width; $x++) {
+                        $compX = $overlay.X + $x
+                        $compY = $overlay.Y + $y
+                        if ($compX -ge 0 -and $compX -lt $global:TuiState.BufferWidth -and 
+                            $compY -ge 0 -and $compY -lt $global:TuiState.BufferHeight) {
+                            # Force clear by setting a higher z-index
+                            $clearCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+                            $clearCell.ZIndex = 1000
+                            $global:TuiState.CompositorBuffer.SetCell($compX, $compY, $clearCell)
+                        }
+                    }
+                }
+                
+                # Now render the overlay
+                $overlay.Render()
+                $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
+            }
+        }
+        
+        # Render to console with improved diffing
+        Render-CompositorToConsole
+        
+        # Swap buffers
+        $temp = $global:TuiState.PreviousCompositorBuffer
+        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
+        $global:TuiState.CompositorBuffer = $temp
+    }
+    catch { Write-Error "Error rendering frame: $($_.Exception.Message)" }
+}
+
+function Render-CompositorToConsole {
+    <#
+    .SYNOPSIS
+    Renders the compositor buffer to the console with differential updates.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        $output = [System.Text.StringBuilder]::new()
+        for ($y = 0; $y -lt $global:TuiState.BufferHeight; $y++) {
+            for ($x = 0; $x -lt $global:TuiState.BufferWidth; $x++) {
+                $currentCell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
+                $previousCell = $global:TuiState.PreviousCompositorBuffer.GetCell($x, $y)
+                if ($currentCell.DiffersFrom($previousCell)) {
+                    [void]$output.Append("`e[" + ($y + 1) + ";" + ($x + 1) + "H")
+                    [void]$output.Append([TuiAnsiHelper]::Reset())
+                    [void]$output.Append([TuiAnsiHelper]::GetForegroundCode($currentCell.ForegroundColor))
+                    [void]$output.Append([TuiAnsiHelper]::GetBackgroundCode($currentCell.BackgroundColor))
+                    if ($currentCell.Bold) { [void]$output.Append([TuiAnsiHelper]::Bold()) }
+                    if ($currentCell.Underline) { [void]$output.Append([TuiAnsiHelper]::Underline()) }
+                    if ($currentCell.Italic) { [void]$output.Append([TuiAnsiHelper]::Italic()) }
+                    [void]$output.Append($currentCell.Char)
+                }
+            }
+        }
+        if ($output.Length -gt 0) {
+            [void]$output.Append([TuiAnsiHelper]::Reset())
+            [Console]::Write($output.ToString())
+        }
+    }
+    catch { Write-Error "Error rendering to console: $($_.Exception.Message)" }
+}
+
+function Cleanup-TuiEngine {
+    <#
+    .SYNOPSIS
+    Cleans up all TUI engine resources.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        Write-Log -Level Info -Message "Cleaning up TUI Engine"
+        if ($global:TuiState.CurrentScreen) { $global:TuiState.CurrentScreen.Cleanup() }
+        while ($global:TuiState.ScreenStack.Count -gt 0) { $global:TuiState.ScreenStack.Pop().Cleanup() }
+        foreach ($overlay in $global:TuiState.OverlayStack) { $overlay.Cleanup() }
+        $global:TuiState.OverlayStack.Clear()
+        
+        [Console]::CursorVisible = $true
+        [Console]::TreatControlCAsInput = $false
+        [Console]::Clear()
+        
+        Write-Log -Level Info -Message "TUI Engine cleanup completed"
+    }
+    catch { Write-Error "Error during TUI cleanup: $($_.Exception.Message)" }
+}
+
+#endregion
+
+#region Screen & Overlay Management
+
+function Push-Screen {
+    <#
+    .SYNOPSIS
+    Pushes a new screen onto the screen stack.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Screen
+    )
+    if (-not $Screen) { Write-Error "Push-Screen: Screen parameter is null"; return }
+    try {
+        $screenName = $Screen.Name ?? "UnknownScreen"
+        Write-Log -Level Debug -Message "Pushing screen: $screenName"
+        if ($global:TuiState.FocusedComponent) { $global:TuiState.FocusedComponent.OnBlur() }
+        if ($global:TuiState.CurrentScreen) {
+            $global:TuiState.CurrentScreen.OnExit()
+            [void]$global:TuiState.ScreenStack.Push($global:TuiState.CurrentScreen)
+        }
+        $global:TuiState.CurrentScreen = $Screen
+        $global:TuiState.FocusedComponent = $null
+        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        if ($Screen.PSObject.Methods['Initialize']) { $Screen.Initialize() }
+        $Screen.OnEnter()
+        $Screen.RequestRedraw()
+        Request-TuiRefresh
+        Publish-Event -EventName "Screen.Pushed" -Data @{ ScreenName = $screenName }
+        Write-Log -Level Debug -Message "Screen pushed successfully: $screenName"
+    }
+    catch {
+        $errorMsg = $_.Exception.Message ?? "Unknown error"
+        $screenName = if ($Screen -and $Screen.PSObject.Properties['Name']) { $Screen.Name } else { "UnknownScreen" }
+        Write-Error "Error pushing screen '$screenName': $errorMsg"
+        $global:TuiState.Running = $false
+    }
+}
+
+function Pop-Screen {
+    <#
+    .SYNOPSIS
+    Pops the current screen from the screen stack.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    if ($global:TuiState.ScreenStack.Count -eq 0) {
+        Write-Log -Level Warning -Message "Cannot pop screen: screen stack is empty"
+        return $false
+    }
+    try {
+        Write-Log -Level Debug -Message "Popping screen"
+        if ($global:TuiState.FocusedComponent) { $global:TuiState.FocusedComponent.OnBlur() }
+        $screenToExit = $global:TuiState.CurrentScreen
+        $global:TuiState.CurrentScreen = $global:TuiState.ScreenStack.Pop()
+        $global:TuiState.FocusedComponent = $null
+        if ($screenToExit) {
+            $screenToExit.OnExit()
+            if ($screenToExit.PSObject.Methods['Cleanup']) { $screenToExit.Cleanup() }
+        }
+        if ($global:TuiState.CurrentScreen) {
+            $global:TuiState.CurrentScreen.OnResume()
+            if ($global:TuiState.CurrentScreen.LastFocusedComponent) { Set-ComponentFocus -Component $global:TuiState.CurrentScreen.LastFocusedComponent }
+        }
+        Request-TuiRefresh
+        Publish-Event -EventName "Screen.Popped" -Data @{ ScreenName = $global:TuiState.CurrentScreen.Name }
+        Write-Log -Level Debug -Message "Screen popped successfully"
+        return $true
+    }
+    catch {
+        Write-Error "Error popping screen: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Show-TuiOverlay {
+    <#
+    .SYNOPSIS
+    Shows an overlay element (like a dialog) on top of the current screen.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        # FIX: Removed [UIElement] type hint
+        $Element
+    )
+    try {
+        Write-Log -Level Debug -Message "Showing overlay: $($Element.Name)"
+        if ($Element.PSObject.Methods['Initialize']) { $Element.Initialize() }
+        $global:TuiState.OverlayStack.Add($Element)
+        Request-TuiRefresh
+        Write-Log -Level Debug -Message "Overlay shown successfully: $($Element.Name)"
+    }
+    catch { Write-Error "Error showing overlay '$($Element.Name)': $($_.Exception.Message)" }
+}
+
+function Close-TopTuiOverlay {
+    <#
+    .SYNOPSIS
+    Closes the top overlay element.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        if ($global:TuiState.OverlayStack.Count -gt 0) {
+            $overlay = $global:TuiState.OverlayStack[-1]
+            $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
+            if ($overlay.PSObject.Methods['Cleanup']) { $overlay.Cleanup() }
+            Request-TuiRefresh
+            Write-Log -Level Debug -Message "Overlay closed: $($overlay.Name)"
+        }
+    }
+    catch { Write-Error "Error closing overlay: $($_.Exception.Message)" }
+}
+
+#endregion
+
+#region Focus Management
+
+function Set-ComponentFocus {
+    <#
+    .SYNOPSIS
+    Sets focus to a specific component.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        # FIX: Removed [UIElement] type hint
+        $Component
+    )
+    try {
+        if (-not $Component.IsFocusable) {
+            Write-Log -Level Warning -Message "Cannot focus non-focusable component: $($Component.Name)"
+            return
+        }
+        if ($global:TuiState.FocusedComponent) { $global:TuiState.FocusedComponent.OnBlur() }
+        $global:TuiState.FocusedComponent = $Component
+        $Component.OnFocus()
+        if ($global:TuiState.CurrentScreen) {
+            $global:TuiState.CurrentScreen.LastFocusedComponent = $Component
+        }
+        Request-TuiRefresh
+        Write-Log -Level Debug -Message "Focus set to component: $($Component.Name)"
+    }
+    catch { Write-Error "Error setting focus to component '$($Component.Name)': $($_.Exception.Message)" }
+}
+
+function Get-FocusedComponent {
+    <#
+    .SYNOPSIS
+    Gets the currently focused component.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    return $global:TuiState.FocusedComponent
+}
+
+#endregion
+
+#region Utility Functions
+
+function Request-TuiRefresh {
+    <#
+    .SYNOPSIS
+    Requests a refresh of the TUI display.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    $global:TuiState.IsDirty = $true
+}
+
+function Show-DebugInfo {
+    <#
+    .SYNOPSIS
+    Shows debug information about the TUI state.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        $debugInfo = @"
+=== TUI Engine Debug Information ===
+Running: $($global:TuiState.Running)
+Buffer Size: $($global:TuiState.BufferWidth) x $($global:TuiState.BufferHeight)
+Frame Count: $($global:TuiState.RenderStats.FrameCount)
+Last Frame Time: $($global:TuiState.RenderStats.LastFrameTime)ms
+Average Frame Time: $($global:TuiState.RenderStats.AverageFrameTime)ms
+Target FPS: $($global:TuiState.RenderStats.TargetFPS)
+Screen Stack Count: $($global:TuiState.ScreenStack.Count)
+Overlay Count: $($global:TuiState.OverlayStack.Count)
+Current Screen: $($global:TuiState.CurrentScreen?.Name ?? 'None')
+Focused Component: $($global:TuiState.FocusedComponent?.Name ?? 'None')
+Input Queue Size: $($global:TuiState.InputQueue.Count)
+Memory Usage: $([math]::round([GC]::GetTotalMemory($false) / 1MB, 2)) MB
+=== End Debug Information ===
+"@
+        
+        Write-Log -Level Info -Message $debugInfo
+        if (Get-Command Show-AlertDialog -ErrorAction SilentlyContinue) {
+            Show-AlertDialog -Title "Debug Information" -Message $debugInfo
+        }
+    }
+    catch { Write-Error "Error showing debug info: $($_.Exception.Message)" }
+}
+
+#endregion
+
+#region Module Exports
+
+Export-ModuleMember -Function `
+    Initialize-TuiEngine, Start-TuiLoop, Cleanup-TuiEngine, `
+    Push-Screen, Pop-Screen, Show-TuiOverlay, Close-TopTuiOverlay, `
+    Set-ComponentFocus, Get-FocusedComponent, Request-TuiRefresh, `
+    Render-Frame, Process-TuiInput, Check-ForResize
+
+Export-ModuleMember -Variable TuiState
+
+#endregion
+
+####run.ps1
+$container = $null 
+try {
+    Write-Host "`n=== Axiom-Phoenix v4.0 - Starting Up ===" -ForegroundColor Cyan
+    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
+    
+    # 1. Initialize standalone services
+    Write-Host "`nInitializing services..." -ForegroundColor Yellow
+    Initialize-Logger -Level $(if ($Debug) { "Debug" } else { "Info" })
+    Initialize-EventSystem
+    Initialize-ThemeManager
+    
+    # 2. Create the service container
+    Write-Host "Creating service container..." -ForegroundColor Yellow
+    $container = Initialize-ServiceContainer
+    
+    # 3. Register all services with the container using factories
+    $container.RegisterFactory("TuiFramework", { param($c) Initialize-TuiFrameworkService }, $true)
+    $container.RegisterFactory("ActionService", { param($c) Initialize-ActionService }, $true)
+    $container.RegisterFactory("KeybindingService", { param($c) New-KeybindingService }, $true)
+    $container.RegisterFactory("DataManager", { param($c) Initialize-DataManager }, $true)
+    $container.RegisterFactory("ThemeManager", { 
+        param($c) 
+        $themeManager = New-Object PSObject
+        $themeManager | Add-Member -MemberType ScriptMethod -Name "GetColor" -Value { param($colorName) Get-ThemeColor -ColorName $colorName }
+        $themeManager | Add-Member -MemberType ScriptMethod -Name "GetTheme" -Value { Get-TuiTheme }
+        return $themeManager
+    }, $true)
+    $container.RegisterFactory("NavigationService", { 
+        param($c)
+        Initialize-NavigationService -Services @{ ServiceContainer = $c } 
+    }, $true)
+    
+    # 4. Register screen classes with the Navigation Service
+    $navService = $container.GetService("NavigationService")
+    
+    # FIX: Robustly get the types from the current AppDomain's loaded assemblies.
+    Write-Host "Registering screen types..." -ForegroundColor Yellow
+    $dashboardScreenType = [System.AppDomain]::CurrentDomain.GetAssemblies().GetTypes() | Where-Object { $_.Name -eq 'DashboardScreen' } | Select-Object -First 1
+    $taskListScreenType = [System.AppDomain]::CurrentDomain.GetAssemblies().GetTypes() | Where-Object { $_.Name -eq 'TaskListScreen' } | Select-Object -First 1
+
+    if (-not $dashboardScreenType) { throw "Could not find the [DashboardScreen] class type after loading modules." }
+    if (-not $taskListScreenType) { throw "Could not find the [TaskListScreen] class type after loading modules." }
+
+    $navService.RegisterScreenClass("DashboardScreen", $dashboardScreenType)
+    $navService.RegisterScreenClass("TaskListScreen", $taskListScreenType)
+    Write-Host "Registered screen types: DashboardScreen, TaskListScreen" -ForegroundColor Green
+    
+    # 5. Initialize the Command Palette system
+    Register-CommandPalette -ActionService $container.GetService("ActionService") -KeybindingService $container.GetService("KeybindingService")
+    
+    Write-Host "Service container configured with $($container.GetAllRegisteredServices().Count) services!" -ForegroundColor Green
+    
+    # 6. Display application logo
+    if (-not $SkipLogo) {
+        Write-Host @"
+
+    ╔═══════════════════════════════════════╗
+    ║      Axiom-Phoenix v4.0               ║
+    ║      PowerShell Management Console    ║
+    ╚═══════════════════════════════════════╝
+    
+"@ -ForegroundColor Cyan
+    }
+    
+    # 7. Initialize the TUI Engine
+    Write-Host "Starting TUI Engine..." -ForegroundColor Yellow
+    Initialize-TuiEngine
+    
+    # 8. Create the initial screen
+    Write-Host "Creating initial dashboard screen..." -ForegroundColor Yellow
+    $initialScreen = $navService.ScreenFactory.CreateScreen("DashboardScreen", @{})
+    
+    # 9. Start the main application loop
+    Write-Host "Starting main application loop... Press Ctrl+P to open the Command Palette." -ForegroundColor Yellow
+    Start-TuiLoop -InitialScreen $initialScreen
+    
+} catch {
+    Write-Host "`n=== FATAL STARTUP ERROR ===" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+    if ($Host.Name -eq 'ConsoleHost' -and $Host.UI.RawUI) { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") }
+    exit 1
+} finally {
+    Write-Host "`nApplication has exited. Cleaning up..."
+    if ($container) {
+        try {
+            $tuiFramework = $container.GetService("TuiFramework")
+            if ($tuiFramework) { $tuiFramework.StopAllAsyncJobs() }
+            $container.Cleanup()
+        } catch {
+            Write-Warning "Error during service container cleanup: $($_.Exception.Message)"
+        }
+    }
+    try {
+        Cleanup-TuiEngine
+    } catch {
+        Write-Warning "Error during TUI engine cleanup: $($_.Exception.Message)"
+    }
+    
+    # Restore the original module path when the script exits
+    $env:PSModulePath = $originalModulePath
+    Write-Host "Restored original PSModulePath." -ForegroundColor DarkGray
+}
+

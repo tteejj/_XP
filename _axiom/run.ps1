@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 # --- STAGE 1: PRE-FLIGHT CLASS LOADING ---
 # Dot-source the loader script to define all classes in the global scope.
 # This solves all parse-time "Unable to find type" errors before module importing begins.
-. "$PSScriptRoot\class-loader.ps1"
+#. "$PSScriptRoot\class-loader.ps1"
 $ErrorActionPreference = 'Stop'
 
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
