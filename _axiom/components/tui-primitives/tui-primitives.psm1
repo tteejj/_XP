@@ -478,3 +478,16 @@ function Get-TuiBorderChars {
     }
 }
 #endregion
+
+# Factory Functions
+function New-TuiBuffer {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$Width,
+        [Parameter(Mandatory)][int]$Height,
+        [string]$Name = "Unnamed"
+    )
+    return [TuiBuffer]::new($Width, $Height, $Name)
+}
+
+Export-ModuleMember -Function New-TuiBuffer, Write-TuiText, Write-TuiBox, Get-TuiBorderChars

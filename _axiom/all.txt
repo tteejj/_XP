@@ -4,10 +4,10 @@
 # High-performance, theme-aware data display components for TUI applications
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using namespace System.Collections.Generic
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Collections.Generic
 
 #region Table Classes
 
@@ -408,11 +408,11 @@ Export-ModuleMember -Function New-TuiTable
 # Sophisticated input controls with theme integration and overlay rendering
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using namespace System.Management.Automation
-using namespace System.Collections.Generic
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Management.Automation
+#using namespace System.Collections.Generic
 
 #region Advanced Input Classes
 
@@ -1449,11 +1449,11 @@ Export-ModuleMember -Function New-TuiMultilineTextBox, New-TuiNumericInput, New-
 # Advanced command palette with fuzzy search and action execution
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using module tui-components
-using namespace System.Management.Automation
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using module tui-components
+#using namespace System.Management.Automation
 
 #region Command Palette Class
 
@@ -1792,11 +1792,11 @@ Export-ModuleMember -Function Register-CommandPalette
 # accessed via the CommandPalette (Ctrl+P).
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using namespace System.Management.Automation
-using namespace System.Collections.Generic
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Management.Automation
+#using namespace System.Collections.Generic
 
 #region Navigation Classes
 
@@ -2226,10 +2226,10 @@ class NavigationMenu : UIElement {
 # Core interactive UI components with theme integration and advanced features
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using namespace System.Management.Automation
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Management.Automation
 
 #region Core UI Components
 
@@ -3356,7 +3356,7 @@ function Get-TuiBorderChars {
 #endregion
 
 ####\components\ui-classes\ui-classes.psm1
-using module 'tui-primitives'
+#using module 'tui-primitives'
 # ==============================================================================
 # PMC Terminal v5 - Base UI Class Hierarchy
 # Provides the foundational classes for all UI components with NCurses compositor support.
@@ -3736,9 +3736,9 @@ class Screen : UIElement {
 #using module '../tui-primitives/tui-primitives.psd1'
 #using module '../../modules/theme-manager/theme-manager.psd1'
 #change these to this method as root is set in run at op
-using module ui-classes
-using module tui-primitives
-using module theme-manager
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
 
 
 # ==============================================================================
@@ -4338,7 +4338,7 @@ class GroupPanel : Panel {
 # Data Manager Module - Axiom-Phoenix v4.0 Enhancement
 # High-performance, transaction-safe, and lifecycle-aware data service.
 
-using module models
+#using module models
 
 function Initialize-DataManager {
     <#
@@ -4848,12 +4848,12 @@ Export-ModuleMember -Function Initialize-DataManager
 # Theme-aware, lifecycle-managed dialogs with modern promise-based API
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module tui-components
-using module theme-manager
-using namespace System.Management.Automation
-using namespace System.Threading.Tasks
+#using module ui-classes
+#using module tui-primitives
+#using module tui-components
+#using module theme-manager
+#using namespace System.Management.Automation
+#using namespace System.Threading.Tasks
 
 #region Base Dialog Class
 
@@ -7612,15 +7612,15 @@ Export-ModuleMember -Function Initialize-ThemeManager, Set-TuiTheme, Get-ThemeCo
 # Core engine providing complete lifecycle management and high-performance rendering
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using module logger
-using module exceptions
-using namespace System.Collections.Generic
-using namespace System.Collections.Concurrent
-using namespace System.Management.Automation
-using namespace System.Threading
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using module logger
+#using module exceptions
+#using namespace System.Collections.Generic
+#using namespace System.Collections.Concurrent
+#using namespace System.Management.Automation
+#using namespace System.Threading
 
 #region Core TUI State
 
@@ -11259,10 +11259,10 @@ class Screen : UIElement {
 # A modern, theme-aware, and event-driven dashboard.
 # ==============================================================================
 
-using module ui-classes
-using module panels-class
-using module theme-manager
-using module logger
+#using module ui-classes
+#using module panels-class
+#using module theme-manager
+#using module logger
 
 class DashboardScreen : Screen {
     #region UI Components
@@ -11492,13 +11492,13 @@ class DashboardScreen : Screen {
 # A dynamic, action-driven, and theme-aware task management screen.
 # ==============================================================================
 
-using module ui-classes
-using module panels-class
-using module theme-manager
-using module logger
-using module tui-components
-using module models
-using module advanced-data-components
+#using module ui-classes
+#using module panels-class
+#using module theme-manager
+#using module logger
+#using module tui-components
+#using module models
+#using module advanced-data-components
 
 class TaskListScreen : Screen {
     #region UI Components
@@ -12839,6 +12839,123 @@ catch {
     Write-Error "Script execution halted at line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line)"
 }
 
+####\mushroom.ps1
+# mushroom.ps1 - The Monolith Decomposer & Recomposer Toolkit (v6.0 - Hard-Coded)
+
+[CmdletBinding()]
+param(
+    [Parameter(Position = 0)]
+    [string]$Command = 'help',
+    
+    [Parameter(Position = 1)]
+    [string]$Path,
+    
+    [Parameter(Position = 2)]
+    [string]$Output = "AxiomPhoenix.ps1"
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+#==============================================================================
+# FUNCTION DEFINITIONS
+#==============================================================================
+
+function Write-Status {
+    param($Message, $Color = 'Cyan')
+    Write-Host "🍄 $Message" -ForegroundColor $Color
+}
+
+function Invoke-Recompose {
+    param($SourceDir, $OutputPath)
+    Write-Status "Recomposing project from '$SourceDir' into '$OutputPath'..."
+    
+    # The master build order. This is the source of truth for dependencies.
+    $SourceFileOrder = @(
+        'modules\exceptions\exceptions.psm1', 'modules\logger\logger.psm1', 'modules\event-system\event-system.psm1', 'modules\models\models.psm1',
+        'components\tui-primitives\tui-primitives.psm1', 'modules\theme-manager\theme-manager.psm1', 'components\ui-classes\ui-classes.psm1',
+        'layout\panels-class\panels-class.psm1', 'services\service-container\service-container.psm1', 'services\action-service\action-service.psm1',
+        'services\keybinding-service-class\keybinding-service-class.psm1', 'services\navigation-service-class\navigation-service-class.psm1',
+        'components\tui-components\tui-components.psm1', 'components\advanced-data-components\advanced-data-components.psm1',
+        'components\advanced-input-components\advanced-input-components.psm1', 'modules\dialog-system-class\dialog-system-class.psm1',
+        'modules\panic-handler\panic-handler.psm1', 'services\keybinding-service\keybinding-service.psm1', 'services\navigation-service\navigation-service.psm1',
+        'modules\tui-framework\tui-framework.psm1', 'components\command-palette\command-palette.psm1', 'modules\data-manager\data-manager.psm1',
+        'screens\dashboard-screen\dashboard-screen.psm1', 'screens\task-list-screen\task-list-screen.psm1', 'modules\tui-engine\tui-engine.psm1',
+        'run.ps1'
+    )
+    
+    $mainLogicSource = Join-Path $SourceDir 'run.ps1'
+    if (-not (Test-Path $mainLogicSource)) { throw "'run.ps1' not found in source directory."}
+    
+    $runnerContent = Get-Content -Path $mainLogicSource -Raw
+    $paramBlock = if ($runnerContent -match '(?msi)(^param\s*\(.*?\))') { $matches[0] } else { '' }
+    $mainLogic = ($runnerContent -split '# --- MAIN EXECUTION LOGIC ---', 2)[-1]
+
+    # --- Build the Monolith ---
+    Write-Status "Assembling the monolith..."
+    $sb = [System.Text.StringBuilder]::new()
+
+    # HARD-CODED using statements, as instructed. This is the definitive list.
+    [void]$sb.AppendLine("# --- HARD-CODED USING STATEMENTS ---")
+    [void]$sb.AppendLine("using namespace System.Collections.Concurrent")
+    [void]$sb.AppendLine("using namespace System.Collections.Generic")
+    [void]$sb.AppendLine("using namespace System.Management.Automation")
+    [void]$sb.AppendLine("using namespace System.Threading")
+    [void]$sb.AppendLine("using namespace System.Threading.Tasks")
+    [void]$sb.AppendLine("# --- END USING STATEMENTS ---")
+    [void]$sb.AppendLine()
+    
+    # Write the param() block AFTER using statements
+    [void]$sb.AppendLine($paramBlock)
+    [void]$sb.AppendLine()
+
+    $filesToEmbed = $SourceFileOrder | Where-Object { $_ -ne 'run.ps1' }
+    foreach ($path in $filesToEmbed) {
+        $fullPath = Join-Path $SourceDir $path
+        if (-not (Test-Path $fullPath)) { Write-Warning "Source file '$fullPath' is missing. Skipping."; continue }
+        
+        # Read the file line by line and STRIP ALL 'using' statements.
+        $cleanLines = Get-Content -Path $fullPath | Where-Object { -not $_.Trim().StartsWith('using ') }
+        $cleanContent = $cleanLines -join [System.Environment]::NewLine
+
+        Write-Status "  -> Embedding: $path" 'Gray'
+        [void]$sb.AppendLine("####$path")
+        [void]$sb.AppendLine($cleanContent.Trim())
+        [void]$sb.AppendLine()
+    }
+
+    # Write the main logic at the very end
+    [void]$sb.AppendLine("####run.ps1")
+    [void]$sb.AppendLine($mainLogic.Trim())
+    
+    Set-Content -Path $OutputPath -Value $sb.ToString() -Encoding UTF8
+    Write-Status "Recomposition complete! New monolith is at '$OutputPath'" "Green"
+}
+
+
+function Show-Help {
+    Write-Host "help"
+}
+
+#==============================================================================
+# MAIN EXECUTION BLOCK
+#==============================================================================
+try {
+    switch ($Command.ToLower()) {
+        'recompose' {
+            $sourceDir = if ($Path) { $Path } else { "." }
+            Invoke-Recompose -SourceDir $sourceDir -OutputPath $Output
+        }
+        default { Show-Help }
+    }
+} catch {
+    Write-Host "`n🍄 ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    if ($_.ScriptStackTrace) {
+        Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+    }
+    exit 1
+}
+
 ####\run.ps1
 param(
     [switch]$Debug,
@@ -12851,16 +12968,34 @@ param(
 # --- PARAMETERS & GLOBAL SETTINGS ---
 
 Set-StrictMode -Version Latest
+# --- STAGE 1: PRE-FLIGHT CLASS LOADING ---
+# Dot-source the loader script to define all classes in the global scope.
+# This solves all parse-time "Unable to find type" errors before module importing begins.
+#. "$PSScriptRoot\class-loader.ps1"
 $ErrorActionPreference = 'Stop'
 
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 # Make your local modules folder transparently available for `using module`.
-$env:PSModulePath = "$PSScriptRoot\modules;$env:PSModulePath"
+# --- AXIOM MODULE PATH CONFIGURATION ---
+# The original module path is saved so it can be restored on exit.
 $originalModulePath = $env:PSModulePath
-$env:PSModulePath = "$PSScriptRoot;$originalModulePath"
-Write-Host "Temporarily added '$PSScriptRoot' to PSModulePath." -ForegroundColor DarkGray
 
+# Define the parent directories where our modules live.
+$moduleParentPaths = @(
+    (Join-Path $PSScriptRoot 'components'),
+    (Join-Path $PSScriptRoot 'modules'),
+    (Join-Path $PSScriptRoot 'services'),
+    (Join-Path $PSScriptRoot 'layout'),
+    (Join-Path $PSScriptRoot 'screens')
+) | ForEach-Object { (Get-Item $_).FullName }
+
+# Prepend our project's module paths to the system's PSModulePath.
+# This allows PowerShell's module loader to automatically discover and resolve
+# dependencies listed in the .psd1 manifests (e.g., RequiredModules).
+$env:PSModulePath = ($moduleParentPaths -join ';') + ';' + $originalModulePath
+
+Write-Host "Temporarily added project module paths to PSModulePath." -ForegroundColor DarkGray
 # --- MODULE SOURCING ---
 $FileLoadOrder = @(
     'modules/logger/logger.psd1',

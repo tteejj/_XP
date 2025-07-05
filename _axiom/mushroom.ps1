@@ -1,9 +1,9 @@
-# mushroom.ps1 - The Monolith Decomposer & Recomposer Toolkit (v6.0 - Hard-Coded)
+# mushroom.ps1 - The Monolith Decomposer & Recomposer Toolkit (v6.5 - Robust Block Removal)
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [string]$Command = 'help',
+    [string]$Command = 'recompose',
     
     [Parameter(Position = 1)]
     [string]$Path,
@@ -28,18 +28,32 @@ function Invoke-Recompose {
     param($SourceDir, $OutputPath)
     Write-Status "Recomposing project from '$SourceDir' into '$OutputPath'..."
     
-    # The master build order. This is the source of truth for dependencies.
     $SourceFileOrder = @(
-        'modules\exceptions\exceptions.psm1', 'modules\logger\logger.psm1', 'modules\event-system\event-system.psm1', 'modules\models\models.psm1',
-        'components\tui-primitives\tui-primitives.psm1', 'modules\theme-manager\theme-manager.psm1', 'components\ui-classes\ui-classes.psm1',
-        'layout\panels-class\panels-class.psm1', 'services\service-container\service-container.psm1', 'services\action-service\action-service.psm1',
-        'services\keybinding-service-class\keybinding-service-class.psm1', 'services\navigation-service-class\navigation-service-class.psm1',
-        'components\tui-components\tui-components.psm1', 'components\advanced-data-components\advanced-data-components.psm1',
-        'components\advanced-input-components\advanced-input-components.psm1', 'modules\dialog-system-class\dialog-system-class.psm1',
-        'modules\panic-handler\panic-handler.psm1', 'services\keybinding-service\keybinding-service.psm1', 'services\navigation-service\navigation-service.psm1',
-        'modules\tui-framework\tui-framework.psm1', 'components\command-palette\command-palette.psm1', 'modules\data-manager\data-manager.psm1',
-        'screens\dashboard-screen\dashboard-screen.psm1', 'screens\task-list-screen\task-list-screen.psm1', 'modules\tui-engine\tui-engine.psm1',
-        'run.ps1'
+        'modules\exceptions\exceptions.psm1',
+        'modules\logger\logger.psm1',
+        'modules\event-system\event-system.psm1',
+        'modules\models\models.psm1',
+        'components\tui-primitives\tui-primitives.psm1',
+        'modules\theme-manager\theme-manager.psm1',
+        'components\ui-classes\ui-classes.psm1',
+        'layout\panels-class\panels-class.psm1',
+        'services\service-container\service-container.psm1',
+        'services\action-service\action-service.psm1',
+        'services\keybinding-service-class\keybinding-service-class.psm1',
+        'services\navigation-service-class\navigation-service-class.psm1',
+        'components\tui-components\tui-components.psm1',
+        'components\advanced-data-components\advanced-data-components.psm1',
+        'components\advanced-input-components\advanced-input-components.psm1',
+        'modules\dialog-system-class\dialog-system-class.psm1',
+        'modules\panic-handler\panic-handler.psm1',
+        'services\keybinding-service\keybinding-service.psm1',
+        'services\navigation-service\navigation-service.psm1',
+        'modules\tui-framework\tui-framework.psm1',
+        'components\command-palette\command-palette.psm1',
+        'modules\data-manager\data-manager.psm1',
+        'screens\dashboard-screen\dashboard-screen.psm1',
+        'screens\task-list-screen\task-list-screen.psm1',
+        'modules\tui-engine\tui-engine.psm1'
     )
     
     $mainLogicSource = Join-Path $SourceDir 'run.ps1'
@@ -47,52 +61,73 @@ function Invoke-Recompose {
     
     $runnerContent = Get-Content -Path $mainLogicSource -Raw
     $paramBlock = if ($runnerContent -match '(?msi)(^param\s*\(.*?\))') { $matches[0] } else { '' }
-    $mainLogic = ($runnerContent -split '# --- MAIN EXECUTION LOGIC ---', 2)[-1]
+    $mainLogic = if ($runnerContent -match '(?msi)(# --- MAIN EXECUTION LOGIC ---.*)') { $matches[0] } else { $runnerContent }
 
-    # --- Build the Monolith ---
-    Write-Status "Assembling the monolith..."
-    $sb = [System.Text.StringBuilder]::new()
+    Write-Status "Scanning modules for using statements and content..."
+    $allUsingStatements = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $allCleanedContent = [System.Text.StringBuilder]::new()
 
-    # HARD-CODED using statements, as instructed. This is the definitive list.
-    [void]$sb.AppendLine("# --- HARD-CODED USING STATEMENTS ---")
-    [void]$sb.AppendLine("using namespace System.Collections.Concurrent")
-    [void]$sb.AppendLine("using namespace System.Collections.Generic")
-    [void]$sb.AppendLine("using namespace System.Management.Automation")
-    [void]$sb.AppendLine("using namespace System.Threading")
-    [void]$sb.AppendLine("using namespace System.Threading.Tasks")
-    [void]$sb.AppendLine("# --- END USING STATEMENTS ---")
-    [void]$sb.AppendLine()
-    
-    # Write the param() block AFTER using statements
-    [void]$sb.AppendLine($paramBlock)
-    [void]$sb.AppendLine()
-
-    $filesToEmbed = $SourceFileOrder | Where-Object { $_ -ne 'run.ps1' }
-    foreach ($path in $filesToEmbed) {
+    foreach ($path in $SourceFileOrder) {
         $fullPath = Join-Path $SourceDir $path
         if (-not (Test-Path $fullPath)) { Write-Warning "Source file '$fullPath' is missing. Skipping."; continue }
         
-        # Read the file line by line and STRIP ALL 'using' statements.
-        $cleanLines = Get-Content -Path $fullPath | Where-Object { -not $_.Trim().StartsWith('using ') }
-        $cleanContent = $cleanLines -join [System.Environment]::NewLine
+        if ($fullPath -eq $MyInvocation.MyCommand.Definition) {
+            Write-Warning "Skipping '$path' because it is the build script itself."
+            continue
+        }
+        
+        Write-Status "  -> Processing: $path" 'Gray'
+        $fileContent = Get-Content -Path $fullPath -Raw
+        
+        $usingMatches = [regex]::Matches($fileContent, '(?im)^using\s+namespace\s+.*')
+        foreach ($match in $usingMatches) {
+            [void]$allUsingStatements.Add($match.Value.Trim())
+        }
+        
+        # **THE FIX**: This regex handles single-line and multi-line Export-ModuleMember commands.
+        # (?s) is the "single line" flag, which makes '.' match newlines.
+        # It finds 'Export-ModuleMember' and matches everything until it finds a line that does NOT end with a backtick (`).
+        $exportBlockRegex = '(?is)Export-ModuleMember.*?(?<!`)(\r?\n)'
+        
+        $cleaned = $fileContent -replace '(?im)^using\s+(module|namespace)\s+.*' -replace $exportBlockRegex
 
-        Write-Status "  -> Embedding: $path" 'Gray'
-        [void]$sb.AppendLine("####$path")
-        [void]$sb.AppendLine($cleanContent.Trim())
-        [void]$sb.AppendLine()
+        [void]$allCleanedContent.AppendLine("####$path")
+        [void]$allCleanedContent.AppendLine($cleaned.Trim())
+        [void]$allCleanedContent.AppendLine()
     }
-
-    # Write the main logic at the very end
-    [void]$sb.AppendLine("####run.ps1")
-    [void]$sb.AppendLine($mainLogic.Trim())
     
-    Set-Content -Path $OutputPath -Value $sb.ToString() -Encoding UTF8
+    Write-Status "Assembling the monolith..."
+    $finalScript = [System.Text.StringBuilder]::new()
+
+    [void]$finalScript.AppendLine("# ==============================================================================")
+    [void]$finalScript.AppendLine("# Axiom-Phoenix v5.0 - MONOLITH SCRIPT")
+    [void]$finalScript.AppendLine("# Auto-generated by mushroom.ps1 on $(Get-Date)")
+    [void]$finalScript.AppendLine("# ==============================================================================")
+    [void]$finalScript.AppendLine()
+    
+    [void]$finalScript.AppendLine("# --- Global Using Statements ---")
+    foreach ($statement in $allUsingStatements | Sort-Object) {
+        [void]$finalScript.AppendLine($statement)
+    }
+    [void]$finalScript.AppendLine("# --- End Using Statements ---")
+    [void]$finalScript.AppendLine()
+    
+    [void]$finalScript.AppendLine($paramBlock)
+    [void]$finalScript.AppendLine()
+    
+    [void]$finalScript.Append($allCleanedContent.ToString())
+    
+    [void]$finalScript.AppendLine($mainLogic.Trim())
+
+    Set-Content -Path $OutputPath -Value $finalScript.ToString() -Encoding UTF8
     Write-Status "Recomposition complete! New monolith is at '$OutputPath'" "Green"
 }
 
-
 function Show-Help {
-    Write-Host "help"
+    Write-Host @"
+Mushroom - The Monolith Decomposer & Recomposer Toolkit (v6.5)
+(Help message...)
+"@
 }
 
 #==============================================================================
@@ -101,7 +136,7 @@ function Show-Help {
 try {
     switch ($Command.ToLower()) {
         'recompose' {
-            $sourceDir = if ($Path) { $Path } else { "." }
+            $sourceDir = if ($Path) { (Resolve-Path $Path).Path } else { $PSScriptRoot }
             Invoke-Recompose -SourceDir $sourceDir -OutputPath $Output
         }
         default { Show-Help }

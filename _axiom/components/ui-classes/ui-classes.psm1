@@ -20,21 +20,21 @@ class UIElement {
     [UIElement] $Parent = $null 
     [System.Collections.Generic.List[UIElement]] $Children 
     
-    hidden [TuiBuffer] $_private_buffer = $null
+    hidden [object] $_private_buffer = $null
     hidden [bool] $_needs_redraw = $true
     
     [hashtable] $Metadata = @{} 
 
     UIElement() {
         $this.Children = [System.Collections.Generic.List[UIElement]]::new()
-        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        $this._private_buffer = New-TuiBuffer -Width $this.Width -Height $this.Height -Name "$($this.Name).Buffer"
         Write-Verbose "UIElement 'Unnamed' created with default size ($($this.Width)x$($this.Height))."
     }
 
     UIElement([string]$name) {
         $this.Name = $name
         $this.Children = [System.Collections.Generic.List[UIElement]]::new()
-        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        $this._private_buffer = New-TuiBuffer -Width $this.Width -Height $this.Height -Name "$($this.Name).Buffer"
         Write-Verbose "UIElement '$($this.Name)' created with default size ($($this.Width)x$($this.Height))."
     }
 
@@ -46,7 +46,7 @@ class UIElement {
         $this.Width = $width
         $this.Height = $height
         $this.Children = [System.Collections.Generic.List[UIElement]]::new()
-        $this._private_buffer = [TuiBuffer]::new($width, $height, "Unnamed.Buffer")
+        $this._private_buffer = New-TuiBuffer -Width $width -Height $height -Name "Unnamed.Buffer"
         Write-Verbose "UIElement 'Unnamed' created at ($x, $y) with dimensions $($width)x$($height)."
     }
 
@@ -124,7 +124,7 @@ class UIElement {
             if ($null -ne $this._private_buffer) {
                 $this._private_buffer.Resize($newWidth, $newHeight)
             } else {
-                $this._private_buffer = [TuiBuffer]::new($newWidth, $newHeight, "$($this.Name).Buffer")
+                $this._private_buffer = New-TuiBuffer -Width $newWidth -Height $newHeight -Name "$($this.Name).Buffer"
                 Write-Verbose "Re-initialized buffer for '$($this.Name)' due to null buffer."
             }
             $this.RequestRedraw()
@@ -201,7 +201,7 @@ class UIElement {
             if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
                 $bufferWidth = [Math]::Max(1, $this.Width)
                 $bufferHeight = [Math]::Max(1, $this.Height)
-                $this._private_buffer = [TuiBuffer]::new($bufferWidth, $bufferHeight, "$($this.Name).Buffer")
+                $this._private_buffer = New-TuiBuffer -Width $bufferWidth -Height $bufferHeight -Name "$($this.Name).Buffer"
                 Write-Verbose "Re-initialized buffer for '$($this.Name)' due to null or dimension mismatch ($($bufferWidth)x$($bufferHeight))."
             }
             $this.OnRender()
@@ -219,7 +219,7 @@ class UIElement {
         }
     }
 
-    [TuiBuffer] GetBuffer() { return $this._private_buffer }
+    [object] GetBuffer() { return $this._private_buffer }
     
     [string] ToString() {
         return "$($this.GetType().Name)(Name='$($this.Name)', X=$($this.X), Y=$($this.Y), Width=$($this.Width), Height=$($this.Height), Visible=$($this.Visible))"

@@ -1,3 +1,4 @@
+####\modules\exceptions\exceptions.psm1
 # MODULE: exceptions.psm1
 # PURPOSE: Provides custom exception types and a centralized error handling wrapper.
 # This module integrates closely with the logging system to provide detailed error diagnostics.
