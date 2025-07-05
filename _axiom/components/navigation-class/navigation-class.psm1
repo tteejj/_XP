@@ -7,11 +7,11 @@
 # accessed via the CommandPalette (Ctrl+P).
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using namespace System.Management.Automation
-using namespace System.Collections.Generic
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Management.Automation
+#using namespace System.Collections.Generic
 
 #region Navigation Classes
 

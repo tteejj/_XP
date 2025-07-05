@@ -1,4 +1,4 @@
-using module 'tui-primitives'
+#using module 'tui-primitives'
 # ==============================================================================
 # PMC Terminal v5 - Base UI Class Hierarchy
 # Provides the foundational classes for all UI components with NCurses compositor support.

@@ -3,9 +3,9 @@
 #using module '../tui-primitives/tui-primitives.psd1'
 #using module '../../modules/theme-manager/theme-manager.psd1'
 #change these to this method as root is set in run at op
-using module ui-classes
-using module tui-primitives
-using module theme-manager
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
 
 
 # ==============================================================================

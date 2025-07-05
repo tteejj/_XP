@@ -3,12 +3,12 @@
 # Theme-aware, lifecycle-managed dialogs with modern promise-based API
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module tui-components
-using module theme-manager
-using namespace System.Management.Automation
-using namespace System.Threading.Tasks
+#using module ui-classes
+#using module tui-primitives
+#using module tui-components
+#using module theme-manager
+#using namespace System.Management.Automation
+#using namespace System.Threading.Tasks
 
 #region Base Dialog Class
 

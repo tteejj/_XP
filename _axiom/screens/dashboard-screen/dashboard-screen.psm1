@@ -3,10 +3,10 @@
 # A modern, theme-aware, and event-driven dashboard.
 # ==============================================================================
 
-using module ui-classes
-using module panels-class
-using module theme-manager
-using module logger
+#using module ui-classes
+#using module panels-class
+#using module theme-manager
+#using module logger
 
 class DashboardScreen : Screen {
     #region UI Components

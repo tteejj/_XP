@@ -30,11 +30,11 @@
 #    RequiredModules = @(
 #        @{
 #            ModuleName = 'tui-primitives'
-#            ModuleVersion = '1.0.0'
+#            ModuleVersion = '3.0.0'
 #        },
 #        @{
 #            ModuleName = 'exceptions'
-#            ModuleVersion = '1.0.0'
+#            ModuleVersion = '3.0.0'
 #        }
 #    )
     

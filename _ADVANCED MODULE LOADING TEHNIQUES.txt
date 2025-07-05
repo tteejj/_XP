@@ -1,0 +1,50 @@
+Discussion: Advanced Solutions for Complex Module Loading
+Given that the standard "PSModulePath + RequiredModules" approach is failing in this execution context, we need to explore more advanced, explicit strategies that force PowerShell to resolve the dependencies correctly.
+Option 1: The "Nested Import-Module" (The Explicit Tree-Walk)
+Instead of a flat load order in run.ps1, we can have our modules explicitly load their own dependencies using Import-Module inside the .psm1 file. This seems counter-intuitive and similar to the using module problem, but the key difference is when it happens.
+How It Works:
+In ui-classes.psm1, at the very top, we would write: Import-Module (Join-Path $PSScriptRoot '..\tui-primitives\tui-primitives.psd1') -Force.
+In panels-class.psm1, we would have Import-Module calls for ui-classes and tui-primitives.
+Why It Might Work: Import-Module is a runtime command, not a parse-time directive. The hope is that by the time the parser reaches the class definitions, the explicit Import-Module command at the top of the script has already run, making the types available.
+Verdict (High Risk): This is very likely to fail with the exact same runtime type pollution that using module caused. Each module would load its own copy of the dependencies, creating multiple, incompatible versions of [TuiBuffer] in memory. This is not a safe path.
+Option 2: The "Service Locator" Pattern for Classes (Dynamic Discovery)
+This is a more advanced pattern. We treat class types themselves as "services" that need to be discovered and provided.
+How It Works:
+We remove all strong type hints like [TuiBuffer] from the class definitions themselves.
+Generated powershell
+class UIElement {
+    # No [TuiBuffer] hint here
+    hidden $_private_buffer = $null 
+    
+    UIElement() {
+        # Find the type dynamically at runtime
+        $TuiBufferType = Get-TuiType -Name 'TuiBuffer' 
+        $this._private_buffer = $TuiBufferType::new(...)
+    }
+}
+Use code with caution.
+Powershell
+We would need a central registry, perhaps run.ps1, that uses Get-Command or reflection to find all class types in all modules and caches them in a global hashtable ($global:TuiTypes).
+Get-TuiType would just be a simple function to look up the type from this global cache.
+Why It Works: It completely sidesteps the parse-time problem. The parser sees no external types, so it succeeds. All type resolution is deferred to runtime, at which point all modules have been loaded and all types are available for discovery.
+Verdict (Powerful but Invasive): This is a very robust solution to the problem. However, it requires significant changes to every class constructor and method that references another class type. It also sacrifices the benefits of static typing and IntelliSense during development. It's a valid, powerful pattern, but it may be too drastic of a change.
+Option 3: The "Pre-Flight Script" (A Clean, Two-Stage Load)
+This is a variation of the monolithic/build idea, but without actually creating a monolith. It acknowledges that the main application script cannot reliably set up the environment and run the application in one pass.
+How It Works:
+We create a new file, loader.ps1. Its only job is to find all the .psm1 files that define classes and dot-source them into the global scope. It defines no functions and runs no logic.
+Generated powershell
+# loader.ps1
+# This script's only purpose is to define all classes globally.
+. ".\components\tui-primitives\tui-primitives.psm1"
+. ".\components\ui-classes\ui-classes.psm1"
+. ".\layout\panels-class\panels-class.psm1"
+# ... and so on for every file with classes
+Use code with caution.
+Powershell
+We modify run.ps1 to have two stages.
+Generated powershell
+# run.ps1
+
+# --- Stage 1: Pre-Flight - Load All Classes ---
+# We dot-source the loader script to pollute the global scope with all class
+# definitions *before* we

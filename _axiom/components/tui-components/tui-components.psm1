@@ -3,10 +3,10 @@
 # Core interactive UI components with theme integration and advanced features
 # ==============================================================================
 
-using module ui-classes
-using module tui-primitives
-using module theme-manager
-using namespace System.Management.Automation
+#using module ui-classes
+#using module tui-primitives
+#using module theme-manager
+#using namespace System.Management.Automation
 
 #region Core UI Components
 

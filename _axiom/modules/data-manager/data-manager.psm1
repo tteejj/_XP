@@ -1,7 +1,7 @@
 # Data Manager Module - Axiom-Phoenix v4.0 Enhancement
 # High-performance, transaction-safe, and lifecycle-aware data service.
 
-using module models
+#using module models
 
 function Initialize-DataManager {
     <#
