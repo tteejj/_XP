@@ -31,7 +31,6 @@ class UIElement {
         Write-Verbose "UIElement 'Unnamed' created with default size ($($this.Width)x$($this.Height))."
     }
 
-    # FIX: Removed invalid attributes
     UIElement([string]$name) {
         $this.Name = $name
         $this.Children = [System.Collections.Generic.List[UIElement]]::new()
@@ -39,7 +38,6 @@ class UIElement {
         Write-Verbose "UIElement '$($this.Name)' created with default size ($($this.Width)x$($this.Height))."
     }
 
-    # FIX: Removed invalid attributes
     UIElement([int]$x, [int]$y, [int]$width, [int]$height) {
         if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
         if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
@@ -64,7 +62,6 @@ class UIElement {
         return @{ X = $absX; Y = $absY }
     }
 
-    # FIX: Removed invalid attributes
     [void] AddChild([UIElement]$child) {
         try {
             if ($child -eq $this) { throw [System.ArgumentException]::new("Cannot add an element as its own child.") }
@@ -86,7 +83,6 @@ class UIElement {
         }
     }
 
-    # FIX: Removed invalid attributes
     [void] RemoveChild([UIElement]$child) {
         try {
             if ($this.Children.Remove($child)) {
@@ -111,7 +107,6 @@ class UIElement {
         Write-Verbose "Redraw requested for '$($this.Name)'."
     }
 
-    # FIX: Removed invalid attributes
     [void] Resize([int]$newWidth, [int]$newHeight) {
         if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
         if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
@@ -138,7 +133,6 @@ class UIElement {
         }
     }
 
-    # FIX: Removed invalid attributes
     [void] Move([int]$newX, [int]$newY) {
         if ($this.X -eq $newX -and $this.Y -eq $newY) {
             Write-Verbose "Move: Component '$($this.Name)' already at target position ($($newX), $($newY)). No change."
@@ -151,12 +145,10 @@ class UIElement {
         Write-Verbose "Component '$($this.Name)' moved to ($newX, $newY)."
     }
 
-    # FIX: Removed invalid attributes
     [bool] ContainsPoint([int]$x, [int]$y) {
         return ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height)
     }
 
-    # FIX: Removed invalid attributes
     [UIElement] GetChildAtPoint([int]$x, [int]$y) {
         for ($i = $this.Children.Count - 1; $i -ge 0; $i--) {
             $child = $this.Children[$i]
@@ -174,12 +166,10 @@ class UIElement {
         Write-Verbose "OnRender called for '$($this.Name)': Default buffer clear."
     }
 
-    # FIX: Removed invalid attributes
     [void] OnResize([int]$newWidth, [int]$newHeight) {
         Write-Verbose "OnResize called for '$($this.Name)': No custom resize logic."
     }
 
-    # FIX: Removed invalid attributes
     [void] OnMove([int]$newX, [int]$newY) {
         Write-Verbose "OnMove called for '$($this.Name)': No custom move logic."
     }
@@ -187,7 +177,6 @@ class UIElement {
     [void] OnFocus() { Write-Verbose "OnFocus called for '$($this.Name)'." }
     [void] OnBlur() { Write-Verbose "OnBlur called for '$($this.Name)'." }
 
-    # FIX: Removed invalid attributes
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         Write-Verbose "HandleInput called for '$($this.Name)': Key: $($keyInfo.Key)."
         return $false
@@ -235,7 +224,6 @@ class UIElement {
 
 #region Component - A generic container component
 class Component : UIElement {
-    # FIX: Removed invalid attributes
     Component([string]$name) : base($name) {
         $this.Name = $name
         Write-Verbose "Component '$($this.Name)' created."
@@ -258,10 +246,12 @@ class Screen : UIElement {
     [object]$ServiceContainer 
     [System.Collections.Generic.Dictionary[string, object]]$State
     [System.Collections.Generic.List[UIElement]] $Panels
-    [UIElement]$LastFocusedComponent
+    
+    # FIX: Removed the [UIElement] type hint to prevent cross-module conversion errors.
+    $LastFocusedComponent
+    
     hidden [System.Collections.Generic.Dictionary[string, string]] $EventSubscriptions 
 
-    # FIX: Removed invalid attributes
     Screen([string]$name, [hashtable]$services) : base($name) {
         $this.Services = $services
         $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
@@ -271,7 +261,6 @@ class Screen : UIElement {
         Write-Verbose "Screen '$($this.Name)' created with hashtable services."
     }
 
-    # FIX: Removed invalid attributes
     Screen([string]$name, [object]$serviceContainer) : base($name) {
         $this.ServiceContainer = $serviceContainer
         $this.Services = [hashtable]::new()
@@ -303,7 +292,6 @@ class Screen : UIElement {
     [void] OnExit() { Write-Verbose "OnExit called for Screen '$($this.Name)': Default (no-op)." }
     [void] OnResume() { Write-Verbose "OnResume called for Screen '$($this.Name)': Default (no-op)." }
 
-    # FIX: Removed invalid attributes
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         Write-Verbose "HandleInput called for Screen '$($this.Name)': Key: $($keyInfo.Key). Default (no-op)."
     }
@@ -338,7 +326,6 @@ class Screen : UIElement {
         }
     }
 
-    # FIX: Removed invalid attributes
     [void] AddPanel([UIElement]$panel) {
         try {
             $this.Panels.Add($panel)
@@ -351,7 +338,6 @@ class Screen : UIElement {
         }
     }
 
-    # FIX: Removed invalid attributes
     [void] SubscribeToEvent([string]$eventName, [scriptblock]$action) {
         try {
             if (Get-Command 'Subscribe-Event' -ErrorAction SilentlyContinue) {
@@ -378,6 +364,3 @@ class Screen : UIElement {
     }
 }
 #endregion
-
-# Export all public classes so they are available when the module is imported.
-# This is handled by the .psd1 manifest.

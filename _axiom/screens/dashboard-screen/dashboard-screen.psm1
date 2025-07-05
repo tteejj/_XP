@@ -25,11 +25,11 @@ class DashboardScreen : Screen {
     # Constructor is now minimal, only calling the base.
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
-    # OnInitialize is the correct lifecycle hook for one-time setup and child component creation.
-    [void] OnInitialize() {
+    # Initialize is the correct lifecycle hook for one-time setup and child component creation.
+    [void] Initialize() {
         # FIX: Defensive programming - check ServiceContainer exists
         if (-not $this.ServiceContainer) {
-            Write-Warning "DashboardScreen.OnInitialize: ServiceContainer is null"
+            Write-Warning "DashboardScreen.Initialize: ServiceContainer is null"
             return
         }
         
