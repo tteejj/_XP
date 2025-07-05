@@ -285,16 +285,45 @@ function Render-Frame {
     param()
     
     try {
+        # Clear the compositor buffer completely to prevent ghost text
         $global:TuiState.CompositorBuffer.Clear()
+        
+        # Render current screen to its buffer
         if ($global:TuiState.CurrentScreen) {
             $global:TuiState.CurrentScreen.Render()
             $global:TuiState.CompositorBuffer.BlendBuffer($global:TuiState.CurrentScreen.GetBuffer(), 0, 0)
         }
+        
+        # Render overlays on top with proper z-ordering
         foreach ($overlay in $global:TuiState.OverlayStack) {
-            $overlay.Render()
-            $global:TuiState.CompositorBuffer.BlendBuffer($overlay.GetBuffer(), $overlay.X, $overlay.Y)
+            # Clear the overlay area in the compositor first to prevent bleed-through
+            $overlayBuffer = $overlay.GetBuffer()
+            if ($overlayBuffer) {
+                # First clear the area where the overlay will be drawn
+                for ($y = 0; $y -lt $overlay.Height; $y++) {
+                    for ($x = 0; $x -lt $overlay.Width; $x++) {
+                        $compX = $overlay.X + $x
+                        $compY = $overlay.Y + $y
+                        if ($compX -ge 0 -and $compX -lt $global:TuiState.BufferWidth -and 
+                            $compY -ge 0 -and $compY -lt $global:TuiState.BufferHeight) {
+                            # Force clear by setting a higher z-index
+                            $clearCell = [TuiCell]::new(' ', [ConsoleColor]::White, [ConsoleColor]::Black)
+                            $clearCell.ZIndex = 1000
+                            $global:TuiState.CompositorBuffer.SetCell($compX, $compY, $clearCell)
+                        }
+                    }
+                }
+                
+                # Now render the overlay
+                $overlay.Render()
+                $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
+            }
         }
+        
+        # Render to console with improved diffing
         Render-CompositorToConsole
+        
+        # Swap buffers
         $temp = $global:TuiState.PreviousCompositorBuffer
         $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
         $global:TuiState.CompositorBuffer = $temp

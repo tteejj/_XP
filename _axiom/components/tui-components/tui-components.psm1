@@ -104,8 +104,10 @@ class ButtonComponent : UIElement {
                 $this.RequestRedraw()
                 
                 if ($this.OnClick) {
-                    Invoke-WithErrorHandling -Component "$($this.Name).OnClick" -ScriptBlock {
+                    try {
                         & $this.OnClick
+                    } catch {
+                        Write-Error "ButtonComponent '$($this.Name)': Error in OnClick handler: $($_.Exception.Message)"
                     }
                 }
                 
@@ -251,8 +253,10 @@ class TextBoxComponent : UIElement {
                 
                 # Trigger change event if text changed
                 if ($this.Text -ne $originalText -and $this.OnChange) {
-                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                    try {
                         & $this.OnChange -NewValue $this.Text
+                    } catch {
+                        Write-Error "TextBoxComponent '$($this.Name)': Error in OnChange handler: $($_.Exception.Message)"
                     }
                 }
                 
@@ -331,8 +335,10 @@ class CheckBoxComponent : UIElement {
                 $this.Checked = -not $this.Checked
                 
                 if ($this.OnChange) {
-                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                    try {
                         & $this.OnChange -NewValue $this.Checked
+                    } catch {
+                        Write-Error "CheckBoxComponent '$($this.Name)': Error in OnChange handler: $($_.Exception.Message)"
                     }
                 }
                 
@@ -402,8 +408,10 @@ class RadioButtonComponent : UIElement {
                     }
                     
                     if ($this.OnChange) {
-                        Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        try {
                             & $this.OnChange -NewValue $this.Selected
+                        } catch {
+                            Write-Error "RadioButtonComponent '$($this.Name)': Error in OnChange handler: $($_.Exception.Message)"
                         }
                     }
                     

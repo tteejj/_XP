@@ -69,12 +69,16 @@ class Dialog : UIElement {
         
         try {
             # Get theme colors
-            $bgColor = Get-ThemeColor 'dialog.background' -Fallback (Get-ThemeColor 'Background')
-            $borderColor = Get-ThemeColor 'dialog.border' -Fallback (Get-ThemeColor 'Border')
-            $titleColor = Get-ThemeColor 'dialog.title' -Fallback (Get-ThemeColor 'Accent')
+            $bgColor = Get-ThemeColor 'dialog.background' -Default (Get-ThemeColor 'Background')
+            $borderColor = Get-ThemeColor 'dialog.border' -Default (Get-ThemeColor 'Border')
+            $titleColor = Get-ThemeColor 'dialog.title' -Default (Get-ThemeColor 'Accent')
             
-            # Clear buffer and draw dialog
-            $this._private_buffer.Clear([TuiCell]::new(' ', $titleColor, $bgColor))
+            # Clear buffer with higher z-index for proper overlay rendering
+            $clearCell = [TuiCell]::new(' ', $titleColor, $bgColor)
+            $clearCell.ZIndex = 100  # Ensure dialog is above background content
+            $this._private_buffer.Clear($clearCell)
+            
+            # Draw dialog box
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Title " $($this.Title) " -BorderStyle "Double" -BorderColor $borderColor -BackgroundColor $bgColor
 
             # Render message if present
@@ -94,8 +98,8 @@ class Dialog : UIElement {
 
     hidden [void] _RenderMessage() {
         try {
-            $messageColor = Get-ThemeColor 'dialog.message' -Fallback (Get-ThemeColor 'Foreground')
-            $bgColor = Get-ThemeColor 'dialog.background' -Fallback (Get-ThemeColor 'Background')
+            $messageColor = Get-ThemeColor 'dialog.message' -Default (Get-ThemeColor 'Foreground')
+            $bgColor = Get-ThemeColor 'dialog.background' -Default (Get-ThemeColor 'Background')
             
             $messageY = 2
             $messageX = 2
@@ -147,8 +151,8 @@ class AlertDialog : Dialog {
     [void] RenderDialogContent() {
         try {
             # Get theme colors for button
-            $buttonFg = Get-ThemeColor 'dialog.button.focus.foreground' -Fallback (Get-ThemeColor 'Background')
-            $buttonBg = Get-ThemeColor 'dialog.button.focus.background' -Fallback (Get-ThemeColor 'Accent')
+            $buttonFg = Get-ThemeColor 'dialog.button.focus.foreground' -Default (Get-ThemeColor 'Background')
+            $buttonBg = Get-ThemeColor 'dialog.button.focus.background' -Default (Get-ThemeColor 'Accent')
             
             $buttonY = $this.Height - 2
             $buttonLabel = " [ OK ] "
@@ -184,10 +188,10 @@ class ConfirmDialog : Dialog {
     [void] RenderDialogContent() {
         try {
             # Get theme colors
-            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Fallback (Get-ThemeColor 'Foreground')
-            $normalBg = Get-ThemeColor 'dialog.button.normal.background' -Fallback (Get-ThemeColor 'Background')
-            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Fallback (Get-ThemeColor 'Background')
-            $focusBg = Get-ThemeColor 'dialog.button.focus.background' -Fallback (Get-ThemeColor 'Accent')
+            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Default (Get-ThemeColor 'Foreground')
+            $normalBg = Get-ThemeColor 'dialog.button.normal.background' -Default (Get-ThemeColor 'Background')
+            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Default (Get-ThemeColor 'Background')
+            $focusBg = Get-ThemeColor 'dialog.button.focus.background' -Default (Get-ThemeColor 'Accent')
             
             $buttonY = $this.Height - 3
             $buttons = @("  Yes  ", "  No   ")
@@ -267,9 +271,9 @@ class InputDialog : Dialog {
         try {
             # The textbox is a child, so the base UIElement.Render() will handle it.
             # We just need to render the buttons.
-            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Fallback (Get-ThemeColor 'Foreground')
-            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Fallback (Get-ThemeColor 'Accent')
-            $bgColor = Get-ThemeColor 'dialog.background' -Fallback (Get-ThemeColor 'Background')
+            $normalFg = Get-ThemeColor 'dialog.button.normal.foreground' -Default (Get-ThemeColor 'Foreground')
+            $focusFg = Get-ThemeColor 'dialog.button.focus.foreground' -Default (Get-ThemeColor 'Accent')
+            $bgColor = Get-ThemeColor 'dialog.background' -Default (Get-ThemeColor 'Background')
             
             $buttonY = $this.Height - 2
             $okLabel = "[ OK ]"

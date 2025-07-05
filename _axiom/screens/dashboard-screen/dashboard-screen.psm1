@@ -59,12 +59,23 @@ class DashboardScreen : Screen {
     }
 
     [void] OnEnter() {
+        Write-Verbose "DashboardScreen: OnEnter called"
+        
+        # Force a complete redraw of all panels
+        if ($this._summaryPanel) { $this._summaryPanel.RequestRedraw() }
+        if ($this._helpPanel) { $this._helpPanel.RequestRedraw() }
+        if ($this._statusPanel) { $this._statusPanel.RequestRedraw() }
+        if ($this._mainPanel) { $this._mainPanel.RequestRedraw() }
+        
         if ($this.ServiceContainer) {
             $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
         } else {
             Write-Warning "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
             $this._RefreshData($null)
         }
+        
+        # Force another redraw after data refresh
+        $this.RequestRedraw()
         
         if ($this._mainPanel -and (Get-Command Set-ComponentFocus -ErrorAction SilentlyContinue)) {
             Set-ComponentFocus -Component $this._mainPanel
@@ -97,34 +108,49 @@ class DashboardScreen : Screen {
         $panel = $this._summaryPanel
         if (-not $panel) { return }
         
+        Write-Verbose "DashboardScreen: Updating summary panel"
+        
+        # Clear the panel content completely
         $panel.ClearContent()
+        
+        # Force the panel to render its background
+        $panel.OnRender()
 
         $headerColor = Get-ThemeColor 'Header'
         $subtleColor = Get-ThemeColor 'Subtle'
         $defaultColor = Get-ThemeColor 'Foreground'
         $highlightColor = Get-ThemeColor 'Highlight'
+        $bgColor = Get-ThemeColor 'Background'
         
         $buffer = $panel.GetBuffer()
         $contentX = $panel.ContentX
         $contentY = $panel.ContentY
 
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY) -Text "Task Overview" -ForegroundColor $headerColor -BackgroundColor (Get-ThemeColor 'Background')
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * ($panel.ContentWidth - 2)) -ForegroundColor $subtleColor -BackgroundColor (Get-ThemeColor 'Background')
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY) -Text "Task Overview" -ForegroundColor $headerColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * ($panel.ContentWidth - 2)) -ForegroundColor $subtleColor -BackgroundColor $bgColor
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -ForegroundColor $defaultColor -BackgroundColor (Get-ThemeColor 'Background')
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -ForegroundColor $defaultColor -BackgroundColor (Get-ThemeColor 'Background')
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -ForegroundColor $defaultColor -BackgroundColor (Get-ThemeColor 'Background')
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
         
         $progress = $this._GetProgressBar()
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "Overall Progress:" -ForegroundColor $defaultColor -BackgroundColor (Get-ThemeColor 'Background')
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 8) -Text $progress -ForegroundColor $highlightColor -BackgroundColor (Get-ThemeColor 'Background')
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "Overall Progress:" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 8) -Text $progress -ForegroundColor $highlightColor -BackgroundColor $bgColor
+        
+        $panel.RequestRedraw()
     }
 
     hidden [void] _UpdateHelpPanel() {
         $panel = $this._helpPanel
         if (-not $panel) { return }
         
+        Write-Verbose "DashboardScreen: Updating help panel"
+        
+        # Clear the panel content completely
         $panel.ClearContent()
+        
+        # Force the panel to render its background
+        $panel.OnRender()
         
         $paletteHotkey = "Ctrl+P"
         
@@ -148,13 +174,21 @@ class DashboardScreen : Screen {
 
         Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 6) -Text "All navigation and actions are" -ForegroundColor $subtleColor -BackgroundColor $bgColor
         Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "now available from there." -ForegroundColor $subtleColor -BackgroundColor $bgColor
+        
+        $panel.RequestRedraw()
     }
     
     hidden [void] _UpdateStatusPanel() {
         $panel = $this._statusPanel
         if (-not $panel) { return }
         
+        Write-Verbose "DashboardScreen: Updating status panel"
+        
+        # Clear the panel content completely
         $panel.ClearContent()
+        
+        # Force the panel to render its background
+        $panel.OnRender()
 
         # FIX: Changed $PID to $global:PID to access the global automatic variable from within a class method.
         $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
@@ -173,6 +207,8 @@ class DashboardScreen : Screen {
         Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "PowerShell Version: $($global:PSVersionTable.PSVersion)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
         Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Platform:           $($global:PSVersionTable.Platform)" -ForegroundColor $defaultColor -BackgroundColor $bgColor
         Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Memory Usage:       $($memoryMB) MB" -ForegroundColor $defaultColor -BackgroundColor $bgColor
+        
+        $panel.RequestRedraw()
     }
 
     hidden [string] _GetProgressBar() {

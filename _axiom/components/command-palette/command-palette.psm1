@@ -143,7 +143,10 @@ class CommandPalette : UIElement {
             $selectionFg = Get-ThemeColor 'Background'
             $subtleColor = Get-ThemeColor 'Subtle'
             
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            # Clear buffer with higher z-index for proper overlay rendering
+            $clearCell = [TuiCell]::new(' ', $fgColor, $bgColor)
+            $clearCell.ZIndex = 100  # Ensure palette is above background content
+            $this._private_buffer.Clear($clearCell)
             
             $title = " Command Palette ($($this._filteredActions.Count)) "
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Title $title -BorderStyle "Double" -BorderColor $borderColor -BackgroundColor $bgColor

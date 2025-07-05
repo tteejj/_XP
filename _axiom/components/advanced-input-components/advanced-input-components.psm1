@@ -35,15 +35,15 @@ class MultilineTextBoxComponent : UIElement {
         
         try {
             # Get theme colors
-            $bgColor = Get-ThemeColor 'input.background' -Fallback (Get-ThemeColor 'Background')
+            $bgColor = Get-ThemeColor 'input.background' -Default (Get-ThemeColor 'Background')
             $borderColor = if ($this.IsFocused) { 
-                Get-ThemeColor 'input.border.focus' -Fallback (Get-ThemeColor 'Accent') 
+                Get-ThemeColor 'input.border.focus' -Default (Get-ThemeColor 'Accent') 
             } else { 
-                Get-ThemeColor 'input.border.normal' -Fallback (Get-ThemeColor 'Border') 
+                Get-ThemeColor 'input.border.normal' -Default (Get-ThemeColor 'Border') 
             }
-            $fgColor = Get-ThemeColor 'input.foreground' -Fallback (Get-ThemeColor 'Foreground')
-            $placeholderColor = Get-ThemeColor 'input.placeholder' -Fallback (Get-ThemeColor 'Subtle')
-            $cursorColor = Get-ThemeColor 'input.cursor' -Fallback (Get-ThemeColor 'Accent')
+            $fgColor = Get-ThemeColor 'input.foreground' -Default (Get-ThemeColor 'Foreground')
+            $placeholderColor = Get-ThemeColor 'input.placeholder' -Default (Get-ThemeColor 'Subtle')
+            $cursorColor = Get-ThemeColor 'input.cursor' -Default (Get-ThemeColor 'Accent')
             
             # Clear buffer and draw border
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))

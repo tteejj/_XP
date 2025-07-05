@@ -137,8 +137,25 @@ class TuiCell {
     # FIX: Removed the [TuiCell] type hint from the $other parameter
     # to prevent cross-module type conversion errors.
     [TuiCell] BlendWith([object]$other) {
-        if ($other.ZIndex -gt $this.ZIndex) { return $other }
-        if ($other.ZIndex -eq $this.ZIndex -and $other.Char -ne ' ') { return $other }
+        if ($null -eq $other) { return $this }
+        
+        # Always replace with source cell if it has a higher z-index
+        if ($other.ZIndex -gt $this.ZIndex) { 
+            return [TuiCell]::new($other)  # Return a copy to prevent reference issues
+        }
+        
+        # For equal z-index, blend based on content
+        if ($other.ZIndex -eq $this.ZIndex) {
+            # If other cell has actual content (non-space) or styling, use it
+            if ($other.Char -ne ' ' -or $other.Bold -or $other.Underline -or $other.Italic) {
+                return [TuiCell]::new($other)
+            }
+            # If other cell has different background color, use it (for filled backgrounds)
+            if ($other.BackgroundColor -ne $this.BackgroundColor) {
+                return [TuiCell]::new($other)
+            }
+        }
+        
         return $this
     }
 
@@ -146,12 +163,15 @@ class TuiCell {
     # to prevent cross-module type conversion errors.
     [bool] DiffersFrom([object]$other) {
         if ($null -eq $other) { return $true }
+        
+        # Check all properties for differences
         return ($this.Char -ne $other.Char -or 
                 $this.ForegroundColor -ne $other.ForegroundColor -or 
                 $this.BackgroundColor -ne $other.BackgroundColor -or
                 $this.Bold -ne $other.Bold -or
                 $this.Underline -ne $other.Underline -or
-                $this.Italic -ne $other.Italic)
+                $this.Italic -ne $other.Italic -or
+                $this.ZIndex -ne $other.ZIndex)  # Also check z-index for overlay changes
     }
 
     [string] ToAnsiString() {
@@ -320,6 +340,13 @@ function Write-TuiText {
         $baseCell.Bold = $Bold
         $baseCell.Underline = $Underline
         $baseCell.Italic = $Italic
+        # Preserve z-index from existing buffer content for proper overlay rendering
+        if ($X -ge 0 -and $X -lt $Buffer.Width -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
+            $existingCell = $Buffer.GetCell($X, $Y)
+            if ($existingCell -and $existingCell.ZIndex -gt 0) {
+                $baseCell.ZIndex = $existingCell.ZIndex
+            }
+        }
         $currentX = $X
         foreach ($char in $Text.ToCharArray()) {
             if ($currentX -ge $Buffer.Width) { break } 
@@ -368,15 +395,36 @@ function Write-TuiBox {
             return
         }
         $fillCell = [TuiCell]::new(' ', $BorderColor, $BackgroundColor)
+        # Preserve z-index from existing buffer content for proper overlay rendering
+        $existingCell = $Buffer.GetCell($drawStartX, $drawStartY)
+        if ($existingCell -and $existingCell.ZIndex -gt 0) {
+            $fillCell.ZIndex = $existingCell.ZIndex
+        }
         for ($currentY = $drawStartY; $currentY -lt $drawEndY; $currentY++) {
             for ($currentX = $drawStartX; $currentX -lt $drawEndX; $currentX++) {
                 $Buffer.SetCell($currentX, $currentY, [TuiCell]::new($fillCell))
             }
         }
-        if ($X -ge 0 -and $Y -ge 0) { $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.TopLeft, $BorderColor, $BackgroundColor)) }
-        if (($X + $Width - 1) -lt $Buffer.Width -and $Y -ge 0) { $Buffer.SetCell($X + $Width - 1, $Y, [TuiCell]::new($borders.TopRight, $BorderColor, $BackgroundColor)) }
-        if ($X -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.BottomLeft, $BorderColor, $BackgroundColor)) }
-        if (($X + $Width - 1) -lt $Buffer.Width -and ($Y + $Height - 1) -lt $Buffer.Height) { $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, [TuiCell]::new($borders.BottomRight, $BorderColor, $BackgroundColor)) }
+        if ($X -ge 0 -and $Y -ge 0) { 
+            $borderCell = [TuiCell]::new($borders.TopLeft, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X, $Y, $borderCell) 
+        }
+        if (($X + $Width - 1) -lt $Buffer.Width -and $Y -ge 0) { 
+            $borderCell = [TuiCell]::new($borders.TopRight, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X + $Width - 1, $Y, $borderCell) 
+        }
+        if ($X -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { 
+            $borderCell = [TuiCell]::new($borders.BottomLeft, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X, $Y + $Height - 1, $borderCell) 
+        }
+        if (($X + $Width - 1) -lt $Buffer.Width -and ($Y + $Height - 1) -lt $Buffer.Height) { 
+            $borderCell = [TuiCell]::new($borders.BottomRight, $BorderColor, $BackgroundColor)
+            $borderCell.ZIndex = $fillCell.ZIndex
+            $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, $borderCell) 
+        }
         for ($cx = 1; $cx -lt ($Width - 1); $cx++) {
             if (($X + $cx) -ge 0 -and ($X + $cx) -lt $Buffer.Width) {
                 if ($Y -ge 0 -and $Y -lt $Buffer.Height) { $Buffer.SetCell($X + $cx, $Y, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor)) }
