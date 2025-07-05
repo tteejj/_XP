@@ -1,0 +1,3686 @@
+Okay, let's proceed with the sixth significant improvement to pull from "Project Acta" into "Axiom-Phoenix." This step focuses on refining the core services that underpin your application's architecture.
+
+---
+
+### Improvement 6: Refined Core Services (Service Container, Action, Keybinding, Navigation)
+
+**1. Explanation of Value:**
+
+This set of changes makes your application's core services more robust, efficient, and easier to manage:
+
+*   **Enhanced `ServiceContainer`**:
+    *   **`IDisposable` Cleanup**: The `ServiceContainer` now tracks services that implement `System.IDisposable` and calls their `Dispose()` method during its own `Cleanup()` phase. This is critical for releasing resources (like file handles, network connections, or background threads) held by services when the application shuts down.
+    *   **Lazy Initialization & Singleton Management**: Factories are explicitly managed to create singletons once (lazy loading) or new instances on demand (transient).
+    *   **Improved Logging**: More detailed logging of service registration, resolution, and cleanup.
+*   **Refined `ActionService`**:
+    *   **Centralized Action Registry**: Continues to provide a single source of truth for all application commands, making them discoverable (e.g., for the Command Palette) and executable.
+    *   **Robust Execution**: Integrates with `Invoke-WithErrorHandling` for consistent error reporting during action execution.
+    *   **Event Publishing**: Actions like `app.exit` directly publish events, promoting a decoupled, event-driven architecture.
+    *   **Cleanup Integration**: The `ActionService` itself can now be disposed, ensuring it cleans up any internal event subscriptions.
+*   **Updated `KeybindingService`**:
+    *   **Separation of Concerns**: The class definition is now in `keybinding-service-class.psm1`, with a simple factory in `keybinding-service.psm1`.
+    *   **Consistent Binding**: Uses `ConsoleKeyInfo` directly for setting and checking bindings, allowing for more precise control over modifiers (Ctrl, Alt, Shift).
+    *   **Context Management**: `PushContext()` and `PopContext()` allow for context-specific keybindings (e.g., different shortcuts in a text editor vs. a file browser).
+    *   **Improved Logging**: More detailed logging for binding operations and key handling.
+*   **Updated `NavigationService`**:
+    *   **Separation of Concerns**: Class definition in `navigation-service-class.psm1`, factory in `navigation-service.psm1`.
+    *   **`ScreenFactory` Integration**: Uses a dedicated `ScreenFactory` to create screen instances, decoupling navigation logic from screen instantiation details.
+    *   **Robust Navigation**: `GoTo()`, `PushScreen()`, `PopScreen()` are wrapped with `Invoke-WithErrorHandling` for consistent error management.
+    *   **Lifecycle Awareness**: Explicitly calls `OnExit()`, `OnResume()`, `Initialize()` methods on screens during navigation transitions, ensuring screens properly manage their state.
+    *   **Event Publishing**: Publishes events (`Navigation.ScreenChanged`, `Navigation.ScreenPopped`, `Application.Exit`) to allow other parts of the application to react to navigation.
+
+**2. Relevant Code to Pull:**
+
+You'll need to **replace** the content of the following files in your Axiom-Phoenix structure:
+
+*   `services\service-container\service-container.psm1`
+*   `services\action-service\action-service.psm1`
+*   `services\keybinding-service\keybinding-service.psm1`
+*   `services\keybinding-service-class\keybinding-service-class.psm1`
+*   `services\navigation-service\navigation-service.psm1`
+*   `services\navigation-service-class\navigation-service-class.psm1`
+
+---
+
+**Code Block 1: `services\service-container\service-container.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v5.0 - Service Container
+# Provides a robust, centralized dependency injection container with lifecycle management.
+# ==============================================================================
+#Requires -Version 7.2
+
+function Initialize-ServiceContainer {
+    <#
+    .SYNOPSIS
+    Creates and returns a new instance of the ServiceContainer.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    return Invoke-WithErrorHandling -Component "ServiceContainer.Initialize" -Context "Creating new service container instance" -ScriptBlock {
+        Write-Verbose "ServiceContainer: Initializing new instance."
+        return [ServiceContainer]::new()
+    }
+}
+
+# The ServiceContainer is a central registry for application-wide services.
+# It supports lazy initialization, singleton/transient lifestyles, circular
+# dependency detection, and managed resource cleanup.
+class ServiceContainer : System.IDisposable { # Implement IDisposable for proper cleanup
+    #region Private State
+    hidden [hashtable] $_services = @{} # Stores eager-loaded instances
+    hidden [hashtable] $_serviceFactories = @{} # Stores factory scriptblocks and their info
+    # For circular dependency detection during resolution
+    hidden [System.Collections.Generic.HashSet[string]] $_resolutionChain = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase) 
+    #endregion
+
+    #region Constructor
+    ServiceContainer() {
+        Write-Log -Level Info -Message "ServiceContainer created."
+        Write-Verbose "ServiceContainer: Instance constructed."
+    }
+    #endregion
+
+    #region Public Methods
+    # Registers an already created service instance (eager loading).
+    [void] Register(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
+        [Parameter(Mandatory)][ValidateNotNull()][object]$serviceInstance
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "Register" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+
+            $this.{_services}[$name] = $serviceInstance
+            Write-Log -Level Debug -Message "Registered eager service instance: '$name'."
+            Write-Verbose "ServiceContainer: Registered eager instance for '$name' of type '$($serviceInstance.GetType().Name)'."
+        }
+    }
+
+    # Registers a factory scriptblock used to create the service on-demand (lazy loading).
+    [void] RegisterFactory(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
+        [Parameter(Mandatory)][ValidateNotNull()][scriptblock]$factory,
+        [bool]$isSingleton = $true # Determines if the factory returns a new instance each time or a shared singleton
+    ) {
+        Invoke-WithErrorHandling -Component "ServiceContainer" -Context "RegisterFactory" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
+                throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+            }
+            
+            $this.{_serviceFactories}[$name] = @{
+                Factory = $factory
+                IsSingleton = $isSingleton
+                Instance = $null # To hold the singleton instance once created
+            }
+            Write-Log -Level Debug -Message "Registered service factory: '$name' (Singleton: $isSingleton)."
+            Write-Verbose "ServiceContainer: Registered factory for '$name' (Singleton: $isSingleton)."
+        }
+    }
+
+    # Retrieves a service by its name.
+    [object] GetService([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+        return Invoke-WithErrorHandling -Component "ServiceContainer" -Context "GetService" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # 1. Return from eager-loaded services
+            if ($this.{_services}.ContainsKey($name)) {
+                Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."
+                return $this.{_services}[$name]
+            }
+
+            # 2. Check for a factory
+            if ($this.{_serviceFactories}.ContainsKey($name)) {
+                return $this._InitializeServiceFromFactory($name)
+            }
+
+            # 3. If not found, throw a detailed error
+            $available = $this.GetAllRegisteredServices() | Select-Object -ExpandProperty Name
+            throw [System.InvalidOperationException]::new("Service '$name' not found. Available services: $($available -join ', ')")
+        }
+    }
+    
+    # Retrieves a list of all registered services and their status.
+    [object[]] GetAllRegisteredServices() {
+        $list = [System.Collections.Generic.List[object]]::new()
+        
+        foreach ($key in $this.{_services}.Keys) {
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Instance'
+                Initialized = $true
+                Lifestyle = 'Singleton' # Eager instances are always singletons
+            })
+        }
+        
+        foreach ($key in $this.{_serviceFactories}.Keys) {
+            $factoryInfo = $this.{_serviceFactories}[$key]
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Factory'
+                Initialized = ($null -ne $factoryInfo.Instance)
+                Lifestyle = if ($factoryInfo.IsSingleton) { 'Singleton' } else { 'Transient' }
+            })
+        }
+        
+        return $list.ToArray() | Sort-Object Name
+    }
+
+    # Cleans up all managed singleton services that implement IDisposable.
+    [void] Dispose() {
+        Write-Log -Level Info -Message "ServiceContainer cleanup initiated."
+        Write-Verbose "ServiceContainer: Initiating cleanup of disposable singleton services."
+        
+        # Collect all singleton instances (eager-loaded and lazily-loaded)
+        $instancesToClean = [System.Collections.Generic.List[object]]::new()
+        $this.{_services}.Values | ForEach-Object { $instancesToClean.Add($_) }
+        $this.{_serviceFactories}.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
+
+        foreach ($service in $instancesToClean) {
+            if ($service -is [System.IDisposable]) {
+                try {
+                    Write-Verbose "ServiceContainer: Disposing service of type '$($service.GetType().FullName)'."
+                    $service.Dispose()
+                } catch {
+                    Write-Log -Level Error -Message "Error disposing service of type '$($service.GetType().FullName)': $($_.Exception.Message)"
+                }
+            }
+        }
+        
+        $this.{_services}.Clear()
+        $this.{_serviceFactories}.Clear()
+        $this.{_resolutionChain}.Clear() # Clear resolution chain state
+        Write-Log -Level Info -Message "ServiceContainer cleanup complete."
+        Write-Verbose "ServiceContainer: Cleanup complete. All service registries cleared."
+    }
+    #endregion
+
+    #region Private Methods
+    # The core logic for instantiating a service from its factory.
+    hidden [object] _InitializeServiceFromFactory([string]$name) {
+        $factoryInfo = $this.{_serviceFactories}[$name]
+        
+        # For singletons, if an instance already exists, return it immediately.
+        if ($factoryInfo.IsSingleton -and $null -ne $factoryInfo.Instance) {
+            Write-Verbose "ServiceContainer: Returning cached singleton instance of '$name'."
+            return $factoryInfo.Instance
+        }
+
+        # Circular dependency detection
+        if ($this.{_resolutionChain}.Contains($name)) {
+            $chain = ($this.{_resolutionChain} -join ' -> ') + " -> $name"
+            throw [System.InvalidOperationException]::new("Circular dependency detected while resolving service '$name'. Chain: $chain")
+        }
+        [void]$this.{_resolutionChain}.Add($name)
+        
+        Write-Log -Level Debug -Message "Instantiating service '$name' from factory."
+        Write-Verbose "ServiceContainer: Invoking factory to create instance of '$name'."
+        
+        try {
+            # Invoke the factory, passing the container itself as an argument if the factory accepts it.
+            # This allows factories to resolve their own dependencies from the container.
+            $serviceInstance = & $factoryInfo.Factory $this
+        }
+        finally {
+            # Ensure the service is removed from the resolution chain, even if instantiation fails.
+            [void]$this.{_resolutionChain}.Remove($name)
+        }
+
+        # If it's a singleton, cache the new instance.
+        if ($factoryInfo.IsSingleton) {
+            $factoryInfo.Instance = $serviceInstance
+            Write-Log -Level Debug -Message "Cached singleton instance of service '$name'."
+            Write-Verbose "ServiceContainer: Cached new singleton instance of '$name'."
+        }
+        
+        return $serviceInstance
+    }
+    #endregion
+}
+
+# Export the factory function
+Export-ModuleMember -Function Initialize-ServiceContainer
+```
+
+---
+
+**Code Block 2: `services\action-service\action-service.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# MODULE: action-service/action-service.psm1
+# PURPOSE: Provides a central registry for application-wide actions/commands.
+# ==============================================================================
+
+using namespace System.Management.Automation # For CmdletBinding, Parameter
+using namespace System.Collections.Generic # For List in GetAllActions
+using namespace System.Collections # For Hashtable
+
+# ------------------------------------------------------------------------------
+# Public Functions
+# ------------------------------------------------------------------------------
+
+function Initialize-ActionService {
+    <#
+    .SYNOPSIS
+    Initializes the central ActionService for the application.
+    .DESCRIPTION
+    This function creates and returns a new instance of the ActionService class,
+    which manages the registration, unregistration, and execution of application-wide commands.
+    #>
+    [CmdletBinding()]
+    param()
+
+    return Invoke-WithErrorHandling -Component "ActionService.Initialize" -Context "Initializing action service" -ScriptBlock {
+        Write-Verbose "ActionService: Initializing a new instance of ActionService."
+        $service = [ActionService]::new()
+        Write-Log -Level Info -Message "ActionService initialized."
+        return $service
+    }
+}
+
+# ------------------------------------------------------------------------------
+# ActionService Class
+# ------------------------------------------------------------------------------
+# The core component that manages the registry of application actions.
+class ActionService : System.IDisposable { # Implement IDisposable for proper cleanup
+    # Stores action definitions, mapping action names (string) to action details (hashtable).
+    [hashtable] $ActionRegistry = @{}
+    
+    # Manages internal event subscriptions made by ActionService itself for cleanup purposes.
+    # Maps event names (string) to handler IDs (string).
+    hidden [System.Collections.Generic.Dictionary[string, string]] $_eventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new() 
+
+    # Constructor: Called when a new instance of ActionService is created.
+    ActionService() {
+        Write-Verbose "ActionService: Constructor called."
+        # Register default application-level actions.
+        # These actions typically publish events for other services to handle.
+        # Note: These are now registered via `commands\global-commands.psm1`
+        # and not hardcoded here, but leaving for example if that's not setup yet.
+        # If global-commands.psm1 is used, remove these from here.
+        # $this.RegisterAction("app.exit", "Exits the PMC Terminal application.", {
+        #     Publish-Event -EventName "Application.Exit" -Data @{ Source = "ActionService"; Action = "AppExit" }
+        # }, "Application", $true)
+
+        # $this.RegisterAction("app.help", "Displays application help.", {
+        #     Publish-Event -EventName "App.HelpRequested" -Data @{ Source = "ActionService"; Action = "Help" }
+        # }, "Application", $true)
+
+        Write-Log -Level Info -Message "ActionService constructed."
+        Write-Verbose "ActionService: Instance created."
+    }
+
+    # RegisterAction: Registers a new action with the service.
+    # Actions are identified by a unique name and associated with a script block to execute.
+    [void] RegisterAction(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name, # Unique name for the action (e.g., "file.save")
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$description, # Short description for UIs (e.g., command palette)
+        [Parameter(Mandatory)][ValidateNotNull()][scriptblock]$scriptBlock, # The PowerShell script block to execute when the action is invoked
+        [string]$category = "General", # Category for grouping actions (e.g., "Application", "File", "Task")
+        [string]$hotkey = $null, # New: Optional hotkey string for display in UI (e.g. "Ctrl+S")
+        [switch]$Force # If specified, overwrite an existing action with the same name
+    ) {
+        if ($this.ActionRegistry.ContainsKey($name)) {
+            if (-not $Force) {
+                Write-Log -Level Warning -Message "Action '$name' already registered. Use -Force to overwrite."
+                Write-Verbose "ActionService: Skipping registration of '$name' as it already exists (no -Force)."
+                return
+            } else {
+                Write-Log -Level Info -Message "Action '$name' already registered. Overwriting due to -Force."
+                Write-Verbose "ActionService: Overwriting action '$name'."
+            }
+        }
+
+        # Store action details in the registry.
+        $this.ActionRegistry[$name] = @{
+            Name = $name;
+            Description = $description;
+            ScriptBlock = $scriptBlock;
+            Category = $category;
+            Hotkey = $hotkey; # Store the hotkey string
+            RegisteredAt = (Get-Date);
+        }
+        Write-Log -Level Debug -Message "Action '$name' registered."
+        Write-Verbose "ActionService: Action '$name' successfully registered."
+    }
+
+    # UnregisterAction: Removes an action from the service.
+    [void] UnregisterAction([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+        if ($this.ActionRegistry.ContainsKey($name)) {
+            $this.ActionRegistry.Remove($name)
+            Write-Log -Level Debug -Message "Action '$name' unregistered."
+            Write-Verbose "ActionService: Action '$name' successfully unregistered."
+        } else {
+            Write-Log -Level Warning -Message "Action '$name' not found, cannot unregister."
+            Write-Verbose "ActionService: Action '$name' not found for unregistration."
+        }
+    }
+
+    # ExecuteAction: Executes a registered action.
+    # The parameters hashtable is passed to the action's script block as $ActionParameters.
+    [void] ExecuteAction(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name, # Name of the action to execute
+        [Parameter()][hashtable]$parameters = @{} # Optional parameters to pass to the action's script block
+    ) {
+        if (-not $this.ActionRegistry.ContainsKey($name)) {
+            $errorMessage = "Attempted to execute unknown action: $name"
+            Write-Log -Level Error -Message $errorMessage -Data @{ ActionName = $name; Parameters = $parameters }
+            Write-Verbose "ActionService: Failed to execute action '$name' - not found."
+            throw [System.ArgumentException]::new($errorMessage, "name")
+        }
+
+        $action = $this.ActionRegistry[$name]
+        Write-Log -Level Info -Message "Executing action: $name" -Data @{ ActionName = $name; Parameters = $parameters }
+        Write-Verbose "ActionService: Preparing to execute action '$name'."
+
+        try {
+            # Pass parameters to the action's script block via a named parameter ($ActionParameters).
+            # This ensures a consistent contract for all action script blocks.
+            & $action.ScriptBlock -ActionParameters $parameters
+            Write-Verbose "ActionService: Action '$name' executed successfully."
+        } catch {
+            $errorMessage = "Action '$name' failed: $($_.Exception.Message)"
+            Write-Log -Level Error -Message $errorMessage -Data @{ ActionName = $name; ActionParameters = $parameters; ErrorDetails = $_.Exception.Message; FullError = $_ }
+            Write-Verbose "ActionService: Action '$name' execution failed: $($_.Exception.Message)."
+            throw # Re-throw to propagate the error, allowing Invoke-WithErrorHandling to catch it.
+        }
+    }
+
+    # GetAction: Retrieves the definition of a specific action.
+    [hashtable] GetAction([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+        Write-Verbose "ActionService: Retrieving action '$name'."
+        return $this.ActionRegistry[$name]
+    }
+
+    # GetAllActions: Retrieves a list of all registered action definitions.
+    # Returns a list of hashtables, each representing an action.
+    [System.Collections.Generic.List[hashtable]] GetAllActions() {
+        Write-Verbose "ActionService: Retrieving all registered actions."
+        # Filter out any null values (shouldn't happen with proper registration) and sort by name.
+        return @($this.ActionRegistry.Values | Where-Object { $_ -ne $null } | Sort-Object Name)
+    }
+
+    # Dispose: Performs necessary cleanup operations when the ActionService is no longer needed.
+    # This includes unsubscribing from any events it subscribed to and clearing its action registry.
+    [void] Dispose() {
+        # Unsubscribe from any events ActionService itself subscribed to.
+        # Assumes 'Unsubscribe-Event' from EventSystem module is globally available.
+        Write-Verbose "ActionService: Starting cleanup process."
+        foreach ($kvp in $this.{_eventSubscriptions}.GetEnumerator()) {
+            try {
+                Unsubscribe-Event -EventName $kvp.Key -HandlerId $kvp.Value
+                Write-Log -Level Debug -Message "ActionService: Unsubscribed from event '$($kvp.Key)' (HandlerId: $($kvp.Value))."
+                Write-Verbose "ActionService: Unsubscribed from event '$($kvp.Key)'."
+            } catch {
+                Write-Log -Level Warning -Message "ActionService: Failed to unsubscribe from event '$($kvp.Key)' (HandlerId: $($kvp.Value)): $($_.Exception.Message)"
+                Write-Verbose "ActionService: Failed to unsubscribe from event '$($kvp.Key)'. Error: $($_.Exception.Message)."
+            }
+        }
+        $this.{_eventSubscriptions}.Clear() # Clear tracking after attempting unsubscriptions.
+        
+        # Clear the action registry.
+        $this.ActionRegistry.Clear()
+        Write-Log -Level Info -Message "ActionService cleaned up."
+        Write-Verbose "ActionService: ActionRegistry cleared. Cleanup complete."
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Module Export
+# ------------------------------------------------------------------------------
+# Export the initialization function and the ActionService class, making them available when the module is imported.
+Export-ModuleMember -Function Initialize-ActionService -Class ActionService
+```
+
+---
+
+**Code Block 3: `services\keybinding-service\keybinding-service.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# MODULE: keybinding-service/keybinding-service.psm1
+# PURPOSE: Factory function for KeybindingService.
+# ==============================================================================
+
+function Initialize-KeybindingService {
+    <#
+    .SYNOPSIS
+    Creates a new instance of the KeybindingService class.
+    
+    .PARAMETER EnableChords
+    If specified, enables experimental key chord support.
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$EnableChords
+    )
+    
+    return Invoke-WithErrorHandling -Component "KeybindingService.Initialize" -Context "Creating KeybindingService instance" -ScriptBlock {
+        if ($EnableChords) {
+            return [KeybindingService]::new($true)
+        }
+        else {
+            return [KeybindingService]::new()
+        }
+    }
+}
+
+# Export the factory function
+Export-ModuleMember -Function Initialize-KeybindingService
+```
+
+---
+
+**Code Block 4: `services\keybinding-service-class\keybinding-service-class.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# MODULE: keybinding-service-class/keybinding-service-class.psm1
+# PURPOSE: Defines the KeybindingService class.
+# ==============================================================================
+
+using namespace System.Management.Automation # For ValidateNotNullOrEmpty, etc.
+using namespace System.Collections.Generic # For List
+using namespace System.Collections # For Hashtable
+
+class KeybindingService : System.IDisposable { # Implement IDisposable for proper cleanup
+    # Stores actionName (string) -> binding details (hashtable). Lowercased for case-insensitivity.
+    [hashtable] $KeyMap = @{}
+    # Stores actionName (string) -> scriptblock to execute globally.
+    [hashtable] $GlobalHandlers = @{}
+    # Manages the active context stack for hierarchical keybindings.
+    [System.Collections.Generic.List[string]] $ContextStack
+    # Flag to enable/disable experimental key chord support.
+    [bool] $EnableChords = $false
+    # Stores event subscriptions for cleanup.
+    hidden [System.Collections.Generic.Dictionary[string, string]] $_eventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new() 
+
+    # Constructor with optional chord support.
+    KeybindingService() {
+        $this.ContextStack = [System.Collections.Generic.List[string]]::new()
+        $this.InitializeDefaultBindings()
+        Write-Log -Level Info -Message "KeybindingService initialized."
+    }
+
+    KeybindingService([bool]$enableChords) {
+        $this.ContextStack = [System.Collections.Generic.List[string]]::new()
+        $this.EnableChords = $enableChords
+        $this.InitializeDefaultBindings()
+        Write-Log -Level Info -Message "KeybindingService initialized with chords enabled: $enableChords."
+    }
+
+    # Initializes a set of common, default keybindings.
+    hidden [void] InitializeDefaultBindings() {
+        # This is where general application keybindings are defined.
+        # Note: In a larger application, some of these might be moved to a global-commands.psm1 file
+        # which uses ActionService and KeybindingService to set up.
+        # Leaving these here as a strong default if no external commands are present.
+        $this.SetBinding("app.exit", 'Q', @("Ctrl"))
+        $this.SetBinding("app.help", [System.ConsoleKey]::F1, @())
+        
+        $this.SetBinding("nav.back", [System.ConsoleKey]::Escape, @())
+        $this.SetBinding("nav.up", [System.ConsoleKey]::UpArrow, @())
+        $this.SetBinding("nav.down", [System.ConsoleKey]::DownArrow, @())
+        $this.SetBinding("nav.left", [System.ConsoleKey]::LeftArrow, @())
+        $this.SetBinding("nav.right", [System.ConsoleKey]::RightArrow, @())
+        $this.SetBinding("nav.select", [System.ConsoleKey]::Enter, @())
+        $this.SetBinding("nav.pageup", [System.ConsoleKey]::PageUp, @())
+        $this.SetBinding("nav.pagedown", [System.ConsoleKey]::PageDown, @())
+        $this.SetBinding("nav.home", [System.ConsoleKey]::Home, @())
+        $this.SetBinding("nav.end", [System.ConsoleKey]::End, @())
+        $this.SetBinding("nav.tab", [System.ConsoleKey]::Tab, @())
+        $this.SetBinding("nav.shifttab", [System.ConsoleKey]::Tab, @("Shift"))
+        
+        $this.SetBinding("edit.delete", [System.ConsoleKey]::Delete, @())
+        $this.SetBinding("edit.backspace", [System.ConsoleKey]::Backspace, @())
+        $this.SetBinding("edit.new", 'N', @())
+        $this.SetBinding("edit.save", 'S', @("Ctrl"))
+        
+        $this.SetBinding("app.refresh", [System.ConsoleKey]::F5, @())
+        
+        Write-Log -Level Debug -Message "KeybindingService: Default keybindings initialized."
+    }
+
+    # Sets a keybinding for a given action using a ConsoleKey.
+    [void] SetBinding([string]$actionName, [System.ConsoleKey]$key, [string[]]$modifiers) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "SetBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) { throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName") }
+            $this.KeyMap[$actionName.ToLower()] = @{
+                Key = $key; # Stores the ConsoleKey enum value
+                KeyChar = ([char]0); # No specific character, as it's a special key
+                Modifiers = if ($modifiers) { @($modifiers | Sort-Object) } else { @() } # Normalize modifiers
+            }
+            Write-Log -Level Debug -Message "Set keybinding: $actionName -> $key $($modifiers -join '+')"
+        }
+    }
+
+    # Sets a keybinding for a given action using a character.
+    [void] SetBinding([string]$actionName, [char]$key, [string[]]$modifiers) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "SetBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) { throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName") }
+            $this.KeyMap[$actionName.ToLower()] = @{
+                Key = $key; # Stores the char value
+                KeyChar = $key; # Redundant but explicit
+                Modifiers = if ($modifiers) { @($modifiers | Sort-Object) } else { @() }
+            }
+            Write-Log -Level Debug -Message "Set keybinding: $actionName -> '$key' $($modifiers -join '+')"
+        }
+    }
+
+    # Sets a keybinding for a given action using a ConsoleKeyInfo object (useful for capturing live input).
+    [void] SetBinding([string]$actionName, [System.ConsoleKeyInfo]$keyInfo) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "SetBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) { throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName") }
+            
+            $modifiers = [System.Collections.Generic.List[string]]::new()
+            if (($keyInfo.Modifiers -band [System.ConsoleModifiers]::Control) -ne 0) { [void]$modifiers.Add("Ctrl") }
+            if (($keyInfo.Modifiers -band [System.ConsoleModifiers]::Alt) -ne 0) { [void]$modifiers.Add("Alt") }
+            if (($keyInfo.Modifiers -band [System.ConsoleModifiers]::Shift) -ne 0) { [void]$modifiers.Add("Shift") }
+            
+            $this.KeyMap[$actionName.ToLower()] = @{
+                Key = $keyInfo.Key;
+                KeyChar = $keyInfo.KeyChar;
+                Modifiers = $modifiers.ToArray() | Sort-Object; # Normalize modifiers
+            }
+            Write-Log -Level Debug -Message "Set keybinding for '$actionName': $($this.GetBindingDescription($actionName))"
+        }
+    }
+
+    # Removes a keybinding for a given action.
+    [void] RemoveBinding([string]$actionName) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "RemoveBinding:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) { return }
+            $normalizedName = $actionName.ToLower()
+            if ($this.KeyMap.ContainsKey($normalizedName)) {
+                $this.KeyMap.Remove($normalizedName)
+                Write-Log -Level Debug -Message "Removed keybinding: $actionName"
+            }
+        }
+    }
+
+    # Checks if a given ConsoleKeyInfo matches a specific action, optionally within a context.
+    [bool] IsAction([string]$actionName, [System.ConsoleKeyInfo]$keyInfo, [string]$context = $null) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "IsAction:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) { return $false }
+            $normalizedName = $actionName.ToLower()
+            if (-not $this.KeyMap.ContainsKey($normalizedName)) { return $false }
+
+            $binding = $this.KeyMap[$normalizedName]
+
+            # 1. Check if the primary key matches.
+            $keyMatches = $false
+            if ($binding.Key -is [System.ConsoleKey]) {
+                $keyMatches = ($keyInfo.Key -eq $binding.Key)
+            } elseif ($binding.Key -is [char]) {
+                # Case-insensitive comparison for character keys
+                $keyMatches = $keyInfo.KeyChar.ToString().Equals($binding.Key.ToString(), [System.StringComparison]::OrdinalIgnoreCase)
+            } else {
+                # Fallback for unexpected types (shouldn't happen with strict SetBinding)
+                Write-Log -Level Warning -Message "Keybinding '$actionName' has unexpected Key type: $($binding.Key.GetType().Name)."
+                return $false
+            }
+
+            if (-not $keyMatches) { return $false }
+
+            # 2. Check modifiers.
+            # Convert incoming modifiers to a sorted list for consistent comparison.
+            $actualModifiers = [System.Collections.Generic.List[string]]::new()
+            if (($keyInfo.Modifiers -band [System.ConsoleModifiers]::Control) -ne 0) { [void]$actualModifiers.Add("Ctrl") }
+            if (($keyInfo.Modifiers -band [System.ConsoleModifiers]::Alt) -ne 0) { [void]$actualModifiers.Add("Alt") }
+            if (($keyInfo.Modifiers -band [System.ConsoleModifiers]::Shift) -ne 0) { [void]$actualModifiers.Add("Shift") }
+            $actualModifiers = $actualModifiers.ToArray() | Sort-Object
+
+            # Compare modifier arrays.
+            # Using -join '' to create a comparable string from sorted arrays for quick check.
+            return (($actualModifiers -join '') -eq ($binding.Modifiers -join ''))
+        }
+    }
+
+    # Finds the action name associated with a given ConsoleKeyInfo.
+    [string] GetAction([System.ConsoleKeyInfo]$keyInfo) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "GetAction" -ScriptBlock {
+            foreach ($actionName in $this.KeyMap.Keys) {
+                if ($this.IsAction($actionName, $keyInfo)) {
+                    return $actionName
+                }
+            }
+            return $null
+        }
+    }
+
+    # Registers a scriptblock to be executed when a specific action is triggered globally.
+    [void] RegisterGlobalHandler([string]$actionName, [scriptblock]$handler) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "RegisterGlobalHandler:$actionName" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($actionName)) { throw [System.ArgumentException]::new("Action name cannot be null or empty", "actionName") }
+            if ($null -eq $handler) { throw [System.ArgumentNullException]::new("handler", "Handler cannot be null") }
+            $this.GlobalHandlers[$actionName.ToLower()] = $handler
+            Write-Log -Level Debug -Message "Registered global handler: $actionName"
+        }
+    }
+
+    # Handles a key press, executing a global handler if found, or returning the action name.
+    # Prioritizes actions based on the current context stack.
+    [object] HandleKey([System.ConsoleKeyInfo]$keyInfo) {
+        return Invoke-WithErrorHandling -Component "KeybindingService" -Context "HandleKey" -ScriptBlock {
+            # 1. Check for action in current context (top of stack)
+            $currentContext = $this.GetCurrentContext()
+            if ($currentContext -ne "global") {
+                foreach ($actionName in $this.KeyMap.Keys) {
+                    # This implies a naming convention like "context.actionName"
+                    if ($actionName.StartsWith("$($currentContext).") -and $this.IsAction($actionName, $keyInfo)) {
+                        # If a global handler exists for this action, execute it.
+                        if ($this.GlobalHandlers.ContainsKey($actionName)) {
+                            Write-Log -Level Debug -Message "Executing contextual global handler: $actionName (Context: $currentContext)"
+                            try { return & $this.GlobalHandlers[$actionName] -KeyInfo $keyInfo -Context $currentContext }
+                            catch { Write-Log -Level Error -Message "Contextual global handler failed for '$actionName': $_"; return $null }
+                        }
+                        # Otherwise, return the action name for component-specific handling.
+                        return $actionName
+                    }
+                }
+            }
+            
+            # 2. Check for action in global context
+            foreach ($actionName in $this.KeyMap.Keys) {
+                # Skip actions that are explicitly tied to a context if we're looking globally.
+                # This assumes context names don't clash with global action names (e.g., "app.exit" vs "edit.copy").
+                if ($actionName.Contains('.') -and (-not $actionName.StartsWith("app."))) { continue } 
+
+                if ($this.IsAction($actionName, $keyInfo)) {
+                    # If a global handler exists for this action, execute it.
+                    if ($this.GlobalHandlers.ContainsKey($actionName)) {
+                        Write-Log -Level Debug -Message "Executing global handler: $actionName"
+                        try { return & $this.GlobalHandlers[$actionName] -KeyInfo $keyInfo -Context "global" }
+                        catch { Write-Log -Level Error -Message "Global handler failed for '$actionName': $_"; return $null }
+                    }
+                    # Otherwise, return the action name for component-specific handling.
+                    return $actionName
+                }
+            }
+            return $null # No action found for this key.
+        }
+    }
+
+    # Pushes a new keybinding context onto the stack.
+    [void] PushContext([string]$context) {
+        if (-not [string]::IsNullOrWhiteSpace($context)) {
+            if ($this.ContextStack.Count -gt 0 -and $this.ContextStack[-1] -eq $context) {
+                Write-Verbose "KeybindingService: Context '$context' is already top of stack. Skipping push."
+                return
+            }
+            $this.ContextStack.Add($context)
+            Write-Log -Level Debug -Message "Pushed keybinding context: $context (Stack depth: $($this.ContextStack.Count))"
+        }
+    }
+
+    # Pops the current keybinding context from the stack.
+    [string] PopContext() {
+        if ($this.ContextStack.Count -gt 0) {
+            $context = $this.ContextStack[-1]
+            $this.ContextStack.RemoveAt($this.ContextStack.Count - 1)
+            Write-Log -Level Debug -Message "Popped keybinding context: $context (Stack depth: $($this.ContextStack.Count))"
+            return $context
+        }
+        return $null # No context to pop.
+    }
+
+    # Gets the current active keybinding context.
+    [string] GetCurrentContext() {
+        if ($this.ContextStack.Count -gt 0) {
+            return $this.ContextStack[-1]
+        }
+        return "global" # Default context.
+    }
+
+    # Provides a human-readable description of a keybinding for display in UIs.
+    [string] GetBindingDescription([string]$actionName) {
+        if ([string]::IsNullOrWhiteSpace($actionName)) { return $null }
+        $normalizedName = $actionName.ToLower()
+        if (-not $this.KeyMap.ContainsKey($normalizedName)) { return "Unbound" }
+
+        $binding = $this.KeyMap[$normalizedName]
+        $keyStr = if ($binding.ContainsKey('KeyChar') -and $binding.KeyChar -ne [char]0) {
+            $binding.KeyChar.ToString().ToUpper() # Character keys (e.g., 'A', '1')
+        } elseif ($binding.Key -is [System.ConsoleKey]) {
+            $binding.Key.ToString() # Special keys (e.g., 'Enter', 'F5')
+        } else {
+            $binding.Key.ToString().ToUpper() # Fallback
+        }
+
+        if ($binding.Modifiers.Count -gt 0) {
+            return "$($binding.Modifiers -join '+') + $keyStr"
+        }
+        return $keyStr
+    }
+
+    # Gets all registered keybindings.
+    [hashtable] GetAllBindings([bool]$groupByCategory = $false) {
+        if (-not $groupByCategory) { return $this.KeyMap.Clone() }
+
+        $grouped = [hashtable]::new()
+        foreach ($action in $this.KeyMap.Keys) {
+            $parts = $action.Split('.')
+            $category = if ($parts.Count -gt 1) { $parts[0] } else { "General" }
+            if (-not $grouped.ContainsKey($category)) { $grouped[$category] = [hashtable]::new() }
+            $grouped[$category][$action] = $this.KeyMap[$action]
+        }
+        return $grouped
+    }
+
+    # Exports current keybindings to a JSON file.
+    [void] ExportBindings([string]$path) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "ExportBindings" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) { throw [System.ArgumentException]::new("Path cannot be null or empty", "path") }
+            $this.KeyMap | ConvertTo-Json -Depth 3 | Out-File -FilePath $path -Encoding UTF8
+            Write-Log -Level Info -Message "Exported keybindings to: $path"
+        }
+    }
+
+    # Imports keybindings from a JSON file, merging with existing.
+    [void] ImportBindings([string]$path) {
+        Invoke-WithErrorHandling -Component "KeybindingService" -Context "ImportBindings" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) { throw [System.ArgumentException]::new("Path cannot be null or empty", "path") }
+            if (-not (Test-Path $path)) { Write-Log -Level Warning -Message "Keybindings file not found: $path"; return }
+
+            try {
+                $imported = Get-Content $path -Raw | ConvertFrom-Json -AsHashtable
+                if ($null -eq $imported) { throw "Imported content is null or not a valid JSON object." }
+
+                foreach ($propName in $imported.Keys) {
+                    $propValue = $imported[$propName]
+                    if ($null -eq $propValue -or -not ($propValue -is [hashtable]) -or -not $propValue.ContainsKey('Key') -or -not $propValue.ContainsKey('Modifiers')) {
+                        Write-Log -Level Warning -Message "Skipping invalid keybinding entry for '$propName'."
+                        continue
+                    }
+                    
+                    # Ensure modifiers are an array of strings
+                    $modifiers = if ($propValue.Modifiers -is [array]) { $propValue.Modifiers } else { @($propValue.Modifiers) }
+
+                    # Try to reconstruct proper binding parameters
+                    if ($propValue.Key -is [string]) {
+                        if ($propValue.Key.Length -eq 1) {
+                            $this.SetBinding($propName, [char]$propValue.Key, $modifiers)
+                        } else {
+                            try {
+                                $consoleKey = [System.ConsoleKey]::Parse([System.ConsoleKey], $propValue.Key, $true)
+                                $this.SetBinding($propName, $consoleKey, $modifiers)
+                            } catch {
+                                Write-Log -Level Warning -Message "Skipping keybinding '$propName': Invalid ConsoleKey value '$($propValue.Key)'. Error: $($_.Exception.Message)"
+                            }
+                        }
+                    } elseif ($propValue.Key -is [System.ConsoleKey]) {
+                        $this.SetBinding($propName, $propValue.Key, $modifiers)
+                    } else {
+                         Write-Log -Level Warning -Message "Skipping keybinding '$propName': Unexpected Key type '$($propValue.Key.GetType().Name)'."
+                    }
+                }
+                Write-Log -Level Info -Message "Imported keybindings from: $path"
+            } catch {
+                Write-Log -Level Error -Message "Failed to import keybindings from '$path': $($_.Exception.Message)"
+                throw # Re-throw for Invoke-WithErrorHandling
+            }
+        }
+    }
+    
+    # Dispose: Cleans up resources held by the KeybindingService.
+    [void] Dispose() {
+        Write-Log -Level Info -Message "KeybindingService disposing."
+        # Clear all registries. Event subscriptions are handled by the global EventSystem.
+        $this.KeyMap.Clear()
+        $this.GlobalHandlers.Clear()
+        $this.ContextStack.Clear()
+        Write-Verbose "KeybindingService: Dispose complete."
+    }
+}
+```
+
+---
+
+**Code Block 5: `services\navigation-service\navigation-service.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# MODULE: navigation-service/navigation-service.psm1
+# PURPOSE: Factory function for NavigationService.
+# ==============================================================================
+
+function Initialize-NavigationService {
+    <#
+    .SYNOPSIS
+    Creates and returns a new instance of the NavigationService class.
+    
+    .PARAMETER ServiceContainer
+    The application's ServiceContainer instance.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.Hashtable]$ServiceContainer # Expects the full ServiceContainer object
+    )
+    
+    return Invoke-WithErrorHandling -Component "NavigationService.Initialize" -Context "Creating NavigationService instance" -ScriptBlock {
+        Write-Verbose "NavigationService: Initializing new instance."
+        return [NavigationService]::new($ServiceContainer)
+    }
+}
+
+# Export the factory function
+Export-ModuleMember -Function Initialize-NavigationService
+```
+
+---
+
+**Code Block 6: `services\navigation-service-class\navigation-service-class.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# MODULE: navigation-service-class/navigation-service-class.psm1
+# PURPOSE: Defines the NavigationService and ScreenFactory classes.
+# ==============================================================================
+
+using namespace System.Management.Automation # For CmdletBinding, Parameter
+using namespace System.Collections.Generic # For List, Stack, Dictionary
+using namespace System.Collections # For Hashtable
+
+# ScreenFactory: Responsible for creating screen instances.
+# Decouples the NavigationService from direct knowledge of screen constructors.
+class ScreenFactory {
+    # Reference to the main service container to pass to screen constructors.
+    hidden [System.Collections.Hashtable] $_serviceContainer 
+    # Registry of screen names (string) to their corresponding Type objects.
+    hidden [System.Collections.Generic.Dictionary[string, type]] $_screenTypes = [System.Collections.Generic.Dictionary[string, type]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    ScreenFactory([Parameter(Mandatory)][System.Collections.Hashtable]$serviceContainer) {
+        $this.{_serviceContainer} = $serviceContainer
+        Write-Log -Level Debug -Message "ScreenFactory initialized."
+    }
+
+    # Registers a screen type with a given name.
+    [void] RegisterScreen([Parameter(Mandatory)][string]$name, [Parameter(Mandatory)][type]$screenType) {
+        if (-not ($screenType -eq [Screen] -or $screenType.IsSubclassOf([Screen]))) {
+            throw [System.ArgumentException]::new("Screen type '$($screenType.Name)' must inherit from the Screen class.", "screenType")
+        }
+        if ($this.{_screenTypes}.ContainsKey($name)) {
+            Write-Log -Level Warning -Message "Screen type '$name' already registered. Overwriting."
+        }
+        $this.{_screenTypes}[$name] = $screenType
+        Write-Log -Level Info -Message "Registered screen factory: $name -> $($screenType.Name)."
+    }
+
+    # Creates a new instance of a registered screen.
+    [Screen] CreateScreen([Parameter(Mandatory)][string]$screenName, [hashtable]$parameters = @{}) {
+        $screenType = $this.{_screenTypes}[$screenName]
+        if ($null -eq $screenType) {
+            $availableScreens = $this.{_screenTypes}.Keys -join ', '
+            throw [System.ArgumentException]::new("Unknown screen type: '$screenName'. Available screens: $availableScreens", "screenName")
+        }
+
+        try {
+            # Instantiate the screen, passing the ServiceContainer.
+            $screen = $screenType::new($screenName, $this.{_serviceContainer})
+            
+            # Apply any initial parameters to the screen's State.
+            if ($parameters) {
+                foreach ($key in $parameters.Keys) {
+                    $screen.State[$key] = $parameters[$key]
+                }
+            }
+            Write-Log -Level Info -Message "Created screen: $screenName."
+            return $screen
+        } catch {
+            Write-Log -Level Error -Message "Failed to create screen '$screenName': $($_.Exception.Message)."
+            throw
+        }
+    }
+
+    # Gets a list of all registered screen names.
+    [string[]] GetRegisteredScreens() {
+        return @($this.{_screenTypes}.Keys)
+    }
+}
+
+# NavigationService: Manages the application's screen navigation stack.
+class NavigationService : System.IDisposable { # Implement IDisposable for cleanup
+    # Stack of previous screens.
+    [System.Collections.Generic.Stack[Screen]] $ScreenStack
+    # Factory to create new screen instances.
+    [ScreenFactory] $ScreenFactory
+    # The currently active screen.
+    [Screen] $CurrentScreen
+    # Reference to the main service container for dependency resolution.
+    [System.Collections.Hashtable] $ServiceContainer 
+    # Maps paths (string) to screen names (string).
+    [hashtable] $RouteMap = @{}
+
+    NavigationService([Parameter(Mandatory)][System.Collections.Hashtable]$serviceContainer) {
+        $this.ServiceContainer = $serviceContainer
+        $this.ScreenStack = [System.Collections.Generic.Stack[Screen]]::new()
+        $this.ScreenFactory = [ScreenFactory]::new($serviceContainer)
+        $this.InitializeRoutes()
+        Write-Log -Level Info -Message "NavigationService initialized."
+    }
+
+    # Defines the application's navigation routes.
+    hidden [void] InitializeRoutes() {
+        # Define your application's internal routes here.
+        $this.RouteMap = @{
+            "/" = "DashboardScreen"
+            "/dashboard" = "DashboardScreen"
+            "/tasks" = "TaskListScreen"
+            "/kanban" = "TaskFlowScreen" # Assuming Kanban is added
+            # Add other routes as new screens are developed (e.g., /projects, /settings)
+            "/exit" = "ExitCommand" # Special internal route to trigger exit
+        }
+        Write-Log -Level Debug -Message "Routes initialized: $($this.RouteMap.Keys -join ', ')."
+    }
+
+    # Registers a screen class with the internal ScreenFactory.
+    [void] RegisterScreenClass([Parameter(Mandatory)][string]$name, [Parameter(Mandatory)][type]$screenType) {
+        $this.ScreenFactory.RegisterScreen($name, $screenType)
+    }
+
+    # Navigates to a specified route, pushing a new screen or handling special commands.
+    [void] GoTo([Parameter(Mandatory)][string]$path, [hashtable]$parameters = @{}) {
+        Invoke-WithErrorHandling -Component "NavigationService" -Context "GoTo:$path" -ScriptBlock {
+            if ([string]::IsNullOrWhiteSpace($path)) { throw [System.ArgumentException]::new("Path cannot be empty.") }
+            if ($path -eq "/exit") {
+                $this.RequestExit()
+                return
+            }
+
+            $screenName = $this.RouteMap[$path]
+            if ($null -eq $screenName) {
+                $availableRoutes = $this.RouteMap.Keys -join ', '
+                throw [System.ArgumentException]::new("Unknown route: '$path'. Available routes: $availableRoutes", "path")
+            }
+
+            Write-Log -Level Info -Message "Navigating to: $path -> $screenName."
+            $this.PushScreen($screenName, $parameters)
+        }
+    }
+
+    # Pushes a new screen onto the navigation stack.
+    [void] PushScreen([Parameter(Mandatory)][string]$screenName, [hashtable]$parameters = @{}) {
+        Invoke-WithErrorHandling -Component "NavigationService" -Context "PushScreen:$screenName" -ScriptBlock {
+            Write-Log -Level Info -Message "Pushing screen: $screenName."
+
+            # Blur current focused component before changing screens.
+            if ($global:TuiState.FocusedComponent) {
+                $global:TuiState.FocusedComponent.OnBlur()
+            }
+
+            # If there's a current screen, call its OnExit and push it to the stack.
+            if ($this.CurrentScreen) {
+                Write-Log -Level Debug -Message "Exiting current screen: $($this.CurrentScreen.Name)."
+                $this.CurrentScreen.OnExit()
+                $this.ScreenStack.Push($this.CurrentScreen)
+            }
+
+            # Create the new screen instance.
+            Write-Log -Level Debug -Message "Creating new screen: $screenName."
+            $newScreen = $this.ScreenFactory.CreateScreen($screenName, $parameters)
+            $this.CurrentScreen = $newScreen
+
+            # Initialize and enter the new screen.
+            Write-Log -Level Debug -Message "Initializing screen: $screenName."
+            $newScreen.OnInitialize() # New lifecycle hook for one-time setup
+            $newScreen.OnEnter()
+
+            # Delegate to TUI Engine to actually display the screen.
+            if (Get-Command "Push-Screen" -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Delegating screen push to TUI engine."
+                Push-Screen -Screen $newScreen
+            } else {
+                # Fallback if TUI Engine Push-Screen is not loaded/available.
+                if ($global:TuiState) {
+                    $global:TuiState.CurrentScreen = $newScreen
+                    Request-TuiRefresh
+                } else {
+                    Write-Log -Level Warning -Message "TUI Engine not available. Cannot display screen '$screenName'."
+                }
+            }
+
+            Publish-Event -EventName "Navigation.ScreenChanged" -Data @{ Screen = $screenName; Action = "Push" }
+            Write-Log -Level Info -Message "Successfully pushed screen: $screenName."
+        }
+    }
+
+    # Pops the current screen from the navigation stack, returning to the previous one.
+    [bool] PopScreen() {
+        return Invoke-WithErrorHandling -Component "NavigationService" -Context "PopScreen" -ScriptBlock {
+            if ($this.ScreenStack.Count -eq 0) {
+                Write-Log -Level Warning -Message "Cannot pop screen: stack is empty."
+                return $false
+            }
+
+            # Blur current focused component.
+            if ($global:TuiState.FocusedComponent) {
+                $global:TuiState.FocusedComponent.OnBlur()
+            }
+
+            Write-Log -Level Info -Message "Popping screen."
+            $screenToExit = $this.CurrentScreen # Store reference to the screen being exited.
+
+            # Pop the previous screen from the stack.
+            $this.CurrentScreen = $this.ScreenStack.Pop()
+            
+            # Reset global focus (new screen will set its own focus).
+            $global:TuiState.FocusedComponent = $null
+
+            # Call OnExit for the screen being removed.
+            if ($screenToExit) {
+                $screenToExit.OnExit()
+                $screenToExit.Cleanup() # Trigger cleanup for the exiting screen.
+                Write-Log -Level Debug -Message "Exited and cleaned up screen: $($screenToExit.Name)."
+            }
+
+            # Resume the new current screen.
+            if ($this.CurrentScreen) {
+                $this.CurrentScreen.OnResume()
+                # Optionally restore last focused component on the resumed screen.
+                if ($this.CurrentScreen.LastFocusedComponent) {
+                    Set-ComponentFocus -Component $this.CurrentScreen.LastFocusedComponent
+                }
+            }
+
+            # Delegate to TUI Engine to update display.
+            if (Get-Command "Pop-Screen" -ErrorAction SilentlyContinue) {
+                Pop-Screen
+            } else {
+                # Fallback if TUI Engine Pop-Screen is not loaded/available.
+                if ($global:TuiState) {
+                    $global:TuiState.CurrentScreen = $this.CurrentScreen
+                    Request-TuiRefresh
+                } else {
+                    Write-Log -Level Warning -Message "TUI Engine not available. Cannot pop screen visually."
+                }
+            }
+
+            Publish-Event -EventName "Navigation.ScreenPopped" -Data @{ Screen = $this.CurrentScreen.Name }
+            return $true
+        }
+    }
+
+    # Requests a graceful application exit.
+    [void] RequestExit() {
+        Write-Log -Level Info -Message "Application exit requested."
+        # Pop all screens from the stack, triggering their cleanup.
+        while ($this.PopScreen()) {} 
+        
+        # Ensure the very last screen (if any remains) is exited and cleaned.
+        if ($this.CurrentScreen) {
+            $this.CurrentScreen.OnExit()
+            $this.CurrentScreen.Cleanup()
+            $this.CurrentScreen = $null
+        }
+
+        # Signal the TUI Engine to stop its main loop.
+        if ($global:TuiState.Running) {
+            $global:TuiState.Running = $false
+            Write-Log -Level Info -Message "TUI Engine stop signal sent."
+        } else {
+            Write-Log -Level Warning -Message "TUI Engine not running or already stopped."
+        }
+        
+        # Publish a global event indicating application exit.
+        Publish-Event -EventName "Application.Exit"
+    }
+
+    # Gets the currently active screen.
+    [Screen] GetCurrentScreen() { return $this.CurrentScreen }
+    # Checks if a given path is a valid registered route.
+    [bool] IsValidRoute([string]$path) { return $this.RouteMap.ContainsKey($path) }
+
+    # Lists all registered screen names for debugging/information.
+    [void] ListRegisteredScreens() {
+        $screens = $this.ScreenFactory.GetRegisteredScreens()
+        Write-Log -Level Info -Message "Registered screens: $($screens -join ', ')."
+        Write-Host "Registered screens: $($screens -join ', ')." -ForegroundColor Green
+    }
+
+    # Lists all available routes for debugging/information.
+    [void] ListAvailableRoutes() {
+        $routes = $this.RouteMap.Keys
+        Write-Log -Level Info -Message "Available routes: $($routes -join ', ')."
+        Write-Host "Available routes: $($routes -join ', ')." -ForegroundColor Green
+    }
+    
+    # Dispose: Cleans up resources held by the NavigationService.
+    [void] Dispose() {
+        Write-Log -Level Info -Message "NavigationService disposing."
+        # Ensure all screens are cleaned up if still on stack (unlikely, but for safety).
+        $this.RequestExit() # Ensures all screens are popped and cleaned.
+        $this.ScreenStack.Clear()
+        $this.RouteMap.Clear()
+        # ScreenFactory itself doesn't need explicit Dispose, it's just a creator.
+        Write-Verbose "NavigationService: Dispose complete."
+    }
+}
+```
+
+---
+
+**3. Integration Ideas for Axiom-Phoenix:**
+
+1.  **Update `run.ps1`'s Module Load Order:**
+    *   Ensure the factory function files (`keybinding-service.psm1`, `navigation-service.psm1`) are loaded, followed by their corresponding class definition files (`keybinding-service-class.psm1`, `navigation-service-class.psm1`).
+    *   Ensure `ServiceContainer` and `ActionService` are loaded before `KeybindingService` and `NavigationService`, as the latter may depend on the former.
+    *   The `ScreenFactory` requires the `Screen` class definition (from `ui-classes.psm1`), so ensure `ui-classes.psm1` is loaded before `navigation-service-class.psm1`.
+
+    ```powershell
+    # --- run.ps1 Snippet ---
+    $FileLoadOrder = @(
+        'modules/logger/logger.psm1',
+        'modules/panic-handler/panic-handler.psm1',
+        'modules/exceptions/exceptions.psm1',
+        'modules/event-system/event-system.psm1',
+        
+        # Core TUI Primitives and Base Classes
+        'components/tui-primitives/tui-primitives.psm1', 
+        'components/ui-classes/ui-classes.psm1', # UIElement, Component, Screen base classes
+        'layout/panels-class/panels-class.psm1', # Panel, ScrollablePanel, GroupPanel (depend on UIElement)
+        
+        'modules/theme-engine/theme-engine.psm1', # ThemeEngine after primitives
+        
+        # Models and Data Management
+        'modules/models/models.psm1',
+        'modules/data-manager/data-manager.psm1',
+        
+        # Services - ORDER IS IMPORTANT
+        'services/service-container/service-container.psm1', # ServiceContainer first
+        'services/action-service/action-service.psm1',       # ActionService next (often used by others)
+        'services/keybinding-service/keybinding-service.psm1', # Keybinding factory
+        'services/keybinding-service-class/keybinding-service-class.psm1', # Keybinding class
+        'services/navigation-service/navigation-service.psm1', # Navigation factory
+        'services/navigation-service-class/navigation-service-class.psm1', # Navigation class (depends on Screen from ui-classes)
+        # Assuming other services like TimeSheetService would come here too
+        
+        # Components & Dialogs (depend on primitives, UI classes, and potentially services)
+        'components/tui-components/tui-components.psm1',
+        'components/advanced-data-components/advanced-data-components.psm1',
+        'components/advanced-input-components/advanced-input-components.psm1',
+        'components/navigation-class/navigation-class.psm1', # Navigation menu component
+        'modules/dialog-system-class/dialog-system-class.psm1', # Includes CommandPalette now
+        
+        # Screens (depend on almost everything)
+        'screens/dashboard-screen/dashboard-screen.psm1',
+        'screens/task-list-screen/task-list-screen.psm1',
+        'screens/task-flow-screen/task-flow-screen.psm1', # Kanban screen
+        # Add other screens like Explorer or Timesheet here if importing
+        
+        # Global commands (depend on services like ActionService, NavigationService)
+        # 'commands/global-commands.psm1', # Optional: if you create this file for global actions
+        
+        # TUI Framework/Engine (orchestrates everything)
+        'modules/tui-framework/tui-framework.psm1',
+        'modules/tui-engine/tui-engine.psm1'
+    )
+    # ... rest of run.ps1 remains similar ...
+    ```
+
+2.  **Update `run.ps1`'s Service Registration with Factories:**
+    *   The `Initialize-ServiceContainer` call remains the same.
+    *   Update how `ActionService`, `KeybindingService`, and `NavigationService` are registered in the `ServiceContainer`. They now use their dedicated `Initialize-` factory functions and receive the container (or specific services) as dependencies.
+
+    ```powershell
+    # --- run.ps1 Snippet ---
+    # ...
+    # 2. Create the service container
+    $container = Initialize-ServiceContainer
+    # Store container in a global variable for easy access from classes
+    # (e.g., UI components needing ThemeEngine, or dialogs needing ActionService).
+    $global:AxiomServices = $container # <-- ADD THIS GLOBAL VARIABLE
+    
+    # 3. Register all services with the container using factories
+    $container.RegisterFactory("ThemeEngine", { param($c) Initialize-ThemeEngine -themesDirectory $themesDir })
+    $container.RegisterFactory("TuiFramework", { param($c) Initialize-TuiFrameworkService })
+    $container.RegisterFactory("ActionService", { param($c) Initialize-ActionService })
+    $container.RegisterFactory("KeybindingService", { param($c) Initialize-KeybindingService })
+    $container.RegisterFactory("DataManager", { param($c) Initialize-DataManager })
+    
+    # NavigationService's factory now takes the ServiceContainer directly
+    $container.RegisterFactory("NavigationService", { param($c) Initialize-NavigationService -ServiceContainer $c })
+    
+    # Example: If you have a TimesheetService (from Acta), register it here too:
+    # $container.RegisterFactory("TimeSheetService", { param($c) Initialize-TimeSheetService -DataManager ($c.GetService("DataManager")) })
+    
+    # 4. Get the navigation service and register screen classes
+    $navService = $container.GetService("NavigationService")
+    $navService.RegisterScreenClass("DashboardScreen", [DashboardScreen])
+    $navService.RegisterScreenClass("TaskListScreen", [TaskListScreen])
+    $navService.RegisterScreenClass("TaskFlowScreen", [TaskFlowScreen]) # If you added this in previous step
+    # Register any other screens here.
+    
+    # 5. Register global actions (using ActionService and KeybindingService)
+    # This replaces your previous Register-CommandPalette call and any hardcoded Ctrl+P.
+    # It's recommended to put these in a separate file (e.g., commands\global-commands.psm1)
+    # and source it here, or directly in run.ps1 if small.
+    $actionService = $container.GetService("ActionService")
+    $keybindingService = $container.GetService("KeybindingService")
+    
+    # Register the action that opens the command palette
+    $actionService.RegisterAction(
+        "app.showCommandPalette", 
+        "Show the command palette for quick action access", 
+        { Show-CommandPalette | Out-Null }, # Calls the global function from dialog-system-class.psm1
+        "Application"
+    )
+    $keybindingService.SetBinding("app.showCommandPalette", 'P', @('Ctrl'))
+    
+    # Register app exit action
+    $actionService.RegisterAction("app.exit", "Exits the application", { $navService.RequestExit() }, "Application")
+    $keybindingService.SetBinding("app.exit", 'Q', @('Ctrl')) # Or another key
+    
+    Write-Host "Service container configured with $($container.GetAllRegisteredServices().Count) services!" -ForegroundColor Green
+    
+    # ... (rest of run.ps1) ...
+    ```
+
+3.  **Update Screen Constructors & Component `OnInitialize`:**
+    *   **Crucial:** All your `Screen` subclasses (e.g., `DashboardScreen`, `TaskListScreen`, `TaskFlowScreen`) must update their constructors to consistently receive the `$ServiceContainer` (which is a `[hashtable]`) and pass it to their `base()` constructor:
+        ```powershell
+        # Example for DashboardScreen:
+        class DashboardScreen : Screen {
+            # ...
+            # Constructor should look like this:
+            DashboardScreen([Parameter(Mandatory)][System.Collections.Hashtable]$services) : base("DashboardScreen", $services) {}
+            # ...
+            [void] OnInitialize() {
+                # Access services via $this.Services
+                $dataManager = $this.Services.GetService("DataManager") # Or $this.Services.DataManager if you prefer
+                $themeEngine = $this.Services.GetService("ThemeEngine")
+                # ... rest of initialization ...
+            }
+        }
+        ```
+    *   **UI Components:** Any UI component that needs access to services (e.g., `Table` needing `ThemeEngine`, or `CommandPalette` needing `ActionService`) should get the `ThemeEngine` or other services from the `$global:AxiomServices` variable, which you just set up in `run.ps1`.
+
+This step centralizes service management, improves application stability with proper resource cleanup, and lays the groundwork for more advanced features.
+
+
+
+Okay, let's proceed with the seventh significant improvement to pull from "Project Acta" into "Axiom-Phoenix." This one focuses on the `TuiFrameworkService`, which acts as an abstraction layer for common TUI-related tasks, especially asynchronous operations.
+
+---
+
+### Improvement 7: TUI Framework Service for Asynchronous Operations
+
+**1. Explanation of Value:**
+
+This update introduces a dedicated service (`TuiFrameworkService`) to encapsulate common utility functions for the TUI application, primarily focusing on managing asynchronous PowerShell jobs (`Start-ThreadJob`):
+
+*   **Centralized Async Management**: Provides `StartAsync()` and `GetAsyncResults()` methods to easily launch background tasks (like heavy data processing, network requests, or long-running computations) without blocking the main TUI thread. This is crucial for maintaining a responsive user interface.
+*   **Resource Management for Jobs**: The `TuiFrameworkService` tracks all initiated background jobs and provides a `StopAllAsyncJobs()` method. This method ensures that all running jobs are properly stopped and removed when the application shuts down, preventing orphaned processes or resource leaks.
+*   **Abstraction Layer**: It abstracts away the direct interaction with `Start-ThreadJob` and `Receive-Job`, offering a cleaner, more application-specific API for async operations.
+*   **Dependency Injection Integration**: Designed as a service, `TuiFrameworkService` is initialized once and registered with the `ServiceContainer`, making it easily available to any other service or UI component that needs to perform background work.
+*   **Error Handling**: All methods are wrapped with `Invoke-WithErrorHandling` for consistent and centralized error logging and propagation.
+
+**2. Relevant Code to Pull:**
+
+You'll need to **replace** the content of `modules\tui-framework\tui-framework.psm1` in your Axiom-Phoenix structure with the updated version from Acta.
+
+---
+
+**Code Block 1: `modules\tui-framework\tui-framework.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v5.0 - TUI Framework Integration Module
+# PURPOSE: Provides helper functions and services for interacting with the TUI engine.
+# This version is updated for the class-based, lifecycle-aware architecture.
+# ==============================================================================
+#Requires -Modules ThreadJob # Explicitly state the dependency on ThreadJob module.
+
+# The TuiFrameworkService class encapsulates utility functions and can be
+# registered with the service container for easy access by other components.
+class TuiFrameworkService : System.IDisposable { # Implement IDisposable for proper cleanup
+    # Stores references to active background jobs, mapped by their InstanceId.
+    hidden [System.Collections.Concurrent.ConcurrentDictionary[guid, object]] $_asyncJobs
+    
+    TuiFrameworkService() {
+        # Check for ThreadJob module availability on instantiation.
+        # This provides a more immediate warning if the dependency is missing.
+        if (-not (Get-Module -Name 'ThreadJob' -ListAvailable)) {
+            Write-Log -Level Error -Message "The 'ThreadJob' module is not installed. Asynchronous features will be severely limited. Please run 'Install-Module ThreadJob'."
+            # Optionally, throw an exception here if async features are critical and cannot be degraded.
+            # throw [System.InvalidOperationException]::new("The 'ThreadJob' module is required but not found. Please install it.")
+        }
+
+        $this._asyncJobs = [System.Collections.Concurrent.ConcurrentDictionary[guid, object]]::new()
+        Write-Log -Level Info "TuiFrameworkService initialized."
+    }
+    
+    # Executes a script block asynchronously using a lightweight thread job.
+    # Ideal for I/O-bound operations like network requests or file access.
+    # Returns a PowerShell Job object, which can be used to track progress or receive results.
+    [System.Management.Automation.Job] StartAsync(
+        [Parameter(Mandatory)][scriptblock]$ScriptBlock,
+        [Parameter()][hashtable]$ArgumentList = @{}
+    ) {
+        return Invoke-WithErrorHandling -Component "TuiFramework.StartAsync" -Context "Starting async thread job" -ScriptBlock {
+            # Ensure ThreadJob module is loaded in the current session state.
+            # This is a safeguard, it should ideally be loaded by the main application script.
+            if (-not (Get-Module -Name 'ThreadJob')) {
+                Import-Module ThreadJob -ErrorAction SilentlyContinue | Out-Null
+            }
+            if (-not (Get-Command 'Start-ThreadJob' -ErrorAction SilentlyContinue)) {
+                throw [System.InvalidOperationException]::new("Start-ThreadJob cmdlet not found. 'ThreadJob' module may not be loaded or installed.")
+            }
+
+            $job = Start-ThreadJob -ScriptBlock $ScriptBlock -ArgumentList @($ArgumentList)
+            $this._asyncJobs[$job.InstanceId] = $job
+            Write-Log -Level Debug -Message "Started async thread job: $($job.Name)." -Data @{ JobId = $job.InstanceId; JobState = $job.State }
+            return $job
+        }
+    }
+
+    # Checks for completed async jobs and returns their results, cleaning them up by default.
+    # Returns an array of custom objects, each representing a job's status and output/error.
+    [object[]] GetAsyncResults([switch]$RemoveCompleted = $true) {
+        return Invoke-WithErrorHandling -Component "TuiFramework.GetAsyncResults" -Context "Checking async job results" -ScriptBlock {
+            $results = [System.Collections.Generic.List[object]]::new()
+            # Iterate through a snapshot of the dictionary values to avoid modification issues during loop.
+            $jobsToCheck = $this._asyncJobs.Values.ToArray() 
+            
+            foreach ($job in $jobsToCheck) {
+                # Check if the job has finished (Completed, Failed, or Stopped).
+                if ($job.State -in @('Completed', 'Failed', 'Stopped')) {
+                    $jobResult = [pscustomobject]@{
+                        JobId = $job.InstanceId;
+                        Name = $job.Name;
+                        State = $job.State.ToString(); # Convert JobState enum to string.
+                        Output = if ($job.State -eq 'Completed') { Receive-Job -Job $job -Keep -ErrorAction SilentlyContinue } else { $null };
+                        Error = if ($job.State -eq 'Failed' -or $job.State -eq 'Stopped') { $job.Error | Select-Object -First 1 -ExpandProperty Exception } else { $null }; # Extract exception object.
+                        ReceivedAt = (Get-Date);
+                    }
+                    [void]$results.Add($jobResult)
+                    
+                    if ($RemoveCompleted) {
+                        if ($this._asyncJobs.TryRemove($job.InstanceId, [ref]$null)) {
+                            try {
+                                Remove-Job -Job $job -Force -ErrorAction SilentlyContinue # Force removal to clean up.
+                                Write-Log -Level Debug -Message "Removed completed async job: $($job.Name)." -Data @{ JobId = $job.InstanceId }
+                            } catch {
+                                Write-Log -Level Warning -Message "Failed to remove completed job $($job.Name) from PowerShell job list: $($_.Exception.Message)"
+                            }
+                        }
+                    }
+                }
+            }
+            return $results.ToArray()
+        }
+    }
+
+    # Stops all currently tracked asynchronous jobs. Should be called during application cleanup.
+    [void] StopAllAsyncJobs() {
+        Invoke-WithErrorHandling -Component "TuiFramework.StopAllAsync" -Context "Stopping all tracked async jobs" -ScriptBlock {
+            # Iterate through a snapshot to avoid modifying collection during enumeration.
+            foreach ($job in $this._asyncJobs.Values.ToArray()) {
+                if ($job.State -in @('Running', 'Suspended', 'Blocked')) {
+                    try {
+                        Write-Log -Level Info -Message "Stopping active async job: $($job.Name)." -Data @{ JobId = $job.InstanceId }
+                        Stop-Job -Job $job -Force -ErrorAction SilentlyContinue
+                        # Give it a moment to transition to Stopped state before attempting removal.
+                        Wait-Job -Job $job -Timeout 1000 -ErrorAction SilentlyContinue | Out-Null
+                    } catch {
+                        Write-Log -Level Warning -Message "Failed to stop async job $($job.Name): $($_.Exception.Message)"
+                    }
+                }
+                try {
+                    # Always attempt to remove the job from PowerShell's job list.
+                    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+                    # Ensure it's removed from our internal tracking as well.
+                    $this._asyncJobs.TryRemove($job.InstanceId, [ref]$null) | Out-Null
+                } catch {
+                     Write-Log -Level Warning -Message "Failed to remove async job $($job.Name) from PowerShell job list: $($_.Exception.Message)"
+                }
+            }
+            $this._asyncJobs.Clear() # Ensure internal tracking is empty.
+            Write-Log -Level Info -Message "All tracked TUI async jobs stopped and cleared."
+        }
+    }
+    
+    # Returns the global TUI state object for debugging or advanced scenarios.
+    [hashtable] GetState() {
+        # This directly accesses the global variable.
+        # This is allowed for the TuiFrameworkService as it's a core utility.
+        return $global:TuiState
+    }
+
+    # Tests if the TUI is in a valid, running state.
+    [bool] IsRunning() {
+        return $global:TuiState -and $global:TuiState.Running -and $global:TuiState.CurrentScreen
+    }
+
+    # Dispose: Implements IDisposable interface for proper resource cleanup.
+    [void] Dispose() {
+        Write-Log -Level Info "TuiFrameworkService disposing. Stopping all async jobs."
+        $this.StopAllAsyncJobs() # Crucial for cleanup.
+        Write-Verbose "TuiFrameworkService: Dispose complete."
+    }
+}
+
+# Factory function to create the TuiFrameworkService instance.
+# This is what gets registered with the service container.
+function Initialize-TuiFrameworkService {
+    [CmdletBinding()]
+    param()
+    
+    # No longer checks for ThreadJob here, as the class constructor does it.
+    return [TuiFrameworkService]::new()
+}
+
+# Export the factory function
+Export-ModuleMember -Function Initialize-TuiFrameworkService
+```
+
+---
+
+**3. Integration Ideas for Axiom-Phoenix:**
+
+1.  **Update `run.ps1`'s Module Load Order:**
+    *   Ensure `modules\tui-framework\tui-framework.psm1` is loaded before `modules\tui-engine\tui-engine.psm1` (as the engine might use it for internal background tasks, though not directly in the provided engine code). It's generally a foundational module.
+    *   Ensure `ThreadJob` module is implicitly or explicitly available. `Requires -Modules ThreadJob` is added to the file. You might also want to add `Import-Module ThreadJob` early in `run.ps1` if not already doing so.
+
+    ```powershell
+    # --- run.ps1 Snippet ---
+    # Optional: Explicitly import ThreadJob if it's not always loaded by default in your environment.
+    # try { Import-Module ThreadJob -ErrorAction Stop } catch { Write-Warning "Could not load ThreadJob module: $($_.Exception.Message). Async operations may fail." }
+
+    $FileLoadOrder = @(
+        # ... (all other core modules, services, components, screens) ...
+        
+        # TUI Framework (should be loaded before TUI Engine)
+        'modules/tui-framework/tui-framework.psm1',
+        
+        # TUI Engine (ABSOLUTELY LAST)
+        'modules/tui-engine/tui-engine.psm1' 
+    )
+    # ... rest of run.ps1 remains similar ...
+    ```
+
+2.  **Update `run.ps1`'s Service Registration:**
+    *   Register the `TuiFrameworkService` with your `ServiceContainer`. It should be a singleton as it manages shared resources (background jobs).
+
+    ```powershell
+    # --- run.ps1 Snippet ---
+    # ... (After ServiceContainer creation) ...
+    
+    # 3. Register all services with the container using factories
+    $container.RegisterFactory("ThemeEngine", { param($c) Initialize-ThemeEngine -themesDirectory $themesDir })
+    $container.RegisterFactory("TuiFramework", { param($c) Initialize-TuiFrameworkService }) # <--- ADD THIS LINE
+    $container.RegisterFactory("ActionService", { param($c) Initialize-ActionService })
+    $container.RegisterFactory("KeybindingService", { param($c) Initialize-KeybindingService })
+    $container.RegisterFactory("DataManager", { param($c) Initialize-DataManager })
+    $container.RegisterFactory("NavigationService", { param($c) Initialize-NavigationService -ServiceContainer $c })
+    # ... (other service registrations) ...
+    ```
+
+3.  **Refactor Components/Screens to use `TuiFrameworkService` for Background Tasks:**
+    *   This is where the real value comes in. Any component or screen that needs to perform a potentially long-running operation (e.g., fetching data from a web API, processing large files, complex calculations) should now use `TuiFrameworkService.StartAsync()` instead of directly launching `Start-Job` or blocking the main thread.
+    *   **Example (Conceptual):** If you had a component fetching web data:
+        ```powershell
+        # In MyComponent.psm1
+        class MyComponent : UIElement {
+            hidden [TuiFrameworkService]$_tuiFramework
+            hidden [guid]$_activeJobId = $null
+
+            MyComponent([string]$name, [hashtable]$services) : base($name) {
+                # ...
+                $this._tuiFramework = $services.GetService("TuiFramework")
+            }
+
+            [void] FetchDataAsync() {
+                if ($null -ne $this._activeJobId) {
+                    Write-Warning "Already fetching data."
+                    return
+                }
+                
+                $scriptBlock = {
+                    param($url, $someParam)
+                    # Simulate long-running operation
+                    Start-Sleep -Seconds 3
+                    $data = Invoke-RestMethod -Uri $url # Actual network call
+                    return $data | Select-Object -First 5
+                }
+                
+                $job = $this._tuiFramework.StartAsync($scriptBlock, @{ url = "https://jsonplaceholder.typicode.com/posts"; someParam = "value" })
+                $this._activeJobId = $job.InstanceId
+                Write-Host "Data fetch started in background. Job ID: $($this._activeJobId)"
+                $this.RequestRedraw() # Update UI to show "Loading..."
+            }
+
+            # This method would typically be called periodically by the TUI engine or a timer.
+            # You might need a global event or a dedicated "JobMonitor" component to check for job completion.
+            [void] CheckDataFetchStatus() {
+                if ($null -eq $this._activeJobId) { return }
+
+                $results = $this._tuiFramework.GetAsyncResults()
+                foreach ($jobResult in $results) {
+                    if ($jobResult.JobId -eq $this._activeJobId) {
+                        if ($jobResult.State -eq 'Completed') {
+                            $this.Data = $jobResult.Output
+                            Write-Host "Data fetch completed: $($this.Data.Count) items."
+                            $this._activeJobId = $null
+                            $this.RequestRedraw() # Update UI with new data
+                        } elseif ($jobResult.State -eq 'Failed' -or $jobResult.State -eq 'Stopped') {
+                            Write-Error "Data fetch failed for job $($jobResult.JobId): $($jobResult.Error)"
+                            Show-AlertDialog -Title "Error" -Message "Failed to fetch data: $($jobResult.Error.Message)" | Out-Null
+                            $this._activeJobId = $null
+                            $this.RequestRedraw()
+                        }
+                        break
+                    }
+                }
+            }
+
+            # Implement Cleanup to stop any pending jobs.
+            [void] Cleanup() {
+                # This ensures the TuiFrameworkService's Dispose will clean this up if not done manually.
+                # But it's good practice to clear specific job references.
+                if ($null -ne $this._activeJobId) {
+                    Write-Log -Level Info "Component '$($this.Name)': Clearing reference to pending job $($this._activeJobId)."
+                    $this._activeJobId = $null # Just clear the reference, StopAllAsyncJobs will do the heavy lifting
+                }
+                ([UIElement]$this).Cleanup()
+            }
+        }
+        ```
+
+This enhancement is crucial for building responsive and complex TUI applications that need to perform background processing without freezing the UI.
+
+
+
+
+Okay, let's proceed with the eighth significant improvement to pull from "Project Acta" into "Axiom-Phoenix." This one focuses on the heart of your application: the **TUI Engine itself**.
+
+---
+
+### Improvement 8: Comprehensive TUI Engine Overhaul
+
+**1. Explanation of Value:**
+
+This is arguably the most impactful and foundational set of changes, upgrading your TUI's core loop, rendering pipeline, and input management to modern, high-performance standards:
+
+*   **Unified Main Loop (`Start-TuiLoop`)**: Replaces the previous basic loop with a sophisticated, continuous rendering and input processing cycle. It manages frame rate (`TargetFPS`), ensuring a smooth user experience.
+*   **Efficient Differential Rendering**: This is the *core performance boost*. The `Render-CompositorToConsole` function is completely rewritten to leverage the `TuiCell.DiffersFrom` method and the `TuiAnsiHelper` (from *Improvement 1*). It meticulously compares the current frame's buffer with the previous one, identifying *only* the cells that have visually changed (character, foreground, background, and all styling attributes). Only these changed cells are then re-written to the console using optimized ANSI escape sequences, drastically reducing console I/O and virtually eliminating flicker.
+*   **Asynchronous Input Handling**: Integrates the background `InputThread` (which implicitly uses `Start-ThreadJob` and the `TuiFrameworkService` from *Improvement 7*). This means keyboard input is read continuously without blocking the main rendering thread, keeping the UI fully responsive even during complex operations or heavy rendering.
+*   **Robust Screen & Overlay Management**: Provides centralized, public functions (`Push-Screen`, `Pop-Screen`, `Show-TuiOverlay`, `Close-TopTuiOverlay`) that correctly manage the `ScreenStack` and `OverlayStack` within `$global:TuiState`. These functions ensure proper screen transitions and modal dialog behavior.
+*   **Centralized Focus Management (`Set-ComponentFocus`)**: A single point of control for keyboard input focus. It correctly calls `OnBlur()` and `OnFocus()` on components, allowing them to react visually (e.g., changing border colors) and logically (e.g., enabling/disabling input processing).
+*   **Automatic Terminal Resize Handling (`Check-ForResize`)**: Continuously monitors the actual console window size. If a change is detected, it automatically resizes the internal buffers and propagates resize calls to the `CurrentScreen` and all active `Overlays`, allowing them to adapt their layout. It also publishes a `TUI.Resized` event.
+*   **Panic Handler Integration**: The main loop is wrapped in a `try/catch` block that directly invokes the `PanicHandler` (from *Improvement 2*) on any unhandled critical errors, ensuring robust crash reporting and graceful (or as graceful as possible) application termination.
+*   **Lifecycle Integration**: Explicitly orchestrates calls to the `OnInitialize`, `OnEnter`, `OnExit`, `OnResume`, and `Cleanup` lifecycle methods on `Screen` and `UIElement` instances during navigation and overlay changes. This ensures components are properly set up, torn down, and refreshed.
+
+**2. Relevant Code to Pull:**
+
+You'll need to **replace** the content of `modules\tui-engine\tui-engine.psm1` in your Axiom-Phoenix structure with the updated version from Acta.
+
+---
+
+**Code Block 1: `modules\tui-engine\tui-engine.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# TUI Engine v5.3 - Lifecycle-Aware Compositor
+# Core engine providing complete lifecycle management and high-performance rendering
+# ==============================================================================
+
+using namespace System.Collections.Generic
+using namespace System.Collections.Concurrent
+using namespace System.Management.Automation
+using namespace System.Threading # For CancellationTokenSource and Threading.Tasks
+
+#region Core TUI State
+
+# Global TUI state management. This is the central repository for the engine's runtime data.
+# It's exposed globally for easy access by other parts of the framework and application.
+$global:TuiState = @{
+    Running = $false # Flag to control the main application loop.
+    BufferWidth = 0 # Current width of the terminal buffer.
+    BufferHeight = 0 # Current height of the terminal buffer.
+    CompositorBuffer = $null # The buffer where all UI elements are rendered for the current frame.
+    PreviousCompositorBuffer = $null # The buffer from the previous frame, used for differential rendering.
+    ScreenStack = [System.Collections.Generic.Stack[Screen]]::new() # Stack of application screens for navigation.
+    CurrentScreen = $null # The currently active Screen object.
+    OverlayStack = [System.Collections.Generic.List[UIElement]]::new() # List of modal overlays (dialogs, popups).
+    IsDirty = $true # Flag indicating if the screen needs to be redrawn (forces a render pass).
+    RenderStats = @{ # Performance statistics for rendering.
+        LastFrameTime = 0 # Time taken for the last frame render (ms).
+        FrameCount = 0 # Total frames rendered.
+        TargetFPS = 60 # Desired frames per second.
+        AverageFrameTime = 0 # Average frame time over a period.
+    }
+    # Global application services (from ServiceContainer).
+    # This is a critical dependency for the TUI Engine to call other services.
+    Services = $null # Will be populated by `run.ps1` after `ServiceContainer` init.
+
+    FocusedComponent = $null # The UIElement that currently has keyboard input focus.
+    InputQueue = [System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]]::new() # Queue for asynchronous keyboard input.
+    InputRunspace = $null # PowerShell runspace for the background input thread.
+    InputPowerShell = $null # PowerShell instance for the background input command.
+    InputAsyncResult = $null # Async result object for the background input command.
+    CancellationTokenSource = $null # For gracefully stopping the input thread.
+    LastWindowWidth = 0 # Track last known window width for resize detection.
+    LastWindowHeight = 0 # Track last known window height for resize detection.
+}
+
+#endregion
+
+#region Engine Lifecycle & Main Loop
+
+function Initialize-TuiEngine {
+    <#
+    .SYNOPSIS
+    Initializes the TUI engine with specified dimensions and sets up core services.
+    
+    .DESCRIPTION
+    Sets up the TUI engine with buffers, input handling, and console configuration.
+    It expects the global `$global:AxiomServices` to be populated with the `ServiceContainer`.
+    
+    .PARAMETER Width
+    The initial width of the TUI buffer. Defaults to current console width.
+    
+    .PARAMETER Height
+    The initial height of the TUI buffer. Defaults to current console height - 1.
+    #>
+    [CmdletBinding()]
+    param(
+        [int]$Width = [Console]::WindowWidth,
+        [int]$Height = [Console]::WindowHeight - 1
+    )
+    
+    try {
+        Write-Log -Level Info -Message "Initializing TUI Engine with dimensions $Width x $Height."
+        
+        # Check for mandatory global services
+        if ($null -eq $global:AxiomServices -or -not ($global:AxiomServices -is [ServiceContainer])) {
+            throw [System.InvalidOperationException]::new("ServiceContainer (\$global:AxiomServices) must be initialized and available before TUI Engine initialization.")
+        }
+        $global:TuiState.Services = $global:AxiomServices # Link the global services to TuiState for easy access.
+
+        # Store initial console dimensions and setup global state
+        $global:TuiState.BufferWidth = $Width
+        $global:TuiState.BufferHeight = $Height
+        $global:TuiState.LastWindowWidth = [Console]::WindowWidth # Use Console.WindowWidth directly for detection.
+        $global:TuiState.LastWindowHeight = [Console]::WindowHeight # Use Console.WindowHeight directly for detection.
+        
+        # Initialize rendering buffers (current and previous for diffing)
+        $global:TuiState.CompositorBuffer = [TuiBuffer]::new($Width, $Height, "CompositorBuffer")
+        $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($Width, $Height, "PreviousCompositorBuffer")
+        
+        # Configure console properties
+        [Console]::CursorVisible = $false # Hide the native console cursor.
+        [Console]::TreatControlCAsInput = $true # Allow Ctrl+C to be captured as input, not just terminate process.
+        
+        # Initialize the asynchronous input reading thread.
+        Initialize-InputThread
+        
+        # The PanicHandler is expected to be initialized by `run.ps1` before `Initialize-TuiEngine`.
+        
+        Write-Log -Level Info -Message "TUI Engine initialized successfully."
+    }
+    catch {
+        # Log and re-throw critical initialization errors.
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Initialization" -ScriptBlock { throw $_ }
+    }
+}
+
+function Initialize-InputThread {
+    <#
+    .SYNOPSIS
+    Initializes the asynchronous input processing thread.
+    
+    .DESCRIPTION
+    Sets up a background runspace to continuously read keyboard input without blocking the main rendering thread.
+    This uses `Start-ThreadJob` implicitly (via the `TuiFrameworkService`).
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        # Create a cancellation token source for graceful shutdown of the input thread.
+        $global:TuiState.CancellationTokenSource = [CancellationTokenSource]::new()
+        
+        # Create a dedicated runspace for the input thread to isolate its state.
+        $global:TuiState.InputRunspace = [RunspaceFactory]::CreateRunspace()
+        $global:TuiState.InputRunspace.Open()
+        
+        # Share necessary variables with the new runspace.
+        # This is how the input thread can enqueue keys into the main thread's queue.
+        $global:TuiState.InputRunspace.SessionStateProxy.SetVariable("InputQueue", $global:TuiState.InputQueue)
+        $global:TuiState.InputRunspace.SessionStateProxy.SetVariable("CancellationToken", $global:TuiState.CancellationTokenSource.Token)
+        
+        # The script block that runs in the background.
+        $inputScript = {
+            param($InputQueue, $CancellationToken)
+            
+            # Loop as long as cancellation has not been requested.
+            while (-not $CancellationToken.IsCancellationRequested) {
+                try {
+                    # Check if a key is available to be read.
+                    if ([Console]::KeyAvailable) {
+                        # Read the key, suppressing output and allowing modifier keys.
+                        $key = [Console]::ReadKey($true)
+                        # Enqueue the key for processing by the main loop.
+                        $InputQueue.Enqueue($key)
+                    }
+                    # Small delay to prevent busy-waiting and consume CPU unnecessarily.
+                    Start-Sleep -Milliseconds 10
+                }
+                catch {
+                    # Log internal input thread errors but allow it to continue or break gracefully.
+                    # This should not propagate to the main application error handler.
+                    Write-Warning "Input thread encountered an error: $($_.Exception.Message)"
+                    break # Exit loop on error to prevent continuous errors.
+                }
+            }
+            Write-Verbose "Input thread gracefully stopped."
+        }
+        
+        # Create and start the PowerShell instance in the background runspace.
+        $global:TuiState.InputPowerShell = [PowerShell]::Create()
+        $global:TuiState.InputPowerShell.Runspace = $global:TuiState.InputRunspace
+        $global:TuiState.InputPowerShell.AddScript($inputScript).AddArgument($global:TuiState.InputQueue).AddArgument($global:TuiState.CancellationTokenSource.Token)
+        $global:TuiState.InputAsyncResult = $global:TuiState.InputPowerShell.BeginInvoke() # Non-blocking start.
+        
+        Write-Log -Level Debug -Message "Input thread initialized successfully."
+    }
+    catch {
+        # Log and re-throw critical input thread initialization errors.
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Input Thread Initialization" -ScriptBlock { throw $_ }
+    }
+}
+
+function Start-TuiLoop {
+    <#
+    .SYNOPSIS
+    Starts the main TUI rendering and input processing loop.
+    
+    .DESCRIPTION
+    Begins the main application loop that handles rendering, input processing, and component lifecycle.
+    This loop continues until `$global:TuiState.Running` is set to `$false`.
+    
+    .PARAMETER InitialScreen
+    The initial `Screen` object to display when the loop starts.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [Screen]$InitialScreen
+    )
+    
+    try {
+        # Ensure the engine is initialized.
+        if (-not $global:TuiState.BufferWidth) {
+            Initialize-TuiEngine # This should ideally be called by `run.ps1`
+        }
+        
+        # Push the initial screen onto the navigation stack.
+        if ($InitialScreen) {
+            # Use the engine's `Push-Screen` for proper lifecycle and rendering.
+            Push-Screen -Screen $InitialScreen 
+        }
+        
+        # Ensure a screen is actually set as current.
+        if ($null -eq $global:TuiState.CurrentScreen) {
+            throw [System.InvalidOperationException]::new("No screen available to start TUI loop. InitialScreen must be valid.")
+        }
+        
+        $global:TuiState.Running = $true # Set the flag to start the loop.
+        $frameTimer = [System.Diagnostics.Stopwatch]::new() # For measuring frame times.
+        $targetFrameTimeMs = 1000.0 / $global:TuiState.RenderStats.TargetFPS # Calculate target time per frame.
+        
+        Write-Log -Level Info -Message "Starting TUI main loop."
+        
+        # Main application loop.
+        while ($global:TuiState.Running) {
+            try {
+                $frameTimer.Restart() # Start timing for the current frame.
+                
+                # Check for terminal window resizing.
+                Check-ForResize
+                
+                # Process all pending keyboard input from the queue.
+                $hadInput = Process-TuiInput
+                
+                # Render a new frame only if content is dirty or input was processed (to ensure responsiveness).
+                if ($global:TuiState.IsDirty -or $hadInput) {
+                    Render-Frame
+                    $global:TuiState.IsDirty = $false # Reset dirty flag after rendering.
+                }
+                
+                # Frame rate limiting: pause if rendering was too fast.
+                $elapsed = $frameTimer.ElapsedMilliseconds
+                if ($elapsed -lt $targetFrameTimeMs) {
+                    $sleepTime = [Math]::Max(1, [int]($targetFrameTimeMs - $elapsed)) # Ensure at least 1ms sleep.
+                    Start-Sleep -Milliseconds $sleepTime
+                }
+                
+                # Update rendering statistics.
+                $global:TuiState.RenderStats.LastFrameTime = $frameTimer.ElapsedMilliseconds
+                $global:TuiState.RenderStats.FrameCount++
+                # Simple average: could be a rolling average for more accuracy.
+                if ($global:TuiState.RenderStats.FrameCount % 60 -eq 0) {
+                    $global:TuiState.RenderStats.AverageFrameTime = $frameTimer.ElapsedMilliseconds # Update every 60 frames.
+                }
+            }
+            catch {
+                # Catch and handle errors within the main loop.
+                Write-Log -Level Error -Message "Error in TUI main loop: $($_.Exception.Message)."
+                # Invoke the global Panic Handler for unhandled critical errors.
+                Invoke-PanicHandler -ErrorRecord $_ -AdditionalContext @{ Stage = "TUI Main Loop" }
+                
+                # If PanicHandler returns (which it shouldn't for critical errors that call exit),
+                # or if the error is non-fatal enough, the loop might continue.
+                # Adding a redundant check here for safety.
+                if ($_.Exception -is [System.OutOfMemoryException] -or $_.Exception -is [System.StackOverflowException]) {
+                    $global:TuiState.Running = $false # Stop loop on severe system errors.
+                    break
+                }
+            }
+        }
+        
+        Write-Log -Level Info -Message "TUI main loop ended."
+    }
+    catch {
+        # Log and re-throw fatal errors that prevent the loop from starting.
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Main Loop Startup" -ScriptBlock { throw $_ }
+    }
+    finally {
+        # Always attempt to clean up TUI resources, even after an error or graceful exit.
+        Cleanup-TuiEngine
+    }
+}
+
+function Check-ForResize {
+    <#
+    .SYNOPSIS
+    Checks for terminal resize and handles resize events.
+    
+    .DESCRIPTION
+    Compares current console dimensions with stored dimensions. If changed, it updates
+    the global state, resizes core buffers, propagates resize to screens/overlays,
+    and publishes a `TUI.Resized` event.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        $currentConsoleWidth = [Console]::WindowWidth
+        $currentConsoleHeight = [Console]::WindowHeight - 1 # Exclude one line for PowerShell's prompt.
+        
+        # Check if dimensions have actually changed.
+        if ($currentConsoleWidth -ne $global:TuiState.BufferWidth -or $currentConsoleHeight -ne $global:TuiState.BufferHeight) {
+            Write-Log -Level Info -Message "Terminal resized from $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight) to $($currentConsoleWidth)x$($currentConsoleHeight)."
+            
+            # Update global state with new dimensions.
+            $global:TuiState.PreviousWindowWidth = $global:TuiState.LastWindowWidth # Store for event data
+            $global:TuiState.PreviousWindowHeight = $global:TuiState.LastWindowHeight # Store for event data
+            $global:TuiState.BufferWidth = $currentConsoleWidth
+            $global:TuiState.BufferHeight = $currentConsoleHeight
+            $global:TuiState.LastWindowWidth = $currentConsoleWidth
+            $global:TuiState.LastWindowHeight = $currentConsoleHeight
+            
+            # Resize primary rendering buffers.
+            $global:TuiState.CompositorBuffer.Resize($currentConsoleWidth, $currentConsoleHeight)
+            $global:TuiState.PreviousCompositorBuffer.Resize($currentConsoleWidth, $currentConsoleHeight)
+            
+            # Propagate resize event to the current screen.
+            if ($global:TuiState.CurrentScreen) {
+                # Screens typically take full window size.
+                $global:TuiState.CurrentScreen.Resize($currentConsoleWidth, $currentConsoleHeight)
+            }
+            
+            # Propagate resize to all active overlays.
+            foreach ($overlay in $global:TuiState.OverlayStack) {
+                # Overlays (like Dialogs) should re-center themselves.
+                # This assumes they have a 'Move' method and know their desired relative position.
+                if ($overlay -is [Dialog]) { # Specific handling for Dialogs.
+                    $overlay.X = [Math]::Floor(($currentConsoleWidth - $overlay.Width) / 2)
+                    $overlay.Y = [Math]::Floor(($currentConsoleHeight - $overlay.Height) / 4)
+                    $overlay.Move($overlay.X, $overlay.Y) # Trigger move logic (updates internal position and requests redraw).
+                }
+                # Trigger the overlay's own resize logic if it hasn't already by setting its X/Y/Width/Height.
+                # If dialogs are fixed size, this won't change their size, but will propagate to children.
+                $overlay.Resize($overlay.Width, $overlay.Height)
+            }
+            
+            # Publish a global event about the TUI resize.
+            Publish-Event -EventName "TUI.Resized" -Data @{
+                Width = $currentConsoleWidth
+                Height = $currentConsoleHeight
+                PreviousWidth = $global:TuiState.PreviousWindowWidth
+                PreviousHeight = $global:TuiState.PreviousWindowHeight
+            }
+            
+            # Force a full redraw of the screen to apply new dimensions.
+            Request-TuiRefresh
+        }
+    }
+    catch {
+        # Log resize errors but do not stop the application.
+        Write-Error "Error checking for resize: $($_.Exception.Message)."
+    }
+}
+
+function Process-TuiInput {
+    <#
+    .SYNOPSIS
+    Processes input from the input queue.
+    
+    .DESCRIPTION
+    Dequeues all available keyboard input from the asynchronous input queue and
+    routes it hierarchically: global shortcuts, then top overlay, then currently focused component,
+    then the current screen.
+    
+    .OUTPUTS
+    [bool] Returns true if any input was processed, false otherwise.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    $hadInput = $false # Flag to indicate if any input was handled.
+    
+    try {
+        # Process all available input in the queue until it's empty.
+        while ($global:TuiState.InputQueue.TryDequeue([ref]$keyInfo)) {
+            $hadInput = $true # At least one key was processed.
+            
+            # Log the key for debugging.
+            Write-Log -Level Debug -Message "Processing input key: $($keyInfo.Key) (Char: '$($keyInfo.KeyChar)', Modifiers: $($keyInfo.Modifiers))."
+
+            # 1. Handle global shortcuts (highest priority, always checked first).
+            if (Handle-GlobalShortcuts -KeyInfo $keyInfo) {
+                continue # If handled globally, no other component gets it.
+            }
+            
+            # 2. Route to overlays (topmost overlay gets priority).
+            # Iterate in reverse order to get the top-most overlay.
+            # Find the target overlay: if a component *within* an overlay is focused, direct input to that focused component's overlay.
+            $targetOverlay = $null
+            if ($global:TuiState.FocusedComponent) {
+                # Find if focused component or any of its parents is an active overlay.
+                $currentParent = $global:TuiState.FocusedComponent
+                while ($currentParent -ne $null) {
+                    if ($global:TuiState.OverlayStack.Contains($currentParent)) {
+                        $targetOverlay = $currentParent
+                        break
+                    }
+                    $currentParent = $currentParent.Parent
+                }
+            }
+            # If no focused component within an overlay, default to the absolute topmost overlay.
+            if ($null -eq $targetOverlay -and $global:TuiState.OverlayStack.Count -gt 0) {
+                $targetOverlay = $global:TuiState.OverlayStack[-1]
+            }
+
+            if ($targetOverlay -and $targetOverlay.Enabled -and $targetOverlay.Visible) {
+                if ($targetOverlay.HandleInput($keyInfo)) {
+                    continue # If the top overlay handled it, stop processing.
+                }
+            }
+            
+            # 3. Route to the currently focused component (if any), but ONLY if it's NOT handled by an overlay.
+            # This ensures keys propagate to focused elements within screens, but overlays take precedence.
+            if ($global:TuiState.FocusedComponent -and $global:TuiState.FocusedComponent.Enabled -and $global:TuiState.FocusedComponent.Visible) {
+                # Ensure it's not the same target overlay that just handled input, or is a child of it.
+                $isChildOfOverlay = $false
+                if ($targetOverlay) {
+                    $currentParent = $global:TuiState.FocusedComponent
+                    while($currentParent) {
+                        if ($currentParent -eq $targetOverlay) {
+                            $isChildOfOverlay = $true
+                            break
+                        }
+                        $currentParent = $currentParent.Parent
+                    }
+                }
+                
+                if (-not $isChildOfOverlay -or $global:TuiState.FocusedComponent -eq $targetOverlay) { # If it's the target overlay or not within any active overlay.
+                    if ($global:TuiState.FocusedComponent.HandleInput($keyInfo)) {
+                        continue # If the focused component handled it, stop processing.
+                    }
+                }
+            }
+            
+            # 4. Route to the current screen (lowest priority in the UI hierarchy).
+            # This catches screen-wide hotkeys not consumed by focused components or overlays.
+            if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.Enabled -and $global:TuiState.CurrentScreen.Visible) {
+                # The screen's HandleInput can also cascade down to its own children.
+                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
+                    continue # If the screen handled it, stop processing.
+                }
+            }
+            
+            Write-Verbose "Unhandled input: Key = $($keyInfo.Key), Char = '$($keyInfo.KeyChar)', Modifiers = $($keyInfo.Modifiers)."
+        }
+    }
+    catch {
+        # Log input processing errors. These should ideally be caught by specific component handlers.
+        Write-Error "Error processing input: $($_.Exception.Message)."
+    }
+    
+    return $hadInput # Return true if any key was processed, signaling a potential redraw.
+}
+
+function Handle-GlobalShortcuts {
+    <#
+    .SYNOPSIS
+    Handles global keyboard shortcuts.
+    
+    .DESCRIPTION
+    Processes global shortcuts that should work regardless of focus state, like Ctrl+C for exit
+    or Ctrl+P for command palette.
+    
+    .PARAMETER KeyInfo
+    The keyboard input to process.
+    
+    .OUTPUTS
+    [bool] Returns true if the shortcut was handled, false otherwise.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.ConsoleKeyInfo]$KeyInfo
+    )
+    
+    try {
+        # Get the KeybindingService from the global services container.
+        $keybindingService = $global:TuiState.Services.GetService("KeybindingService")
+        if ($null -eq $keybindingService) {
+            Write-Log -Level Warning -Message "KeybindingService not found. Global shortcuts will not be processed."
+            return $false
+        }
+
+        # Let the KeybindingService determine if this key combination maps to a global action.
+        # HandleKey will check `KeyMap` and `GlobalHandlers`.
+        # The KeybindingService now also handles context internally.
+        $actionName = $keybindingService.HandleKey($KeyInfo)
+
+        if (-not [string]::IsNullOrEmpty($actionName)) {
+            Write-Log -Level Debug -Message "Global shortcut handled: $actionName."
+            # The KeybindingService.HandleKey already executes global handlers.
+            # If it returns an action name, it means it was recognized and potentially handled globally.
+            return $true 
+        }
+        
+        return $false # No global shortcut matched.
+    }
+    catch {
+        Write-Error "Error handling global shortcuts: $($_.Exception.Message)."
+        return $false
+    }
+}
+
+function Render-Frame {
+    <#
+    .SYNOPSIS
+    Renders the current frame to the screen.
+    
+    .DESCRIPTION
+    Orchestrates the rendering of the current screen and any active overlays
+    onto the compositor buffer. It then performs a differential update to the
+    actual console to minimize flicker and improve performance.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        # Clear the compositor buffer with a default transparent cell.
+        $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', '#FFFFFF', $null)) # Default FG white, BG transparent.
+        
+        # Render the current screen first (lowest Z-index, forms the base layer).
+        if ($global:TuiState.CurrentScreen) {
+            # Each UIElement (including Screen) has its own `Render()` method
+            # which recursively renders children to its private buffer.
+            # The screen's buffer will contain all its panels and components.
+            $global:TuiState.CurrentScreen.Render()
+            # Blend the screen's fully rendered buffer onto the main compositor.
+            $global:TuiState.CompositorBuffer.BlendBuffer($global:TuiState.CurrentScreen.GetBuffer(), 0, 0)
+        }
+        
+        # Render overlays on top of the current screen (higher Z-index).
+        # Overlays in `OverlayStack` are already managed as a simple "z-order" by virtue of `Add` method.
+        foreach ($overlay in $global:TuiState.OverlayStack) {
+            # Calculate absolute position for blending (overlays have their own X/Y).
+            $overlay.Render()
+            # Blend the overlay's buffer onto the main compositor.
+            $global:TuiState.CompositorBuffer.BlendBuffer($overlay.GetBuffer(), $overlay.X, $overlay.Y)
+        }
+        
+        # Perform the differential update to the actual console display.
+        # This is where performance optimization happens by only writing changed cells.
+        Render-CompositorToConsole
+        
+        # Swap buffers: Current compositor becomes the previous for the next frame.
+        $temp = $global:TuiState.PreviousCompositorBuffer
+        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
+        $global:TuiState.CompositorBuffer = $temp
+    }
+    catch {
+        # Log rendering errors.
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Frame Rendering" -ScriptBlock { throw $_ }
+    }
+}
+
+function Render-CompositorToConsole {
+    <#
+    .SYNOPSIS
+    Renders the compositor buffer to the console with differential updates.
+    
+    .DESCRIPTION
+    This function compares the current compositor buffer with the previous frame's
+    buffer cell by cell. Only cells that have changed (character, foreground,
+    background, or style attributes) are rewritten to the console. This minimizes
+    console output and reduces flicker, especially important for rich UIs.
+    It uses ANSI escape codes for full color and styling.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        $output = [System.Text.StringBuilder]::new($global:TuiState.BufferWidth * $global:TuiState.BufferHeight * 5) # Estimate StringBuilder capacity
+        
+        # Track current ANSI state to avoid redundant escape codes.
+        $currentFg = ""
+        $currentBg = ""
+        $currentBold = $false
+        $currentItalic = $false
+        $currentUnderline = $false
+        $currentStrikethrough = $false
+
+        # Move cursor to top-left to start fresh.
+        [void]$output.Append("`e[H") # ANSI sequence to move cursor to home (1,1).
+
+        for ($y = 0; $y -lt $global:TuiState.BufferHeight; $y++) {
+            for ($x = 0; $x -lt $global:TuiState.BufferWidth; $x++) {
+                $currentCell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
+                $previousCell = $global:TuiState.PreviousCompositorBuffer.GetCell($x, $y)
+                
+                # Use the new DiffersFrom method on TuiCell for comprehensive comparison.
+                if ($currentCell.DiffersFrom($previousCell)) {
+                    # Position cursor to the specific cell using ANSI (SGR H).
+                    # Add 1 to X and Y for 1-based ANSI coordinates.
+                    [void]$output.Append("`e[" + ($y + 1) + ";" + ($x + 1) + "H")
+                    
+                    # Generate ANSI style sequence if current style differs from last applied.
+                    # This ensures minimal ANSI codes are sent.
+                    if ($currentCell.ForegroundColor -ne $currentFg -or
+                        $currentCell.BackgroundColor -ne $currentBg -or
+                        $currentCell.Bold -ne $currentBold -or
+                        $currentCell.Italic -ne $currentItalic -or
+                        $currentCell.Underline -ne $currentUnderline -or
+                        $currentCell.Strikethrough -ne $currentStrikethrough)
+                    {
+                        # Reset styles if any attribute changes to ensure clean application.
+                        [void]$output.Append([TuiAnsiHelper]::Reset())
+                        
+                        # Generate and append the new ANSI sequence for current cell's style.
+                        [void]$output.Append([TuiAnsiHelper]::GetAnsiSequence(
+                            $currentCell.ForegroundColor, 
+                            $currentCell.BackgroundColor,
+                            @{ Bold = $currentCell.Bold; Italic = $currentCell.Italic; Underline = $currentCell.Underline; Strikethrough = $currentCell.Strikethrough }
+                        ))
+                        
+                        # Update current state trackers.
+                        $currentFg = $currentCell.ForegroundColor
+                        $currentBg = $currentCell.BackgroundColor
+                        $currentBold = $currentCell.Bold
+                        $currentItalic = $currentCell.Italic
+                        $currentUnderline = $currentCell.Underline
+                        $currentStrikethrough = $currentCell.Strikethrough
+                    }
+                    
+                    # Append the character to the output.
+                    [void]$output.Append($currentCell.Char)
+                }
+            }
+        }
+        
+        # Reset colors and styles at the end to not affect the prompt.
+        [void]$output.Append([TuiAnsiHelper]::Reset())
+        # Move cursor to end of screen for a clean prompt.
+        [void]$output.Append("`e[" + ($global:TuiState.BufferHeight) + ";1H")
+        
+        # Write the accumulated ANSI string to the console.
+        if ($output.Length -gt 0) {
+            [Console]::Write($output.ToString())
+        }
+    }
+    catch {
+        # Log critical rendering errors.
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Compositor To Console Render" -ScriptBlock { throw $_ }
+    }
+}
+
+function Cleanup-TuiEngine {
+    <#
+    .SYNOPSIS
+    Cleans up all TUI engine resources.
+    
+    .DESCRIPTION
+    Performs complete cleanup of the TUI engine: stopping background threads,
+    disposing of services, cleaning up UI components, and restoring console state.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        Write-Log -Level Info -Message "Cleaning up TUI Engine."
+        
+        # 1. Stop the main application loop flag.
+        $global:TuiState.Running = $false
+
+        # 2. Clean up screens and overlays (trigger Dispose/Cleanup on them).
+        # RequestExit() from NavigationService should handle screen cleanup, but this is a fallback.
+        if ($global:TuiState.CurrentScreen) {
+            Write-Log -Level Debug -Message "Calling cleanup on current screen: $($global:TuiState.CurrentScreen.Name)."
+            $global:TuiState.CurrentScreen.Cleanup()
+            $global:TuiState.CurrentScreen = $null
+        }
+        while ($global:TuiState.ScreenStack.Count -gt 0) {
+            $screen = $global:TuiState.ScreenStack.Pop()
+            Write-Log -Level Debug -Message "Calling cleanup on stacked screen: $($screen.Name)."
+            $screen.Cleanup()
+        }
+        # Clean up overlays.
+        foreach ($overlay in $global:TuiState.OverlayStack.ToArray()) { # Iterate copy to allow removal.
+            Write-Log -Level Debug -Message "Calling cleanup on overlay: $($overlay.Name)."
+            $overlay.Cleanup()
+        }
+        $global:TuiState.OverlayStack.Clear()
+        
+        # 3. Stop the asynchronous input thread.
+        if ($global:TuiState.CancellationTokenSource) {
+            $global:TuiState.CancellationTokenSource.Cancel() # Signal cancellation.
+        }
+        if ($global:TuiState.InputPowerShell) {
+            # Wait for the input thread to complete its work or time out.
+            $global:TuiState.InputAsyncResult.AsyncWaitHandle.WaitOne(2000) | Out-Null # Wait up to 2 seconds.
+            if (-not $global:TuiState.InputAsyncResult.IsCompleted) {
+                 Write-Log -Level Warning -Message "Input thread did not complete gracefully within timeout."
+            }
+            $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult) # Harvest any exceptions/results.
+            $global:TuiState.InputPowerShell.Dispose() # Dispose the PowerShell instance.
+        }
+        if ($global:TuiState.InputRunspace) {
+            $global:TuiState.InputRunspace.Close() # Close the runspace.
+            $global:TuiState.InputRunspace.Dispose() # Dispose the runspace.
+        }
+        if ($global:TuiState.CancellationTokenSource) {
+            $global:TuiState.CancellationTokenSource.Dispose() # Dispose the cancellation token source.
+        }
+        
+        # 4. Dispose of the ServiceContainer (which will dispose all registered IDisposable services).
+        if ($global:TuiState.Services -is [System.IDisposable]) {
+            Write-Log -Level Debug -Message "Disposing ServiceContainer."
+            $global:TuiState.Services.Dispose()
+        }
+        $global:TuiState.Services = $null # Clear global reference.
+
+        # 5. Restore original console state.
+        [Console]::CursorVisible = $true # Make cursor visible again.
+        [Console]::TreatControlCAsInput = $false # Restore default Ctrl+C behavior.
+        [Console]::ResetColor() # Reset console colors to default.
+        [Console]::Clear() # Clear the screen one last time.
+        
+        Write-Log -Level Info -Message "TUI Engine cleanup completed."
+    }
+    catch {
+        # Log errors during cleanup but attempt to continue to ensure a clean exit as much as possible.
+        Write-Error "Error during TUI cleanup: $($_.Exception.Message)."
+    }
+}
+
+#endregion
+
+#region Screen & Overlay Management - Public API for TUI Engine
+
+function Push-Screen {
+    <#
+    .SYNOPSIS
+    Pushes a new screen onto the TUI engine's screen stack and makes it active.
+    
+    .DESCRIPTION
+    This function should be called by the `NavigationService` or other high-level
+    components to change the primary application view. It handles:
+    - Calling `OnExit` on the previous screen.
+    - Pushing the previous screen onto the stack.
+    - Setting the new screen as current.
+    - Resizing and calling `OnInitialize`/`OnEnter` on the new screen.
+    - Requesting a redraw.
+    
+    .PARAMETER Screen
+    The `Screen` object to push onto the stack.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [Screen]$Screen
+    )
+    
+    if ($null -eq $Screen) { return } # Defensive check.
+    
+    try {
+        Write-Log -Level Debug -Message "TUI Engine: Pushing screen: $($Screen.Name)."
+        
+        # This function is meant to be called by NavigationService's PushScreen.
+        # It's an internal engine function for screen management.
+        # It handles setting the global TuiState.CurrentScreen and preparing it for render.
+        $global:TuiState.CurrentScreen = $Screen 
+        
+        # Ensure the screen is sized correctly to the current buffer dimensions.
+        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        
+        # The screen's OnInitialize and OnEnter should already be called by NavigationService.
+        # This is primarily for the TUI Engine to manage the global CurrentScreen reference
+        # and trigger a redraw.
+        
+        $Screen.RequestRedraw() # Mark the new screen as needing a full redraw.
+        Request-TuiRefresh # Request the TUI engine to refresh its display.
+        
+        Write-Log -Level Debug -Message "TUI Engine: Screen '$($Screen.Name)' is now the current display screen."
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Push Screen: $($Screen.Name)" -ScriptBlock { throw $_ }
+    }
+}
+
+function Pop-Screen {
+    <#
+    .SYNOPSIS
+    Pops the current screen from the TUI engine's screen stack, returning to the previous one.
+    
+    .DESCRIPTION
+    This function should be called by the `NavigationService` or other high-level
+    components to navigate back. It handles:
+    - Setting the previous screen as current.
+    - Calling `OnResume` on the new current screen.
+    - Requesting a redraw.
+    - The `NavigationService` is responsible for calling `OnExit` and `Cleanup` on the popped screen.
+    
+    .OUTPUTS
+    [bool] Returns true if a screen was popped, false if the stack is empty.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    # This function is usually called by NavigationService.PopScreen.
+    # NavigationService manages the `ScreenStack` and calls `OnExit`/`Cleanup` on the old screen.
+    # Here, we just need to update the `global:TuiState.CurrentScreen` to the top of `ScreenStack`.
+    
+    if ($global:TuiState.ScreenStack.Count -eq 0) {
+        Write-Log -Level Warning -Message "TUI Engine: Cannot pop screen; screen stack is empty."
+        return $false
+    }
+    
+    try {
+        Write-Log -Level Debug -Message "TUI Engine: Popping screen."
+        
+        # The NavigationService has already popped the screen from its own stack.
+        # We need to reflect that change by setting our CurrentScreen to the new top of the NavigationService's stack.
+        $navigationService = $global:TuiState.Services.GetService("NavigationService")
+        if ($null -eq $navigationService) {
+            throw [System.InvalidOperationException]::new("NavigationService not found for screen popping.")
+        }
+        
+        # The new current screen is the one that was previously pushed onto NavigationService's stack.
+        # Get it from NavigationService's CurrentScreen property.
+        $global:TuiState.CurrentScreen = $navigationService.GetCurrentScreen() 
+
+        # If there's a new current screen, ensure it's sized correctly.
+        if ($global:TuiState.CurrentScreen) {
+            $global:TuiState.CurrentScreen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        }
+        
+        Request-TuiRefresh # Request a full redraw to reflect the screen change.
+        
+        Write-Log -Level Debug -Message "TUI Engine: Screen popped successfully, now displaying '$($global:TuiState.CurrentScreen?.Name ?? 'None')'."
+        return $true
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Pop Screen" -ScriptBlock { throw $_ }
+        return $false
+    }
+}
+
+function Show-TuiOverlay {
+    <#
+    .SYNOPSIS
+    Shows an overlay element (like a dialog) on top of the current screen.
+    
+    .DESCRIPTION
+    Adds a `UIElement` (typically a `Dialog` subclass) to the engine's overlay stack.
+    The engine will render overlays on top of the current screen.
+    The overlay's `OnInitialize` method should be called by the caller (e.g., `Dialog.Show()`).
+    
+    .PARAMETER Element
+    The `UIElement` to show as an overlay.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [UIElement]$Element
+    )
+    
+    try {
+        Write-Log -Level Debug -Message "TUI Engine: Showing overlay: $($Element.Name)."
+        
+        # Add the element to the overlay stack. Last element added is typically rendered on top.
+        $global:TuiState.OverlayStack.Add($Element)
+        
+        Request-TuiRefresh # Force a redraw to show the new overlay immediately.
+        
+        Write-Log -Level Debug -Message "TUI Engine: Overlay '$($Element.Name)' added to stack."
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Show Overlay: $($Element.Name)" -ScriptBlock { throw $_ }
+    }
+}
+
+function Close-TopTuiOverlay {
+    <#
+    .SYNOPSIS
+    Closes the topmost overlay element.
+    
+    .DESCRIPTION
+    Removes the topmost overlay from the engine's overlay stack.
+    It triggers cleanup on the removed overlay.
+    
+    .EXAMPLE
+    Close-TopTuiOverlay
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        if ($global:TuiState.OverlayStack.Count -gt 0) {
+            $overlay = $global:TuiState.OverlayStack[-1] # Get topmost element.
+            $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1) # Remove it.
+            
+            # Important: Clear focus if the closed overlay or one of its children was focused.
+            if ($global:TuiState.FocusedComponent -and ($global:TuiState.FocusedComponent -eq $overlay -or $global:TuiState.FocusedComponent.Parent -eq $overlay)) {
+                $global:TuiState.FocusedComponent.OnBlur() # Blur the component.
+                $global:TuiState.FocusedComponent = $null # Clear the global focus.
+            }
+
+            # Call Cleanup on the removed overlay to release its resources.
+            # (UIElement.Cleanup cascades to children and unsubscribes events).
+            $overlay.Cleanup()
+            
+            Request-TuiRefresh # Force a redraw to remove the overlay from display.
+            
+            Write-Log -Level Debug -Message "TUI Engine: Top overlay closed and cleaned: $($overlay.Name)."
+        }
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Close Top Overlay" -ScriptBlock { throw $_ }
+    }
+}
+
+#endregion
+
+#region Focus Management - Public API for TUI Engine
+
+function Set-ComponentFocus {
+    <#
+    .SYNOPSIS
+    Sets keyboard input focus to a specific UI component.
+    
+    .DESCRIPTION
+    Manages the global focus state. It first blurs the currently focused component
+    (if any) by calling its `OnBlur` method, then sets the new component as focused
+    by calling its `OnFocus` method and updating `$global:TuiState.FocusedComponent`.
+    
+    .PARAMETER Component
+    The `UIElement` to focus. Must be focusable (`IsFocusable` = $true).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [UIElement]$Component
+    )
+    
+    try {
+        if ($null -eq $Component) {
+            # If null component, simply clear focus.
+            if ($global:TuiState.FocusedComponent) {
+                $global:TuiState.FocusedComponent.OnBlur()
+                $global:TuiState.FocusedComponent = $null
+                Request-TuiRefresh
+                Write-Log -Level Debug -Message "TUI Engine: Focus cleared."
+            }
+            return
+        }
+
+        if (-not $Component.IsFocusable) {
+            Write-Log -Level Warning -Message "TUI Engine: Cannot set focus to non-focusable component: $($Component.Name)."
+            return
+        }
+        
+        # Do nothing if the component is already focused.
+        if ($global:TuiState.FocusedComponent -eq $Component) {
+            Write-Verbose "TUI Engine: Component '$($Component.Name)' already has focus. No change."
+            return
+        }
+
+        # Blur the previously focused component.
+        if ($global:TuiState.FocusedComponent) {
+            $global:TuiState.FocusedComponent.OnBlur()
+            Write-Log -Level Debug -Message "TUI Engine: Blurred previous focused component: $($global:TuiState.FocusedComponent.Name)."
+        }
+        
+        # Set the new focused component and call its OnFocus method.
+        $global:TuiState.FocusedComponent = $Component
+        $Component.OnFocus()
+        
+        # If focusing a component on the current screen, update the screen's last focused component.
+        # This allows navigation service to restore focus to where it was.
+        # Find the top-level parent that is either the current screen or an overlay.
+        $topLevelParent = $Component
+        while ($topLevelParent.Parent -ne $null -and $topLevelParent.Parent -ne $global:TuiState.CurrentScreen -and -not $global:TuiState.OverlayStack.Contains($topLevelParent.Parent)) {
+            $topLevelParent = $topLevelParent.Parent
+        }
+
+        if ($topLevelParent -eq $global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen) {
+             $global:TuiState.CurrentScreen.LastFocusedComponent = $Component # Store the specific component.
+             Write-Verbose "TUI Engine: Updated CurrentScreen.LastFocusedComponent to $($Component.Name)."
+        } else {
+             # If focused component is within an overlay, the overlay itself might manage its internal focus.
+             # No specific global tracking for overlay internal focus, relies on overlay's HandleInput.
+        }
+        
+        Request-TuiRefresh # Request a redraw to show the focus change.
+        
+        Write-Log -Level Debug -Message "TUI Engine: Focus set to component: $($Component.Name)."
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Set Component Focus: $($Component?.Name)" -ScriptBlock { throw $_ }
+    }
+}
+
+function Get-FocusedComponent {
+    <#
+    .SYNOPSIS
+    Gets the currently focused component.
+    
+    .DESCRIPTION
+    Returns the `UIElement` that currently has keyboard input focus, or `$null` if no component is focused.
+    
+    .OUTPUTS
+    [UIElement] The currently focused component, or null.
+    
+    .EXAMPLE
+    $focused = Get-FocusedComponent
+    #>
+    [CmdletBinding()]
+    param()
+    
+    return $global:TuiState.FocusedComponent
+}
+
+#endregion
+
+#region Utility Functions - Public API for TUI Engine
+
+function Request-TuiRefresh {
+    <#
+    .SYNOPSIS
+    Requests a refresh of the TUI display.
+    
+    .DESCRIPTION
+    Marks the TUI as dirty, forcing it to be redrawn on the next frame of the main loop.
+    This is essential after any UI state changes that are not automatically tracked by `SetCell`.
+    
+    .EXAMPLE
+    Request-TuiRefresh
+    #>
+    [CmdletBinding()]
+    param()
+    
+    $global:TuiState.IsDirty = $true
+    Write-Verbose "TUI Engine: Refresh requested (IsDirty set to true)."
+}
+
+function Show-DebugInfo {
+    <#
+    .SYNOPSIS
+    Shows debug information about the TUI state.
+    
+    .DESCRIPTION
+    Displays a modal `AlertDialog` containing various debugging information about the
+    TUI engine's current state, performance statistics, and memory usage.
+    Requires `dialog-system-class.psm1` to be loaded.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    try {
+        # Check if AlertDialog is available (from dialog-system-class.psm1)
+        if (-not (Get-Command Show-AlertDialog -ErrorAction SilentlyContinue)) {
+            Write-Log -Level Warning -Message "Show-DebugInfo: Show-AlertDialog function not found. Cannot display debug info in a dialog."
+            Write-Host "TUI Engine Debug Info (to console):"
+            $global:TuiState | Format-List
+            return
+        }
+
+        $process = Get-Process -Id $PID -ErrorAction SilentlyContinue
+        $memoryMB = if ($process) { [Math]::Round($process.WorkingSet64 / 1MB, 2) } else { "N/A" }
+
+        $debugInfo = @"
+=== TUI Engine Debug Information ===
+Running: $($global:TuiState.Running)
+Buffer Size: $($global:TuiState.BufferWidth) x $($global:TuiState.BufferHeight)
+Frame Count: $($global:TuiState.RenderStats.FrameCount)
+Last Frame Time: $($global:TuiState.RenderStats.LastFrameTime)ms
+Average Frame Time: $($global:TuiState.RenderStats.AverageFrameTime)ms
+Target FPS: $($global:TuiState.RenderStats.TargetFPS)
+Screen Stack Depth: $($global:TuiState.ScreenStack.Count)
+Overlay Count: $($global:TuiState.OverlayStack.Count)
+Current Screen: $($global:TuiState.CurrentScreen?.Name ?? 'None')
+Focused Component: $($global:TuiState.FocusedComponent?.Name ?? 'None')
+Input Queue Size: $($global:TuiState.InputQueue.Count)
+Memory Usage: $($memoryMB) MB (Working Set)
+PS Version: $($PSVersionTable.PSVersion)
+OS: $($PSVersionTable.OS)
+=== End Debug Information ===
+"@
+        
+        Write-Log -Level Info -Message $debugInfo # Always log debug info.
+        
+        Show-AlertDialog -Title "TUI Engine Debug Info" -Message $debugInfo | Out-Null # Show as a modal dialog.
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "TUI Engine" -Context "Show Debug Info" -ScriptBlock { throw $_ }
+    }
+}
+
+#endregion
+
+#region Module Exports
+
+# Export public functions that form the TUI Engine's public API.
+Export-ModuleMember -Function `
+    Initialize-TuiEngine, Start-TuiLoop, Cleanup-TuiEngine, `
+    Push-Screen, Pop-Screen, Show-TuiOverlay, Close-TopTuiOverlay, `
+    Set-ComponentFocus, Get-FocusedComponent, Request-TuiRefresh, `
+    Show-DebugInfo
+
+# Export the global TUI state variable for advanced scenarios or debugging.
+Export-ModuleMember -Variable TuiState
+
+# Note: Render-Frame, Process-TuiInput, Check-ForResize, Handle-GlobalShortcuts
+# and Render-CompositorToConsole are internal to the engine's operation and are NOT exported.
+
+#endregion
+```
+
+---
+
+**3. Integration Ideas for Axiom-Phoenix:**
+
+1.  **Update `run.ps1`'s Module Load Order:**
+    *   This is **critical**. `tui-engine.psm1` should be the **absolute last** module loaded in `run.ps1` because it orchestrates the entire UI framework and relies on *all* other components, services, and base classes being available. Its `Initialize-TuiEngine` must be able to resolve `TuiBuffer`, `TuiCell`, `Screen`, `UIElement`, `Dialog`, and services like `KeybindingService` and the `ServiceContainer`.
+
+    ```powershell
+    # --- run.ps1 Snippet ---
+    $FileLoadOrder = @(
+        'modules/logger/logger.psm1',
+        'modules/panic-handler/panic-handler.psm1',
+        'modules/exceptions/exceptions.psm1',
+        'modules/event-system/event-system.psm1',
+        
+        # Core TUI Primitives and Base Classes ( foundational )
+        'components/tui-primitives/tui-primitives.psm1', 
+        'components/ui-classes/ui-classes.psm1',
+        'layout/panels-class/panels-class.psm1', # Panel, ScrollablePanel, GroupPanel (depend on UIElement)
+        
+        'modules/theme-engine/theme-engine.psm1', # ThemeEngine after primitives
+        
+        # Models and Data Management
+        'modules/models/models.psm1',
+        'modules/data-manager/data-manager.psm1',
+        
+        # Services
+        'services/service-container/service-container.psm1',
+        'services/action-service/action-service.psm1',
+        'services/keybinding-service/keybinding-service.psm1',
+        'services/keybinding-service-class/keybinding-service-class.psm1',
+        'services/navigation-service/navigation-service.psm1',
+        'services/navigation-service-class/navigation-service-class.psm1',
+        # (Optional: Add other services like timesheet-service here)
+        
+        # Components & Dialogs (depend on primitives, UI classes, and potentially services)
+        'components/tui-components/tui-components.psm1',
+        'components/advanced-data-components/advanced-data-components.psm1',
+        'components/advanced-input-components/advanced-input-components.psm1',
+        'components/navigation-class/navigation-class.psm1', # Navigation menu component (if still used, needs style refactor)
+        'modules/dialog-system-class/dialog-system-class.psm1', # Includes CommandPalette now (depends on textbox, table)
+        
+        # Screens (depend on almost everything, including components and services)
+        'screens/dashboard-screen/dashboard-screen.psm1',
+        'screens/task-list-screen/task-list-screen.psm1',
+        'screens/task-flow-screen/task-flow-screen.psm1', # Kanban screen (if added in previous step)
+        # (Optional: Add other screens here)
+        
+        # Global commands (depend on services like ActionService, NavigationService)
+        # 'commands/global-commands.psm1', # If you centralize global actions there.
+
+        # TUI Framework (Provides service, loads after other services)
+        'modules/tui-framework/tui-framework.psm1',
+        
+        # TUI Engine (ABSOLUTELY LAST: Orchestrates everything, needs all definitions loaded)
+        'modules/tui-engine/tui-engine.psm1' 
+    )
+    # ... rest of run.ps1 remains similar ...
+    ```
+
+2.  **Update `run.ps1`'s Engine and Initial Screen Setup:**
+    *   The `Initialize-TuiEngine` call will now automatically get the `ServiceContainer` from `$global:AxiomServices`.
+    *   The `Start-TuiLoop` call now relies on `NavigationService.PushScreen` to set the `CurrentScreen`.
+
+    ```powershell
+    # --- run.ps1 Snippet ---
+    # ... (After ServiceContainer and service registrations) ...
+    
+    # 7. Initialize the TUI Engine
+    Write-Host "Starting TUI Engine..." -ForegroundColor Yellow
+    Initialize-TuiEngine # No parameters needed, it picks up global:AxiomServices
+
+    # 8. Create and push the initial screen (via NavigationService)
+    Write-Host "Creating initial dashboard screen..." -ForegroundColor Yellow
+    # NavigationService's PushScreen handles OnInitialize, OnEnter, and passing to TUI Engine's Push-Screen.
+    $navService.PushScreen("DashboardScreen") # Or $navService.GoTo("/")
+    # This automatically sets $global:TuiState.CurrentScreen within the engine.
+
+    # 9. Start the main application loop
+    Write-Host "Starting main application loop... Press Ctrl+P to open the Command Palette." -ForegroundColor Yellow
+    # The `InitialScreen` parameter of `Start-TuiLoop` is still required, but you pass the screen
+    # that `NavigationService` has already made current.
+    Start-TuiLoop -InitialScreen $global:TuiState.CurrentScreen 
+    
+    # ... (finally block with Cleanup-TuiEngine) ...
+    ```
+3.  **Review and Refactor `Task List Screen` and `Dashboard Screen` Input Handling:**
+    *   The `Process-TuiInput` function in `tui-engine.psm1` now has a clear priority for input routing. Review the `HandleInput` methods in `DashboardScreen` and `TaskListScreen`.
+    *   They should now primarily deal with screen-specific input that wasn't handled by focused components or overlays. For example, a `TaskListScreen`'s `HandleInput` method might simply return `$this._taskTable.HandleInput($keyInfo)` to delegate directly to the table when the table is the main interactive component on that screen.
+    *   Similarly, `DashboardScreen`'s `HandleInput` will catch general F5 refreshes, but most other interaction is expected to go through the Command Palette.
+
+This comprehensive overhaul of the TUI Engine is a major leap forward, ensuring your application is highly performant, responsive, and robust.
+
+
+
+
+Okay, let's move to the eighth significant improvement (as you've already completed 7 prior steps). This one focuses on modernizing your basic TUI components to be fully theme-aware.
+
+---
+
+### Improvement 8: Theme-Aware Core UI Components
+
+**1. Explanation of Value:**
+
+This step refactors your fundamental UI building blocks (`LabelComponent`, `ButtonComponent`, `TextBoxComponent`, `CheckBoxComponent`, `RadioButtonComponent`) to fully integrate with the new `ThemeEngine` and the `TuiAnsiHelper` for truecolor output and rich styling.
+
+*   **Centralized Styling**: Components no longer hardcode `ConsoleColor` values or define their own basic colors. Instead, their `OnRender` methods query the `ThemeEngine` service for predefined styles (e.g., `Components.Button.Focus.FG`).
+*   **Dynamic Theming**: Changes to the active theme (via `Set-TuiTheme`) will automatically be reflected in these components on their next redraw, without any code changes within the components themselves.
+*   **Consistent Appearance**: Ensures a unified look and feel across your application, as all components derive their appearance from the same central theme configuration.
+*   **Reduced Boilerplate**: The `OnRender` methods become cleaner by simply retrieving a `style` hashtable and passing it directly to `Write-TuiText` or `Write-TuiBox`.
+*   **Seamless Truecolor**: By using `ThemeEngine` and `TuiAnsiHelper` (via `Write-TuiText`/`Write-TuiBox`), these components natively support 24-bit truecolors.
+*   **"Drop-in Replacement" Factory Functions**: The `New-Tui...` factory functions are preserved, maintaining compatibility with existing code that uses them.
+
+**2. Relevant Code to Pull:**
+
+You'll need to **replace** the entire content of `components\tui-components\tui-components.psm1` with the new version below.
+
+---
+
+**Code Block 1: `components\tui-components\tui-components.psm1` (Full Replacement)**
+
+```powershell
+# ==============================================================================
+# TUI Components Module v5.0 - Theme-Aware Edition
+# Core interactive UI components with theme integration and advanced features
+# ==============================================================================
+
+using namespace System.Management.Automation
+using namespace System # For Math
+
+#region Core UI Components
+
+class LabelComponent : UIElement {
+    [string]$Text = ""
+    # Property for direct color override, but theme-based is preferred
+    hidden [string]$_foregroundColor = $null 
+
+    LabelComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $false
+        $this.Width = 10
+        $this.Height = 1
+        Write-Verbose "LabelComponent: Constructor called for '$($this.Name)'"
+    }
+
+    # Allow setting ForegroundColor as a hex string for direct overrides
+    [string] get_ForegroundColor() { return $this._foregroundColor }
+    [void] set_ForegroundColor([string]$value) {
+        if ($null -eq $value -or $value -match '^#[0-9A-Fa-f]{6}$') {
+            $this._foregroundColor = $value
+        } else {
+            Write-Warning "LabelComponent '$($this.Name)': Invalid ForegroundColor format: '$value'. Must be '#RRGGBB' or null."
+        }
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # Get theme styles
+            $themeEngine = $global:AxiomServices.ThemeEngine
+            $defaultStyle = $themeEngine.GetStyle("Components.Default")
+            $labelStyle = $themeEngine.GetStyle("Components.Label")
+            
+            # Combine styles, allowing explicit property override
+            $currentStyle = $defaultStyle.Clone()
+            foreach($key in $labelStyle.Keys) { $currentStyle[$key] = $labelStyle[$key] }
+            if ($null -ne $this._foregroundColor) { $currentStyle.FG = $this._foregroundColor } # Explicit override
+
+            # Clear buffer with the default background for the component
+            $this._private_buffer.Clear([TuiCell]::new(' ', $currentStyle.FG, $currentStyle.BG))
+            
+            # Write text using the resolved style
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -Style $currentStyle
+            Write-Verbose "LabelComponent '$($this.Name)': Rendered text '$($this.Text)'"
+        }
+        catch {
+            Write-Error "LabelComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        return $false # Labels don't handle input
+    }
+
+    [string] ToString() {
+        return "LabelComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class ButtonComponent : UIElement {
+    [string]$Text = "Button"
+    [bool]$IsPressed = $false
+    [scriptblock]$OnClick
+
+    ButtonComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 10
+        $this.Height = 3
+        Write-Verbose "ButtonComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $themeEngine = $global:AxiomServices.ThemeEngine
+            # Get base button styles for different states
+            $buttonNormalStyle = $themeEngine.GetStyle("Components.Button")
+            $buttonFocusStyle = $themeEngine.GetStyle("Components.Button.Focus")
+            $buttonPressedStyle = $themeEngine.GetStyle("Components.Button.Pressed")
+            
+            # Determine which style to apply based on component state
+            $currentStyle = $buttonNormalStyle # Start with normal style
+            if ($this.IsPressed) { 
+                # Merge pressed style over normal/focus style
+                $currentStyle = $buttonPressedStyle.Clone()
+                foreach($key in $buttonNormalStyle.Keys) { if (-not $currentStyle.ContainsKey($key)) { $currentStyle[$key] = $buttonNormalStyle[$key] } }
+            } elseif ($this.IsFocused) { 
+                # Merge focus style over normal style
+                $currentStyle = $buttonFocusStyle.Clone()
+                foreach($key in $buttonNormalStyle.Keys) { if (-not $currentStyle.ContainsKey($key)) { $currentStyle[$key] = $buttonNormalStyle[$key] } }
+            }
+
+            # Extract style properties for Write-TuiBox/Write-TuiText
+            $boxStyle = @{
+                BorderStyle = $currentStyle.BorderStyle ?? "Single"
+                BorderFG = $currentStyle.BorderFG
+                BG = $currentStyle.BG
+                TitleFG = $currentStyle.FG # Button text is often the title of its "box"
+                TitleStyle = @{ Bold = $currentStyle.Bold; Italic = $currentStyle.Italic; Underline = $currentStyle.Underline; Strikethrough = $currentStyle.Strikethrough }
+            }
+
+            # Clear buffer and draw button box
+            $this._private_buffer.Clear([TuiCell]::new(' ', $currentStyle.FG, $currentStyle.BG))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style $boxStyle
+            
+            # Center text within the box (not as title, but as content)
+            $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
+            $textY = [Math]::Floor(($this.Height - 1) / 2)
+            # Use the same currentStyle for the text
+            Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -Style $currentStyle
+            
+            Write-Verbose "ButtonComponent '$($this.Name)': Rendered in state (Pressed: $($this.IsPressed), Focused: $($this.IsFocused))"
+        }
+        catch {
+            Write-Error "ButtonComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                $this.IsPressed = $true
+                $this.RequestRedraw()
+                
+                # Perform the action on the same thread but allow visual feedback.
+                # Consider using TuiFrameworkService.StartAsync for long-running actions
+                # if the OnClick script block might block.
+                if ($this.OnClick) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnClick" -ScriptBlock {
+                        & $this.OnClick
+                    }
+                }
+                
+                # Brief visual feedback for the pressed state
+                Start-Sleep -Milliseconds 50
+                $this.IsPressed = $false
+                $this.RequestRedraw()
+                
+                Write-Verbose "ButtonComponent '$($this.Name)': Click event handled"
+                return $true
+            }
+            catch {
+                Write-Error "ButtonComponent '$($this.Name)': Error handling click: $($_.Exception.Message)"
+                $this.IsPressed = $false
+                $this.RequestRedraw()
+            }
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "ButtonComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class TextBoxComponent : UIElement {
+    [string]$Text = ""
+    [string]$Placeholder = ""
+    [ValidateRange(1, [int]::MaxValue)][int]$MaxLength = 100
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+    hidden [int]$_scrollOffset = 0 # Tracks the start of the visible text window
+
+    TextBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 3
+        Write-Verbose "TextBoxComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $themeEngine = $global:AxiomServices.ThemeEngine
+            # Get theme styles for normal and focused states
+            $textBoxStyle = $themeEngine.GetStyle("Components.TextBox")
+            $textBoxFocusStyle = $themeEngine.GetStyle("Components.TextBox.Focus")
+            
+            # Determine current style based on focus
+            $currentStyle = $textBoxStyle.Clone()
+            if ($this.IsFocused) {
+                foreach($key in $textBoxFocusStyle.Keys) { $currentStyle[$key] = $textBoxFocusStyle[$key] }
+            }
+
+            # Prepare for box drawing
+            $boxStyle = @{
+                BorderStyle = $currentStyle.BorderStyle ?? "Single"
+                BorderFG = $currentStyle.BorderFG
+                BG = $currentStyle.BG
+                TitleFG = $null # Textbox doesn't typically have a title
+                TitleStyle = $null
+            }
+
+            # Clear buffer and draw border
+            $this._private_buffer.Clear([TuiCell]::new(' ', $currentStyle.FG, $currentStyle.BG))
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style $boxStyle
+
+            $textAreaWidth = $this.Width - 2
+            $displayText = $this.Text ?? ""
+            $textToDisplay = $displayText
+            $textStyle = @{ FG = $currentStyle.FG; BG = $currentStyle.BG } # Style for actual text
+
+            # Show placeholder if empty and not focused
+            if ([string]::IsNullOrEmpty($displayText) -and -not $this.IsFocused) {
+                $textToDisplay = $this.Placeholder ?? ""
+                $textStyle.FG = $currentStyle.PlaceholderFG ?? $currentStyle.FG
+            }
+
+            # Apply viewport scrolling logic to textToDisplay, but also for cursor calculation
+            if ($textToDisplay.Length -gt $textAreaWidth) {
+                $textToDisplay = $textToDisplay.Substring($this._scrollOffset, [Math]::Min($textAreaWidth, $textToDisplay.Length - $this._scrollOffset))
+            }
+
+            # Draw text
+            if (-not [string]::IsNullOrEmpty($textToDisplay)) {
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $textToDisplay -Style $textStyle
+            }
+
+            # Render non-destructive block cursor
+            if ($this.IsFocused) {
+                $cursorX = 1 + ($this.CursorPosition - $this._scrollOffset)
+                if ($cursorX -ge 1 -and $cursorX -lt ($this.Width - 1)) {
+                    # Get the cell at cursor position to preserve its character, but change its colors.
+                    $cell = $this._private_buffer.GetCell($cursorX, 1)
+                    if ($null -ne $cell) {
+                        # Use cursor colors from theme, falling back to accent/background
+                        $cell.BackgroundColor = $currentStyle.CursorBG ?? $themeEngine.GetStyle("Palette.accent1")
+                        $cell.ForegroundColor = $currentStyle.CursorFG ?? $themeEngine.GetStyle("Palette.background")
+                        $this._private_buffer.SetCell($cursorX, 1, $cell)
+                    }
+                }
+            }
+            
+            Write-Verbose "TextBoxComponent '$($this.Name)': Rendered text (length: $($this.Text.Length), cursor: $($this.CursorPosition))"
+        }
+        catch {
+            Write-Error "TextBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        try {
+            $currentText = $this.Text ?? ""
+            $cursorPos = $this.CursorPosition
+            $originalText = $currentText
+            $handled = $true
+
+            switch ($key.Key) {
+                ([ConsoleKey]::Backspace) {
+                    if ($cursorPos -gt 0) {
+                        $this.Text = $currentText.Remove($cursorPos - 1, 1)
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::Delete) {
+                    if ($cursorPos -lt $currentText.Length) {
+                        $this.Text = $currentText.Remove($cursorPos, 1)
+                    }
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    if ($cursorPos -gt 0) {
+                        $this.CursorPosition--
+                    }
+                }
+                ([ConsoleKey]::RightArrow) {
+                    if ($cursorPos -lt $this.Text.Length) {
+                        $this.CursorPosition++
+                    }
+                }
+                ([ConsoleKey]::Home) {
+                    $this.CursorPosition = 0
+                }
+                ([ConsoleKey]::End) {
+                    $this.CursorPosition = $this.Text.Length
+                }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar) -and $currentText.Length -lt $this.MaxLength) {
+                        $this.Text = $currentText.Insert($cursorPos, $key.KeyChar)
+                        $this.CursorPosition++
+                    } else {
+                        $handled = $false
+                    }
+                }
+            }
+
+            if ($handled) {
+                $this._UpdateScrollOffset()
+                
+                # Trigger change event if text changed
+                if ($this.Text -ne $originalText -and $this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Text
+                    }
+                }
+                
+                $this.RequestRedraw()
+                Write-Verbose "TextBoxComponent '$($this.Name)': Input handled, new text: '$($this.Text)'"
+            }
+            
+            return $handled
+        }
+        catch {
+            Write-Error "TextBoxComponent '$($this.Name)': Error handling input: $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    # Update scroll offset to keep cursor visible
+    hidden [void] _UpdateScrollOffset() {
+        $textAreaWidth = $this.Width - 2
+        
+        # Scroll right if cursor is beyond visible area
+        if ($this.CursorPosition -gt ($this._scrollOffset + $textAreaWidth - 1)) {
+            $this._scrollOffset = $this.CursorPosition - $textAreaWidth + 1
+        }
+        
+        # Scroll left if cursor is before visible area
+        if ($this.CursorPosition -lt $this._scrollOffset) {
+            $this._scrollOffset = $this.CursorPosition
+        }
+        
+        # Ensure scroll offset is within bounds
+        $maxScroll = [Math]::Max(0, $this.Text.Length - $textAreaWidth)
+        $this._scrollOffset = [Math]::Min($this._scrollOffset, $maxScroll)
+        $this._scrollOffset = [Math]::Max(0, $this._scrollOffset)
+    }
+
+    [string] ToString() {
+        return "TextBoxComponent(Name='$($this.Name)', Text='$($this.Text)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class CheckBoxComponent : UIElement {
+    [string]$Text = "Checkbox"
+    [bool]$Checked = $false
+    [scriptblock]$OnChange
+
+    CheckBoxComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+        Write-Verbose "CheckBoxComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $themeEngine = $global:AxiomServices.ThemeEngine
+            $checkBoxStyle = $themeEngine.GetStyle("Components.CheckBox")
+            $checkBoxFocusStyle = $themeEngine.GetStyle("Components.CheckBox.Focus")
+            
+            $currentStyle = $checkBoxStyle.Clone()
+            if ($this.IsFocused) {
+                foreach($key in $checkBoxFocusStyle.Keys) { $currentStyle[$key] = $checkBoxFocusStyle[$key] }
+            }
+
+            $this._private_buffer.Clear([TuiCell]::new(' ', $currentStyle.FG, $currentStyle.BG))
+            
+            $checkChar = $currentStyle.CheckChar ?? "X"
+            $checkbox = if ($this.Checked) { "[$checkChar]" } else { "[ ]" }
+            $displayText = "$checkbox $($this.Text)"
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -Style $currentStyle
+            Write-Verbose "CheckBoxComponent '$($this.Name)': Rendered (Checked: $($this.Checked))"
+        }
+        catch {
+            Write-Error "CheckBoxComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                $this.Checked = -not $this.Checked
+                
+                if ($this.OnChange) {
+                    Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                        & $this.OnChange -NewValue $this.Checked
+                    }
+                }
+                
+                $this.RequestRedraw()
+                Write-Verbose "CheckBoxComponent '$($this.Name)': State changed to $($this.Checked)"
+                return $true
+            }
+            catch {
+                Write-Error "CheckBoxComponent '$($this.Name)': Error handling toggle: $($_.Exception.Message)"
+            }
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "CheckBoxComponent(Name='$($this.Name)', Text='$($this.Text)', Checked=$($this.Checked), Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+class RadioButtonComponent : UIElement {
+    [string]$Text = "Option"
+    [bool]$Selected = $false
+    [string]$GroupName = ""
+    [scriptblock]$OnChange
+
+    RadioButtonComponent([Parameter(Mandatory)][string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 20
+        $this.Height = 1
+        Write-Verbose "RadioButtonComponent: Constructor called for '$($this.Name)'"
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $themeEngine = $global:AxiomServices.ThemeEngine
+            $radioButtonStyle = $themeEngine.GetStyle("Components.RadioButton")
+            $radioButtonFocusStyle = $themeEngine.GetStyle("Components.RadioButton.Focus")
+            
+            $currentStyle = $radioButtonStyle.Clone()
+            if ($this.IsFocused) {
+                foreach($key in $radioButtonFocusStyle.Keys) { $currentStyle[$key] = $radioButtonFocusStyle[$key] }
+            }
+
+            $this._private_buffer.Clear([TuiCell]::new(' ', $currentStyle.FG, $currentStyle.BG))
+            
+            $selectChar = $currentStyle.SelectChar ?? "●"
+            $unselectChar = $currentStyle.UnselectChar ?? " "
+            $radio = if ($this.Selected) { "($selectChar)" } else { "($unselectChar)" }
+            $displayText = "$radio $($this.Text)"
+            
+            Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $displayText -Style $currentStyle
+            Write-Verbose "RadioButtonComponent '$($this.Name)': Rendered (Selected: $($this.Selected))"
+        }
+        catch {
+            Write-Error "RadioButtonComponent '$($this.Name)': Error during render: $($_.Exception.Message)"
+        }
+    }
+
+    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$key) {
+        if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
+            try {
+                if (-not $this.Selected) {
+                    $this.Selected = $true
+                    
+                    # Unselect other radio buttons in the same group
+                    # This requires the radio buttons to be children of a common parent component.
+                    if ($this.Parent -and $this.GroupName) {
+                        $this.Parent.Children | Where-Object { 
+                            $_ -is [RadioButtonComponent] -and $_.GroupName -eq $this.GroupName -and $_ -ne $this 
+                        } | ForEach-Object {
+                            # Explicitly update the `Selected` property and trigger redraw.
+                            $_.Selected = $false
+                            $_.RequestRedraw()
+                        }
+                    }
+                    
+                    if ($this.OnChange) {
+                        Invoke-WithErrorHandling -Component "$($this.Name).OnChange" -ScriptBlock {
+                            & $this.OnChange -NewValue $this.Selected
+                        }
+                    }
+                    
+                    $this.RequestRedraw()
+                    Write-Verbose "RadioButtonComponent '$($this.Name)': Selected in group '$($this.GroupName)'"
+                }
+                return $true
+            }
+            catch {
+                Write-Error "RadioButtonComponent '$($this.Name)': Error handling selection: $($_.Exception.Message)"
+            }
+        }
+        return $false
+    }
+
+    [string] ToString() {
+        return "RadioButtonComponent(Name='$($this.Name)', Text='$($this.Text)', Selected=$($this.Selected), Group='$($this.GroupName)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height))"
+    }
+}
+
+#endregion
+
+#region Factory Functions
+
+function New-TuiLabel {
+    <#
+    .SYNOPSIS
+    Creates a new Label component with specified properties.
+    .DESCRIPTION
+    Factory function to create a LabelComponent with configurable properties.
+    .PARAMETER Props
+    Hashtable of properties to apply to the label component.
+    .EXAMPLE
+    $label = New-TuiLabel -Props @{
+        Name = "StatusLabel"
+        Text = "Ready"
+        ForegroundColor = "#00FF00" # Can still override directly
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $labelName = $Props.Name ?? "Label_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $label = [LabelComponent]::new($labelName)
+        
+        # Apply properties from Props hashtable
+        $Props.GetEnumerator() | ForEach-Object {
+            $propName = $_.Name
+            $propValue = $_.Value
+            
+            # Check if property exists on the class
+            if ($label.PSObject.Properties.Match($propName)) {
+                $label.($propName) = $propValue
+            }
+        }
+        
+        Write-Verbose "Created label '$labelName' with $($Props.Count) properties"
+        return $label
+    }
+    catch {
+        Write-Error "Failed to create label: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiButton {
+    <#
+    .SYNOPSIS
+    Creates a new Button component with specified properties.
+    .DESCRIPTION
+    Factory function to create a ButtonComponent with configurable properties.
+    .PARAMETER Props
+    Hashtable of properties to apply to the button component.
+    .EXAMPLE
+    $button = New-TuiButton -Props @{
+        Name = "SubmitButton"
+        Text = "Submit"
+        OnClick = { Write-Host "Submitted!" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $buttonName = $Props.Name ?? "Button_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $button = [ButtonComponent]::new($buttonName)
+        
+        # Apply properties
+        $Props.GetEnumerator() | ForEach-Object {
+            $propName = $_.Name
+            $propValue = $_.Value
+            
+            if ($button.PSObject.Properties.Match($propName)) {
+                $button.($propName) = $propValue
+            }
+        }
+        
+        Write-Verbose "Created button '$buttonName' with $($Props.Count) properties"
+        return $button
+    }
+    catch {
+        Write-Error "Failed to create button: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiTextBox {
+    <#
+    .SYNOPSIS
+    Creates a new TextBox component with specified properties.
+    .DESCRIPTION
+    Factory function to create a TextBoxComponent with configurable properties.
+    .PARAMETER Props
+    Hashtable of properties to apply to the textbox component.
+    .EXAMPLE
+    $textBox = New-TuiTextBox -Props @{
+        Name = "InputField"
+        Placeholder = "Enter text here"
+        MaxLength = 50
+        OnChange = { param($NewValue) Write-Host "Text changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $textBoxName = $Props.Name ?? "TextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $textBox = [TextBoxComponent]::new($textBoxName)
+        
+        # Apply properties
+        $Props.GetEnumerator() | ForEach-Object {
+            $propName = $_.Name
+            $propValue = $_.Value
+            
+            if ($textBox.PSObject.Properties.Match($propName)) {
+                $textBox.($propName) = $propValue
+            }
+        }
+        
+        Write-Verbose "Created textbox '$textBoxName' with $($Props.Count) properties"
+        return $textBox
+    }
+    catch {
+        Write-Error "Failed to create textbox: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiCheckBox {
+    <#
+    .SYNOPSIS
+    Creates a new CheckBox component with specified properties.
+    .DESCRIPTION
+    Factory function to create a CheckBoxComponent with configurable properties.
+    .PARAMETER Props
+    Hashtable of properties to apply to the checkbox component.
+    .EXAMPLE
+    $checkBox = New-TuiCheckBox -Props @{
+        Name = "AgreeCheckbox"
+        Text = "I agree to the terms"
+        OnChange = { param($NewValue) Write-Host "Checkbox changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $checkBoxName = $Props.Name ?? "CheckBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $checkBox = [CheckBoxComponent]::new($checkBoxName)
+        
+        # Apply properties
+        $Props.GetEnumerator() | ForEach-Object {
+            $propName = $_.Name
+            $propValue = $_.Value
+            
+            if ($checkBox.PSObject.Properties.Match($propName)) {
+                $checkBox.($propName) = $propValue
+            }
+        }
+        
+        Write-Verbose "Created checkbox '$checkBoxName' with $($Props.Count) properties"
+        return $checkBox
+    }
+    catch {
+        Write-Error "Failed to create checkbox: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function New-TuiRadioButton {
+    <#
+    .SYNOPSIS
+    Creates a new RadioButton component with specified properties.
+    .DESCRIPTION
+    Factory function to create a RadioButtonComponent with configurable properties.
+    .PARAMETER Props
+    Hashtable of properties to apply to the radio button component.
+    .EXAMPLE
+    $radioButton = New-TuiRadioButton -Props @{
+        Name = "Option1"
+        Text = "Option 1"
+        GroupName = "MyGroup"
+        OnChange = { param($NewValue) Write-Host "Radio button changed: $NewValue" }
+    }
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Props = @{})
+    
+    try {
+        $radioButtonName = $Props.Name ?? "RadioButton_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $radioButton = [RadioButtonComponent]::new($radioButtonName)
+        
+        # Apply properties
+        $Props.GetEnumerator() | ForEach-Object {
+            $propName = $_.Name
+            $propValue = $_.Value
+            
+            if ($radioButton.PSObject.Properties.Match($propName)) {
+                $radioButton.($propName) = $propValue
+            }
+        }
+        
+        Write-Verbose "Created radio button '$radioButtonName' with $($Props.Count) properties"
+        return $radioButton
+    }
+    catch {
+        Write-Error "Failed to create radio button: $($_.Exception.Message)"
+        throw
+    }
+}
+
+#endregion
+
+#region Module Exports
+
+# Export public functions
+Export-ModuleMember -Function New-TuiLabel, New-TuiButton, New-TuiTextBox, New-TuiCheckBox, New-TuiRadioButton
+
+# Classes are automatically exported in PowerShell 7+
+# LabelComponent, ButtonComponent, TextBoxComponent, CheckBoxComponent, RadioButtonComponent classes are available when module is imported
+
+#endregion
+```
+
+---
+
+**3. Integration Ideas for Axiom-Phoenix:**
+
+1.  **Update `run.ps1`'s Module Load Order:**
+    *   Ensure `components\tui-components\tui-components.psm1` is loaded *after* `components\ui-classes\ui-classes.psm1` (which defines `UIElement`) and `modules\theme-engine\theme-engine.psm1` (which provides the `ThemeEngine` service).
+
+    ```powershell
+    # --- run.ps1 Snippet ---
+    $FileLoadOrder = @(
+        # ... (all prior modules) ...
+        
+        # Components & Dialogs (depend on primitives, UI classes, and ThemeEngine)
+        'components/tui-components/tui-components.psm1', # <-- This is the file
+        'components/advanced-data-components/advanced-data-components.psm1', # Will need similar update next
+        'components/advanced-input-components/advanced-input-components.psm1', # Will need similar update next
+        'components/navigation-class/navigation-class.psm1', # Needs update too if still used
+        'modules/dialog-system-class/dialog-system-class.psm1',
+        
+        # ... (rest of the load order) ...
+    )
+    # ... rest of run.ps1 remains similar ...
+    ```
+
+2.  **Add/Update Theme Configuration (if not already done):**
+    *   To make these components look correct, you need to define their styles in your theme JSON file (e.g., `themes\Modern.theme.json`).
+    *   Example `*.theme.json` snippet for these components:
+
+    ```json
+    {
+      "Name": "Modern",
+      "Palette": {
+        "background": "#0d1117",
+        "foreground": "#c9d1d9",
+        "accent1": "#58a6ff",
+        "accent2": "#f78166",
+        "border": "#30363d",
+        "borderFocus": "#58a6ff",
+        "success": "#3fb950",
+        "error": "#f85149",
+        "errorHighlight": "#FF00FF",
+        "subtle": "#6a737d",
+        "selectionBg": "$Palette.accent1",
+        "selectionFg": "$Palette.background",
+        "inputBg": "$Palette.background",
+        "inputFg": "$Palette.foreground",
+        "inputBorder": "$Palette.border",
+        "inputBorderFocus": "$Palette.accent1",
+        "inputPlaceholder": "$Palette.subtle",
+        "inputCursor": "$Palette.accent1"
+      },
+      "Components": {
+        "Default": { "FG": "$Palette.foreground", "BG": "$Palette.background" },
+        "Label": { "FG": "$Palette.foreground", "BG": "$Palette.background" },
+        "Button": {
+          "FG": "$Palette.foreground",
+          "BG": "$Palette.background",
+          "BorderFG": "$Palette.border",
+          "BorderStyle": "Single",
+          "Bold": false
+        },
+        "Button.Focus": {
+          "FG": "$Palette.background",
+          "BG": "$Palette.accent1",
+          "BorderFG": "$Palette.accent1",
+          "Bold": true
+        },
+        "Button.Pressed": {
+          "FG": "$Palette.background",
+          "BG": "$Palette.accent2",
+          "BorderFG": "$Palette.accent2",
+          "Bold": true
+        },
+        "TextBox": {
+          "FG": "$Palette.inputFg",
+          "BG": "$Palette.inputBg",
+          "PlaceholderFG": "$Palette.inputPlaceholder",
+          "BorderFG": "$Palette.inputBorder",
+          "BorderStyle": "Single"
+        },
+        "TextBox.Focus": {
+          "BorderFG": "$Palette.inputBorderFocus",
+          "CursorFG": "$Palette.inputFg",
+          "CursorBG": "$Palette.inputCursor"
+        },
+        "CheckBox": {
+          "FG": "$Palette.foreground",
+          "BG": "$Palette.background",
+          "CheckChar": "X"
+        },
+        "CheckBox.Focus": {
+          "FG": "$Palette.accent1",
+          "Bold": true
+        },
+        "RadioButton": {
+          "FG": "$Palette.foreground",
+          "BG": "$Palette.background",
+          "SelectChar": "●",
+          "UnselectChar": " "
+        },
+        "RadioButton.Focus": {
+          "FG": "$Palette.accent1",
+          "Bold": true
+        },
+        "Dialog": {
+          "BorderFG": "$Palette.border",
+          "BG": "$Palette.background",
+          "TitleFG": "$Palette.accent1",
+          "TitleStyle": { "Bold": true },
+          "MessageFG": "$Palette.foreground",
+          "BorderStyle": "Double"
+        },
+        "Dialog.Focus": {
+          "BorderFG": "$Palette.borderFocus"
+        },
+        "Dialog.Button": {
+            "FG": "$Palette.foreground",
+            "BG": "$Palette.background"
+        },
+        "Dialog.Button.Focus": {
+            "FG": "$Palette.background",
+            "BG": "$Palette.accent1"
+        }
+      }
+    }
+    ```
+
+This step ensures your basic interactive UI elements are fully integrated into the new, robust theming system, providing a foundation for consistent visual design throughout your application.
+
+

@@ -1,0 +1,200 @@
+The provided PowerShell modules represent a sophisticated Terminal User Interface (TUI) framework built with a strong emphasis on modularity, modern design patterns, and robustness. The overall integration is generally well-executed, leveraging several key architectural patterns to promote decoupling and maintainability.
+
+### Overall Architecture & Strengths:
+
+1.  **Dependency Injection (DI) through Service Container**:
+    *   **Strength**: The `ServiceContainer` is a central and well-implemented DI mechanism. It supports eager vs. lazy loading, singleton vs. transient lifestyles, and most importantly, provides a `Cleanup()` method for managing `IDisposable` services. This is a critical pattern for managing application state and resources in a long-running PowerShell application.
+    *   **Integration**: `run.ps1` correctly initializes the `ServiceContainer` and registers all core services (`DataManager`, `ActionService`, `KeybindingService`, `NavigationService`, `TuiFrameworkService`) using factories. Screens (`DashboardScreen`, `TaskListScreen`) receive the `ServiceContainer` in their constructors and pull necessary services from it (`$this.ServiceContainer.GetService(...)`). This promotes loose coupling.
+
+2.  **Event System (Pub/Sub)**:
+    *   **Strength**: The `EventSystem` module (`Publish-Event`, `Subscribe-Event`, `Unsubscribe-Event`) is a robust and essential component for decoupled communication between services and UI components. It explicitly supports `HandlerId` and `Source` for targeted cleanup.
+    *   **Integration**: Used effectively for:
+        *   Notifying UI components of data changes (`Tasks.Changed` event from `DataManager` to `TaskListScreen` and `DashboardScreen`).
+        *   Application-level events (`Application.Exit`, `Screen.Pushed`, `TUI.Resized`).
+        *   `Screen` base class provides `SubscribeToEvent` helper which tracks subscriptions for automatic cleanup in `Screen.Cleanup()`. This is excellent for preventing memory leaks.
+
+3.  **Centralized Error Handling & Logging**:
+    *   **Strength**: The `exceptions.psm1` module (`Invoke-WithErrorHandling`) provides a consistent, centralized mechanism for catching, logging, and re-throwing errors. It integrates with `logger.psm1` for detailed diagnostics and `panic-handler.psm1` for unhandled fatal errors. Custom `HeliosException` types offer structured error data.
+    *   **Integration**: `Invoke-WithErrorHandling` is extensively used across most service and component methods, ensuring that operations are wrapped for resilience and diagnostic clarity. This is a significant strength for debugging and production stability.
+
+4.  **UI Component Lifecycle Management**:
+    *   **Strength**: The `UIElement` base class and its subclasses (`Screen`, `Panel`, `Table`, `TextBox`, `Dialog`) define a clear lifecycle (`OnInitialize`, `OnEnter`, `OnExit`, `OnResume`, `OnRender`, `HandleInput`, `OnFocus`, `OnBlur`). The `TUI Engine` orchestrates these calls effectively.
+    *   **Integration**:
+        *   `OnInitialize` is used for one-time setup (e.g., creating child components, registering actions).
+        *   `OnEnter`/`OnExit`/`OnResume` manage screen transitions and associated resources (like keybinding contexts).
+        *   `Cleanup` methods are implemented in `Screen` to release resources and unsubscribe from events.
+
+5.  **Theme Integration**:
+    *   **Strength**: `ThemeManager` supports both simple `ConsoleColor` themes and advanced `palette`/`styles` with hex colors. Components retrieve colors via `Get-ThemeColor`, ensuring consistency.
+    *   **Integration**: Components like `Table`, `TextBoxComponent`, `ButtonComponent`, `Dialog` directly call `Get-ThemeColor`, making them theme-aware. The `Theme.Changed` event allows components to react to theme switches (though explicit redraw requests might be needed on individual components, this is generally handled by `Request-TuiRefresh` from the `Theme.Changed` event or `Set-TuiTheme` itself).
+
+6.  **Keybinding & Command Palette**:
+    *   **Strength**: `KeybindingService` allows flexible definition of key-to-action mappings, supporting modifiers and context stacks. The `CommandPalette` provides a discoverable interface for all registered actions.
+    *   **Integration**: `TaskListScreen` demonstrates good contextual keybinding management (`PushContext`/`PopContext`). `CommandPalette` pulls all actions from `ActionService` and uses `KeybindingService` for its activation shortcut, showcasing excellent cross-service cooperation.
+
+7.  **Rendering Optimization**:
+    *   **Strength**: `TuiBuffer` provides efficient cell-based rendering. `Render-CompositorToConsole` uses differential rendering (only updating changed cells) to minimize console writes, which is crucial for TUI performance. `RequestRedraw` correctly propagates dirty flags up the component tree.
+
+### Systemic Issues & Areas for Improvement:
+
+1.  **Inconsistent `Initialize-DialogSystem` Call**:
+    *   **Issue**: `run.ps1` calls `Initialize-DialogSystem`, but no such function is exported or defined in `dialog-system-class.psm1`. The `Dialog` and its child classes (`AlertDialog`, `ConfirmDialog`, `InputDialog`) are directly `new()`d and used via `Show-*Dialog` functions.
+    *   **Impact**: This is a minor naming inconsistency or a remnant of an older design. The dialog system still functions, but the call is a no-op and misleading.
+    *   **Recommendation**: Remove `Initialize-DialogSystem` from `run.ps1` or create a dummy function if it's meant to be a placeholder for future dialog-system-wide initialization. Given the current design, it's not needed.
+
+2.  **`Initialize-NavigationService` Parameter**:
+    *   **Issue**: `navigation-service-functions.psm1` defines `Initialize-NavigationService` to accept a `[hashtable]$Services`. However, `run.ps1` calls it with `Initialize-NavigationService -ServiceContainer $c`. The `navigation-service-class.psm1` `NavigationService` constructor expects a `[hashtable]$services` but the screen factory within it also expects `[hashtable]$services`. This is a mismatch in parameter names and types for the DI approach.
+    *   **Impact**: This indicates a slight confusion in the DI pattern. If `Initialize-NavigationService` is meant to be a factory that receives the `ServiceContainer` and then populates its internal `Services` hashtable (for backward compatibility, as noted), it should explicitly take `[object]$serviceContainer` and not `[hashtable]$Services`. The `NavigationService` class constructor itself *should* take the `ServiceContainer` if it's truly consuming services from it.
+    *   **Recommendation**:
+        *   In `navigation-service-functions.psm1`, change `param([hashtable]$Services)` to `param([Parameter(Mandatory)][object]$ServiceContainer)`.
+        *   In `navigation-service-class.psm1`, `NavigationService` constructor should be `NavigationService([object]$serviceContainer)`.
+        *   Then, within the `NavigationService` constructor, properly extract services from `$serviceContainer` if needed for `this.Services` hashtable, or preferably, directly use `$this.ServiceContainer.GetService()`. The existing `Screen` constructors already do this properly.
+        *   The current `ScreenFactory` implementation directly uses `[hashtable]$Services` in its constructor. It should also be updated to consistently take `[object]$serviceContainer`.
+
+3.  **Global `Write-Log`, `Publish-Event`, etc. dependency**:
+    *   **Issue**: Many classes directly call global functions like `Write-Log`, `Publish-Event`, `Get-ThemeColor`, `Show-AlertDialog`, etc., without them being explicitly injected or available via `$this.Services`.
+    *   **Impact**: While PowerShell makes globally sourced functions available, relying on implicit global availability makes unit testing harder and masks dependencies. For example, `PmcTask` and `PmcProject` models call `Write-Warning` directly instead of using the injected `Logger` service.
+    *   **Recommendation**: For core services that are critical and meant to be globally available (Logger, EventSystem, ThemeManager, Dialogs, PanicHandler), this pattern is somewhat acceptable in a PowerShell framework (similar to static facades in other languages). However, for classes like `PmcTask` or `PmcProject`, it would be cleaner if they took a `Logger` or `EventSystem` instance (or a helper object that wraps logging/events) in their constructor if they need to log/publish events. For TUI components, `Get-ThemeColor` is acceptable due to its nature. `Show-AlertDialog` is effectively a global helper, which is fine for UI calls.
+
+4.  **Redundant `PSObject.Properties.Match` in Factories**:
+    *   **Issue**: Factory functions like `New-TuiTable`, `New-TuiMultilineTextBox`, etc., use `$component.PSObject.Properties.Match($_.Name)` to check if a property exists before assigning.
+    *   **Impact**: While harmless, this is generally unnecessary if `Props` are expected to match defined properties. Direct assignment `$component.($propertyName) = $propertyValue` will simply fail (and be caught by `Invoke-WithErrorHandling`) if the property doesn't exist, which is often preferable to silently skipping.
+    *   **Recommendation**: Consider simplifying these loops to directly assign properties, relying on `Invoke-WithErrorHandling` for error capture. This is a minor point, but it clutters the factories.
+
+5.  **`Panel` `HandleInput` Delegation Logic**:
+    *   **Issue**: `Panel.HandleInput` first calls `([Panel]$this).HandleInput($keyInfo)` (which recursively calls itself unless `CanFocus` is true and a Tab/Enter is hit) and then iterates children. For `GroupPanel`, it re-calls `([Panel]$this).HandleInput($keyInfo)` after its own logic. This looks like it could lead to infinite recursion or unclear delegation if not carefully managed.
+    *   **Impact**: The `[UIElement]$this).HandleInput($keyInfo)` call in `Panel` and `GroupPanel` does *not* recursively call `HandleInput` but rather the `UIElement` base's `HandleInput` (which returns `$false`). This is okay. The deeper issue is in `GroupPanel`'s re-calling `([Panel]$this).HandleInput($keyInfo)` *after* it has already handled its own focus/toggle logic. It means the base `Panel`'s child delegation logic might be run *twice* for a given key, or the key might be handled by the parent Panel, then by the GroupPanel, then by the parent Panel again trying to delegate to children.
+    *   **Recommendation**: The base `UIElement.HandleInput` should return `$false` and its role is just to log. The chain of command for input should be: `TUIEngine` -> `OverlayStack` (top-down) -> `CurrentScreen` -> `FocusedComponent`. `Panel` (if `CanFocus`) or `GroupPanel` would be a `FocusedComponent`. If a `Panel` itself is focused, it *then* tries to delegate to its children. If a `Panel` is NOT focused, its `HandleInput` should probably not be called directly by the engine, but rather the focused child's `HandleInput` inside the panel would be called.
+        *   Clarify `Panel.HandleInput`'s role: should it delegate only if *it* is focused, or should it always be part of the delegation chain? The current `TUI Engine` design (routing to `FocusedComponent`) implies only the focused component gets input. If a panel is focused, it then handles the input and *itself* decides if it wants to pass it to *its* children. The `HandleInput` in `Panel` and `GroupPanel` seems to correctly follow this. The specific line `return ([Panel]$this).HandleInput($keyInfo)` in `GroupPanel` is the main concern as it implies re-calling the `Panel`'s input logic again, which is redundant and potentially problematic. It should instead explicitly iterate and delegate to its children if needed after the GroupPanel-specific logic.
+
+6.  **Direct `Get-Command` Checks for Global Functions**:
+    *   **Issue**: Many modules use `if (Get-Command 'FunctionName' -ErrorAction SilentlyContinue)` before calling global functions (`Write-Log`, `Publish-Event`, `Show-AlertDialog`, etc.).
+    *   **Impact**: This adds overhead and verbose logging. While robust for isolated module testing or partial loading, in a monolithic application with a defined load order, these functions *will* exist after initialization.
+    *   **Recommendation**: Given `run.ps1` explicitly sources these modules early, these `Get-Command` checks are mostly unnecessary and can be removed for cleaner, slightly more performant code in a production build, relying on the `ErrorActionPreference = "Stop"` and `Invoke-WithErrorHandling` for error propagation.
+
+7.  **Overuse of `Write-Verbose`**:
+    *   **Issue**: `Write-Verbose` is used very heavily, often for simple state changes or method calls.
+    *   **Impact**: This generates an extremely high volume of verbose output, making it difficult to read and potentially impacting performance in debug mode.
+    *   **Recommendation**: Re-evaluate the verbosity level. Reserve `Write-Verbose` for significant state transitions or complex logic entry/exit. For routine operations, `Write-Log -Level Debug` (which is configurable) is generally preferred as it's part of the application's structured logging system.
+
+8.  **`$global:TuiState` and DI**:
+    *   **Issue**: `TuiEngine` relies heavily on `$global:TuiState`. While `TuiEngine` itself isn't *directly* registered as a service and injected, its state (`$global:TuiState`) is implicitly used by many components (e.g., `Dialog` centering, `Check-ForResize`).
+    *   **Impact**: This is a direct global dependency, making `TuiEngine` less of a "service" and more of a global manager. It makes `TuiEngine` difficult to swap out or test in isolation.
+    *   **Recommendation**: For a true DI approach, the `TuiEngine` instance itself (or a facade that holds `$global:TuiState`) could be registered as a singleton service. Components requiring TUI dimensions or overlay management would `GetService("TuiEngine")` and interact with its methods (`$tuiEngine.GetBufferWidth()`, `$tuiEngine.ShowOverlay()`). However, this would be a significant refactor and might add complexity for little gain given the nature of a TUI framework where a central engine is almost inherently a singleton. The current approach is pragmatic for PowerShell.
+
+### Integration Summary:
+
+The modules are **very well integrated** and follow a coherent architectural vision. The core is built around a robust **Dependency Injection** pattern using the `ServiceContainer`, a flexible **Event System** for decoupling, and a strong **Error Handling** strategy. The **UI component lifecycle** is clear and consistently managed by the `TUI Engine`. **Theme management** and **keybinding/command palette** are effectively integrated as cross-cutting concerns that all components can leverage.
+
+The few identified "issues" are minor inconsistencies or areas for minor refinement rather than fundamental flaws in the integration strategy. The primary areas for attention are the parameter type mismatch in `Initialize-NavigationService` and the `Initialize-DialogSystem` call, which are easily fixed. The reliance on `Get-Command` checks for globally sourced functions is also an area that can be cleaned up in a final build.
+
+Overall, this is a remarkably well-structured and integrated PowerShell application. The use of classes, lifecycle hooks, and service-oriented architecture demonstrates a mature approach to building complex PowerShell applications.
+
+
+This TUI framework is remarkably well-structured and demonstrates a strong understanding of object-oriented principles, modularity, and event-driven architecture in PowerShell. It's a significant undertaking and generally well-executed.
+
+Let's break down the review:
+
+### Critical Issues:
+
+1.  **Fundamental Rendering Bug (No Truecolor Output, Inefficient Diffing):**
+    *   **Description**: The `Render-CompositorToConsole` function in `tui-engine.psm1` is responsible for sending actual ANSI escape codes to the console.
+        *   It uses `30 + [int]$currentCell.ForegroundColor` and `40 + [int]$currentCell.BackgroundColor`. This translates `ConsoleColor` enums to standard 8/16-color ANSI codes. It **does not** use the truecolor (24-bit RGB) ANSI sequences (`38;2;R;G;B` and `48;2;R;G;B`) provided by `TuiAnsiHelper`. This means your entire truecolor theme system (`ThemeManager` resolving to hex colors) is effectively rendered as 8/16-color approximations, losing fidelity.
+        *   Furthermore, the differential rendering comparison `if (-not $currentCell.Equals($previousCell))` is incorrect. `Equals` for PowerShell classes (unless explicitly overridden) defaults to reference equality. Since `TuiCell` objects are often *newly created* or copied during rendering, even if their *values* are identical to the previous frame, `Equals` will return `false`, causing the engine to redraw *every* cell every frame. This completely defeats the purpose of differential rendering and will lead to very high CPU usage and flickering.
+    *   **Impact**:
+        *   **Visual Fidelity**: Truecolor themes won't actually display true colors.
+        *   **Performance**: Extremely high CPU utilization and potential screen flickering due to re-drawing every character, even if it hasn't changed. This is a severe performance bottleneck.
+    *   **Fix**:
+        *   Update `Render-CompositorToConsole` to use `[TuiAnsiHelper]::GetForegroundCode($currentCell.ForegroundColor)` and `[TuiAnsiHelper]::GetBackgroundCode($currentCell.BackgroundColor)` which correctly generate 24-bit ANSI codes if hex colors are used.
+        *   Change `if (-not $currentCell.Equals($previousCell))` to `if ($currentCell.DiffersFrom($previousCell))`. (Note: `DiffersFrom` returns `true` if they are different, so you want `if ($currentCell.DiffersFrom($previousCell))` to trigger a redraw when they *do* differ.)
+
+2.  **ComboBox Dropdown Not Rendering as Overlay:**
+    *   **Description**: In `advanced-input-components.psm1`, the `ComboBoxComponent._RenderDropdownOverlay()` method creates a `_dropdownBuffer`, renders to it, and logs "Dropdown overlay rendered". However, it has a comment: `"# Note: This would need integration with the TUI engine's overlay system"`. The code then *doesn't* actually pass this `_dropdownBuffer` to the `TUIEngine`'s overlay stack or render it globally.
+    *   **Impact**: The ComboBox dropdown will never actually appear on the screen, even though its logic for filtering and selection is present.
+    *   **Fix**:
+        *   The `ComboBoxComponent` itself needs to be capable of being added to `TuiState.OverlayStack` when its dropdown opens.
+        *   You'd likely need to refactor `ComboBoxComponent` slightly:
+            *   When `IsDropDownOpen` becomes `$true`, `ComboBoxComponent` should probably trigger `Show-TuiOverlay -Element $this` or a new component that *is* the dropdown itself.
+            *   This implies the ComboBox component itself might need to expose its dropdown as a separate `UIElement` instance, or `TuiEngine` needs a way to "activate" a sub-buffer as a temporary overlay, potentially inheriting position from its parent ComboBox. This is not a simple fix, but critical for the ComboBox's functionality.
+
+3.  **NavigationService DI Parameter Mismatch:**
+    *   **Description**: The factory function `Initialize-NavigationService` in `navigation-service\navigation-service.psm1` expects `param([hashtable]$Services)`, but `run.ps1` passes the `ServiceContainer` object itself (`Initialize-NavigationService -ServiceContainer $c`). The `NavigationService` class constructor (`navigation-service-class.psm1`) then correctly expects `[hashtable]$services`. This creates a type mismatch if PowerShell's implicit conversion isn't robust, and semantically, it's ambiguous what `Services` means (the container or a hashtable of services).
+    *   **Impact**: While PowerShell often manages to "do the right thing" with type coercion, this is fragile. It can lead to `null` services or unexpected behavior if the `$Services` hashtable isn't populated as intended within `NavigationService`.
+    *   **Fix**:
+        *   **Option A (Recommended for true DI)**: Modify `Initialize-NavigationService` to `param([Parameter(Mandatory)][object]$ServiceContainer)`. Then, inside `NavigationService` constructor, have it explicitly take `[object]$serviceContainer` and use `$serviceContainer.GetService()` internally. The `Screen` class constructors already use this pattern.
+        *   **Option B (If you truly want a separate hashtable)**: `Initialize-NavigationService` should take `[object]$ServiceContainer` and then populate a hashtable `servicesHashTable = $ServiceContainer.GetAllRegisteredServices() | Group-Object Name -AsHashtable -Property Name` (or similar, though `GetAllRegisteredServices` provides objects, not raw services), and then pass *that* hashtable to `NavigationService::new($servicesHashTable)`. This is less efficient and less flexible than Option A.
+
+### Easy Improvements:
+
+1.  **Remove Unused `Initialize-DialogSystem` Call**:
+    *   **Description**: `run.ps1` calls `Initialize-DialogSystem`, but no such function exists in `dialog-system-class.psm1` or is exported.
+    *   **Impact**: Harmless, but misleading and generates a "command not found" error if `ErrorActionPreference` is not `SilentlyContinue`.
+    *   **Fix**: Remove the line `Initialize-DialogSystem` from `run.ps1`.
+
+2.  **Consolidate `KeybindingService` Files**:
+    *   **Description**: The `KeybindingService` is split into `keybinding-service.psm1` (factory function) and `keybinding-service-class.psm1` (class definition). This adds unnecessary file overhead and module sourcing complexity for a single logical component.
+    *   **Impact**: Minor, but makes the project slightly harder to navigate.
+    *   **Fix**: Merge `keybinding-service.psm1` directly into `keybinding-service-class.psm1`.
+
+3.  **Trim Excessive `Write-Verbose` Calls**:
+    *   **Description**: `Write-Verbose` is used in almost every method of every class, often for simple entry/exit or trivial state changes.
+    *   **Impact**: In `Debug` mode, this creates a very noisy log, making it difficult to find truly useful verbose messages. It can also add minor performance overhead.
+    *   **Fix**: Review and reduce `Write-Verbose` to only truly significant actions, lifecycle changes, or debugging points. For internal method calls that are part of a larger operation, `Write-Log -Level Debug` is preferable as it's part of your structured logging and can be controlled by `Set-LogLevel`.
+
+4.  **Remove Redundant `Get-Command` Checks**:
+    *   **Description**: Many modules check for the existence of globally sourced functions (`Write-Log`, `Publish-Event`, `Show-AlertDialog`, etc.) using `Get-Command 'FunctionName' -ErrorAction SilentlyContinue`.
+    *   **Impact**: Adds minor overhead. In a monolithic application with a carefully controlled load order (`run.ps1`), these functions are guaranteed to exist.
+    *   **Fix**: Remove these `Get-Command` checks. Your `run.ps1`'s strict load order ensures these modules are available. Rely on `Invoke-WithErrorHandling` to catch any genuine missing function errors during runtime.
+
+5.  **Add `PSCmdlet.ShouldProcess` to `Set-TuiTheme` for Consistency**:
+    *   **Description**: `Set-TuiTheme` has `SupportsShouldProcess` but is missing the `if ($PSCmdlet.ShouldProcess(...))` block around its core logic.
+    *   **Impact**: The user won't be prompted for confirmation when using `-WhatIf` or `-Confirm` with this function.
+    *   **Fix**: Wrap the core theme-setting logic inside `if ($PSCmdlet.ShouldProcess("theme '$ThemeName'", "Set active theme")) { ... }`.
+
+6.  **`Initialize-ThemeManager` Error Handling for External Dir**:
+    *   **Description**: The `catch` block for creating the external themes directory in `Initialize-ThemeManager` simply `Write-Warning` and nulls the directory. This is good. However, it's within `Invoke-WithErrorHandling`, which would then re-throw that warning as an error.
+    *   **Impact**: The `Initialize-ThemeManager` call would appear to fail with an error, even if it's just a warning that external themes can't be loaded.
+    *   **Fix**: If a non-fatal warning is intended, don't throw an error from within the `Invoke-WithErrorHandling`'s `ScriptBlock` by ensuring the `catch` block uses `Write-Warning` instead of `throw`. The `Invoke-WithErrorHandling` itself `throw`s *its own* exception if the script block throws. In this case, it might be fine as is, but it's worth noting the behavior.
+
+7.  **More Robust `PmcTask` and `PmcProject` `FromLegacyFormat`**:
+    *   **Description**: The `FromLegacyFormat` methods have `try/catch` blocks for parsing `DateTime` and `enum` values, which is good. However, they directly `Write-Warning` inside the model class.
+    *   **Impact**: This couples the models directly to the logging system in a way that might be less desirable for pure data models.
+    *   **Fix**: For a "pure" model, consider having `FromLegacyFormat` return `null` or throw a more specific `DataValidationException` (a subclass of `HeliosException`) if data is unrecoverable, letting the `DataManager` (which calls `FromLegacyFormat`) handle the logging. However, given the current setup, it's not a critical issue.
+
+### Further Ncurses/TUI Stuff to Implement:
+
+These are more significant feature additions, moving beyond basic component implementation:
+
+1.  **Full Mouse Support**:
+    *   **Description**: The current input handling is purely keyboard-driven. Terminals often support mouse events (clicks, scrolls, position).
+    *   **Implementation**: This is complex. The `InputThread` would need to capture mouse events (e.g., via `[System.Console]::Read()` if supported, or platform-specific calls). These events would then need to be added to `InputQueue` with their coordinates. The `TUIEngine`'s input processing loop would then need to resolve clicks to specific `UIElement` instances using their `X`, `Y`, `Width`, `Height` properties and trigger `OnClick` or `OnMouseDown` events. This would vastly improve UX for buttons, tables, and scrollbars.
+
+2.  **Sophisticated Layout Managers**:
+    *   **Description**: `Panel` provides basic "Vertical", "Horizontal", and "Grid" layouts. For complex UIs, more flexible layout managers are often needed (e.g., weighted splits, explicit row/column definitions, anchoring).
+    *   **Implementation**: Implement a `SplitPanel` (horizontal/vertical splitter), `GridPanel` with explicit rows/columns/spanning, or a `DockPanel`. These would likely manage child `UIElement` `Width` and `Height` based on percentage, fixed size, or `Auto` (similar to `TableColumn` width resolution).
+
+3.  **Advanced Scrollbar Components**:
+    *   **Description**: `ScrollablePanel` draws very basic text-based scrollbars. Users cannot interact with them.
+    *   **Implementation**: Create dedicated `ScrollbarComponent` classes (vertical and horizontal) that are interactive. They would respond to mouse clicks/drags, and when interacted with, update the `ScrollX`/`ScrollY` of their parent `ScrollablePanel`.
+
+4.  **Pop-up Menus/Context Menus**:
+    *   **Description**: `NavigationMenu` is for fixed navigation. Context menus (right-click, or specific hotkey) appear temporarily and disappear after selection.
+    *   **Implementation**: Implement a `ContextMenu` class inheriting from `UIElement` or `Dialog`. It would dynamically populate `NavigationItem`s, appear at a specific screen coordinate, handle input (arrow keys, hotkeys, Enter), and then `Close()` itself after an item is selected or `Esc` is pressed. This would tie into the overlay system.
+
+5.  **Progress Bars / Activity Indicators**:
+    *   **Description**: Visual feedback for long-running operations.
+    *   **Implementation**: Create a `ProgressBarComponent` that displays a percentage or fills a bar. Create `SpinnerComponent` that cycles through characters (`|`, `/`, `-`, `\`) for indeterminate progress. These could be used in dialogs or status bars.
+
+6.  **"Toast" Notifications**:
+    *   **Description**: Small, temporary, non-blocking messages that appear on screen and fade away (or disappear after a timeout).
+    *   **Implementation**: A `ToastComponent` that lives on an overlay or a dedicated "toast region". It would be added to the overlay stack with a timer, and `TUIEngine` would need to support timed overlay removal or a custom `ToastManager` service.
+
+7.  **Text Input Masking/Validation**:
+    *   **Description**: `TextBoxComponent`, `NumericInputComponent`, `DateInputComponent` are basic. Advanced scenarios require input masks (e.g., phone numbers, SSN), client-side validation rules.
+    *   **Implementation**: Add `Mask` and `ValidationRegex` properties to input components. Implement `OnValidate` events or methods.
+
+8.  **Rich Text (Inline Styles)**:
+    *   **Description**: Currently, `TuiCell` supports `Bold`, `Underline`, `Italic`, but `Write-TuiText` applies it to the whole string. What if you want *part* of a string to be bold or a different color?
+    *   **Implementation**: This would require a more complex text rendering system. Instead of just a `string $Text`, a `RichTextElement` might contain `[TuiFormattedSpan[]]` where each `TuiFormattedSpan` has `string Text`, `$ForegroundColor`, `$BackgroundColor`, `[bool]$Bold`, etc. `Write-TuiText` would then iterate over these spans.
+
+By addressing the critical bugs (especially the rendering issues) and then considering the easy improvements, the framework will become significantly more stable, performant, and delightful to use, paving the way for more advanced TUI features.
