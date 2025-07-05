@@ -405,8 +405,8 @@ function Register-CommandPalette {
             $false # Don't force overwrite
         )
 
-        # Bind Ctrl+P to the palette action
-        $KeybindingService.SetBinding("app.showCommandPalette", 'P', @('Ctrl'))
+        # Bind Ctrl+P to the palette action with explicit type casting
+        $KeybindingService.SetBinding([string]"app.showCommandPalette", [char]'P', [string[]]@('Ctrl'))
         
         Write-Log -Level Info -Message "Command Palette registered successfully with Ctrl+P keybinding"
         

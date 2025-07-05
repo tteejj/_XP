@@ -173,7 +173,7 @@ function Start-TuiLoop {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$InitialScreen
+        [object]$InitialScreen
     )
     
     try {
@@ -594,7 +594,7 @@ function Push-Screen {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$Screen
+        [object]$Screen
     )
     
     if (-not $Screen) { return }
@@ -721,7 +721,7 @@ function Show-TuiOverlay {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$Element
+        [object]$Element
     )
     
     try {
@@ -795,7 +795,7 @@ function Set-ComponentFocus {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$Component
+        [object]$Component
     )
     
     try {
