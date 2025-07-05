@@ -229,13 +229,11 @@ function Start-TuiLoop {
             }
             catch {
                 Write-Error "Error in TUI main loop: $($_.Exception.Message)"
-                Invoke-PanicHandler -Exception $_.Exception -Context "TUI Main Loop"
+                Invoke-PanicHandler -ErrorRecord $_ -AdditionalContext @{ Context = "TUI Main Loop" }
                 
-                # Continue running unless it's a critical error
-                if ($_.Exception -is [System.OutOfMemoryException] -or $_.Exception -is [System.StackOverflowException]) {
-                    $global:TuiState.Running = $false
-                    break
-                }
+                # Stop running on any critical error to prevent infinite loops
+                $global:TuiState.Running = $false
+                break
             }
         }
         
@@ -327,6 +325,7 @@ function Process-TuiInput {
     param()
     
     $hadInput = $false
+    $keyInfo = [System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::None, $false, $false, $false)
     
     try {
         # Process all available input
@@ -544,21 +543,37 @@ function Cleanup-TuiEngine {
         $global:TuiState.OverlayStack.Clear()
         
         # Stop input thread
-        if ($global:TuiState.CancellationTokenSource) {
-            $global:TuiState.CancellationTokenSource.Cancel()
+        if ($global:TuiState.CancellationTokenSource -and -not $global:TuiState.CancellationTokenSource.IsCancellationRequested) {
+            try {
+                $global:TuiState.CancellationTokenSource.Cancel()
+            } catch {
+                Write-Verbose "CancellationTokenSource already disposed during cancel: $($_.Exception.Message)"
+            }
         }
         
         if ($global:TuiState.InputPowerShell) {
-            $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult)
-            $global:TuiState.InputPowerShell.Dispose()
+            try {
+                $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult)
+                $global:TuiState.InputPowerShell.Dispose()
+            } catch {
+                Write-Verbose "Error disposing InputPowerShell: $($_.Exception.Message)"
+            }
         }
         
         if ($global:TuiState.InputRunspace) {
-            $global:TuiState.InputRunspace.Dispose()
+            try {
+                $global:TuiState.InputRunspace.Dispose()
+            } catch {
+                Write-Verbose "Error disposing InputRunspace: $($_.Exception.Message)"
+            }
         }
         
         if ($global:TuiState.CancellationTokenSource) {
-            $global:TuiState.CancellationTokenSource.Dispose()
+            try {
+                $global:TuiState.CancellationTokenSource.Dispose()
+            } catch {
+                Write-Verbose "Error disposing CancellationTokenSource: $($_.Exception.Message)"
+            }
         }
         
         # Restore console

@@ -308,7 +308,7 @@ function Invoke-PanicHandler {
             ErrorDetails = $detailedError;
             SystemInfo = $systemInfo;
             ScreenshotFile = $screenshotPath;
-            LastLogEntries = if (Get-Command 'Get-LogEntries' -ErrorAction SilentlyContinue) { (Get-LogEntries -Count 50 -Level '*' | Select-Object -ExpandProperty UserData) } else { $null };
+            LastLogEntries = if (Get-Command 'Get-LogEntries' -ErrorAction SilentlyContinue) { (Get-LogEntries -Count 50 | Select-Object -ExpandProperty UserData) } else { $null };
             ErrorHistory = if (Get-Command 'Get-ErrorHistory' -ErrorAction SilentlyContinue) { Get-ErrorHistory -Count 25 } else { $null };
         }
 

@@ -90,16 +90,16 @@ class DashboardScreen : Screen {
         $theme = $this.ServiceContainer.GetService('ThemeManager')
         $panel.ClearContent()
 
-        $panel.WriteToBuffer(1, 0, "Task Overview", $theme.GetColor('text.header'))
-        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('subtle'))
+        $panel.WriteToBuffer(1, 0, "Task Overview", $theme.GetColor('Header'))
+        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('Subtle'))
         
-        $panel.WriteToBuffer(1, 3, "Total Tasks:    $($this._totalTasks)", $theme.GetColor('text.normal'))
-        $panel.WriteToBuffer(1, 4, "Completed:      $($this._completedTasks)", $theme.GetColor('text.normal'))
-        $panel.WriteToBuffer(1, 5, "Pending:        $($this._pendingTasks)", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(1, 3, "Total Tasks:    $($this._totalTasks)", $theme.GetColor('Foreground'))
+        $panel.WriteToBuffer(1, 4, "Completed:      $($this._completedTasks)", $theme.GetColor('Foreground'))
+        $panel.WriteToBuffer(1, 5, "Pending:        $($this._pendingTasks)", $theme.GetColor('Foreground'))
         
         $progress = $this._GetProgressBar()
-        $panel.WriteToBuffer(1, 7, "Overall Progress:", $theme.GetColor('text.normal'))
-        $panel.WriteToBuffer(1, 8, $progress, $theme.GetColor('text.highlight'))
+        $panel.WriteToBuffer(1, 7, "Overall Progress:", $theme.GetColor('Foreground'))
+        $panel.WriteToBuffer(1, 8, $progress, $theme.GetColor('Highlight'))
     }
 
     # Updates the help panel to guide users to the new Command Palette.
@@ -113,16 +113,16 @@ class DashboardScreen : Screen {
         $paletteAction = $actionService.GetAction("app.showCommandPalette")
         $paletteHotkey = $paletteAction.Hotkey ?? "Ctrl+P" # Fallback just in case
         
-        $panel.WriteToBuffer(1, 0, "Welcome to Axiom-Phoenix!", $theme.GetColor('text.header'))
-        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('subtle'))
+        $panel.WriteToBuffer(1, 0, "Welcome to Axiom-Phoenix!", $theme.GetColor('Header'))
+        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('Subtle'))
         
-        $panel.WriteToBuffer(1, 3, "Press ", $theme.GetColor('text.normal'))
-        $panel.WriteToBuffer(7, 3, $paletteHotkey, $theme.GetColor('text.hotkey'))
-        $panel.WriteToBuffer(7 + $paletteHotkey.Length, 3, " to open the", $theme.GetColor('text.normal'))
-        $panel.WriteToBuffer(1, 4, "Command Palette.", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(1, 3, "Press ", $theme.GetColor('Foreground'))
+        $panel.WriteToBuffer(7, 3, $paletteHotkey, $theme.GetColor('Accent'))
+        $panel.WriteToBuffer(7 + $paletteHotkey.Length, 3, " to open the", $theme.GetColor('Foreground'))
+        $panel.WriteToBuffer(1, 4, "Command Palette.", $theme.GetColor('Foreground'))
 
-        $panel.WriteToBuffer(1, 6, "All navigation and actions are", $theme.GetColor('text.subtle'))
-        $panel.WriteToBuffer(1, 7, "now available from there.", $theme.GetColor('text.subtle'))
+        $panel.WriteToBuffer(1, 6, "All navigation and actions are", $theme.GetColor('Subtle'))
+        $panel.WriteToBuffer(1, 7, "now available from there.", $theme.GetColor('Subtle'))
     }
     
     # Updates the status panel with system info.
@@ -134,11 +134,11 @@ class DashboardScreen : Screen {
         $process = Get-Process -Id $global:PID
         $memoryMB = [Math]::Round($process.WorkingSet64 / 1MB, 2)
 
-        $panel.WriteToBuffer(1, 0, "System Information", $theme.GetColor('text.header'))
-        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('subtle'))
-        $panel.WriteToBuffer(1, 3, "PowerShell Version: $($global:PSVersionTable.PSVersion)", $theme.GetColor('text.normal'))
-        $panel.WriteToBuffer(1, 4, "Platform:           $($global:PSVersionTable.Platform)", $theme.GetColor('text.normal'))
-        $panel.WriteToBuffer(1, 5, "Memory Usage:       $($memoryMB) MB", $theme.GetColor('text.normal'))
+        $panel.WriteToBuffer(1, 0, "System Information", $theme.GetColor('Header'))
+        $panel.WriteToBuffer(1, 1, ('─' * ($panel.ContentWidth-2)), $theme.GetColor('Subtle'))
+        $panel.WriteToBuffer(1, 3, "PowerShell Version: $($global:PSVersionTable.PSVersion)", $theme.GetColor('Foreground'))
+        $panel.WriteToBuffer(1, 4, "Platform:           $($global:PSVersionTable.Platform)", $theme.GetColor('Foreground'))
+        $panel.WriteToBuffer(1, 5, "Memory Usage:       $($memoryMB) MB", $theme.GetColor('Foreground'))
     }
 
     # Helper to generate the progress bar string.

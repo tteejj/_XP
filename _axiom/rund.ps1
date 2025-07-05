@@ -100,6 +100,13 @@ try {
     $container.RegisterFactory("ActionService", { param($c) Initialize-ActionService }, $true)
     $container.RegisterFactory("KeybindingService", { param($c) New-KeybindingService }, $true)
     $container.RegisterFactory("DataManager", { param($c) Initialize-DataManager }, $true)
+    $container.RegisterFactory("ThemeManager", { 
+        param($c) 
+        $themeManager = New-Object PSObject
+        $themeManager | Add-Member -MemberType ScriptMethod -Name "GetColor" -Value { param($colorName) Get-ThemeColor -ColorName $colorName }
+        $themeManager | Add-Member -MemberType ScriptMethod -Name "GetTheme" -Value { Get-TuiTheme }
+        return $themeManager
+    }, $true)
     $container.RegisterFactory("NavigationService", { 
         param($c)
         Initialize-NavigationService -Services @{ ServiceContainer = $c } 
