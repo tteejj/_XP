@@ -39,10 +39,15 @@ class ServiceContainer {
     #region Public Methods
     # Registers an already created service instance (eager loading).
     [void] Register(
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
-        [Parameter(Mandatory)][ValidateNotNull()][object]$serviceInstance
+        # FIX: Removed [Parameter] and [Validate] attributes which are invalid on class method parameters.
+        [string]$name,
+        [object]$serviceInstance
     ) {
         Invoke-WithErrorHandling -Component "ServiceContainer" -Context "Register" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # FIX: Added manual validation to replace the removed attributes.
+            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+            if ($null -eq $serviceInstance) { throw [System.ArgumentNullException]::new("serviceInstance") }
+
             if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
                 throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
             }
@@ -57,11 +62,16 @@ class ServiceContainer {
 
     # Registers a factory scriptblock used to create the service on-demand (lazy loading).
     [void] RegisterFactory(
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name,
-        [Parameter(Mandatory)][ValidateNotNull()][scriptblock]$factory,
+        # FIX: Removed [Parameter] and [Validate] attributes.
+        [string]$name,
+        [scriptblock]$factory,
         [bool]$isSingleton = $true
     ) {
         Invoke-WithErrorHandling -Component "ServiceContainer" -Context "RegisterFactory" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # FIX: Added manual validation.
+            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+            if ($null -eq $factory) { throw [System.ArgumentNullException]::new("factory") }
+
             if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
                 throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
             }
@@ -79,8 +89,14 @@ class ServiceContainer {
     }
 
     # Retrieves a service by its name.
-    [object] GetService([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+    [object] GetService(
+        # FIX: Removed [Parameter] and [Validate] attributes.
+        [string]$name
+    ) {
         return Invoke-WithErrorHandling -Component "ServiceContainer" -Context "GetService" -AdditionalData @{ ServiceName = $name } -ScriptBlock {
+            # FIX: Added manual validation.
+            if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
             # 1. Return from eager-loaded services
             if ($this.{_services}.ContainsKey($name)) {
                 Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."

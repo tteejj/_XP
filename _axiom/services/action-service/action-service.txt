@@ -43,15 +43,27 @@ class ActionService {
         Write-Verbose "ActionService: Constructor called."
         # Register default application-level actions.
         # These actions typically publish events for other services to handle.
-        $this.RegisterAction("app.exit", "Exits the PMC Terminal application.", {
-            # This script block will be executed when 'app.exit' action is called.
-            # It expects the global 'Publish-Event' function to be available.
-            Publish-Event -EventName "Application.Exit" -Data @{ Source = "ActionService"; Action = "AppExit" }
-        }, "Application", $true) # Force overwrite if called multiple times in tests
+        $this.RegisterAction(
+            "app.exit", 
+            "Exits the PMC Terminal application.", 
+            {
+                # This script block will be executed when 'app.exit' action is called.
+                # It expects the global 'Publish-Event' function to be available.
+                Publish-Event -EventName "Application.Exit" -Data @{ Source = "ActionService"; Action = "AppExit" }
+            }, 
+            "Application", 
+            $true # Force overwrite if called multiple times in tests
+        )
 
-        $this.RegisterAction("app.help", "Displays application help.", {
-            Publish-Event -EventName "App.HelpRequested" -Data @{ Source = "ActionService"; Action = "Help" }
-        }, "Application", $true) # Force overwrite
+        $this.RegisterAction(
+            "app.help", 
+            "Displays application help.", 
+            {
+                Publish-Event -EventName "App.HelpRequested" -Data @{ Source = "ActionService"; Action = "Help" }
+            }, 
+            "Application", 
+            $true # Force overwrite
+        )
 
         Write-Log -Level Info -Message "ActionService initialized with default actions."
         Write-Verbose "ActionService: Default actions registered."
@@ -60,13 +72,15 @@ class ActionService {
     # RegisterAction: Registers a new action with the service.
     # Actions are identified by a unique name and associated with a script block to execute.
     [void] RegisterAction(
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name, # Unique name for the action (e.g., "file.save")
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$description, # Short description for UIs (e.g., command palette)
-        [Parameter(Mandatory)][ValidateNotNull()][scriptblock]$scriptBlock, # The PowerShell script block to execute when the action is invoked
-        [string]$category = "General", # Category for grouping actions (e.g., "Application", "File", "Task")
-        [switch]$Force # If specified, overwrite an existing action with the same name
+        [string]$name, 
+        [string]$description, 
+        [scriptblock]$scriptBlock, 
+        [string]$category = "General", 
+        [switch]$Force 
     ) {
-        # Input validation handled by parameter attributes.
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($description)) { throw [System.ArgumentException]::new("Parameter 'description' cannot be null or empty.") }
+        if ($null -eq $scriptBlock) { throw [System.ArgumentNullException]::new("scriptBlock") }
 
         if ($this.ActionRegistry.ContainsKey($name)) {
             if (-not $Force) {
@@ -92,7 +106,9 @@ class ActionService {
     }
 
     # UnregisterAction: Removes an action from the service.
-    [void] UnregisterAction([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+    [void] UnregisterAction([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
         if ($this.ActionRegistry.ContainsKey($name)) {
             $this.ActionRegistry.Remove($name)
             Write-Log -Level Debug -Message "Action '$name' unregistered."
@@ -106,10 +122,10 @@ class ActionService {
     # ExecuteAction: Executes a registered action.
     # The parameters hashtable is passed to the action's script block as $ActionParameters.
     [void] ExecuteAction(
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name, # Name of the action to execute
-        [Parameter()][hashtable]$parameters = @{} # Optional parameters to pass to the action's script block
+        [string]$name, 
+        [hashtable]$parameters = @{}
     ) {
-        # Input validation handled by parameter attributes.
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
 
         if (-not $this.ActionRegistry.ContainsKey($name)) {
             $errorMessage = "Attempted to execute unknown action: $name"
@@ -136,7 +152,9 @@ class ActionService {
     }
 
     # GetAction: Retrieves the definition of a specific action.
-    [hashtable] GetAction([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$name) {
+    [hashtable] GetAction([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        
         Write-Verbose "ActionService: Retrieving action '$name'."
         return $this.ActionRegistry[$name]
     }
@@ -151,7 +169,10 @@ class ActionService {
 
     # AddEventSubscription: Internal method to track event subscriptions made by ActionService.
     # This allows for proper cleanup in the Cleanup method.
-    hidden [void] AddEventSubscription([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$eventName, [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$handlerId) {
+    hidden [void] AddEventSubscription([string]$eventName, [string]$handlerId) {
+        if ([string]::IsNullOrWhiteSpace($eventName)) { throw [System.ArgumentException]::new("Parameter 'eventName' cannot be null or empty.") }
+        if ([string]::IsNullOrWhiteSpace($handlerId)) { throw [System.ArgumentException]::new("Parameter 'handlerId' cannot be null or empty.") }
+
         $this.EventSubscriptions[$eventName] = $handlerId
         Write-Log -Level Debug -Message "ActionService: Tracking event subscription for '$eventName' (HandlerId: $handlerId)."
         Write-Verbose "ActionService: Added event subscription tracking for '$eventName'."
@@ -185,5 +206,5 @@ class ActionService {
 # ------------------------------------------------------------------------------
 # Module Export
 # ------------------------------------------------------------------------------
-# Export the initialization function and the ActionService class, making them available when the module is imported.
-Export-ModuleMember -Function Initialize-ActionService -Class ActionService
+# FIX: Removed the invalid -Class parameter. The ActionService class is exported automatically.
+Export-ModuleMember -Function Initialize-ActionService

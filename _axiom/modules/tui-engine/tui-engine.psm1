@@ -53,18 +53,6 @@ function Initialize-TuiEngine {
     <#
     .SYNOPSIS
     Initializes the TUI engine with specified dimensions.
-    
-    .DESCRIPTION
-    Sets up the TUI engine with buffers, input handling, and console configuration.
-    
-    .PARAMETER Width
-    The width of the TUI buffer.
-    
-    .PARAMETER Height
-    The height of the TUI buffer.
-    
-    .EXAMPLE
-    Initialize-TuiEngine -Width 120 -Height 40
     #>
     [CmdletBinding()]
     param(
@@ -107,9 +95,6 @@ function Initialize-InputThread {
     <#
     .SYNOPSIS
     Initializes the asynchronous input processing thread.
-    
-    .DESCRIPTION
-    Sets up background input processing to handle keyboard input without blocking the main thread.
     #>
     [CmdletBinding()]
     param()
@@ -145,7 +130,7 @@ function Initialize-InputThread {
         # Start input processing
         $global:TuiState.InputPowerShell = [PowerShell]::Create()
         $global:TuiState.InputPowerShell.Runspace = $global:TuiState.InputRunspace
-        $global:TuiState.InputPowerShell.AddScript($inputScript).AddArgument($global:TuiState.InputQueue).AddArgument($global:TuiState.CancellationTokenSource.Token)
+        [void]$global:TuiState.InputPowerShell.AddScript($inputScript).AddArgument($global:TuiState.InputQueue).AddArgument($global:TuiState.CancellationTokenSource.Token)
         $global:TuiState.InputAsyncResult = $global:TuiState.InputPowerShell.BeginInvoke()
         
         Write-Log -Level Debug -Message "Input thread initialized successfully"
@@ -160,15 +145,6 @@ function Start-TuiLoop {
     <#
     .SYNOPSIS
     Starts the main TUI rendering and input processing loop.
-    
-    .DESCRIPTION
-    Begins the main application loop that handles rendering, input processing, and component lifecycle.
-    
-    .PARAMETER InitialScreen
-    The initial screen to display when the loop starts.
-    
-    .EXAMPLE
-    Start-TuiLoop -InitialScreen $mainScreen
     #>
     [CmdletBinding()]
     param(
@@ -214,7 +190,7 @@ function Start-TuiLoop {
                 # Frame rate limiting
                 $elapsed = $frameTimer.ElapsedMilliseconds
                 if ($elapsed -lt $targetFrameTime) {
-                    $sleepTime = [Math]::Max(1, $targetFrameTime - $elapsed)
+                    $sleepTime = [Math]::Max(1, [int]($targetFrameTime - $elapsed))
                     Start-Sleep -Milliseconds $sleepTime
                 }
                 
@@ -252,9 +228,6 @@ function Check-ForResize {
     <#
     .SYNOPSIS
     Checks for terminal resize and handles resize events.
-    
-    .DESCRIPTION
-    Detects terminal size changes and propagates resize events to all components.
     #>
     [CmdletBinding()]
     param()
@@ -281,7 +254,6 @@ function Check-ForResize {
             
             # Resize overlays
             foreach ($overlay in $global:TuiState.OverlayStack) {
-                # Re-center overlays or apply custom resize logic
                 if ($overlay -is [Dialog]) {
                     $overlay.X = [Math]::Floor(($currentWidth - $overlay.Width) / 2)
                     $overlay.Y = [Math]::Floor(($currentHeight - $overlay.Height) / 4)
@@ -314,12 +286,6 @@ function Process-TuiInput {
     <#
     .SYNOPSIS
     Processes input from the input queue.
-    
-    .DESCRIPTION
-    Handles keyboard input from the asynchronous input queue and routes it to the appropriate components.
-    
-    .OUTPUTS
-    [bool] Returns true if input was processed, false otherwise.
     #>
     [CmdletBinding()]
     param()
@@ -328,7 +294,6 @@ function Process-TuiInput {
     $keyInfo = [System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::None, $false, $false, $false)
     
     try {
-        # Process all available input
         while ($global:TuiState.InputQueue.TryDequeue([ref]$keyInfo)) {
             $hadInput = $true
             
@@ -345,16 +310,16 @@ function Process-TuiInput {
                 }
             }
             
-            # Route to current screen
-            if ($global:TuiState.CurrentScreen) {
-                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
+            # Route to focused component if not an overlay
+            if ($global:TuiState.OverlayStack.Count -eq 0 -and $global:TuiState.FocusedComponent) {
+                if ($global:TuiState.FocusedComponent.HandleInput($keyInfo)) {
                     continue
                 }
             }
             
-            # Route to focused component
-            if ($global:TuiState.FocusedComponent) {
-                if ($global:TuiState.FocusedComponent.HandleInput($keyInfo)) {
+            # Route to current screen
+            if ($global:TuiState.CurrentScreen) {
+                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                     continue
                 }
             }
@@ -373,15 +338,6 @@ function Handle-GlobalShortcuts {
     <#
     .SYNOPSIS
     Handles global keyboard shortcuts.
-    
-    .DESCRIPTION
-    Processes global shortcuts that should work regardless of focus state.
-    
-    .PARAMETER KeyInfo
-    The keyboard input to process.
-    
-    .OUTPUTS
-    [bool] Returns true if the shortcut was handled, false otherwise.
     #>
     [CmdletBinding()]
     param(
@@ -397,10 +353,10 @@ function Handle-GlobalShortcuts {
             return $true
         }
         
-        # Ctrl+P - Command Palette (if available)
-        if ($KeyInfo.Key -eq [ConsoleKey]::P -and $KeyInfo.Modifiers -band [ConsoleModifiers]::Control) {
-            if (Get-Command Show-CommandPalette -ErrorAction SilentlyContinue) {
-                Show-CommandPalette
+        # Ctrl+P - Command Palette
+        if ($KeyInfo.Key -eq [ConsoleKey]::P -and ($KeyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+            if (Get-Command Publish-Event -ErrorAction SilentlyContinue) {
+                Publish-Event -EventName "CommandPalette.Open"
                 return $true
             }
         }
@@ -423,9 +379,6 @@ function Render-Frame {
     <#
     .SYNOPSIS
     Renders the current frame to the screen.
-    
-    .DESCRIPTION
-    Orchestrates the rendering of the current screen and overlays to the compositor buffer.
     #>
     [CmdletBinding()]
     param()
@@ -449,10 +402,10 @@ function Render-Frame {
         # Perform differential update to console
         Render-CompositorToConsole
         
-        # Swap buffers
-        $temp = $global:TuiState.PreviousCompositorBuffer
-        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
-        $global:TuiState.CompositorBuffer = $temp
+        # Swap buffers for next frame's diffing
+        $tempBuffer = $global:TuiState.CompositorBuffer
+        $global:TuiState.CompositorBuffer = $global:TuiState.PreviousCompositorBuffer
+        $global:TuiState.PreviousCompositorBuffer = $tempBuffer
     }
     catch {
         Write-Error "Error rendering frame: $($_.Exception.Message)"
@@ -463,47 +416,39 @@ function Render-CompositorToConsole {
     <#
     .SYNOPSIS
     Renders the compositor buffer to the console with differential updates.
-    
-    .DESCRIPTION
-    Optimizes console output by only updating changed cells between frames.
     #>
     [CmdletBinding()]
     param()
     
     try {
         $output = [System.Text.StringBuilder]::new()
-        $lastForeground = [ConsoleColor]::White
-        $lastBackground = [ConsoleColor]::Black
         
         for ($y = 0; $y -lt $global:TuiState.BufferHeight; $y++) {
             for ($x = 0; $x -lt $global:TuiState.BufferWidth; $x++) {
-                $currentCell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
-                $previousCell = $global:TuiState.PreviousCompositorBuffer.GetCell($x, $y)
+                $currentCell = $global:TuiState.PreviousCompositorBuffer.GetCell($x, $y) # Note: we render from the buffer that was just composed
+                $previousCell = $global:TuiState.CompositorBuffer.GetCell($x, $y) # The "old" frame
                 
-                # Only update if cell changed
-                if (-not $currentCell.Equals($previousCell)) {
-                    # Position cursor
-                    $output.Append([char]27 + "[" + ($y + 1) + ";" + ($x + 1) + "H")
+                # Use DiffersFrom for correct value comparison
+                if ($currentCell.DiffersFrom($previousCell)) {
+                    # Suppress StringBuilder.Append output by casting to [void]
+                    [void]$output.Append("`e[" + ($y + 1) + ";" + ($x + 1) + "H")
                     
-                    # Update colors if needed
-                    if ($currentCell.ForegroundColor -ne $lastForeground) {
-                        $output.Append([char]27 + "[" + (30 + [int]$currentCell.ForegroundColor) + "m")
-                        $lastForeground = $currentCell.ForegroundColor
-                    }
+                    # Use TuiAnsiHelper for Truecolor support and styling
+                    [void]$output.Append([TuiAnsiHelper]::Reset())
+                    [void]$output.Append([TuiAnsiHelper]::GetForegroundCode($currentCell.ForegroundColor))
+                    [void]$output.Append([TuiAnsiHelper]::GetBackgroundCode($currentCell.BackgroundColor))
                     
-                    if ($currentCell.BackgroundColor -ne $lastBackground) {
-                        $output.Append([char]27 + "[" + (40 + [int]$currentCell.BackgroundColor) + "m")
-                        $lastBackground = $currentCell.BackgroundColor
-                    }
+                    if ($currentCell.Bold) { [void]$output.Append([TuiAnsiHelper]::Bold()) }
+                    if ($currentCell.Underline) { [void]$output.Append([TuiAnsiHelper]::Underline()) }
+                    if ($currentCell.Italic) { [void]$output.Append([TuiAnsiHelper]::Italic()) }
                     
-                    # Write character
-                    $output.Append($currentCell.Character)
+                    [void]$output.Append($currentCell.Char)
                 }
             }
         }
         
-        # Output to console
         if ($output.Length -gt 0) {
+            [void]$output.Append([TuiAnsiHelper]::Reset())
             [Console]::Write($output.ToString())
         }
     }
@@ -516,9 +461,6 @@ function Cleanup-TuiEngine {
     <#
     .SYNOPSIS
     Cleans up all TUI engine resources.
-    
-    .DESCRIPTION
-    Performs complete cleanup of the TUI engine, including screen cleanup, input thread termination, and console restoration.
     #>
     [CmdletBinding()]
     param()
@@ -527,54 +469,40 @@ function Cleanup-TuiEngine {
         Write-Log -Level Info -Message "Cleaning up TUI Engine"
         
         # Cleanup all screens and components
-        if ($global:TuiState.CurrentScreen) {
+        if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.PSObject.Methods['Cleanup']) {
             $global:TuiState.CurrentScreen.Cleanup()
         }
         
         while ($global:TuiState.ScreenStack.Count -gt 0) {
             $screen = $global:TuiState.ScreenStack.Pop()
-            $screen.Cleanup()
+            if ($screen.PSObject.Methods['Cleanup']) {
+                $screen.Cleanup()
+            }
         }
         
         # Cleanup overlays
         foreach ($overlay in $global:TuiState.OverlayStack) {
-            $overlay.Cleanup()
+            if ($overlay.PSObject.Methods['Cleanup']) {
+                $overlay.Cleanup()
+            }
         }
         $global:TuiState.OverlayStack.Clear()
         
         # Stop input thread
         if ($global:TuiState.CancellationTokenSource -and -not $global:TuiState.CancellationTokenSource.IsCancellationRequested) {
-            try {
-                $global:TuiState.CancellationTokenSource.Cancel()
-            } catch {
-                Write-Verbose "CancellationTokenSource already disposed during cancel: $($_.Exception.Message)"
-            }
+            $global:TuiState.CancellationTokenSource.Cancel()
         }
         
         if ($global:TuiState.InputPowerShell) {
-            try {
-                $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult)
-                $global:TuiState.InputPowerShell.Dispose()
-            } catch {
-                Write-Verbose "Error disposing InputPowerShell: $($_.Exception.Message)"
-            }
+            $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult)
+            $global:TuiState.InputPowerShell.Dispose()
         }
         
         if ($global:TuiState.InputRunspace) {
-            try {
-                $global:TuiState.InputRunspace.Dispose()
-            } catch {
-                Write-Verbose "Error disposing InputRunspace: $($_.Exception.Message)"
-            }
+            $global:TuiState.InputRunspace.Dispose()
         }
         
-        if ($global:TuiState.CancellationTokenSource) {
-            try {
-                $global:TuiState.CancellationTokenSource.Dispose()
-            } catch {
-                Write-Verbose "Error disposing CancellationTokenSource: $($_.Exception.Message)"
-            }
-        }
+        $global:TuiState.CancellationTokenSource.Dispose()
         
         # Restore console
         [Console]::CursorVisible = $true
@@ -596,83 +524,52 @@ function Push-Screen {
     <#
     .SYNOPSIS
     Pushes a new screen onto the screen stack.
-    
-    .DESCRIPTION
-    Adds a new screen to the navigation stack and makes it the current screen.
-    
-    .PARAMETER Screen
-    The screen to push onto the stack.
-    
-    .EXAMPLE
-    Push-Screen -Screen $newScreen
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [object]$Screen
+        # FIX: Removed the [UIElement] type constraint to avoid module scoping issues.
+        $Screen
     )
     
-    # FIX: Enhanced null checking to prevent null method calls
-    if (-not $Screen) { 
+    if (-not $Screen) {
         Write-Error "Push-Screen: Screen parameter is null"
-        return 
+        return
     }
     
     try {
-        # FIX: Safe property access with null coalescing
         $screenName = $Screen.Name ?? "UnknownScreen"
         Write-Log -Level Debug -Message "Pushing screen: $screenName"
         
-        # FIX: Null check before calling methods
-        if ($global:TuiState.FocusedComponent -and $global:TuiState.FocusedComponent.PSObject.Methods['OnBlur']) {
+        if ($global:TuiState.FocusedComponent) {
             $global:TuiState.FocusedComponent.OnBlur()
         }
         
-        # Handle current screen with null checks
-        if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.PSObject.Methods['OnExit']) {
+        if ($global:TuiState.CurrentScreen) {
             $global:TuiState.CurrentScreen.OnExit()
-            $global:TuiState.ScreenStack.Push($global:TuiState.CurrentScreen)
+            [void]$global:TuiState.ScreenStack.Push($global:TuiState.CurrentScreen)
         }
         
-        # Set new screen as current
         $global:TuiState.CurrentScreen = $Screen
         $global:TuiState.FocusedComponent = $null
         
-        # FIX: Null check before calling Resize
-        if ($Screen.PSObject.Methods['Resize']) {
-            $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        
+        if ($Screen.PSObject.Methods['OnInitialize']) {
+            $Screen.OnInitialize()
         }
         
-        # FIX: Enhanced null checking for Initialize method
-        if ($Screen.PSObject.Methods['Initialize']) {
-            $Screen.Initialize()
-        } else {
-            Write-Warning "Screen '$screenName' does not have an Initialize method"
-        }
-        
-        # FIX: Null check before calling OnEnter
-        if ($Screen.PSObject.Methods['OnEnter']) {
-            $Screen.OnEnter()
-        }
-        
-        # FIX: Null check before calling RequestRedraw
-        if ($Screen.PSObject.Methods['RequestRedraw']) {
-            $Screen.RequestRedraw()
-        }
+        $Screen.OnEnter()
+        $Screen.RequestRedraw()
         
         Request-TuiRefresh
-        
         Publish-Event -EventName "Screen.Pushed" -Data @{ ScreenName = $screenName }
-        
         Write-Log -Level Debug -Message "Screen pushed successfully: $screenName"
     }
     catch {
-        # FIX: Prevent infinite loops in error handling by avoiding complex object string conversion
         $errorMsg = $_.Exception.Message ?? "Unknown error"
         $screenName = if ($Screen -and $Screen.PSObject.Properties['Name']) { $Screen.Name } else { "UnknownScreen" }
         Write-Error "Error pushing screen '$screenName': $errorMsg"
-        
-        # FIX: Stop the TUI loop on critical errors to prevent infinite loops
         $global:TuiState.Running = $false
     }
 }
@@ -681,15 +578,6 @@ function Pop-Screen {
     <#
     .SYNOPSIS
     Pops the current screen from the screen stack.
-    
-    .DESCRIPTION
-    Removes the current screen and returns to the previous screen in the stack.
-    
-    .OUTPUTS
-    [bool] Returns true if a screen was popped, false if the stack is empty.
-    
-    .EXAMPLE
-    $popped = Pop-Screen
     #>
     [CmdletBinding()]
     param()
@@ -702,38 +590,31 @@ function Pop-Screen {
     try {
         Write-Log -Level Debug -Message "Popping screen"
         
-        # Blur current focused component
         if ($global:TuiState.FocusedComponent) {
             $global:TuiState.FocusedComponent.OnBlur()
         }
         
-        # Get screen to exit
         $screenToExit = $global:TuiState.CurrentScreen
         
-        # Pop previous screen
         $global:TuiState.CurrentScreen = $global:TuiState.ScreenStack.Pop()
         $global:TuiState.FocusedComponent = $null
         
-        # LIFECYCLE INTEGRATION: Cleanup the exiting screen
         if ($screenToExit) {
             $screenToExit.OnExit()
-            $screenToExit.Cleanup()
+            if ($screenToExit.PSObject.Methods['Cleanup']) {
+                $screenToExit.Cleanup()
+            }
         }
         
-        # Resume previous screen
         if ($global:TuiState.CurrentScreen) {
             $global:TuiState.CurrentScreen.OnResume()
-            
-            # Restore focus if available
             if ($global:TuiState.CurrentScreen.LastFocusedComponent) {
                 Set-ComponentFocus -Component $global:TuiState.CurrentScreen.LastFocusedComponent
             }
         }
         
         Request-TuiRefresh
-        
         Publish-Event -EventName "Screen.Popped" -Data @{ ScreenName = $global:TuiState.CurrentScreen.Name }
-        
         Write-Log -Level Debug -Message "Screen popped successfully"
         return $true
     }
@@ -747,33 +628,22 @@ function Show-TuiOverlay {
     <#
     .SYNOPSIS
     Shows an overlay element (like a dialog) on top of the current screen.
-    
-    .DESCRIPTION
-    Adds an overlay element to the overlay stack and displays it on top of the current screen.
-    
-    .PARAMETER Element
-    The overlay element to show.
-    
-    .EXAMPLE
-    Show-TuiOverlay -Element $dialog
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [object]$Element
+        [UIElement]$Element
     )
     
     try {
         Write-Log -Level Debug -Message "Showing overlay: $($Element.Name)"
         
-        # Initialize overlay
-        $Element.Initialize()
+        if ($Element.PSObject.Methods['OnInitialize']) {
+            $Element.OnInitialize()
+        }
         
-        # Add to overlay stack
         $global:TuiState.OverlayStack.Add($Element)
-        
         Request-TuiRefresh
-        
         Write-Log -Level Debug -Message "Overlay shown successfully: $($Element.Name)"
     }
     catch {
@@ -785,12 +655,6 @@ function Close-TopTuiOverlay {
     <#
     .SYNOPSIS
     Closes the top overlay element.
-    
-    .DESCRIPTION
-    Removes the topmost overlay from the overlay stack and cleans it up.
-    
-    .EXAMPLE
-    Close-TopTuiOverlay
     #>
     [CmdletBinding()]
     param()
@@ -800,11 +664,11 @@ function Close-TopTuiOverlay {
             $overlay = $global:TuiState.OverlayStack[-1]
             $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
             
-            # LIFECYCLE INTEGRATION: Cleanup the overlay
-            $overlay.Cleanup()
+            if ($overlay.PSObject.Methods['Cleanup']) {
+                $overlay.Cleanup()
+            }
             
             Request-TuiRefresh
-            
             Write-Log -Level Debug -Message "Overlay closed: $($overlay.Name)"
         }
     }
@@ -821,20 +685,11 @@ function Set-ComponentFocus {
     <#
     .SYNOPSIS
     Sets focus to a specific component.
-    
-    .DESCRIPTION
-    Manages focus state by blurring the current focused component and focusing the new one.
-    
-    .PARAMETER Component
-    The component to focus.
-    
-    .EXAMPLE
-    Set-ComponentFocus -Component $textBox
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [object]$Component
+        [UIElement]$Component
     )
     
     try {
@@ -843,22 +698,18 @@ function Set-ComponentFocus {
             return
         }
         
-        # Blur current focused component
         if ($global:TuiState.FocusedComponent) {
             $global:TuiState.FocusedComponent.OnBlur()
         }
         
-        # Set new focused component
         $global:TuiState.FocusedComponent = $Component
         $Component.OnFocus()
         
-        # Update screen's last focused component
         if ($global:TuiState.CurrentScreen) {
             $global:TuiState.CurrentScreen.LastFocusedComponent = $Component
         }
         
         Request-TuiRefresh
-        
         Write-Log -Level Debug -Message "Focus set to component: $($Component.Name)"
     }
     catch {
@@ -870,15 +721,6 @@ function Get-FocusedComponent {
     <#
     .SYNOPSIS
     Gets the currently focused component.
-    
-    .DESCRIPTION
-    Returns the component that currently has focus, or null if no component is focused.
-    
-    .OUTPUTS
-    [UIElement] The currently focused component, or null.
-    
-    .EXAMPLE
-    $focused = Get-FocusedComponent
     #>
     [CmdletBinding()]
     param()
@@ -894,12 +736,6 @@ function Request-TuiRefresh {
     <#
     .SYNOPSIS
     Requests a refresh of the TUI display.
-    
-    .DESCRIPTION
-    Marks the TUI as dirty so it will be redrawn on the next frame.
-    
-    .EXAMPLE
-    Request-TuiRefresh
     #>
     [CmdletBinding()]
     param()
@@ -911,9 +747,6 @@ function Show-DebugInfo {
     <#
     .SYNOPSIS
     Shows debug information about the TUI state.
-    
-    .DESCRIPTION
-    Displays debugging information including render statistics, component counts, and memory usage.
     #>
     [CmdletBinding()]
     param()
@@ -932,13 +765,12 @@ Overlay Count: $($global:TuiState.OverlayStack.Count)
 Current Screen: $($global:TuiState.CurrentScreen?.Name ?? 'None')
 Focused Component: $($global:TuiState.FocusedComponent?.Name ?? 'None')
 Input Queue Size: $($global:TuiState.InputQueue.Count)
-Memory Usage: $([GC]::GetTotalMemory($false) / 1MB) MB
+Memory Usage: $([math]::round([GC]::GetTotalMemory($false) / 1MB, 2)) MB
 === End Debug Information ===
 "@
         
         Write-Log -Level Info -Message $debugInfo
         
-        # Also show as overlay if possible
         if (Get-Command Show-AlertDialog -ErrorAction SilentlyContinue) {
             Show-AlertDialog -Title "Debug Information" -Message $debugInfo
         }
@@ -952,14 +784,12 @@ Memory Usage: $([GC]::GetTotalMemory($false) / 1MB) MB
 
 #region Module Exports
 
-# Export public functions
 Export-ModuleMember -Function `
     Initialize-TuiEngine, Start-TuiLoop, Cleanup-TuiEngine, `
     Push-Screen, Pop-Screen, Show-TuiOverlay, Close-TopTuiOverlay, `
     Set-ComponentFocus, Get-FocusedComponent, Request-TuiRefresh, `
     Render-Frame, Process-TuiInput, Check-ForResize
 
-# Export the TUI state for advanced scenarios
 Export-ModuleMember -Variable TuiState
 
 #endregion

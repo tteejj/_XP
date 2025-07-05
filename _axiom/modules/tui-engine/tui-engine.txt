@@ -3,6 +3,11 @@
 # Core engine providing complete lifecycle management and high-performance rendering
 # ==============================================================================
 
+using module ui-classes
+using module tui-primitives
+using module theme-manager
+using module logger
+using module exceptions
 using namespace System.Collections.Generic
 using namespace System.Collections.Concurrent
 using namespace System.Management.Automation
@@ -168,7 +173,7 @@ function Start-TuiLoop {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$InitialScreen
+        [object]$InitialScreen
     )
     
     try {
@@ -224,13 +229,11 @@ function Start-TuiLoop {
             }
             catch {
                 Write-Error "Error in TUI main loop: $($_.Exception.Message)"
-                Invoke-PanicHandler -Exception $_.Exception -Context "TUI Main Loop"
+                Invoke-PanicHandler -ErrorRecord $_ -AdditionalContext @{ Context = "TUI Main Loop" }
                 
-                # Continue running unless it's a critical error
-                if ($_.Exception -is [System.OutOfMemoryException] -or $_.Exception -is [System.StackOverflowException]) {
-                    $global:TuiState.Running = $false
-                    break
-                }
+                # Stop running on any critical error to prevent infinite loops
+                $global:TuiState.Running = $false
+                break
             }
         }
         
@@ -322,6 +325,7 @@ function Process-TuiInput {
     param()
     
     $hadInput = $false
+    $keyInfo = [System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::None, $false, $false, $false)
     
     try {
         # Process all available input
@@ -539,21 +543,37 @@ function Cleanup-TuiEngine {
         $global:TuiState.OverlayStack.Clear()
         
         # Stop input thread
-        if ($global:TuiState.CancellationTokenSource) {
-            $global:TuiState.CancellationTokenSource.Cancel()
+        if ($global:TuiState.CancellationTokenSource -and -not $global:TuiState.CancellationTokenSource.IsCancellationRequested) {
+            try {
+                $global:TuiState.CancellationTokenSource.Cancel()
+            } catch {
+                Write-Verbose "CancellationTokenSource already disposed during cancel: $($_.Exception.Message)"
+            }
         }
         
         if ($global:TuiState.InputPowerShell) {
-            $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult)
-            $global:TuiState.InputPowerShell.Dispose()
+            try {
+                $global:TuiState.InputPowerShell.EndInvoke($global:TuiState.InputAsyncResult)
+                $global:TuiState.InputPowerShell.Dispose()
+            } catch {
+                Write-Verbose "Error disposing InputPowerShell: $($_.Exception.Message)"
+            }
         }
         
         if ($global:TuiState.InputRunspace) {
-            $global:TuiState.InputRunspace.Dispose()
+            try {
+                $global:TuiState.InputRunspace.Dispose()
+            } catch {
+                Write-Verbose "Error disposing InputRunspace: $($_.Exception.Message)"
+            }
         }
         
         if ($global:TuiState.CancellationTokenSource) {
-            $global:TuiState.CancellationTokenSource.Dispose()
+            try {
+                $global:TuiState.CancellationTokenSource.Dispose()
+            } catch {
+                Write-Verbose "Error disposing CancellationTokenSource: $($_.Exception.Message)"
+            }
         }
         
         # Restore console
@@ -589,21 +609,27 @@ function Push-Screen {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$Screen
+        [object]$Screen
     )
     
-    if (-not $Screen) { return }
+    # FIX: Enhanced null checking to prevent null method calls
+    if (-not $Screen) { 
+        Write-Error "Push-Screen: Screen parameter is null"
+        return 
+    }
     
     try {
-        Write-Log -Level Debug -Message "Pushing screen: $($Screen.Name)"
+        # FIX: Safe property access with null coalescing
+        $screenName = $Screen.Name ?? "UnknownScreen"
+        Write-Log -Level Debug -Message "Pushing screen: $screenName"
         
-        # Blur current focused component
-        if ($global:TuiState.FocusedComponent) {
+        # FIX: Null check before calling methods
+        if ($global:TuiState.FocusedComponent -and $global:TuiState.FocusedComponent.PSObject.Methods['OnBlur']) {
             $global:TuiState.FocusedComponent.OnBlur()
         }
         
-        # Handle current screen
-        if ($global:TuiState.CurrentScreen) {
+        # Handle current screen with null checks
+        if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.PSObject.Methods['OnExit']) {
             $global:TuiState.CurrentScreen.OnExit()
             $global:TuiState.ScreenStack.Push($global:TuiState.CurrentScreen)
         }
@@ -612,24 +638,42 @@ function Push-Screen {
         $global:TuiState.CurrentScreen = $Screen
         $global:TuiState.FocusedComponent = $null
         
-        # Resize screen to current dimensions
-        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        # FIX: Null check before calling Resize
+        if ($Screen.PSObject.Methods['Resize']) {
+            $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        }
         
-        # LIFECYCLE INTEGRATION: Initialize the screen
-        $Screen.Initialize()
+        # FIX: Enhanced null checking for Initialize method
+        if ($Screen.PSObject.Methods['Initialize']) {
+            $Screen.Initialize()
+        } else {
+            Write-Warning "Screen '$screenName' does not have an Initialize method"
+        }
         
-        # Call OnEnter hook
-        $Screen.OnEnter()
+        # FIX: Null check before calling OnEnter
+        if ($Screen.PSObject.Methods['OnEnter']) {
+            $Screen.OnEnter()
+        }
         
-        $Screen.RequestRedraw()
+        # FIX: Null check before calling RequestRedraw
+        if ($Screen.PSObject.Methods['RequestRedraw']) {
+            $Screen.RequestRedraw()
+        }
+        
         Request-TuiRefresh
         
-        Publish-Event -EventName "Screen.Pushed" -Data @{ ScreenName = $Screen.Name }
+        Publish-Event -EventName "Screen.Pushed" -Data @{ ScreenName = $screenName }
         
-        Write-Log -Level Debug -Message "Screen pushed successfully: $($Screen.Name)"
+        Write-Log -Level Debug -Message "Screen pushed successfully: $screenName"
     }
     catch {
-        Write-Error "Error pushing screen '$($Screen.Name)': $($_.Exception.Message)"
+        # FIX: Prevent infinite loops in error handling by avoiding complex object string conversion
+        $errorMsg = $_.Exception.Message ?? "Unknown error"
+        $screenName = if ($Screen -and $Screen.PSObject.Properties['Name']) { $Screen.Name } else { "UnknownScreen" }
+        Write-Error "Error pushing screen '$screenName': $errorMsg"
+        
+        # FIX: Stop the TUI loop on critical errors to prevent infinite loops
+        $global:TuiState.Running = $false
     }
 }
 
@@ -716,7 +760,7 @@ function Show-TuiOverlay {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$Element
+        [object]$Element
     )
     
     try {
@@ -790,7 +834,7 @@ function Set-ComponentFocus {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$Component
+        [object]$Component
     )
     
     try {

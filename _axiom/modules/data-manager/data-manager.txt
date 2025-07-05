@@ -1,6 +1,8 @@
 # Data Manager Module - Axiom-Phoenix v4.0 Enhancement
 # High-performance, transaction-safe, and lifecycle-aware data service.
 
+using module models
+
 function Initialize-DataManager {
     <#
     .SYNOPSIS
@@ -81,7 +83,8 @@ class DataManager : IDisposable {
                 if ($jsonData.ContainsKey('Tasks')) {
                     $this.{_dataStore}.Tasks.Clear()
                     foreach ($taskData in $jsonData.Tasks) {
-                        $task = [PmcTask]::new($taskData)
+                        # FIX: Use FromLegacyFormat instead of constructor with hashtable
+                        $task = [PmcTask]::FromLegacyFormat($taskData)
                         [void]$this.{_dataStore}.Tasks.Add($task)
                     }
                 }
@@ -89,7 +92,8 @@ class DataManager : IDisposable {
                 if ($jsonData.ContainsKey('Projects')) {
                     $this.{_dataStore}.Projects.Clear()
                     foreach ($projectData in $jsonData.Projects) {
-                        $project = [PmcProject]::new($projectData)
+                        # FIX: Use FromLegacyFormat instead of constructor with hashtable
+                        $project = [PmcProject]::FromLegacyFormat($projectData)
                         [void]$this.{_dataStore}.Projects.Add($project)
                     }
                 }
@@ -159,13 +163,13 @@ class DataManager : IDisposable {
                 SavedAt = [datetime]::Now
             }
             
-            # Convert objects to serializable format
+            # Convert objects to serializable format using ToLegacyFormat
             foreach ($task in $this.{_dataStore}.Tasks) {
-                $saveData.Tasks += $task.ToHashtable()
+                $saveData.Tasks += $task.ToLegacyFormat()
             }
             
             foreach ($project in $this.{_dataStore}.Projects) {
-                $saveData.Projects += $project.ToHashtable()
+                $saveData.Projects += $project.ToLegacyFormat()
             }
             
             # Save to file
@@ -279,7 +283,7 @@ class DataManager : IDisposable {
     #endregion
 
     #region Task Management Methods
-    [PmcTask] AddTask([Parameter(Mandatory)][ValidateNotNull()][PmcTask]$newTask) {
+    [PmcTask] AddTask([PmcTask]$newTask) {
         return Invoke-WithErrorHandling -Component "DataManager.AddTask" -Context "Adding new task" -AdditionalData @{ TaskId = $newTask.Id; TaskTitle = $newTask.Title } -ScriptBlock {
             # Ensure task has required properties
             if ([string]::IsNullOrEmpty($newTask.Id)) {
@@ -311,7 +315,7 @@ class DataManager : IDisposable {
         }
     }
 
-    [PmcTask] UpdateTask([Parameter(Mandatory)][ValidateNotNull()][PmcTask]$taskWithUpdates) {
+    [PmcTask] UpdateTask([PmcTask]$taskWithUpdates) {
         return Invoke-WithErrorHandling -Component "DataManager.UpdateTask" -Context "Updating task" -AdditionalData @{ TaskId = $taskWithUpdates.Id } -ScriptBlock {
             if (-not $this.{_taskIndex}.ContainsKey($taskWithUpdates.Id)) {
                 throw [System.InvalidOperationException]::new("Task with ID '$($taskWithUpdates.Id)' not found for update.")
@@ -344,7 +348,7 @@ class DataManager : IDisposable {
         }
     }
 
-    [bool] RemoveTask([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$taskId) {
+    [bool] RemoveTask([string]$taskId) {
         return Invoke-WithErrorHandling -Component "DataManager.RemoveTask" -Context "Removing task" -AdditionalData @{ TaskId = $taskId } -ScriptBlock {
             if (-not $this.{_taskIndex}.ContainsKey($taskId)) {
                 if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
@@ -372,7 +376,7 @@ class DataManager : IDisposable {
         }
     }
     
-    [PmcTask] GetTask([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$taskId) {
+    [PmcTask] GetTask([string]$taskId) {
         if ($this.{_taskIndex}.ContainsKey($taskId)) {
             return $this.{_taskIndex}[$taskId]
         }
@@ -385,7 +389,7 @@ class DataManager : IDisposable {
     #endregion
     
     #region Project Management Methods
-    [PmcProject] AddProject([Parameter(Mandatory)][ValidateNotNull()][PmcProject]$newProject) {
+    [PmcProject] AddProject([PmcProject]$newProject) {
         return Invoke-WithErrorHandling -Component "DataManager.AddProject" -Context "Adding new project" -AdditionalData @{ ProjectKey = $newProject.Key; ProjectName = $newProject.Name } -ScriptBlock {
             # Ensure project has required properties
             if ([string]::IsNullOrEmpty($newProject.Key)) {
@@ -417,7 +421,7 @@ class DataManager : IDisposable {
         }
     }
     
-    [PmcProject] UpdateProject([Parameter(Mandatory)][ValidateNotNull()][PmcProject]$projectWithUpdates) {
+    [PmcProject] UpdateProject([PmcProject]$projectWithUpdates) {
         return Invoke-WithErrorHandling -Component "DataManager.UpdateProject" -Context "Updating project" -AdditionalData @{ ProjectKey = $projectWithUpdates.Key } -ScriptBlock {
             if (-not $this.{_projectIndex}.ContainsKey($projectWithUpdates.Key)) {
                 throw [System.InvalidOperationException]::new("Project with Key '$($projectWithUpdates.Key)' not found for update.")
@@ -450,7 +454,7 @@ class DataManager : IDisposable {
         }
     }
     
-    [bool] RemoveProject([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$projectKey) {
+    [bool] RemoveProject([string]$projectKey) {
         return Invoke-WithErrorHandling -Component "DataManager.RemoveProject" -Context "Removing project" -AdditionalData @{ ProjectKey = $projectKey } -ScriptBlock {
             if (-not $this.{_projectIndex}.ContainsKey($projectKey)) {
                 if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
@@ -478,7 +482,7 @@ class DataManager : IDisposable {
         }
     }
     
-    [PmcProject] GetProject([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$projectKey) {
+    [PmcProject] GetProject([string]$projectKey) {
         if ($this.{_projectIndex}.ContainsKey($projectKey)) {
             return $this.{_projectIndex}[$projectKey]
         }

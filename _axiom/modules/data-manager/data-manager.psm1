@@ -83,7 +83,7 @@ class DataManager : IDisposable {
                 if ($jsonData.ContainsKey('Tasks')) {
                     $this.{_dataStore}.Tasks.Clear()
                     foreach ($taskData in $jsonData.Tasks) {
-                        # FIX: Use FromLegacyFormat instead of constructor with hashtable
+                        # FIX: Use the correct FromLegacyFormat static method for deserialization.
                         $task = [PmcTask]::FromLegacyFormat($taskData)
                         [void]$this.{_dataStore}.Tasks.Add($task)
                     }
@@ -92,7 +92,7 @@ class DataManager : IDisposable {
                 if ($jsonData.ContainsKey('Projects')) {
                     $this.{_dataStore}.Projects.Clear()
                     foreach ($projectData in $jsonData.Projects) {
-                        # FIX: Use FromLegacyFormat instead of constructor with hashtable
+                        # FIX: Use the correct FromLegacyFormat static method for deserialization.
                         $project = [PmcProject]::FromLegacyFormat($projectData)
                         [void]$this.{_dataStore}.Projects.Add($project)
                     }
@@ -145,17 +145,14 @@ class DataManager : IDisposable {
     }
     
     hidden [void] SaveData() {
-        # Only save if not in a transaction or at the end of one
         if ($this.{_updateTransactionCount} -gt 0) {
             Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this.{_updateTransactionCount}))."
             return
         }
         
         try {
-            # Create backup before saving
             $this.CreateBackup()
             
-            # Prepare data for serialization
             $saveData = @{
                 Tasks = @()
                 Projects = @()
@@ -163,7 +160,6 @@ class DataManager : IDisposable {
                 SavedAt = [datetime]::Now
             }
             
-            # Convert objects to serializable format using ToLegacyFormat
             foreach ($task in $this.{_dataStore}.Tasks) {
                 $saveData.Tasks += $task.ToLegacyFormat()
             }
@@ -172,7 +168,6 @@ class DataManager : IDisposable {
                 $saveData.Projects += $project.ToLegacyFormat()
             }
             
-            # Save to file
             $saveData | ConvertTo-Json -Depth 10 | Set-Content -Path $this.{_dataFilePath} -Encoding UTF8 -Force
             $this.{_lastSaveTime} = [datetime]::Now
             $this.{_dataModified} = $false
@@ -202,13 +197,15 @@ class DataManager : IDisposable {
                 
                 Copy-Item -Path $this.{_dataFilePath} -Destination $backupFilePath -Force
                 
-                # Clean up old backups
-                $backups = Get-ChildItem -Path $this.{_backupPath} -Filter "pmc-data-*.json" | Sort-Object LastWriteTime -Descending
-                if ($backups.Count -gt $this.{_dataStore}.Settings.BackupCount) {
-                    $backupsToDelete = $backups | Select-Object -Skip $this.{_dataStore}.Settings.BackupCount
-                    foreach ($backup in $backupsToDelete) {
-                        Remove-Item -Path $backup.FullName -Force
-                        Write-Verbose "DataManager: Removed old backup '$($backup.Name)'."
+                $backupLimit = $this.{_dataStore}.Settings.BackupCount
+                if ($backupLimit -is [int] -and $backupLimit -gt 0) {
+                    $backups = Get-ChildItem -Path $this.{_backupPath} -Filter "pmc-data-*.json" | Sort-Object LastWriteTime -Descending
+                    if ($backups.Count -gt $backupLimit) {
+                        $backupsToDelete = $backups | Select-Object -Skip $backupLimit
+                        foreach ($backup in $backupsToDelete) {
+                            Remove-Item -Path $backup.FullName -Force
+                            Write-Verbose "DataManager: Removed old backup '$($backup.Name)'."
+                        }
                     }
                 }
                 
@@ -220,7 +217,6 @@ class DataManager : IDisposable {
     }
     
     hidden [void] InitializeEventHandlers() {
-        # Initialize any event subscriptions if needed
         Write-Verbose "DataManager: Event handlers initialized."
     }
     #endregion
@@ -233,7 +229,6 @@ class DataManager : IDisposable {
         Write-Verbose "DataManager: Disposing - checking for unsaved data."
         
         if ($this.{_dataModified}) {
-            # Force save on dispose, ignoring any transaction counts
             $originalTransactionCount = $this.{_updateTransactionCount}
             $this.{_updateTransactionCount} = 0
             try {
@@ -285,7 +280,6 @@ class DataManager : IDisposable {
     #region Task Management Methods
     [PmcTask] AddTask([PmcTask]$newTask) {
         return Invoke-WithErrorHandling -Component "DataManager.AddTask" -Context "Adding new task" -AdditionalData @{ TaskId = $newTask.Id; TaskTitle = $newTask.Title } -ScriptBlock {
-            # Ensure task has required properties
             if ([string]::IsNullOrEmpty($newTask.Id)) {
                 $newTask.Id = [guid]::NewGuid().ToString()
             }
@@ -293,7 +287,6 @@ class DataManager : IDisposable {
                 $newTask.CreatedAt = [datetime]::Now
             }
             
-            # Check for duplicate ID
             if ($this.{_taskIndex}.ContainsKey($newTask.Id)) {
                 throw [System.InvalidOperationException]::new("Task with ID '$($newTask.Id)' already exists.")
             }
@@ -321,10 +314,8 @@ class DataManager : IDisposable {
                 throw [System.InvalidOperationException]::new("Task with ID '$($taskWithUpdates.Id)' not found for update.")
             }
             
-            # Get the actual, managed instance of the task from our store
             $managedTask = $this.{_taskIndex}[$taskWithUpdates.Id]
             
-            # Copy properties from the provided object to the managed object
             $propertiesToUpdate = @('Title', 'Description', 'Status', 'Priority', 'ProjectKey', 'Tags', 'DueDate', 'CompletedAt')
             foreach ($propName in $propertiesToUpdate) {
                 if ($taskWithUpdates.PSObject.Properties[$propName]) {
@@ -391,7 +382,6 @@ class DataManager : IDisposable {
     #region Project Management Methods
     [PmcProject] AddProject([PmcProject]$newProject) {
         return Invoke-WithErrorHandling -Component "DataManager.AddProject" -Context "Adding new project" -AdditionalData @{ ProjectKey = $newProject.Key; ProjectName = $newProject.Name } -ScriptBlock {
-            # Ensure project has required properties
             if ([string]::IsNullOrEmpty($newProject.Key)) {
                 throw [System.ArgumentException]::new("Project Key is required.")
             }
@@ -399,7 +389,6 @@ class DataManager : IDisposable {
                 $newProject.CreatedAt = [datetime]::Now
             }
             
-            # Check for duplicate key
             if ($this.{_projectIndex}.ContainsKey($newProject.Key)) {
                 throw [System.InvalidOperationException]::new("Project with Key '$($newProject.Key)' already exists.")
             }
@@ -427,10 +416,8 @@ class DataManager : IDisposable {
                 throw [System.InvalidOperationException]::new("Project with Key '$($projectWithUpdates.Key)' not found for update.")
             }
             
-            # Get the actual, managed instance
             $managedProject = $this.{_projectIndex}[$projectWithUpdates.Key]
             
-            # Copy properties
             $propertiesToUpdate = @('Name', 'Description', 'Status', 'CompletedAt')
             foreach ($propName in $propertiesToUpdate) {
                 if ($projectWithUpdates.PSObject.Properties[$propName]) {

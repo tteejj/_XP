@@ -57,8 +57,9 @@ class CommandPalette : UIElement {
         $this.AddChild($this._searchBox)
         
         # Listen for activation events
+        $paletteInstance = $this
         Subscribe-Event -EventName "CommandPalette.Open" -Handler {
-            $this.Show()
+            $paletteInstance.Show()
         }.GetNewClosure() -Source "CommandPalette"
         
         Write-Verbose "CommandPalette: Initialization complete"
@@ -362,22 +363,6 @@ function Register-CommandPalette {
     <#
     .SYNOPSIS
     Registers the Command Palette component with the application.
-    
-    .DESCRIPTION
-    Creates a Command Palette instance and registers the necessary action and keybinding
-    to activate it with Ctrl+P. This should be called during application startup.
-    
-    .PARAMETER ActionService
-    The ActionService instance to use for action registration and execution.
-    
-    .PARAMETER KeybindingService
-    The KeybindingService instance to use for keybinding registration.
-    
-    .EXAMPLE
-    $palette = Register-CommandPalette -ActionService $actionService -KeybindingService $keybindingService
-    
-    .OUTPUTS
-    [CommandPalette] The created Command Palette instance.
     #>
     [CmdletBinding()]
     param(
@@ -405,8 +390,9 @@ function Register-CommandPalette {
             $false # Don't force overwrite
         )
 
-        # Bind Ctrl+P to the palette action with explicit type casting
-        $KeybindingService.SetBinding([string]"app.showCommandPalette", [char]'P', [string[]]@('Ctrl'))
+        # FIX: The call to SetBinding is now unambiguous.
+        # It uses [System.ConsoleKey]::P which uniquely matches the ConsoleKey overload.
+        $KeybindingService.SetBinding("app.showCommandPalette", [System.ConsoleKey]::P, [string[]]@('Ctrl'))
         
         Write-Log -Level Info -Message "Command Palette registered successfully with Ctrl+P keybinding"
         

@@ -3,6 +3,10 @@
 # Advanced command palette with fuzzy search and action execution
 # ==============================================================================
 
+using module ui-classes
+using module tui-primitives
+using module theme-manager
+using module tui-components
 using namespace System.Management.Automation
 
 #region Command Palette Class
@@ -16,7 +20,7 @@ class CommandPalette : UIElement {
     hidden [int] $_scrollOffset
     hidden [string] $_lastQuery
 
-    CommandPalette([Parameter(Mandatory)][object]$actionService) : base("CommandPalette") {
+    CommandPalette([object]$actionService) : base("CommandPalette") {
         if (-not $actionService) {
             throw [System.ArgumentNullException]::new('actionService')
         }
@@ -227,8 +231,9 @@ class CommandPalette : UIElement {
         }
     }
 
-    [bool] HandleInput([Parameter(Mandatory)][System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if (-not $this.Visible) { return $false }
+        if ($null -eq $keyInfo) { return $false }
         
         try {
             # If search box is focused, let it handle character input first
@@ -395,12 +400,13 @@ function Register-CommandPalette {
             "Show the command palette for quick action access", 
             { 
                 Publish-Event -EventName "CommandPalette.Open" 
-            },
-            "Application"
+            }, 
+            "Application",
+            $false # Don't force overwrite
         )
 
-        # Bind Ctrl+P to the palette action
-        $KeybindingService.SetBinding("app.showCommandPalette", 'P', @('Ctrl'))
+        # Bind Ctrl+P to the palette action with explicit type casting
+        $KeybindingService.SetBinding([string]"app.showCommandPalette", [char]'P', [string[]]@('Ctrl'))
         
         Write-Log -Level Info -Message "Command Palette registered successfully with Ctrl+P keybinding"
         

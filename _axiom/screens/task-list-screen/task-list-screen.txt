@@ -3,6 +3,14 @@
 # A dynamic, action-driven, and theme-aware task management screen.
 # ==============================================================================
 
+using module ui-classes
+using module panels-class
+using module theme-manager
+using module logger
+using module tui-components
+using module models
+using module advanced-data-components
+
 class TaskListScreen : Screen {
     #region UI Components
     hidden [Panel] $_mainPanel

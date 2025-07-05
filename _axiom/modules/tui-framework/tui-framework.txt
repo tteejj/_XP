@@ -3,7 +3,12 @@
 # PURPOSE: Provides helper functions and services for interacting with the TUI engine.
 # This version is updated for the class-based, lifecycle-aware architecture.
 # ==============================================================================
-#Requires -Modules ThreadJob
+
+using module ui-classes
+using module tui-primitives
+using module theme-manager
+using module logger
+using module exceptions
 
 # The TuiFrameworkService class encapsulates utility functions and can be
 # registered with the service container for easy access by other components.
@@ -18,8 +23,8 @@ class TuiFrameworkService {
     # Executes a script block asynchronously using a lightweight thread job.
     # Ideal for I/O-bound operations like network requests or file access.
     [System.Management.Automation.Job] StartAsync(
-        [Parameter(Mandatory)][scriptblock]$ScriptBlock,
-        [Parameter()][hashtable]$ArgumentList = @{}
+        [scriptblock]$ScriptBlock,
+        [hashtable]$ArgumentList = @{}
     ) {
         return Invoke-WithErrorHandling -Component "TuiFramework.StartAsync" -Context "Starting async thread job" -ScriptBlock {
             $job = Start-ThreadJob -ScriptBlock $ScriptBlock -ArgumentList @($ArgumentList)
