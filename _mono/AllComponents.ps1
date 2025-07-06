@@ -2249,11 +2249,11 @@ class CommandPalette : UIElement {
     hidden [ListBox] $_listBox
     hidden [TextBox] $_searchBox
     hidden [Panel] $_panel
-    hidden [ActionService] $_actionService
+    hidden [object] $_actionService  # ActionService - type not available at parse time
     hidden [System.Collections.Generic.List[hashtable]] $_filteredActions
     hidden [bool] $_isVisible = $false
     
-    CommandPalette([ActionService]$actionService) : base("CommandPalette") {
+    CommandPalette([object]$actionService) : base("CommandPalette") {
         $this._actionService = $actionService
         $this.IsFocusable = $true
         $this.ZIndex = 1000  # Always on top
@@ -2363,6 +2363,7 @@ class CommandPalette : UIElement {
                 return $true
             }
         }
+        return $false  # Fallback return value
     }
 }
 
