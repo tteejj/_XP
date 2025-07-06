@@ -35,7 +35,7 @@ class DataManager : IDisposable {
 
     #region Constructor and Initialization
     DataManager() {
-        $this._dataStore = @{
+        $this.{_dataStore} = @{
             Projects = [System.Collections.ArrayList]::new()
             Tasks = [System.Collections.ArrayList]::new()
             Settings = @{ 
@@ -44,20 +44,20 @@ class DataManager : IDisposable {
                 LastModified = [datetime]::MinValue
             }
         }
-        $this._taskIndex = [System.Collections.Generic.Dictionary[string, object]]::new()
-        $this._projectIndex = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.{_taskIndex} = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.{_projectIndex} = [System.Collections.Generic.Dictionary[string, object]]::new()
         
         # Set up file paths
         $baseDir = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "PMCTerminal"
-        $this._dataFilePath = Join-Path $baseDir "pmc-data.json"
-        $this._backupPath = Join-Path $baseDir "backups"
+        $this.{_dataFilePath} = Join-Path $baseDir "pmc-data.json"
+        $this.{_backupPath} = Join-Path $baseDir "backups"
 
         # Ensure directories exist
         if (-not (Test-Path $baseDir)) {
             New-Item -ItemType Directory -Path $baseDir -Force | Out-Null
         }
-        if (-not (Test-Path $this._backupPath)) {
-            New-Item -ItemType Directory -Path $this._backupPath -Force | Out-Null
+        if (-not (Test-Path $this.{_backupPath})) {
+            New-Item -ItemType Directory -Path $this.{_backupPath} -Force | Out-Null
         }
 
         $this.LoadData()
@@ -65,10 +65,10 @@ class DataManager : IDisposable {
         
         if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
             Write-Log -Level Info -Message "DataManager initialized successfully." -Data @{
-                DataPath = $this._dataFilePath
-                BackupPath = $this._backupPath
-                TaskCount = $this._dataStore.Tasks.Count
-                ProjectCount = $this._dataStore.Projects.Count
+                DataPath = $this.{_dataFilePath}
+                BackupPath = $this.{_backupPath}
+                TaskCount = $this.{_dataStore}.Tasks.Count
+                ProjectCount = $this.{_dataStore}.Projects.Count
             }
         }
         Write-Verbose "DataManager: Initialization complete."
@@ -76,43 +76,43 @@ class DataManager : IDisposable {
 
     hidden [void] LoadData() {
         try {
-            if (Test-Path $this._dataFilePath) {
-                $jsonData = Get-Content $this._dataFilePath -Raw | ConvertFrom-Json -AsHashtable
+            if (Test-Path $this.{_dataFilePath}) {
+                $jsonData = Get-Content $this.{_dataFilePath} -Raw | ConvertFrom-Json -AsHashtable
                 
                 # Validate and load data structure
                 if ($jsonData.ContainsKey('Tasks')) {
-                    $this._dataStore.Tasks.Clear()
+                    $this.{_dataStore}.Tasks.Clear()
                     foreach ($taskData in $jsonData.Tasks) {
                         # FIX: Use the correct FromLegacyFormat static method for deserialization.
-                        $task = [PmcTask]::FromLegacyFormat($taskData)
-                        [void]$this._dataStore.Tasks.Add($task)
+                        $task = [models.PmcTask]::FromLegacyFormat($taskData)
+                        [void]$this.{_dataStore}.Tasks.Add($task)
                     }
                 }
                 
                 if ($jsonData.ContainsKey('Projects')) {
-                    $this._dataStore.Projects.Clear()
+                    $this.{_dataStore}.Projects.Clear()
                     foreach ($projectData in $jsonData.Projects) {
                         # FIX: Use the correct FromLegacyFormat static method for deserialization.
-                        $project = [PmcProject]::FromLegacyFormat($projectData)
-                        [void]$this._dataStore.Projects.Add($project)
+                        $project = [models.PmcProject]::FromLegacyFormat($projectData)
+                        [void]$this.{_dataStore}.Projects.Add($project)
                     }
                 }
                 
                 if ($jsonData.ContainsKey('Settings')) {
                     foreach ($key in $jsonData.Settings.Keys) {
-                        $this._dataStore.Settings[$key] = $jsonData.Settings[$key]
+                        $this.{_dataStore}.Settings[$key] = $jsonData.Settings[$key]
                     }
                 }
                 
-                $this._lastSaveTime = [datetime]::Now
-                Write-Verbose "DataManager: Loaded data from '$($this._dataFilePath)'."
+                $this.{_lastSaveTime} = [datetime]::Now
+                Write-Verbose "DataManager: Loaded data from '$($this.{_dataFilePath})'."
             } else {
                 Write-Verbose "DataManager: No existing data file found. Starting with empty data store."
             }
         } catch {
-            Write-Warning "DataManager: Failed to load data from '$($this._dataFilePath)': $($_.Exception.Message). Starting with empty data store."
-            $this._dataStore.Tasks.Clear()
-            $this._dataStore.Projects.Clear()
+            Write-Warning "DataManager: Failed to load data from '$($this.{_dataFilePath})': $($_.Exception.Message). Starting with empty data store."
+            $this.{_dataStore}.Tasks.Clear()
+            $this.{_dataStore}.Projects.Clear()
         }
         
         # Rebuild indexes after loading
@@ -120,33 +120,33 @@ class DataManager : IDisposable {
     }
     
     hidden [void] _RebuildIndexes() {
-        $this._taskIndex.Clear()
-        $this._projectIndex.Clear()
+        $this.{_taskIndex}.Clear()
+        $this.{_projectIndex}.Clear()
         
-        foreach ($task in $this._dataStore.Tasks) {
+        foreach ($task in $this.{_dataStore}.Tasks) {
             if ($task.Id) {
-                $this._taskIndex[$task.Id] = $task
+                $this.{_taskIndex}[$task.Id] = $task
             }
         }
         
-        foreach ($project in $this._dataStore.Projects) {
+        foreach ($project in $this.{_dataStore}.Projects) {
             if ($project.Key) {
-                $this._projectIndex[$project.Key] = $project
+                $this.{_projectIndex}[$project.Key] = $project
             }
         }
         
         if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
             Write-Log -Level Debug -Message "Rebuilt data indexes." -Data @{
-                TaskIndexCount = $this._taskIndex.Count
-                ProjectIndexCount = $this._projectIndex.Count
+                TaskIndexCount = $this.{_taskIndex}.Count
+                ProjectIndexCount = $this.{_projectIndex}.Count
             }
         }
-        Write-Verbose "DataManager: Rebuilt data indexes for $($this._taskIndex.Count) tasks and $($this._projectIndex.Count) projects."
+        Write-Verbose "DataManager: Rebuilt data indexes for $($this.{_taskIndex}.Count) tasks and $($this.{_projectIndex}.Count) projects."
     }
     
     hidden [void] SaveData() {
-        if ($this._updateTransactionCount -gt 0) {
-            Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this._updateTransactionCount))."
+        if ($this.{_updateTransactionCount} -gt 0) {
+            Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this.{_updateTransactionCount}))."
             return
         }
         
@@ -156,30 +156,30 @@ class DataManager : IDisposable {
             $saveData = @{
                 Tasks = @()
                 Projects = @()
-                Settings = $this._dataStore.Settings.Clone()
+                Settings = $this.{_dataStore}.Settings.Clone()
                 SavedAt = [datetime]::Now
             }
             
-            foreach ($task in $this._dataStore.Tasks) {
+            foreach ($task in $this.{_dataStore}.Tasks) {
                 $saveData.Tasks += $task.ToLegacyFormat()
             }
             
-            foreach ($project in $this._dataStore.Projects) {
+            foreach ($project in $this.{_dataStore}.Projects) {
                 $saveData.Projects += $project.ToLegacyFormat()
             }
             
-            $saveData | ConvertTo-Json -Depth 10 | Set-Content -Path $this._dataFilePath -Encoding UTF8 -Force
-            $this._lastSaveTime = [datetime]::Now
-            $this._dataModified = $false
+            $saveData | ConvertTo-Json -Depth 10 | Set-Content -Path $this.{_dataFilePath} -Encoding UTF8 -Force
+            $this.{_lastSaveTime} = [datetime]::Now
+            $this.{_dataModified} = $false
             
             if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
                 Write-Log -Level Debug -Message "Data saved successfully." -Data @{
-                    FilePath = $this._dataFilePath
+                    FilePath = $this.{_dataFilePath}
                     TaskCount = $saveData.Tasks.Count
                     ProjectCount = $saveData.Projects.Count
                 }
             }
-            Write-Verbose "DataManager: Data saved to '$($this._dataFilePath)'."
+            Write-Verbose "DataManager: Data saved to '$($this.{_dataFilePath})'."
         } catch {
             if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
                 Write-Log -Level Error -Message "Failed to save data: $($_.Exception.Message)"
@@ -190,16 +190,16 @@ class DataManager : IDisposable {
     
     hidden [void] CreateBackup() {
         try {
-            if (Test-Path $this._dataFilePath) {
+            if (Test-Path $this.{_dataFilePath}) {
                 $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
                 $backupFileName = "pmc-data-$timestamp.json"
-                $backupFilePath = Join-Path $this._backupPath $backupFileName
+                $backupFilePath = Join-Path $this.{_backupPath} $backupFileName
                 
-                Copy-Item -Path $this._dataFilePath -Destination $backupFilePath -Force
+                Copy-Item -Path $this.{_dataFilePath} -Destination $backupFilePath -Force
                 
-                $backupLimit = $this._dataStore.Settings.BackupCount
+                $backupLimit = $this.{_dataStore}.Settings.BackupCount
                 if ($backupLimit -is [int] -and $backupLimit -gt 0) {
-                    $backups = Get-ChildItem -Path $this._backupPath -Filter "pmc-data-*.json" | Sort-Object LastWriteTime -Descending
+                    $backups = Get-ChildItem -Path $this.{_backupPath} -Filter "pmc-data-*.json" | Sort-Object LastWriteTime -Descending
                     if ($backups.Count -gt $backupLimit) {
                         $backupsToDelete = $backups | Select-Object -Skip $backupLimit
                         foreach ($backup in $backupsToDelete) {
@@ -228,9 +228,9 @@ class DataManager : IDisposable {
         }
         Write-Verbose "DataManager: Disposing - checking for unsaved data."
         
-        if ($this._dataModified) {
-            $originalTransactionCount = $this._updateTransactionCount
-            $this._updateTransactionCount = 0
+        if ($this.{_dataModified}) {
+            $originalTransactionCount = $this.{_updateTransactionCount}
+            $this.{_updateTransactionCount} = 0
             try {
                 $this.SaveData()
                 if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
@@ -240,7 +240,7 @@ class DataManager : IDisposable {
             } catch {
                 Write-Warning "DataManager: Failed to save data during dispose: $($_.Exception.Message)"
             } finally {
-                $this._updateTransactionCount = $originalTransactionCount
+                $this.{_updateTransactionCount} = $originalTransactionCount
             }
         }
     }
@@ -248,11 +248,11 @@ class DataManager : IDisposable {
 
     #region Transactional Updates
     [void] BeginUpdate() {
-        $this._updateTransactionCount++
+        $this.{_updateTransactionCount}++
         if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Debug -Message "Began data update transaction." -Data @{ Depth = $this._updateTransactionCount }
+            Write-Log -Level Debug -Message "Began data update transaction." -Data @{ Depth = $this.{_updateTransactionCount} }
         }
-        Write-Verbose "DataManager: Began update transaction. Depth: $($this._updateTransactionCount)."
+        Write-Verbose "DataManager: Began update transaction. Depth: $($this.{_updateTransactionCount})."
     }
 
     [void] EndUpdate() {
@@ -260,17 +260,17 @@ class DataManager : IDisposable {
     }
     
     [void] EndUpdate([bool]$forceSave) {
-        if ($this._updateTransactionCount -gt 0) {
-            $this._updateTransactionCount--
+        if ($this.{_updateTransactionCount} -gt 0) {
+            $this.{_updateTransactionCount}--
         }
         
         if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Debug -Message "Ended data update transaction." -Data @{ Depth = $this._updateTransactionCount }
+            Write-Log -Level Debug -Message "Ended data update transaction." -Data @{ Depth = $this.{_updateTransactionCount} }
         }
-        Write-Verbose "DataManager: Ended update transaction. Depth: $($this._updateTransactionCount)."
+        Write-Verbose "DataManager: Ended update transaction. Depth: $($this.{_updateTransactionCount})."
         
-        if ($this._updateTransactionCount -eq 0 -and ($this._dataModified -or $forceSave)) {
-            if ($this._dataStore.Settings.AutoSave -or $forceSave) {
+        if ($this.{_updateTransactionCount} -eq 0 -and ($this.{_dataModified} -or $forceSave)) {
+            if ($this.{_dataStore}.Settings.AutoSave -or $forceSave) {
                 $this.SaveData()
             }
         }
@@ -287,15 +287,15 @@ class DataManager : IDisposable {
                 $newTask.CreatedAt = [datetime]::Now
             }
             
-            if ($this._taskIndex.ContainsKey($newTask.Id)) {
+            if ($this.{_taskIndex}.ContainsKey($newTask.Id)) {
                 throw [System.InvalidOperationException]::new("Task with ID '$($newTask.Id)' already exists.")
             }
             
-            [void]$this._dataStore.Tasks.Add($newTask)
-            $this._taskIndex[$newTask.Id] = $newTask
-            $this._dataModified = $true
+            [void]$this.{_dataStore}.Tasks.Add($newTask)
+            $this.{_taskIndex}[$newTask.Id] = $newTask
+            $this.{_dataModified} = $true
             
-            if ($this._dataStore.Settings.AutoSave -and $this._updateTransactionCount -eq 0) {
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
                 $this.SaveData()
             }
             
@@ -310,11 +310,11 @@ class DataManager : IDisposable {
 
     [PmcTask] UpdateTask([PmcTask]$taskWithUpdates) {
         return Invoke-WithErrorHandling -Component "DataManager.UpdateTask" -Context "Updating task" -AdditionalData @{ TaskId = $taskWithUpdates.Id } -ScriptBlock {
-            if (-not $this._taskIndex.ContainsKey($taskWithUpdates.Id)) {
+            if (-not $this.{_taskIndex}.ContainsKey($taskWithUpdates.Id)) {
                 throw [System.InvalidOperationException]::new("Task with ID '$($taskWithUpdates.Id)' not found for update.")
             }
             
-            $managedTask = $this._taskIndex[$taskWithUpdates.Id]
+            $managedTask = $this.{_taskIndex}[$taskWithUpdates.Id]
             
             $propertiesToUpdate = @('Title', 'Description', 'Status', 'Priority', 'ProjectKey', 'Tags', 'DueDate', 'CompletedAt')
             foreach ($propName in $propertiesToUpdate) {
@@ -324,9 +324,9 @@ class DataManager : IDisposable {
             }
             $managedTask.UpdatedAt = [datetime]::Now
             
-            $this._dataModified = $true
+            $this.{_dataModified} = $true
             
-            if ($this._dataStore.Settings.AutoSave -and $this._updateTransactionCount -eq 0) {
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
                 $this.SaveData()
             }
             
@@ -341,7 +341,7 @@ class DataManager : IDisposable {
 
     [bool] RemoveTask([string]$taskId) {
         return Invoke-WithErrorHandling -Component "DataManager.RemoveTask" -Context "Removing task" -AdditionalData @{ TaskId = $taskId } -ScriptBlock {
-            if (-not $this._taskIndex.ContainsKey($taskId)) {
+            if (-not $this.{_taskIndex}.ContainsKey($taskId)) {
                 if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
                     Write-Log -Level Warning -Message "Task not found for removal: '$taskId'"
                 }
@@ -349,12 +349,12 @@ class DataManager : IDisposable {
                 return $false
             }
             
-            $taskToRemove = $this._taskIndex[$taskId]
-            [void]$this._dataStore.Tasks.Remove($taskToRemove)
-            [void]$this._taskIndex.Remove($taskId)
-            $this._dataModified = $true
+            $taskToRemove = $this.{_taskIndex}[$taskId]
+            [void]$this.{_dataStore}.Tasks.Remove($taskToRemove)
+            [void]$this.{_taskIndex}.Remove($taskId)
+            $this.{_dataModified} = $true
             
-            if ($this._dataStore.Settings.AutoSave -and $this._updateTransactionCount -eq 0) {
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
                 $this.SaveData()
             }
             
@@ -368,14 +368,14 @@ class DataManager : IDisposable {
     }
     
     [PmcTask] GetTask([string]$taskId) {
-        if ($this._taskIndex.ContainsKey($taskId)) {
-            return $this._taskIndex[$taskId]
+        if ($this.{_taskIndex}.ContainsKey($taskId)) {
+            return $this.{_taskIndex}[$taskId]
         }
         return $null
     }
     
     [PmcTask[]] GetTasks() {
-        return $this._dataStore.Tasks.ToArray()
+        return $this.{_dataStore}.Tasks.ToArray()
     }
     #endregion
     
@@ -389,15 +389,15 @@ class DataManager : IDisposable {
                 $newProject.CreatedAt = [datetime]::Now
             }
             
-            if ($this._projectIndex.ContainsKey($newProject.Key)) {
+            if ($this.{_projectIndex}.ContainsKey($newProject.Key)) {
                 throw [System.InvalidOperationException]::new("Project with Key '$($newProject.Key)' already exists.")
             }
             
-            [void]$this._dataStore.Projects.Add($newProject)
-            $this._projectIndex[$newProject.Key] = $newProject
-            $this._dataModified = $true
+            [void]$this.{_dataStore}.Projects.Add($newProject)
+            $this.{_projectIndex}[$newProject.Key] = $newProject
+            $this.{_dataModified} = $true
             
-            if ($this._dataStore.Settings.AutoSave -and $this._updateTransactionCount -eq 0) {
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
                 $this.SaveData()
             }
             
@@ -412,11 +412,11 @@ class DataManager : IDisposable {
     
     [PmcProject] UpdateProject([PmcProject]$projectWithUpdates) {
         return Invoke-WithErrorHandling -Component "DataManager.UpdateProject" -Context "Updating project" -AdditionalData @{ ProjectKey = $projectWithUpdates.Key } -ScriptBlock {
-            if (-not $this._projectIndex.ContainsKey($projectWithUpdates.Key)) {
+            if (-not $this.{_projectIndex}.ContainsKey($projectWithUpdates.Key)) {
                 throw [System.InvalidOperationException]::new("Project with Key '$($projectWithUpdates.Key)' not found for update.")
             }
             
-            $managedProject = $this._projectIndex[$projectWithUpdates.Key]
+            $managedProject = $this.{_projectIndex}[$projectWithUpdates.Key]
             
             $propertiesToUpdate = @('Name', 'Description', 'Status', 'CompletedAt')
             foreach ($propName in $propertiesToUpdate) {
@@ -426,9 +426,9 @@ class DataManager : IDisposable {
             }
             $managedProject.UpdatedAt = [datetime]::Now
             
-            $this._dataModified = $true
+            $this.{_dataModified} = $true
             
-            if ($this._dataStore.Settings.AutoSave -and $this._updateTransactionCount -eq 0) {
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
                 $this.SaveData()
             }
             
@@ -443,7 +443,7 @@ class DataManager : IDisposable {
     
     [bool] RemoveProject([string]$projectKey) {
         return Invoke-WithErrorHandling -Component "DataManager.RemoveProject" -Context "Removing project" -AdditionalData @{ ProjectKey = $projectKey } -ScriptBlock {
-            if (-not $this._projectIndex.ContainsKey($projectKey)) {
+            if (-not $this.{_projectIndex}.ContainsKey($projectKey)) {
                 if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
                     Write-Log -Level Warning -Message "Project not found for removal: '$projectKey'"
                 }
@@ -451,12 +451,12 @@ class DataManager : IDisposable {
                 return $false
             }
             
-            $projectToRemove = $this._projectIndex[$projectKey]
-            [void]$this._dataStore.Projects.Remove($projectToRemove)
-            [void]$this._projectIndex.Remove($projectKey)
-            $this._dataModified = $true
+            $projectToRemove = $this.{_projectIndex}[$projectKey]
+            [void]$this.{_dataStore}.Projects.Remove($projectToRemove)
+            [void]$this.{_projectIndex}.Remove($projectKey)
+            $this.{_dataModified} = $true
             
-            if ($this._dataStore.Settings.AutoSave -and $this._updateTransactionCount -eq 0) {
+            if ($this.{_dataStore}.Settings.AutoSave -and $this.{_updateTransactionCount} -eq 0) {
                 $this.SaveData()
             }
             
@@ -470,30 +470,30 @@ class DataManager : IDisposable {
     }
     
     [PmcProject] GetProject([string]$projectKey) {
-        if ($this._projectIndex.ContainsKey($projectKey)) {
-            return $this._projectIndex[$projectKey]
+        if ($this.{_projectIndex}.ContainsKey($projectKey)) {
+            return $this.{_projectIndex}[$projectKey]
         }
         return $null
     }
     
     [PmcProject[]] GetProjects() {
-        return $this._dataStore.Projects.ToArray()
+        return $this.{_dataStore}.Projects.ToArray()
     }
     #endregion
     
     #region Settings and Utility Methods
     [bool] IsAutoSaveEnabled() {
-        return $this._dataStore.Settings.AutoSave
+        return $this.{_dataStore}.Settings.AutoSave
     }
     
     [void] SetAutoSave([bool]$enabled) {
-        $this._dataStore.Settings.AutoSave = $enabled
-        $this._dataModified = $true
+        $this.{_dataStore}.Settings.AutoSave = $enabled
+        $this.{_dataModified} = $true
         Write-Verbose "DataManager: AutoSave set to '$enabled'."
     }
     
     [datetime] GetLastSaveTime() {
-        return $this._lastSaveTime
+        return $this.{_lastSaveTime}
     }
     
     [void] ForceSave() {

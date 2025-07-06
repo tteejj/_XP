@@ -206,5 +206,4 @@ class ActionService {
 # ------------------------------------------------------------------------------
 # Module Export
 # ------------------------------------------------------------------------------
-# FIX: Removed the invalid -Class parameter. The ActionService class is exported automatically.
-Export-ModuleMember -Function Initialize-ActionService
+Export-ModuleMember -Function Initialize-ActionService # FIX: Removed the invalid -Class parameter. The ActionService class is exported automatically.

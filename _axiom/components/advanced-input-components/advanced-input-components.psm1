@@ -678,7 +678,7 @@ class ComboBoxComponent : UIElement {
             $selectionBg = Get-ThemeColor 'input.selection' -Fallback (Get-ThemeColor 'Selection')
             $selectionFg = Get-ThemeColor 'input.selection.foreground' -Fallback (Get-ThemeColor 'Background')
             
-            $dropdownHeight = [Math]::Min($this.MaxDropDownHeight, $this._filteredItems.Count + 2)
+            $dropdownHeight = [Math]::Min($this.MaxDropDownHeight, ($this._filteredItems.Count + 2))
             
             # Create or resize dropdown buffer
             if (-not $this._dropdownBuffer -or $this._dropdownBuffer.Height -ne $dropdownHeight -or $this._dropdownBuffer.Width -ne $this.Width) {

@@ -21,9 +21,7 @@ $script:TraceAllCalls = $false # Flag to enable/disable extensive call tracing
 # Converts a complex PowerShell object into a simpler, serializable hashtable or primitive.
 # Handles common types, circular references, and limits recursion/array size to prevent huge log data.
 function ConvertTo-SerializableObject {
-    param(
-        [Parameter(Mandatory)][object]$Object # The object to convert  <--- FIX #1: UNCOMMENTED THIS LINE
-    )
+    param([object]$Object)
 
     if ($null -eq $Object) { return $null }
 
@@ -121,7 +119,6 @@ function Initialize-Logger {
         [ValidateNotNullOrEmpty()]
         [string]$LogFileName = "pmc_terminal_{0:yyyy-MM-dd}.log" -f (Get-Date),
         
-        # [Parameter(Mandatory)] #<-- FIX #2: REMOVED THIS LINE
         [ValidateSet("Debug", "Verbose", "Info", "Warning", "Error", "Fatal", "Trace")]
         [string]$Level = "Info"
     )

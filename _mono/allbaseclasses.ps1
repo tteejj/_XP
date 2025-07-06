@@ -1,0 +1,923 @@
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Base Classes (Load First)
+# Core framework classes with NO external dependencies
+# ==============================================================================
+
+using namespace System.Collections.Generic
+using namespace System.Collections.Concurrent
+using namespace System.Management.Automation
+using namespace System.Threading
+
+# Disable verbose output during TUI rendering
+$script:TuiVerbosePreference = 'SilentlyContinue'
+
+#region TuiAnsiHelper - ANSI Code Generation with Truecolor Support
+class TuiAnsiHelper {
+    hidden static [System.Collections.Concurrent.ConcurrentDictionary[string, string]] $_fgCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
+    hidden static [System.Collections.Concurrent.ConcurrentDictionary[string, string]] $_bgCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
+
+    static [hashtable] $ColorMap = @{
+        Black = 30; DarkBlue = 34; DarkGreen = 32; DarkCyan = 36
+        DarkRed = 31; DarkMagenta = 35; DarkYellow = 33; Gray = 37
+        DarkGray = 90; Blue = 94; Green = 92; Cyan = 96
+        Red = 91; Magenta = 95; Yellow = 93; White = 97
+    }
+
+    static [int[]] ParseHexColor([string]$hexColor) {
+        if ([string]::IsNullOrWhiteSpace($hexColor) -or -not $hexColor.StartsWith("#")) { return $null }
+        $hex = $hexColor.Substring(1)
+        if ($hex.Length -eq 3) { $hex = "$($hex[0])$($hex[0])$($hex[1])$($hex[1])$($hex[2])$($hex[2])" }
+        if ($hex.Length -ne 6) { return $null }
+        try {
+            $r = [System.Convert]::ToInt32($hex.Substring(0, 2), 16)
+            $g = [System.Convert]::ToInt32($hex.Substring(2, 2), 16)
+            $b = [System.Convert]::ToInt32($hex.Substring(4, 2), 16)
+            return @($r, $g, $b)
+        } catch { return $null }
+    }
+
+    static [string] GetForegroundCode($color) {
+        if ($color -is [ConsoleColor]) {
+            return "`e[$([TuiAnsiHelper]::ColorMap[$color.ToString()] ?? 37)m"
+        } elseif ($color -is [string] -and $color.StartsWith("#")) {
+            return [TuiAnsiHelper]::GetForegroundSequence($color)
+        } else {
+            return "`e[37m" 
+        }
+    }
+
+    static [string] GetBackgroundCode($color) {
+        if ($color -is [ConsoleColor]) {
+            $code = ([TuiAnsiHelper]::ColorMap[$color.ToString()] ?? 30) + 10
+            return "`e[${code}m"
+        } elseif ($color -is [string] -and $color.StartsWith("#")) {
+            return [TuiAnsiHelper]::GetBackgroundSequence($color)
+        } else {
+            return "`e[40m" 
+        }
+    }
+
+    static [string] GetForegroundSequence([string]$hexColor) {
+        if ([string]::IsNullOrEmpty($hexColor)) { return "" }
+        if ([TuiAnsiHelper]::_fgCache.ContainsKey($hexColor)) { 
+            return [TuiAnsiHelper]::_fgCache[$hexColor] 
+        }
+        $rgb = [TuiAnsiHelper]::ParseHexColor($hexColor)
+        if (-not $rgb) { return "" }
+        $sequence = "`e[38;2;$($rgb[0]);$($rgb[1]);$($rgb[2])m"
+        [TuiAnsiHelper]::_fgCache[$hexColor] = $sequence
+        return $sequence
+    }
+    
+    static [string] GetBackgroundSequence([string]$hexColor) {
+        if ([string]::IsNullOrEmpty($hexColor)) { return "" }
+        if ([TuiAnsiHelper]::_bgCache.ContainsKey($hexColor)) { 
+            return [TuiAnsiHelper]::_bgCache[$hexColor] 
+        }
+        $rgb = [TuiAnsiHelper]::ParseHexColor($hexColor)
+        if (-not $rgb) { return "" }
+        $sequence = "`e[48;2;$($rgb[0]);$($rgb[1]);$($rgb[2])m"
+        [TuiAnsiHelper]::_bgCache[$hexColor] = $sequence
+        return $sequence
+    }
+    
+    static [string] Reset() { return "`e[0m" }
+    static [string] Bold() { return "`e[1m" }
+    static [string] Underline() { return "`e[4m" }
+    static [string] Italic() { return "`e[3m" }
+}
+#endregion
+
+#region TuiCell Class - Core Compositor Unit with Truecolor Support
+class TuiCell {
+    [char] $Char = ' '
+    $ForegroundColor = [ConsoleColor]::White
+    $BackgroundColor = [ConsoleColor]::Black
+    [bool] $Bold = $false
+    [bool] $Underline = $false
+    [bool] $Italic = $false
+    [string] $StyleFlags = "" 
+    [int] $ZIndex = 0        
+    [object] $Metadata = $null 
+
+    TuiCell() { }
+    TuiCell([char]$char) { $this.Char = $char }
+    TuiCell([char]$char, $fg, $bg) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+    }
+    TuiCell([char]$char, $fg, $bg, [bool]$bold, [bool]$underline) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+        $this.Underline = $underline
+    }
+    TuiCell([object]$other) {
+        $this.Char = $other.Char
+        $this.ForegroundColor = $other.ForegroundColor
+        $this.BackgroundColor = $other.BackgroundColor
+        $this.Bold = $other.Bold
+        $this.Underline = $other.Underline
+        $this.Italic = $other.Italic
+        $this.StyleFlags = $other.StyleFlags
+        $this.ZIndex = $other.ZIndex
+        $this.Metadata = $other.Metadata
+    }
+
+    [TuiCell] WithStyle($fg, $bg) {
+        $copy = [TuiCell]::new($this)
+        $copy.ForegroundColor = $fg
+        $copy.BackgroundColor = $bg
+        return $copy
+    }
+
+    [TuiCell] WithChar([char]$char) {
+        $copy = [TuiCell]::new($this)
+        $copy.Char = $char
+        return $copy
+    }
+
+    [TuiCell] BlendWith([object]$other) {
+        if ($null -eq $other) { return $this }
+        
+        if ($other.ZIndex -gt $this.ZIndex) { 
+            return [TuiCell]::new($other)
+        }
+        
+        if ($other.ZIndex -eq $this.ZIndex) {
+            if ($other.Char -ne ' ' -or $other.Bold -or $other.Underline -or $other.Italic) {
+                return [TuiCell]::new($other)
+            }
+            if ($other.BackgroundColor -ne $this.BackgroundColor) {
+                return [TuiCell]::new($other)
+            }
+        }
+        
+        return $this
+    }
+
+    [bool] DiffersFrom([object]$other) {
+        if ($null -eq $other) { return $true }
+        
+        return ($this.Char -ne $other.Char -or 
+                $this.ForegroundColor -ne $other.ForegroundColor -or 
+                $this.BackgroundColor -ne $other.BackgroundColor -or
+                $this.Bold -ne $other.Bold -or
+                $this.Underline -ne $other.Underline -or
+                $this.Italic -ne $other.Italic -or
+                $this.ZIndex -ne $other.ZIndex)
+    }
+
+    [string] ToAnsiString() {
+        $sb = [System.Text.StringBuilder]::new()
+        $fgCode = [TuiAnsiHelper]::GetForegroundCode($this.ForegroundColor)
+        $bgCode = [TuiAnsiHelper]::GetBackgroundCode($this.BackgroundColor)
+        [void]$sb.Append($fgCode).Append($bgCode)
+        if ($this.Bold) { [void]$sb.Append([TuiAnsiHelper]::Bold()) }
+        if ($this.Underline) { [void]$sb.Append([TuiAnsiHelper]::Underline()) }
+        if ($this.Italic) { [void]$sb.Append([TuiAnsiHelper]::Italic()) }
+        [void]$sb.Append($this.Char)
+        return $sb.ToString()
+    }
+
+    [hashtable] ToLegacyFormat() {
+        return @{ Char = $this.Char; FG = $this.ForegroundColor; BG = $this.BackgroundColor }
+    }
+    
+    [string] ToString() {
+        return "TuiCell(Char='$($this.Char)', FG='$($this.ForegroundColor)', BG='$($this.BackgroundColor)', Bold=$($this.Bold), Underline=$($this.Underline), Italic=$($this.Italic), ZIndex=$($this.ZIndex))"
+    }
+}
+#endregion
+
+#region TuiBuffer Class - 2D Array of TuiCells
+class TuiBuffer {
+    [TuiCell[,]] $Cells       
+    [int] $Width             
+    [int] $Height            
+    [string] $Name            
+    [bool] $IsDirty = $true  
+
+    TuiBuffer([int]$width, [int]$height, [string]$name = "Unnamed") {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.Width = $width
+        $this.Height = $height
+        $this.Name = $name
+        $this.Cells = New-Object 'TuiCell[,]' $height, $width
+        $this.Clear()
+        # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
+    }
+
+    [void] Clear() { $this.Clear([TuiCell]::new()) }
+
+    [void] Clear([TuiCell]$fillCell) {
+        for ($y = 0; $y -lt $this.Height; $y++) {
+            for ($x = 0; $x -lt $this.Width; $x++) {
+                $this.Cells[$y, $x] = [TuiCell]::new($fillCell) 
+            }
+        }
+        $this.IsDirty = $true
+        # Write-Verbose "TuiBuffer '$($this.Name)' cleared with specified cell."
+    }
+
+    [TuiCell] GetCell([int]$x, [int]$y) {
+        if ($x -lt 0 -or $x -ge $this.Width -or $y -lt 0 -or $y -ge $this.Height) { return [TuiCell]::new() }
+        return $this.Cells[$y, $x]
+    }
+
+    [void] SetCell([int]$x, [int]$y, [TuiCell]$cell) {
+        if ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height) {
+            $this.Cells[$y, $x] = $cell
+            $this.IsDirty = $true
+        } else {
+            # Write-Warning "Attempted to set cell out of bounds in TuiBuffer '$($this.Name)': ($x, $y) is outside 0..$($this.Width-1), 0..$($this.Height-1). Cell: '$($cell.Char)'."
+        }
+    }
+
+    [void] WriteString([int]$x, [int]$y, [string]$text, $fg, $bg) {
+        if ($y -lt 0 -or $y -ge $this.Height) {
+            # Write-Warning "Skipping WriteString: Y coordinate ($y) out of bounds for buffer '$($this.Name)' (0..$($this.Height-1)). Text: '$text'."
+            return
+        }
+        $currentX = $x
+        foreach ($char in $text.ToCharArray()) {
+            if ($currentX -ge $this.Width) { break } 
+            if ($currentX -ge 0) {
+                $this.SetCell($currentX, $y, [TuiCell]::new($char, $fg, $bg))
+            }
+            $currentX++
+        }
+        $this.IsDirty = $true
+        # Write-Verbose "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
+    }
+
+    [void] BlendBuffer([object]$other, [int]$offsetX, [int]$offsetY) {
+        for ($y = 0; $y -lt $other.Height; $y++) {
+            for ($x = 0; $x -lt $other.Width; $x++) {
+                $targetX = $offsetX + $x
+                $targetY = $offsetY + $y
+                if ($targetX -ge 0 -and $targetX -lt $this.Width -and $targetY -ge 0 -and $targetY -lt $this.Height) {
+                    $sourceCell = $other.GetCell($x, $y)
+                    $targetCell = $this.GetCell($targetX, $targetY)
+                    $blendedCell = $targetCell.BlendWith($sourceCell)
+                    $this.SetCell($targetX, $targetY, $blendedCell)
+                }
+            }
+        }
+        $this.IsDirty = $true
+        # Write-Verbose "BlendBuffer: Blended buffer '$($other.Name)' onto '$($this.Name)' at ($offsetX, $offsetY)."
+    }
+
+    [TuiBuffer] GetSubBuffer([int]$x, [int]$y, [int]$width, [int]$height) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $subBuffer = [TuiBuffer]::new($width, $height, "$($this.Name).Sub")
+        for ($sy = 0; $sy -lt $height; $sy++) {
+            for ($sx = 0; $sx -lt $width; $sx++) {
+                $sourceCell = $this.GetCell($x + $sx, $y + $sy)
+                $subBuffer.SetCell($sx, $sy, [TuiCell]::new($sourceCell))
+            }
+        }
+        # Write-Verbose "GetSubBuffer: Created sub-buffer '$($subBuffer.Name)' from '$($this.Name)' at ($x, $y) with dimensions $($width)x$($height)."
+        return $subBuffer
+    }
+
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
+        if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
+        $oldCells = $this.Cells
+        $oldWidth = $this.Width
+        $oldHeight = $this.Height
+        $this.Width = $newWidth
+        $this.Height = $newHeight
+        $this.Cells = New-Object 'TuiCell[,]' $newHeight, $newWidth
+        $this.Clear()
+        $copyWidth = [Math]::Min($oldWidth, $newWidth)
+        $copyHeight = [Math]::Min($oldHeight, $newHeight)
+        for ($y = 0; $y -lt $copyHeight; $y++) {
+            for ($x = 0; $x -lt $copyWidth; $x++) {
+                $this.Cells[$y, $x] = $oldCells[$y, $x]
+            }
+        }
+        $this.IsDirty = $true
+        # Write-Verbose "TuiBuffer '$($this.Name)' resized from $($oldWidth)x$($oldHeight) to $($newWidth)x$($newHeight)."
+    }
+
+    [string] ToString() {
+        return "TuiBuffer(Name='$($this.Name)', Width=$($this.Width), Height=$($this.Height), IsDirty=$($this.IsDirty))"
+    }
+
+    # Additional helper methods needed by rendering pipeline
+    [void] DrawText([int]$x, [int]$y, [string]$text, $fg, $bg) {
+        $this.WriteString($x, $y, $text, $fg, $bg)
+    }
+    
+    [void] DrawBox([int]$x, [int]$y, [int]$width, [int]$height, $fg, $bg, [bool]$doubleLine = $false) {
+        if ($doubleLine) {
+            $topLeft = '╔'; $topRight = '╗'; $bottomLeft = '╚'; $bottomRight = '╝'
+            $horizontal = '═'; $vertical = '║'
+        } else {
+            $topLeft = '┌'; $topRight = '┐'; $bottomLeft = '└'; $bottomRight = '┘'
+            $horizontal = '─'; $vertical = '│'
+        }
+        
+        # Top line
+        $this.SetCell($x, $y, [TuiCell]::new($topLeft, $fg, $bg))
+        for ($i = 1; $i -lt $width - 1; $i++) {
+            $this.SetCell($x + $i, $y, [TuiCell]::new($horizontal, $fg, $bg))
+        }
+        $this.SetCell($x + $width - 1, $y, [TuiCell]::new($topRight, $fg, $bg))
+        
+        # Vertical lines
+        for ($i = 1; $i -lt $height - 1; $i++) {
+            $this.SetCell($x, $y + $i, [TuiCell]::new($vertical, $fg, $bg))
+            $this.SetCell($x + $width - 1, $y + $i, [TuiCell]::new($vertical, $fg, $bg))
+        }
+        
+        # Bottom line
+        $this.SetCell($x, $y + $height - 1, [TuiCell]::new($bottomLeft, $fg, $bg))
+        for ($i = 1; $i -lt $width - 1; $i++) {
+            $this.SetCell($x + $i, $y + $height - 1, [TuiCell]::new($horizontal, $fg, $bg))
+        }
+        $this.SetCell($x + $width - 1, $y + $height - 1, [TuiCell]::new($bottomRight, $fg, $bg))
+    }
+    
+    [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$char, $fg, $bg) {
+        for ($py = $y; $py -lt $y + $height; $py++) {
+            for ($px = $x; $px -lt $x + $width; $px++) {
+                $this.SetCell($px, $py, [TuiCell]::new($char, $fg, $bg))
+            }
+        }
+    }
+    
+    [TuiBuffer] Clone() {
+        $clone = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name)_Clone")
+        for ($y = 0; $y -lt $this.Height; $y++) {
+            for ($x = 0; $x -lt $this.Width; $x++) {
+                $clone.Cells[$y, $x] = [TuiCell]::new($this.Cells[$y, $x])
+            }
+        }
+        return $clone
+    }
+}
+#endregion
+
+#region UIElement - Base Class for all UI Components
+class UIElement {
+    [string] $Name = "UIElement" 
+    [int] $X = 0               
+    [int] $Y = 0               
+    [int] $Width = 10          
+    [int] $Height = 3          
+    [bool] $Visible = $true    
+    [bool] $Enabled = $true    
+    [bool] $IsFocusable = $false 
+    [bool] $IsFocused = $false  
+    [int] $TabIndex = 0        
+    [int] $ZIndex = 0          
+    [UIElement] $Parent = $null 
+    [System.Collections.Generic.List[UIElement]] $Children 
+    
+    hidden [object] $_private_buffer = $null
+    hidden [bool] $_needs_redraw = $true
+    
+    [hashtable] $Metadata = @{} 
+
+    UIElement() {
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        # Write-Verbose "UIElement 'Unnamed' created with default size ($($this.Width)x$($this.Height))."
+    }
+
+    UIElement([string]$name) {
+        $this.Name = $name
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        # Write-Verbose "UIElement '$($this.Name)' created with default size ($($this.Width)x$($this.Height))."
+    }
+
+    UIElement([int]$x, [int]$y, [int]$width, [int]$height) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.X = $x
+        $this.Y = $y
+        $this.Width = $width
+        $this.Height = $height
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._private_buffer = [TuiBuffer]::new($width, $height, "Unnamed.Buffer")
+        # Write-Verbose "UIElement 'Unnamed' created at ($x, $y) with dimensions $($width)x$($height)."
+    }
+
+    [hashtable] GetAbsolutePosition() {
+        $absX = $this.X
+        $absY = $this.Y
+        $current = $this.Parent
+        while ($null -ne $current) {
+            $absX += $current.X
+            $absY += $current.Y
+            $current = $current.Parent
+        }
+        return @{ X = $absX; Y = $absY }
+    }
+
+    [void] AddChild([object]$child) {
+        try {
+            if ($child -eq $this) { throw [System.ArgumentException]::new("Cannot add an element as its own child.") }
+            if ($this.Children.Contains($child)) {
+                Write-Warning "Child '$($child.Name)' is already a child of '$($this.Name)'. Skipping addition."
+                return
+            }
+            if ($child.Parent -ne $null) {
+                Write-Warning "Child '$($child.Name)' already has a parent ('$($child.Parent.Name)'). Consider removing it from its current parent first."
+            }
+            $child.Parent = $this
+            $this.Children.Add($child)
+            $this.RequestRedraw()
+            # Write-Verbose "Added child '$($child.Name)' to parent '$($this.Name)'."
+        }
+        catch {
+            Write-Error "Failed to add child '$($child.Name)' to '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] RemoveChild([object]$child) {
+        try {
+            if ($this.Children.Remove($child)) {
+                $child.Parent = $null
+                $this.RequestRedraw()
+                # Write-Verbose "Removed child '$($child.Name)' from parent '$($this.Name)'."
+            } else {
+                Write-Warning "Child '$($child.Name)' not found in parent '$($this.Name)' for removal. No action taken."
+            }
+        }
+        catch {
+            Write-Error "Failed to remove child '$($child.Name)' from '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] RequestRedraw() {
+        $this._needs_redraw = $true
+        if ($null -ne $this.Parent) {
+            $this.Parent.RequestRedraw()
+        }
+        # Write-Verbose "Redraw requested for '$($this.Name)'."
+    }
+
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
+        if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
+        try {
+            if ($this.Width -eq $newWidth -and $this.Height -eq $newHeight) {
+                Write-Verbose "Resize: Component '$($this.Name)' already has target dimensions ($($newWidth)x$($newHeight)). No change."
+                return
+            }
+            $this.Width = $newWidth
+            $this.Height = $newHeight
+            if ($null -ne $this._private_buffer) {
+                $this._private_buffer.Resize($newWidth, $newHeight)
+            } else {
+                $this._private_buffer = [TuiBuffer]::new($newWidth, $newHeight, "$($this.Name).Buffer")
+                # Write-Verbose "Re-initialized buffer for '$($this.Name)' due to null buffer."
+            }
+            $this.RequestRedraw()
+            $this.OnResize($newWidth, $newHeight)
+            # Write-Verbose "Component '$($this.Name)' resized to $($newWidth)x$($newHeight)."
+        }
+        catch {
+            Write-Error "Failed to resize component '$($this.Name)' to $($newWidth)x$($newHeight): $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] Move([int]$newX, [int]$newY) {
+        if ($this.X -eq $newX -and $this.Y -eq $newY) {
+            # Write-Verbose "Move: Component '$($this.Name)' already at target position ($($newX), $($newY)). No change."
+            return
+        }
+        $this.X = $newX
+        $this.Y = $newY
+        $this.RequestRedraw()
+        $this.OnMove($newX, $newY)
+        # Write-Verbose "Component '$($this.Name)' moved to ($newX, $newY)."
+    }
+
+    [bool] ContainsPoint([int]$x, [int]$y) {
+        return ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height)
+    }
+
+    [object] GetChildAtPoint([int]$x, [int]$y) {
+        for ($i = $this.Children.Count - 1; $i -ge 0; $i--) {
+            $child = $this.Children[$i]
+            if ($child.Visible -and $child.ContainsPoint($x - $child.X, $y - $child.Y)) {
+                return $child
+            }
+        }
+        return $null
+    }
+
+    [void] OnRender() 
+    {
+        if ($null -ne $this._private_buffer) {
+            $this._private_buffer.Clear()
+        }
+        # Write-Verbose "OnRender called for '$($this.Name)': Default buffer clear."
+    }
+
+    [void] OnResize([int]$newWidth, [int]$newHeight) 
+    {
+        # Write-Verbose "OnResize called for '$($this.Name)': No custom resize logic."
+    }
+
+    [void] OnMove([int]$newX, [int]$newY) 
+    {
+        # Write-Verbose "OnMove called for '$($this.Name)': No custom move logic."
+    }
+
+    [void] OnFocus() 
+    { 
+        # Write-Verbose "OnFocus called for '$($this.Name)'." 
+    }
+    
+    [void] OnBlur() 
+    { 
+        # Write-Verbose "OnBlur called for '$($this.Name)'." 
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) 
+    {
+        # Write-Verbose "HandleInput called for '$($this.Name)': Key: $($keyInfo.Key)."
+        return $false
+    }
+
+    [void] Render() 
+    {
+        if (-not $this.Visible) { 
+            # Write-Verbose "Skipping Render for '$($this.Name)': Not visible."
+            return 
+        }
+        $this._RenderContent() 
+    }
+
+    hidden [void] _RenderContent() 
+    {
+        if (-not $this.Visible) { return }
+        if ($this._needs_redraw -or ($null -eq $this._private_buffer)) {
+            if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
+                $bufferWidth = [Math]::Max(1, $this.Width)
+                $bufferHeight = [Math]::Max(1, $this.Height)
+                $this._private_buffer = [TuiBuffer]::new($bufferWidth, $bufferHeight, "$($this.Name).Buffer")
+                # Write-Verbose "Re-initialized buffer for '$($this.Name)' due to null or dimension mismatch ($($bufferWidth)x$($bufferHeight))."
+            }
+            $this.OnRender()
+            $this._needs_redraw = $false
+            # Write-Verbose "Rendered own content for '$($this.Name)'."
+        }
+        foreach ($child in $this.Children | Sort-Object ZIndex) { 
+            if ($child.Visible) {
+                $child.Render()
+                if ($null -ne $child._private_buffer) {
+                    $this._private_buffer.BlendBuffer($child._private_buffer, $child.X, $child.Y)
+                    # Write-Verbose "Blended child '$($child.Name)' onto '$($this.Name)' at ($($child.X), $($child.Y))."
+                }
+            }
+        }
+    }
+
+    [object] GetBuffer() 
+    { 
+        return $this._private_buffer 
+    }
+    
+    [string] ToString() 
+    {
+        return "$($this.GetType().Name)(Name='$($this.Name)', X=$($this.X), Y=$($this.Y), Width=$($this.Width), Height=$($this.Height), Visible=$($this.Visible))"
+    }
+}
+#endregion
+
+#region Component - A generic container component
+class Component : UIElement {
+    Component([string]$name) : base($name) {
+        $this.Name = $name
+        # Write-Verbose "Component '$($this.Name)' created."
+    }
+
+    hidden [void] _RenderContent() {
+        ([UIElement]$this)._RenderContent()
+        # Write-Verbose "_RenderContent called for Component '$($this.Name)' (delegating to base UIElement)."
+    }
+
+    [string] ToString() {
+        return "Component(Name='$($this.Name)', Children=$($this.Children.Count))"
+    }
+}
+#endregion
+
+#region Screen - Top-level Container for Application Views
+class Screen : UIElement {
+    [hashtable]$Services
+    [object]$ServiceContainer 
+    [System.Collections.Generic.Dictionary[string, object]]$State
+    [System.Collections.Generic.List[UIElement]] $Panels
+    
+    $LastFocusedComponent
+    
+    hidden [System.Collections.Generic.Dictionary[string, string]] $EventSubscriptions 
+
+    Screen([string]$name, [hashtable]$services) : base($name) {
+        $this.Services = $services
+        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
+        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+        $this.ServiceContainer = $null
+        # Write-Verbose "Screen '$($this.Name)' created with hashtable services."
+    }
+
+    Screen([string]$name, [object]$serviceContainer) : base($name) {
+        $this.ServiceContainer = $serviceContainer
+        $this.Services = [hashtable]::new()
+        if ($this.ServiceContainer.PSObject.Methods['GetAllRegisteredServices'] -and $this.ServiceContainer.PSObject.Methods['GetService']) { 
+            try {
+                $registeredServices = $this.ServiceContainer.GetAllRegisteredServices()
+                foreach ($service in $registeredServices) {
+                    try {
+                        $this.Services[$service.Name] = $this.ServiceContainer.GetService($service.Name)
+                    } catch {
+                        Write-Warning "Screen '$($this.Name)': Failed to resolve service '$($service.Name)' from container: $($_.Exception.Message)"
+                    }
+                }
+                # Write-Verbose "Screen '$($this.Name)' populated Services hashtable from ServiceContainer."
+            } catch {
+                Write-Warning "Screen '$($this.Name)': Failed to enumerate services from container: $($_.Exception.Message)"
+            }
+        } else {
+            Write-Warning "Screen '$($this.Name)' received a non-ServiceContainer object for DI. Services hashtable might be incomplete or inaccurate."
+        }
+        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
+        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+        # Write-Verbose "Screen '$($this.Name)' created with ServiceContainer."
+    }
+
+    [void] Initialize() { 
+        # Write-Verbose "Initialize called for Screen '$($this.Name)': Default (no-op)." 
+    }
+    [void] OnEnter() { 
+        # Write-Verbose "OnEnter called for Screen '$($this.Name)': Default (no-op)." 
+    }
+    [void] OnExit() { 
+        # Write-Verbose "OnExit called for Screen '$($this.Name)': Default (no-op)." 
+    }
+    [void] OnResume() { 
+        # Write-Verbose "OnResume called for Screen '$($this.Name)': Default (no-op)." 
+    }
+
+    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Write-Verbose "HandleInput called for Screen '$($this.Name)': Key: $($keyInfo.Key). Default (no-op)."
+    }
+
+    [void] HandleKeyPress([System.ConsoleKeyInfo]$keyInfo) {
+        $this.HandleInput($keyInfo)
+    }
+
+    [void] HandleResize([int]$newWidth, [int]$newHeight) {
+        $this.Resize($newWidth, $newHeight)
+    }
+
+    [void] Cleanup() {
+        try {
+            # Write-Verbose "Cleanup called for Screen '$($this.Name)'."
+            foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
+                try {
+                    if (Get-Command 'Unsubscribe-Event' -ErrorAction SilentlyContinue) {
+                        Unsubscribe-Event -EventName $kvp.Key -HandlerId $kvp.Value
+                        Write-Verbose "Unsubscribed event '$($kvp.Key)' (HandlerId: $($kvp.Value)) for screen '$($this.Name)'."
+                    }
+                }
+                catch {
+                    Write-Warning "Failed to unsubscribe event '$($kvp.Key)' (HandlerId: $($kvp.Value)) for screen '$($this.Name)': $($_.Exception.Message)"
+                }
+            }
+            $this.EventSubscriptions.Clear()
+            foreach ($child in $this.Children) {
+                if ($child.PSObject.Methods['Cleanup']) {
+                    try { $child.Cleanup() } catch { Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" }
+                }
+            }
+            $this.Panels.Clear()
+            $this.Children.Clear()
+            Write-Verbose "Cleaned up resources for screen: $($this.Name)."
+        }
+        catch {
+            Write-Error "Error during Cleanup for screen '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] AddPanel([object]$panel) {
+        try {
+            $this.Panels.Add($panel)
+            $this.AddChild($panel) 
+            Write-Verbose "Added panel '$($panel.Name)' to screen '$($this.Name)'."
+        }
+        catch {
+            Write-Error "Failed to add panel '$($panel.Name)' to screen '$($this.Name)': $($_.Exception.Message)"
+            throw
+        }
+    }
+
+    [void] SubscribeToEvent([string]$eventName, [scriptblock]$action) {
+        try {
+            if (Get-Command 'Subscribe-Event' -ErrorAction SilentlyContinue) {
+                $subscriptionId = Subscribe-Event -EventName $eventName -Handler $action -Source $this.Name
+                $this.EventSubscriptions[$eventName] = $subscriptionId
+                Write-Verbose "Screen '$($this.Name)' subscribed to event '$eventName' with HandlerId: $subscriptionId."
+            } else {
+                Write-Warning "Subscribe-Event function not available. Event subscription for '$eventName' failed."
+            }
+        }
+        catch {
+            Write-Error "Failed for screen '$($this.Name)' to subscribe to event '$eventName': $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    hidden [void] _RenderContent() {
+        ([UIElement]$this)._RenderContent()
+        Write-Verbose "_RenderContent called for Screen '$($this.Name)' (rendering UIElement children, including panels)."
+    }
+
+    [string] ToString() {
+        return "Screen(Name='$($this.Name)', Panels=$($this.Panels.Count), Visible=$($this.Visible))"
+    }
+
+    [void] Render([TuiBuffer]$buffer) {
+        # First render self
+        $this._RenderContent()
+        
+        # Then blend our buffer onto the target
+        if ($null -ne $this._private_buffer) {
+            $buffer.BlendBuffer($this._private_buffer, 0, 0)
+        }
+    }
+}
+#endregion
+
+#region ServiceContainer Class
+class ServiceContainer {
+    hidden [hashtable] $_services = @{}
+    hidden [hashtable] $_serviceFactories = @{}
+
+    ServiceContainer() {
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer created."
+        }
+        Write-Verbose "ServiceContainer: Instance constructed."
+    }
+
+    [void] Register([string]$name, [object]$serviceInstance) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        if ($null -eq $serviceInstance) { throw [System.ArgumentNullException]::new("serviceInstance") }
+
+        if ($this._services.ContainsKey($name) -or $this._serviceFactories.ContainsKey($name)) {
+            throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+        }
+
+        $this._services[$name] = $serviceInstance
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Registered eager service instance: '$name'."
+        }
+        Write-Verbose "ServiceContainer: Registered eager instance for '$name' of type '$($serviceInstance.GetType().Name)'."
+    }
+
+    [void] RegisterFactory([string]$name, [scriptblock]$factory, [bool]$isSingleton = $true) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+        if ($null -eq $factory) { throw [System.ArgumentNullException]::new("factory") }
+
+        if ($this._services.ContainsKey($name) -or $this._serviceFactories.ContainsKey($name)) {
+            throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
+        }
+        
+        $this._serviceFactories[$name] = @{
+            Factory = $factory
+            IsSingleton = $isSingleton
+            Instance = $null
+        }
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Registered service factory: '$name' (Singleton: $isSingleton)."
+        }
+        Write-Verbose "ServiceContainer: Registered factory for '$name' (Singleton: $isSingleton)."
+    }
+
+    [object] GetService([string]$name) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") }
+
+        if ($this._services.ContainsKey($name)) {
+            Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."
+            return $this._services[$name]
+        }
+
+        if ($this._serviceFactories.ContainsKey($name)) {
+            return $this._InitializeServiceFromFactory($name, [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase))
+        }
+
+        $available = $this.GetAllRegisteredServices() | Select-Object -ExpandProperty Name
+        throw [System.InvalidOperationException]::new("Service '$name' not found. Available services: $($available -join ', ')")
+    }
+    
+    [object[]] GetAllRegisteredServices() {
+        $list = [System.Collections.Generic.List[object]]::new()
+        
+        foreach ($key in $this._services.Keys) {
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Instance'
+                Initialized = $true
+                Lifestyle = 'Singleton'
+            })
+        }
+        
+        foreach ($key in $this._serviceFactories.Keys) {
+            $factoryInfo = $this._serviceFactories[$key]
+            $list.Add([pscustomobject]@{
+                Name = $key
+                Type = 'Factory'
+                Initialized = ($null -ne $factoryInfo.Instance)
+                Lifestyle = if ($factoryInfo.IsSingleton) { 'Singleton' } else { 'Transient' }
+            })
+        }
+        
+        return $list.ToArray() | Sort-Object Name
+    }
+
+    [void] Cleanup() {
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer cleanup initiated."
+        }
+        Write-Verbose "ServiceContainer: Initiating cleanup of disposable singleton services."
+        
+        $instancesToClean = [System.Collections.Generic.List[object]]::new()
+        $this._services.Values | ForEach-Object { $instancesToClean.Add($_) }
+        $this._serviceFactories.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
+
+        foreach ($service in $instancesToClean) {
+            if ($service -is [System.IDisposable]) {
+                try {
+                    Write-Verbose "ServiceContainer: Disposing service of type '$($service.GetType().FullName)'."
+                    $service.Dispose()
+                } catch {
+                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                        Write-Log -Level Error -Message "Error disposing service of type '$($service.GetType().FullName)': $($_.Exception.Message)"
+                    }
+                }
+            }
+        }
+        
+        $this._services.Clear()
+        $this._serviceFactories.Clear()
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Info -Message "ServiceContainer cleanup complete."
+        }
+        Write-Verbose "ServiceContainer: Cleanup complete. All service registries cleared."
+    }
+
+    hidden [object] _InitializeServiceFromFactory([string]$name, [System.Collections.Generic.HashSet[string]]$resolutionChain) {
+        $factoryInfo = $this._serviceFactories[$name]
+        
+        if ($factoryInfo.IsSingleton -and $null -ne $factoryInfo.Instance) {
+            Write-Verbose "ServiceContainer: Returning cached singleton instance of '$name'."
+            return $factoryInfo.Instance
+        }
+
+        if ($resolutionChain.Contains($name)) {
+            $chain = ($resolutionChain -join ' -> ') + " -> $name"
+            throw [System.InvalidOperationException]::new("Circular dependency detected while resolving service '$name'. Chain: $chain")
+        }
+        [void]$resolutionChain.Add($name)
+        
+        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "Instantiating service '$name' from factory."
+        }
+        Write-Verbose "ServiceContainer: Invoking factory to create instance of '$name'."
+        
+        $serviceInstance = & $factoryInfo.Factory $this
+
+        if ($factoryInfo.IsSingleton) {
+            $factoryInfo.Instance = $serviceInstance
+            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "Cached singleton instance of service '$name'."
+            }
+            Write-Verbose "ServiceContainer: Cached new singleton instance of '$name'."
+        }
+
+        [void]$resolutionChain.Remove($name)
+        
+        return $serviceInstance
+    }
+}
+#endregion

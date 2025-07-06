@@ -46,11 +46,11 @@ class ServiceContainer {
             if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") } # FIX: Added manual validation to replace the removed attributes.
             if ($null -eq $serviceInstance) { throw [System.ArgumentNullException]::new("serviceInstance") }
 
-            if ($this._services.ContainsKey($name) -or $this._serviceFactories.ContainsKey($name)) {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
                 throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
             }
 
-            $this._services[$name] = $serviceInstance
+            $this.{_services}[$name] = $serviceInstance
             if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
                 Write-Log -Level Debug -Message "Registered eager service instance: '$name'."
             }
@@ -68,11 +68,11 @@ class ServiceContainer {
             if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") } # FIX: Added manual validation.
             if ($null -eq $factory) { throw [System.ArgumentNullException]::new("factory") }
 
-            if ($this._services.ContainsKey($name) -or $this._serviceFactories.ContainsKey($name)) {
+            if ($this.{_services}.ContainsKey($name) -or $this.{_serviceFactories}.ContainsKey($name)) {
                 throw [System.InvalidOperationException]::new("A service or factory with the name '$name' is already registered.")
             }
             
-            $this._serviceFactories[$name] = @{
+            $this.{_serviceFactories}[$name] = @{
                 Factory = $factory
                 IsSingleton = $isSingleton
                 Instance = $null # To hold the singleton instance once created
@@ -92,13 +92,13 @@ class ServiceContainer {
             if ([string]::IsNullOrWhiteSpace($name)) { throw [System.ArgumentException]::new("Parameter 'name' cannot be null or empty.") } # FIX: Added manual validation.
 
             # 1. Return from eager-loaded services
-            if ($this._services.ContainsKey($name)) {
+            if ($this.{_services}.ContainsKey($name)) {
                 Write-Verbose "ServiceContainer: Returning eager-loaded instance of '$name'."
-                return $this._services[$name]
+                return $this.{_services}[$name]
             }
 
             # 2. Check for a factory
-            if ($this._serviceFactories.ContainsKey($name)) {
+            if ($this.{_serviceFactories}.ContainsKey($name)) {
                 return $this._InitializeServiceFromFactory($name, [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase))
             }
 
@@ -112,7 +112,7 @@ class ServiceContainer {
     [object[]] GetAllRegisteredServices() {
         $list = [System.Collections.Generic.List[object]]::new()
         
-        foreach ($key in $this._services.Keys) {
+        foreach ($key in $this.{_services}.Keys) {
             $list.Add([pscustomobject]@{
                 Name = $key
                 Type = 'Instance'
@@ -121,8 +121,8 @@ class ServiceContainer {
             })
         }
         
-        foreach ($key in $this._serviceFactories.Keys) {
-            $factoryInfo = $this._serviceFactories[$key]
+        foreach ($key in $this.{_serviceFactories}.Keys) {
+            $factoryInfo = $this.{_serviceFactories}[$key]
             $list.Add([pscustomobject]@{
                 Name = $key
                 Type = 'Factory'
@@ -143,8 +143,8 @@ class ServiceContainer {
         
         # Collect all singleton instances
         $instancesToClean = [System.Collections.Generic.List[object]]::new()
-        $this._services.Values | ForEach-Object { $instancesToClean.Add($_) }
-        $this._serviceFactories.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
+        $this.{_services}.Values | ForEach-Object { $instancesToClean.Add($_) }
+        $this.{_serviceFactories}.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
 
         foreach ($service in $instancesToClean) {
             if ($service -is [System.IDisposable]) {
@@ -159,8 +159,8 @@ class ServiceContainer {
             }
         }
         
-        $this._services.Clear()
-        $this._serviceFactories.Clear()
+        $this.{_services}.Clear()
+        $this.{_serviceFactories}.Clear()
         if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
             Write-Log -Level Info -Message "ServiceContainer cleanup complete."
         }
@@ -171,7 +171,7 @@ class ServiceContainer {
     #region Private Methods
     # The core logic for instantiating a service from its factory.
     hidden [object] _InitializeServiceFromFactory([string]$name, [System.Collections.Generic.HashSet[string]]$resolutionChain) {
-        $factoryInfo = $this._serviceFactories[$name]
+        $factoryInfo = $this.{_serviceFactories}[$name]
         
         # For singletons, if an instance already exists, return it immediately.
         if ($factoryInfo.IsSingleton -and $null -ne $factoryInfo.Instance) {

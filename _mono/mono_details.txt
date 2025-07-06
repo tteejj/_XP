@@ -1,0 +1,441 @@
+{
+  `path`: `C:\\Users\\jhnhe\\Documents\\GitHub\\_XP\\_axiom\\_mono\\mono_analysis.md`,
+  `content`: `# Axiom-Phoenix v4.0 TUI Framework (_mono Directory) - Complete Analysis
+
+## Program Overview
+
+**Axiom-Phoenix v4.0** is a sophisticated Text User Interface (TUI) framework built in PowerShell, implementing a modular architecture with separated concerns across multiple files. This version focuses on rapid prototyping and development with a clear file-based organization.
+
+**Core Purpose:** Provides a comprehensive TUI development framework with advanced components, service-oriented architecture, and modern UI patterns for building professional terminal applications.
+
+## Architecture Summary
+
+The framework follows a modular file-based architecture:
+
+- **Foundation:** AllBaseClasses.ps1 (TUI primitives, UIElement base)
+- **Data Layer:** AllModels.ps1 (business entities and enums)
+- **Component Layer:** AllComponents.ps1 (UI components)
+- **Screen Layer:** AllScreens.ps1 (application screens)
+- **Function Layer:** AllFunctions.ps1 (utility functions)
+- **Service Layer:** AllServices.ps1 (business services)
+- **Runtime Layer:** AllRuntime.ps1 (engine and main loop)
+- **Entry Point:** Start.ps1 (application startup)
+
+## File-by-File Breakdown
+
+### **Start.ps1** (Application Entry Point)
+**Purpose:** Main startup script that orchestrates loading and running the application
+
+**Core Process:**
+1. Loads all framework files in dependency order
+2. Creates ServiceContainer with all services
+3. Loads sample data (tasks and projects)
+4. Initializes and starts the application
+
+**Sample Data Creation:**
+- Creates 5 sample tasks with different priorities and progress
+- Demonstrates task status management
+- Shows proper service container usage
+
+### **AllBaseClasses.ps1** (Foundation Layer)
+**Purpose:** Core framework classes with zero external dependencies
+
+#### **Key Classes:**
+
+**TuiAnsiHelper**
+- ANSI escape code generation with truecolor support
+- Color caching for performance (`_fgCache`, `_bgCache`)
+- Methods: `GetForegroundCode()`, `GetBackgroundCode()`, `ParseHexColor()`
+- Support for hex colors (#RRGGBB) and ConsoleColor enums
+
+**TuiCell**
+- Single character cell with styling information
+- Properties: `Char`, `ForegroundColor`, `BackgroundColor`, `Bold`, `Underline`, `Italic`, `ZIndex`, `Metadata`
+- Methods: `BlendWith()`, `DiffersFrom()`, `ToAnsiString()`, `WithStyle()`, `WithChar()`
+- Z-order aware blending for layered rendering
+
+**TuiBuffer**
+- 2D array of TuiCells representing drawable area
+- Properties: `Width`, `Height`, `Name`, `IsDirty`, `Cells[,]`
+- Methods: `Clear()`, `GetCell()`, `SetCell()`, `WriteString()`, `BlendBuffer()`, `Resize()`
+- Additional: `DrawText()`, `DrawBox()`, `FillRect()`, `Clone()`
+
+**UIElement** (Base UI Class)
+- Foundation for all UI components
+- Properties: `Name`, `X`, `Y`, `Width`, `Height`, `Visible`, `Enabled`, `IsFocusable`, `IsFocused`, `Children`, `Parent`
+- Lifecycle: `OnRender()`, `OnResize()`, `OnMove()`, `OnFocus()`, `OnBlur()`, `HandleInput()`
+- Hierarchy: `AddChild()`, `RemoveChild()`, `GetAbsolutePosition()`, `ContainsPoint()`
+- Rendering: Private buffer management, compositor integration
+
+**Component**
+- Generic container extending UIElement
+- Simple wrapper for grouping related components
+
+**Screen**
+- Top-level container for application views
+- Service integration via ServiceContainer or hashtable
+- Lifecycle: `Initialize()`, `OnEnter()`, `OnExit()`, `OnResume()`, `Cleanup()`
+- Event management with automatic cleanup
+
+**ServiceContainer**
+- Dependency injection container
+- Methods: `Register()`, `RegisterFactory()`, `GetService()`, `Cleanup()`
+- Support for singleton and transient lifestyles
+- Circular dependency detection
+
+### **AllModels.ps1** (Data Layer)
+**Purpose:** Business entities, enums, and validation classes
+
+#### **Enumerations:**
+- **TaskStatus:** Pending, InProgress, Completed, Cancelled
+- **TaskPriority:** Low, Medium, High  
+- **BillingType:** Billable, NonBillable
+
+#### **Core Classes:**
+
+**ValidationBase**
+- Static validation methods
+- `ValidateNotEmpty()` for string validation
+
+**PmcTask**
+- Core task entity with comprehensive functionality
+- Properties: `Id`, `Title`, `Description`, `Status`, `Priority`, `ProjectKey`, `CreatedAt`, `UpdatedAt`, `DueDate`, `Tags`, `Progress`, `Completed`
+- Methods: `Complete()`, `Cancel()`, `SetProgress()`, `AddTag()`, `RemoveTag()`, `GetAge()`, `IsOverdue()`, `Clone()`
+- Advanced features: Automatic status updates based on progress, age calculation, overdue detection
+
+**PmcProject**
+- Project container entity
+- Properties: `Key`, `Name`, `Description`, `CreatedAt`, `UpdatedAt`, `Owner`, `Tags`, `Metadata`, `IsActive`
+- Methods: `Archive()`, `Activate()`, `AddTag()`, `RemoveTag()`, `SetMetadata()`, `GetMetadata()`
+
+**TimeEntry**
+- Time tracking entity for billable work
+- Properties: `Id`, `TaskId`, `ProjectKey`, `StartTime`, `EndTime`, `Description`, `BillingType`, `UserId`, `HourlyRate`
+- Methods: `GetDuration()`, `GetHours()`, `GetTotalValue()`, `Stop()`, `IsRunning()`
+
+### **AllComponents.ps1** (Component Layer)
+**Purpose:** UI components extending UIElement
+
+#### **Core Components:**
+
+**LabelComponent**
+- Static text display
+- Properties: `Text`, `ForegroundColor`
+- Non-focusable, simple rendering
+
+**ButtonComponent**
+- Interactive button with click events
+- Properties: `Text`, `IsPressed`, `OnClick`
+- Visual states: normal, focus, pressed
+- Keyboard support: Enter, Spacebar
+
+**TextBoxComponent**
+- Advanced text input with scrolling
+- Properties: `Text`, `Placeholder`, `MaxLength`, `CursorPosition`, `OnChange`
+- Features: Horizontal scrolling, non-destructive cursor, placeholder support
+- Keyboard navigation: arrows, home, end, backspace, delete
+
+**CheckBoxComponent**
+- Boolean checkbox input
+- Properties: `Text`, `Checked`, `OnChange`
+- Visual: `[X]` or `[ ]` with text label
+
+**RadioButtonComponent**
+- Exclusive selection within groups
+- Properties: `Text`, `Selected`, `GroupName`, `OnChange`
+- Automatic group management
+
+#### **Advanced Components:**
+
+**ListBox**
+- Scrollable item list with selection
+- Properties: `Items`, `SelectedIndex`, color properties, `ScrollOffset`
+- Methods: `AddItem()`, `ClearItems()`, `EnsureVisible()`
+- Keyboard navigation: arrows, page up/down, home/end
+
+**TextBox** (Wrapper)
+- Enhanced wrapper around TextBoxComponent
+- Methods: `Clear()`, `Focus()`
+
+**CommandPalette**
+- Searchable command interface
+- Components: `_listBox`, `_searchBox`, `_panel`
+- Features: Fuzzy search, overlay rendering, action integration
+- Methods: `Show()`, `Hide()`, `RefreshActions()`
+
+#### **Panel Classes:**
+
+**Panel**
+- Container with layout management
+- Properties: `Title`, `BorderStyle`, `BorderColor`, `BackgroundColor`, `HasBorder`, `LayoutType`
+- Layout types: Manual, Vertical, Horizontal, Grid
+- Content area management
+
+**ScrollablePanel**
+- Panel with scrolling capabilities
+- Properties: `ScrollOffsetY`, `MaxScrollY`, `ShowScrollbar`
+- Methods: `ScrollUp()`, `ScrollDown()`, `ScrollToTop()`, `ScrollToBottom()`
+
+**GroupPanel**
+- Themed panel for grouping
+- Applies group-specific styling
+
+### **AllScreens.ps1** (Screen Layer)
+**Purpose:** Application screens extending Screen base class
+
+#### **Screen Classes:**
+
+**DashboardScreen**
+- Main application dashboard
+- Components: `_mainPanel`, `_summaryPanel`, `_statusPanel`, `_helpPanel`
+- Features: Task overview, progress bar, system status, quick start guide
+- Real-time data updates from DataManager
+
+**TaskListScreen**
+- Task management interface
+- Components: `_mainPanel`, `_taskListPanel`, `_detailPanel`, `_statusBar`
+- Features: Scrollable task list, detailed task view, filtering
+- Keyboard navigation: arrows, page up/down, home/end
+- Actions: Edit (Enter), Delete (D), New (N)
+
+### **AllServices.ps1** (Service Layer)
+**Purpose:** Core application services
+
+#### **Service Classes:**
+
+**ActionService**
+- Central command registry
+- Properties: `ActionRegistry`, `EventSubscriptions`
+- Methods: `RegisterAction()`, `UnregisterAction()`, `ExecuteAction()`, `GetAction()`, `GetAllActions()`
+- Default actions: app.exit, app.help
+
+**KeybindingService**
+- Global keyboard management
+- Properties: `KeyMap`, `GlobalHandlers`, `ContextStack`, `EnableChords`
+- Methods: `SetBinding()`, `IsAction()`, `GetAction()`, `GetBindingDescription()`
+- Default bindings: Ctrl+Q (exit), F1 (help), Ctrl+P (command palette), arrows, etc.
+
+**DataManager**
+- Data persistence and management
+- Properties: `Tasks`, `Projects`, `DataPath`
+- Methods: `LoadData()`, `SaveData()`, `GetTasks()`, `AddTask()`, `UpdateTask()`, `DeleteTask()`, `GetProjects()`, `AddProject()`
+- Auto-save and JSON persistence
+- Event publishing for data changes
+
+**NavigationService**
+- Screen navigation management
+- Properties: `NavigationStack`, `CurrentScreen`
+- Methods: `NavigateTo()`, `CanGoBack()`, `GoBack()`, `Reset()`
+
+**ThemeManager**
+- Visual theming system
+- Properties: `CurrentTheme`, `ThemeName`
+- Methods: `LoadDefaultTheme()`, `GetColor()`, `SetColor()`
+- Comprehensive color scheme including button states
+
+**Logger**
+- Application logging
+- Properties: `LogPath`, `LogQueue`
+- Methods: `Log()`, `Flush()`
+- Queue-based logging with batch writes
+
+**EventManager**
+- Pub/sub event system
+- Properties: `EventHandlers`, `NextHandlerId`
+- Methods: `Subscribe()`, `Unsubscribe()`, `Publish()`
+
+### **AllFunctions.ps1** (Function Layer)
+**Purpose:** Standalone utility functions
+
+#### **TUI Drawing Functions:**
+- **Write-TuiText:** Write styled text to buffer
+- **Write-TuiBox:** Draw bordered boxes with titles
+- **Get-TuiBorderChars:** Border character sets (Single, Double, Rounded, Thick)
+
+#### **Factory Functions:**
+- **New-TuiBuffer:** Buffer factory
+- **New-TuiLabel:** Label component factory
+- **New-TuiButton:** Button component factory
+- **New-TuiTextBox:** TextBox component factory
+- **New-TuiCheckBox:** CheckBox component factory
+- **New-TuiRadioButton:** RadioButton component factory
+
+#### **Utility Functions:**
+- **Get-ThemeColor:** Theme color resolution
+- **Set-ComponentFocus:** Focus management
+- **Write-Log:** Simplified logging
+- **Subscribe-Event / Unsubscribe-Event / Publish-Event:** Event system
+
+### **AllRuntime.ps1** (Runtime Layer)
+**Purpose:** Core engine, screen management, and application runtime
+
+#### **Global State:**
+```powershell
+$global:TuiState = @{
+    Running = $false
+    BufferWidth = 0; BufferHeight = 0
+    CompositorBuffer = $null; PreviousCompositorBuffer = $null
+    ScreenStack = [System.Collections.Stack]::new()
+    CurrentScreen = $null
+    IsDirty = $true
+    FocusedComponent = $null
+    CommandPalette = $null
+    Services = @{}
+}
+```
+
+#### **Core Functions:**
+
+**Engine Management:**
+- **Initialize-TuiEngine:** Engine setup with buffer creation
+- **Start-TuiEngine:** Main render loop with 60 FPS targeting
+- **Stop-TuiEngine:** Engine cleanup and terminal restoration
+- **Update-TuiEngineSize:** Dynamic resize handling
+
+**Rendering System:**
+- **Invoke-TuiRender:** Frame rendering with differential updates
+- **Render-DifferentialBuffer:** Efficient console output
+- **Process-TuiInput:** Input processing with priority handling
+
+**Screen Management:**
+- **Push-Screen:** Add screen to navigation stack
+- **Pop-Screen:** Remove current screen and restore previous
+- **Switch-Screen:** Replace current screen without stacking
+
+**Error Handling:**
+- **Invoke-PanicHandler:** Comprehensive crash handling
+- Crash report generation with system information
+- Terminal restoration on failure
+
+**Application Entry:**
+- **Start-AxiomPhoenix:** Main application orchestrator
+
+## Key Features and Capabilities
+
+### **Advanced TUI Rendering:**
+- Differential rendering for performance
+- Z-order compositing for overlays
+- Truecolor support (#RGB hex colors)
+- Non-destructive cursors
+- Viewport-based scrolling
+
+### **Component System:**
+- Hierarchical parent-child relationships
+- Automatic layout management (Vertical, Horizontal, Grid, Manual)
+- Focus management with keyboard navigation
+- Event-driven architecture
+
+### **Service Architecture:**
+- Dependency injection container
+- Lazy loading with singleton/transient support
+- Circular dependency detection
+- Automatic resource cleanup
+
+### **Data Management:**
+- JSON persistence with auto-save
+- Event-driven data updates
+- Comprehensive task and project models
+- Time tracking capabilities
+
+### **Command System:**
+- Searchable command palette (Ctrl+P)
+- Fuzzy search across actions
+- Category-based organization
+- Global hotkey support
+
+### **Error Handling:**
+- Comprehensive panic handler
+- Crash report generation
+- Terminal restoration
+- Graceful degradation
+
+## Application Flow
+
+1. **Startup (Start.ps1):**
+   - Load all framework files in dependency order
+   - Create ServiceContainer and register services
+   - Load sample data
+   - Initialize TUI engine
+   - Start main loop
+
+2. **Main Loop:**
+   - Process window resize events
+   - Handle keyboard input with priority (Command Palette → Global hotkeys → Current screen)
+   - Render frames with differential updates
+   - 60 FPS targeting with 16ms sleep
+
+3. **Component Lifecycle:**
+   - Initialize() → OnEnter() → Main Loop → OnExit() → Cleanup()
+   - Automatic event subscription cleanup
+   - Resource disposal for IDisposable services
+
+4. **Navigation:**
+   - Stack-based screen management
+   - Command palette for global navigation
+   - Keyboard shortcuts for common actions
+
+## Technology Features
+
+### **Rendering Pipeline:**
+- TuiCell → TuiBuffer → UIElement → Screen → Compositor → Console
+- Z-order aware blending
+- Efficient differential updates
+- Truecolor ANSI support
+
+### **Input System:**
+- Priority-based input routing
+- Global hotkey system
+- Contextual key bindings
+- Focus-aware navigation
+
+### **Performance Optimizations:**
+- Color code caching
+- Differential rendering
+- Viewport scrolling
+- Queue-based logging
+- Memory-efficient buffer operations
+
+## Sample Application
+
+The framework includes a complete task management application demonstrating:
+- Dashboard with task overview and progress visualization
+- Task list with scrolling and detailed view
+- Interactive command palette
+- Real-time data updates
+- Comprehensive keyboard navigation
+
+## Dependencies
+
+**External:** PowerShell 7.0+
+**Internal:** All dependencies contained within the framework files
+
+## Version Differences from v5.0
+
+**v4.0 Features:**
+- File-based modular organization
+- Simpler service registration
+- Direct global state management
+- Manual component factories
+- Embedded sample data
+
+**Missing from v5.0:**
+- Advanced input components (multiline text, numeric, date, combo box)
+- Table component with high-performance scrolling
+- Theme manager with JSON import/export
+- Panic handler with screenshot capture
+- Module-based architecture
+
+## Summary
+
+Axiom-Phoenix v4.0 represents a mature, feature-complete TUI framework optimized for rapid development and prototyping. The file-based organization makes it easy to understand, modify, and extend while providing enterprise-grade features like dependency injection, event-driven architecture, and comprehensive error handling.
+
+**Key Strengths:**
+- **8 modular files** with clear separation of concerns
+- **40+ classes** covering all aspects of TUI development
+- **100+ functions** providing comprehensive functionality
+- **Modern architecture** with service containers, events, and lifecycle management
+- **Complete sample application** demonstrating real-world usage
+- **Professional features** including crash handling, differential rendering, and advanced input processing
+
+The framework enables rapid development of sophisticated terminal applications with the same architectural patterns found in modern GUI frameworks, while leveraging PowerShell's strengths for system administration and automation tasks.`
+}

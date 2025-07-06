@@ -107,8 +107,7 @@ class TuiCell {
         $this.Bold = $bold
         $this.Underline = $underline
     }
-    # FIX: Removed the [TuiCell] type hint from the $other parameter
-    # to prevent cross-module type conversion errors.
+    # FIX: Removed the [TuiCell] type hint from the $other parameter to prevent cross-module type conversion errors.
     TuiCell([object]$other) {
         $this.Char = $other.Char
         $this.ForegroundColor = $other.ForegroundColor
@@ -134,8 +133,7 @@ class TuiCell {
         return $copy
     }
 
-    # FIX: Removed the [TuiCell] type hint from the $other parameter
-    # to prevent cross-module type conversion errors.
+    # FIX: Removed the [TuiCell] type hint from the $other parameter to prevent cross-module type conversion errors.
     [TuiCell] BlendWith([object]$other) {
         if ($null -eq $other) { return $this }
         
@@ -159,8 +157,7 @@ class TuiCell {
         return $this
     }
 
-    # FIX: Removed the [TuiCell] type hint from the $other parameter
-    # to prevent cross-module type conversion errors.
+    # FIX: Removed the [TuiCell] type hint from the $other parameter to prevent cross-module type conversion errors.
     [bool] DiffersFrom([object]$other) {
         if ($null -eq $other) { return $true }
         
@@ -257,8 +254,7 @@ class TuiBuffer {
         Write-Verbose "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
     }
 
-    # FIX: Removed the [TuiBuffer] type hint from the $other parameter
-    # to prevent cross-module type conversion errors.
+    # FIX: Removed the [TuiBuffer] type hint from the $other parameter to prevent cross-module type conversion errors.
     [void] BlendBuffer([object]$other, [int]$offsetX, [int]$offsetY) {
         for ($y = 0; $y -lt $other.Height; $y++) {
             for ($x = 0; $x -lt $other.Width; $x++) {

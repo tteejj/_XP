@@ -32,8 +32,7 @@ class ValidationBase {
     # Validates that a string value is not null, empty, or whitespace.
     # Throws an ArgumentException if the validation fails.
     static [void] ValidateNotEmpty(
-        # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes. They are not valid on method parameters.
-        [string]$value,
+        [string]$value, # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes. They are not valid on method parameters.
         [string]$parameterName
     ) {
         try {
@@ -75,16 +74,14 @@ class PmcTask : ValidationBase {
     PmcTask() {}
     
     # Constructor: Initializes a new task with a title.
-    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes from the constructor parameter.
-    PmcTask([string]$title) {
+    PmcTask([string]$title) { # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes from the constructor parameter.
         [ValidationBase]::ValidateNotEmpty($title, "Title")
         $this.Title = $title
     }
     
     # Constructor: Initializes a new task with common detailed properties.
-    # FIX: Removed all cmdlet-style attributes from the constructor parameters.
     PmcTask(
-        [string]$title,
+        [string]$title, # FIX: Removed all cmdlet-style attributes from the constructor parameters.
         [string]$description,
         [TaskPriority]$priority,
         [string]$projectKey
@@ -109,8 +106,7 @@ class PmcTask : ValidationBase {
 
     # UpdateProgress: Updates the task's progress and adjusts status accordingly.
     # Throws an ArgumentOutOfRangeException if newProgress is outside 0-100.
-    # FIX: Removed [Parameter(Mandatory)] and [ValidateRange(0,100)]. The validation is done manually inside.
-    [void] UpdateProgress([int]$newProgress) {
+    [void] UpdateProgress([int]$newProgress) { # FIX: Removed [Parameter(Mandatory)] and [ValidateRange(0,100)]. The validation is done manually inside.
         if ($newProgress -lt 0 -or $newProgress -gt 100) {
             throw [System.ArgumentOutOfRangeException]::new("newProgress", $newProgress, "Progress must be between 0 and 100.")
         }
@@ -147,8 +143,7 @@ class PmcTask : ValidationBase {
     }
 
     # FromLegacyFormat: Static method to create a PmcTask object from a legacy hashtable format.
-    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNull()] attributes.
-    static [PmcTask] FromLegacyFormat([hashtable]$legacyData) {
+    static [PmcTask] FromLegacyFormat([hashtable]$legacyData) { # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNull()] attributes.
         $task = [PmcTask]::new() # Start with a default PmcTask instance
         
         # Populate properties, using null-coalescing where appropriate
@@ -214,9 +209,8 @@ class PmcProject : ValidationBase {
     PmcProject() {}
     
     # Constructor: Initializes a new project with a key and name.
-    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes.
     PmcProject(
-        [string]$key,
+        [string]$key, # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNullOrEmpty()] attributes.
         [string]$name
     ) {
         [ValidationBase]::ValidateNotEmpty($key, "Key")
@@ -241,8 +235,7 @@ class PmcProject : ValidationBase {
     }
 
     # FromLegacyFormat: Static method to create a PmcProject object from a legacy hashtable format.
-    # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNull()] attributes.
-    static [PmcProject] FromLegacyFormat([hashtable]$legacyData) {
+    static [PmcProject] FromLegacyFormat([hashtable]$legacyData) { # FIX: Removed [Parameter(Mandatory)] and [ValidateNotNull()] attributes.
         $project = [PmcProject]::new() # Start with a default PmcProject instance
         
         $project.Key = ($legacyData.Key ?? $project.Key).ToUpper()

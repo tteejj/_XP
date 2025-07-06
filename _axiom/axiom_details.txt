@@ -1,0 +1,544 @@
+# PMC Terminal TUI Framework (Axiom-Phoenix) - Complete Analysis
+
+## Program Overview
+
+**PMC Terminal** is a sophisticated Text User Interface (TUI) framework built in PowerShell, implementing the "Axiom-Phoenix" architecture. This is a comprehensive terminal-based application development platform featuring advanced UI components, service-oriented architecture, modern dependency injection, and robust error handling.
+
+**Core Purpose:** Provides a complete framework for building professional TUI applications in PowerShell with modern software engineering practices including lifecycle management, event-driven architecture, theming, and component-based UI development.
+
+## Architecture Summary
+
+The framework follows a layered, service-oriented architecture:
+
+- **Foundation Layer:** tui-primitives (ANSI, buffers, cells)
+- **Core Engine:** tui-engine (main loop, rendering, input)
+- **Component Layer:** ui-classes, tui-components, advanced components
+- **Business Layer:** Services (action, navigation, data)
+- **Application Layer:** Screens and application logic
+
+**Key Architectural Principles:**
+- Component-based UI with hierarchical rendering
+- Dependency injection with service container
+- Event-driven communication between components
+- Compositor-based rendering with differential updates
+- Comprehensive lifecycle management
+- Theme-aware visual system
+
+## Complete Module Breakdown
+
+### Foundation Modules
+
+#### **tui-primitives** (Zero Dependencies)
+**Purpose:** Core TUI building blocks
+**Classes:**
+- `TuiAnsiHelper` - ANSI escape code generation
+- `TuiCell` - Single character cell with styling
+- `TuiBuffer` - 2D array of TuiCells for rendering
+
+**Functions:**
+- `Write-TuiText` - Write styled text to buffer
+- `Write-TuiBox` - Draw boxes with borders
+- `Get-TuiBorderChars` - Border character sets
+
+#### **ui-classes** (Base UI System)
+**Purpose:** Foundation class hierarchy for all UI components
+
+**Core Classes:**
+- `UIElement` (Base) - Fundamental UI component with lifecycle
+  - Properties: X, Y, Width, Height, Visible, Enabled, IsFocused, Children, Parent
+  - Lifecycle: OnRender(), OnResize(), OnMove(), OnFocus(), OnBlur(), HandleInput()
+  - Methods: AddChild(), RemoveChild(), Resize(), Move(), RequestRedraw()
+
+- `Component` - Generic container extending UIElement
+
+- `Screen` - Top-level container with service integration
+  - Constructor: Screen([string]$name, [object]$serviceContainer)
+  - Lifecycle: Initialize(), OnEnter(), OnExit(), OnResume(), Cleanup()
+  - Service Integration: Automatic dependency injection
+
+**Architecture Features:**
+- Hierarchical parent-child relationships
+- Compositor-based rendering with private buffers
+- Focus management and keyboard navigation
+- Event subscription with automatic cleanup
+- Service container integration for screens
+
+### Core Components
+
+#### **tui-components** (Basic Components)
+**Purpose:** Essential interactive UI elements
+
+**Components:**
+- `LabelComponent` - Static text display
+- `ButtonComponent` - Interactive button with click events
+- `TextBoxComponent` - Text input with viewport scrolling, non-destructive cursor
+- `CheckBoxComponent` - Boolean checkbox input
+- `RadioButtonComponent` - Exclusive selection with group management
+
+**Features:**
+- Theme integration for all visual elements
+- Event-driven callbacks (OnClick, OnChange)
+- Comprehensive state management
+- Advanced text input with scrolling
+
+#### **advanced-input-components** (Advanced Inputs)
+**Purpose:** Sophisticated input controls
+
+**Components:**
+- `MultilineTextBoxComponent` - Full text editor with scrolling
+- `NumericInputComponent` - Numeric input with spinners and validation
+- `DateInputComponent` - Date picker with calendar interface
+- `ComboBoxComponent` - Dropdown with search and overlay rendering
+
+**Advanced Features:**
+- Viewport scrolling for large content
+- Overlay rendering (true overlays above all content)
+- Real-time input validation
+- Advanced cursor handling
+
+#### **advanced-data-components** (Data Display)
+**Purpose:** High-performance data display
+
+**Components:**
+- `Table` - Fully-featured data grid
+  - High-performance scrolling with viewport rendering
+  - Dynamic column sizing
+  - Event-driven selection
+  - Keyboard navigation
+  - Theme-aware styling
+
+#### **command-palette** (Quick Actions)
+**Purpose:** Searchable command interface
+
+**Components:**
+- `CommandPalette` - Modal search interface
+  - Fuzzy search across registered actions
+  - Global hotkey activation (Ctrl+P)
+  - Keyboard navigation
+  - ActionService integration
+
+#### **navigation-class** (Local Menus)
+**Purpose:** Contextual navigation menus
+
+**Components:**
+- `NavigationMenu` - Local menu component
+- `NavigationItem` - Menu item data class
+  - Horizontal/vertical orientation
+  - Hotkey support
+  - Action execution via scriptblocks
+
+#### **tui-primitives** Advanced Features:
+**Purpose:** Enhanced primitive operations
+
+**Classes:**
+- `TuiCell` with blending, Z-order, metadata
+- `TuiBuffer` with sub-buffers, compositing, differential updates
+
+### Layout System
+
+#### **panels-class** (Layout Management)
+**Purpose:** Container components with layout capabilities
+
+**Components:**
+- `Panel` - Base panel with layout management
+  - Layout types: Manual, Vertical, Horizontal, Grid
+  - Border and title support
+  - Focus management
+
+- `ScrollablePanel` - Panel with scrolling
+  - Virtual content area support
+  - Scrollbar indicators
+  - Efficient viewport rendering
+
+- `GroupPanel` - Collapsible panel
+  - Expand/collapse functionality
+  - State indicators
+  - Automatic height adjustment
+
+### Engine and Framework
+
+#### **tui-engine** (Core Engine)
+**Purpose:** Main application orchestrator
+
+**Core Systems:**
+- **TUI State Management:** Global application state
+- **Rendering System:** Compositor-based differential updates
+- **Input Processing:** Asynchronous input with concurrent queues
+- **Screen Management:** Stack-based navigation
+- **Overlay Support:** Modal dialogs and popups
+- **Lifecycle Management:** Complete component lifecycle
+- **Error Recovery:** Panic handling and recovery
+
+**Key Functions:**
+- `Initialize-TuiEngine` - Engine initialization
+- `Start-TuiLoop` - Main application loop
+- `Push-Screen` / `Pop-Screen` - Navigation
+- `Show-TuiOverlay` - Modal overlays
+- `Cleanup-TuiEngine` - Resource cleanup
+
+#### **tui-framework** (Helper Utilities)
+**Purpose:** Framework utilities and async operations
+
+**Service:**
+- `TuiFrameworkService` - Injectable service for utilities
+  - `StartAsync()` - Lightweight async operations with ThreadJob
+  - `GetAsyncResults()` - Check for completed async work
+  - `StopAllAsyncJobs()` - Cleanup all background jobs
+  - `GetState()` / `IsRunning()` - State checking
+
+### Business Services
+
+#### **service-container** (Dependency Injection)
+**Purpose:** Centralized service management
+
+**Class:**
+- `ServiceContainer` - DI container with lifecycle management
+  - `Register()` - Register service instance
+  - `RegisterFactory()` - Register lazy factory
+  - `GetService()` - Resolve service with dependency injection
+  - `Cleanup()` - Automatic IDisposable cleanup
+
+**Features:**
+- Singleton and transient lifestyles
+- Circular dependency detection
+- Lazy initialization
+- Automatic resource cleanup
+
+#### **action-service** (Command Management)
+**Purpose:** Centralized action registry
+
+**Class:**
+- `ActionService` - Command registry and execution
+  - `RegisterAction()` - Register command with metadata
+  - `ExecuteAction()` - Execute by name with parameters
+  - `GetAllActions()` - Retrieve all registered actions
+
+**Integration:**
+- CommandPalette integration for searchable commands
+- Event-driven action execution
+- Category-based organization
+
+#### **data-manager** (Data Persistence)
+**Purpose:** High-performance data management
+
+**Class:**
+- `DataManager` - Transactional data service
+  - **Task Management:** AddTask(), UpdateTask(), RemoveTask(), GetTask()
+  - **Project Management:** AddProject(), UpdateProject(), GetProject()
+  - **Transactions:** BeginUpdate(), EndUpdate() for bulk operations
+  - **Backup System:** Automatic backups with retention
+  - **Event Integration:** Publishes data change events
+
+**Performance Features:**
+- O(1) lookups with dictionary indexes
+- Transactional bulk operations
+- Automatic backup rotation
+- Memory-efficient operations
+
+#### **keybinding-service** / **keybinding-service-class**
+**Purpose:** Global keyboard management
+
+**Features:**
+- Global hotkey registration
+- Context-aware key bindings
+- Integration with ActionService
+
+#### **navigation-service** / **navigation-service-class**
+**Purpose:** Screen navigation management
+
+**Features:**
+- Screen stack management
+- Navigation history
+- Integration with Screen lifecycle
+
+### Supporting Modules
+
+#### **theme-manager** (Visual Theming)
+**Purpose:** Comprehensive theming system
+
+**Features:**
+- **Multiple Themes:** Modern, Dark, Light, Retro, Custom
+- **Color Formats:** ConsoleColor and 24-bit RGB support
+- **Semantic Colors:** Named roles (Primary, Accent, Error, etc.)
+- **Hot Swapping:** Runtime theme changes
+- **Persistence:** JSON import/export
+
+**Functions:**
+- `Initialize-ThemeManager` - Setup theming
+- `Set-TuiTheme` - Change active theme
+- `Get-ThemeColor` - Retrieve semantic colors
+- `New-TuiTheme` - Create custom themes
+- `Export-TuiTheme` / `Import-TuiTheme` - Theme persistence
+
+#### **event-system** (Pub/Sub Events)
+**Purpose:** Decoupled component communication
+
+**Functions:**
+- `Publish-Event` - Send events with data
+- `Subscribe-Event` - Register event handlers
+- `Unsubscribe-Event` - Remove specific handlers
+- `Remove-ComponentEventHandlers` - Bulk cleanup for components
+
+**Features:**
+- Event history tracking
+- Component-based handler cleanup
+- Error isolation in handlers
+
+#### **logger** (Comprehensive Logging)
+**Purpose:** Application-wide logging and diagnostics
+
+**Functions:**
+- `Write-Log` - Core logging with levels (Trace, Debug, Info, Warning, Error, Fatal)
+- `Initialize-Logger` - Setup logging system
+- `Trace-FunctionEntry` / `Trace-FunctionExit` - Call tracing
+- `Trace-Step` - Checkpoint logging
+- `Get-LogEntries` - Query log history
+
+**Features:**
+- In-memory and file logging
+- Automatic log rotation
+- Structured data logging
+- Call tracing capabilities
+
+#### **exceptions** (Error Handling)
+**Purpose:** Centralized error management
+
+**Exception Hierarchy:**
+- `Helios.HeliosException` (Base)
+- `NavigationException`, `ServiceInitializationException`
+- `ComponentRenderException`, `StateMutationException`
+- `InputHandlingException`, `DataLoadException`
+
+**Functions:**
+- `Invoke-WithErrorHandling` - Robust error wrapper
+- `Get-ErrorHistory` - Error history retrieval
+
+#### **panic-handler** (Crash Recovery)
+**Purpose:** Critical error recovery
+
+**Functions:**
+- `Initialize-PanicHandler` - Setup crash handling
+- `Invoke-PanicHandler` - Handle critical failures
+- `Get-DetailedSystemInfo` - System diagnostics
+
+**Features:**
+- Terminal restoration after crashes
+- Comprehensive crash reports
+- Text-based screenshot capture
+
+#### **models** (Business Entities)
+**Purpose:** Core business data models
+
+**Classes:**
+- `PmcTask` - Task entity with validation
+  - Properties: Id, Title, Description, Status, Priority, ProjectKey
+  - Methods: UpdateProgress(), Complete(), ToLegacyFormat(), FromLegacyFormat()
+
+- `PmcProject` - Project entity
+  - Properties: Key, Name, Client, BillingType, Rate, Budget
+  - Methods: ToLegacyFormat(), FromLegacyFormat()
+
+**Enumerations:**
+- `TaskStatus`: Pending, InProgress, Completed, Cancelled
+- `TaskPriority`: Low, Medium, High
+- `BillingType`: Billable, NonBillable
+
+#### **dialog-system-class** (Modal Dialogs)
+**Purpose:** Modal dialog framework
+
+**Dialog Types:**
+- `AlertDialog` - Simple message dialog
+- `ConfirmDialog` - Yes/No confirmation
+- `InputDialog` - Text input dialog
+- `Dialog` (Base) - Custom dialog foundation
+
+**Features:**
+- Promise-based API for linear code
+- Theme integration
+- Keyboard navigation
+- Resource management
+
+### Application Screens
+
+#### **dashboard-screen**
+**Purpose:** Main dashboard interface
+
+**Features:**
+- Overview display
+- Quick action access
+- Status information
+
+#### **task-list-screen**
+**Purpose:** Task management interface
+
+**Features:**
+- Task list display
+- CRUD operations
+- Filtering and sorting
+
+### Utility and Build Scripts
+
+#### Core Application Files:
+- `run.ps1` - Main application entry point
+- `start.ps1` - Application startup script
+- `launcher.ps1` - Application launcher
+- `mono.ps1` - Monolithic build script
+
+#### Development Tools:
+- `class-loader.ps1` - Dynamic class loading
+- `extractor.ps1` - Code extraction utilities
+- `verify-order.ps1` - Dependency order verification
+- `test-classes.ps1` - Class testing utilities
+
+#### Maintenance Scripts:
+- `cleaner.ps1` - Cleanup utilities
+- `restore-backups.ps1` - Backup restoration
+- `filecopy.ps1` - File management
+
+## Component Integration Patterns
+
+### Service Registration Pattern
+```powershell
+# Typical service setup in run.ps1
+$container = Initialize-ServiceContainer
+
+# Core services
+$container.RegisterFactory("Logger", { Initialize-Logger })
+$container.RegisterFactory("ThemeManager", { param($c) Initialize-ThemeManager })
+$container.RegisterFactory("DataManager", { param($c) Initialize-DataManager })
+$container.RegisterFactory("ActionService", { param($c) Initialize-ActionService })
+
+# Framework services
+$container.RegisterFactory("TuiFramework", { param($c) Initialize-TuiFrameworkService })
+```
+
+### Screen Implementation Pattern
+```powershell
+class MainScreen : Screen {
+    [DataManager]$DataManager
+    [ActionService]$ActionService
+    
+    MainScreen([ServiceContainer]$container) : base("Main", $container) {}
+    
+    [void] Initialize() {
+        # Resolve dependencies
+        $this.DataManager = $this.ServiceContainer.GetService("DataManager")
+        $this.ActionService = $this.ServiceContainer.GetService("ActionService")
+        
+        # Setup UI
+        $this.CreateComponents()
+        
+        # Subscribe to events
+        $this.SubscribeToEvent("Data.Changed", { $this.RefreshData() })
+    }
+}
+```
+
+### Component Creation Pattern
+```powershell
+# Factory functions for components
+function New-TuiButton {
+    param([hashtable]$Props)
+    
+    $button = [ButtonComponent]::new($Props.Name)
+    $button.Text = $Props.Text
+    $button.OnClick = $Props.OnClick
+    return $button
+}
+```
+
+## Data Flow Architecture
+
+1. **User Input** → TUI Engine → Focused Component
+2. **Component Actions** → ActionService → Business Logic
+3. **Data Changes** → DataManager → Event System
+4. **Event Notifications** → UI Components → RequestRedraw()
+5. **Rendering** → Compositor → Screen Buffer → Terminal
+
+## Key Technology Features
+
+### Rendering System:
+- Differential buffer updates (only changed cells)
+- Z-order compositing with layers
+- Viewport-based scrolling for performance
+- Non-destructive cursors
+- True overlay support
+
+### Input System:
+- Asynchronous input processing
+- Focus-aware event routing
+- Keyboard navigation
+- Global hotkey support
+
+### Event System:
+- Pub/sub pattern for loose coupling
+- Automatic cleanup for components
+- Event history tracking
+- Error isolation
+
+### Theme System:
+- Semantic color naming
+- Runtime theme switching
+- ConsoleColor and RGB support
+- JSON persistence
+
+### Service Architecture:
+- Dependency injection container
+- Lazy initialization
+- Singleton/transient lifestyles
+- Automatic resource cleanup
+
+## Application Lifecycle
+
+1. **Initialization:**
+   - Initialize-ServiceContainer
+   - Register all services
+   - Initialize-TuiEngine
+   - Create initial screen
+
+2. **Main Loop:**
+   - Input processing
+   - Component updates
+   - Event processing
+   - Rendering
+
+3. **Shutdown:**
+   - Screen cleanup
+   - Service cleanup
+   - Resource disposal
+   - Engine cleanup
+
+## Dependencies Summary
+
+**External Dependencies:**
+- PowerShell 7.0+
+- ThreadJob module (for async operations)
+
+**Internal Dependency Chain:**
+```
+tui-primitives (foundation, zero deps)
+├── ui-classes (base components)
+├── tui-components (basic UI elements)
+├── advanced-* components (enhanced UI)
+├── theme-manager (visual system)
+├── event-system (communication)
+├── logger (diagnostics)
+├── exceptions (error handling)
+├── models (business entities)
+├── service-container (DI)
+├── action-service (commands)
+├── data-manager (persistence)
+└── tui-engine (orchestration)
+```
+
+## Summary
+
+PMC Terminal represents a mature, enterprise-grade TUI framework for PowerShell featuring:
+
+- **27 modules** with distinct responsibilities
+- **50+ classes** implementing UI components and services
+- **200+ functions** providing comprehensive functionality
+- **Modern architecture** with dependency injection, event-driven design, and lifecycle management
+- **Professional features** including theming, error recovery, async operations, and data persistence
+
+The framework enables rapid development of sophisticated terminal applications with the same architectural patterns found in modern GUI frameworks, while leveraging PowerShell's strengths for system administration and automation tasks.

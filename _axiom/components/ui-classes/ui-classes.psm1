@@ -62,8 +62,7 @@ class UIElement {
         return @{ X = $absX; Y = $absY }
     }
 
-    # FIX: Removed the [UIElement] type hint from the $child parameter
-    # to prevent cross-module type conversion errors.
+    # FIX: Removed the [UIElement] type hint from the $child parameter to prevent cross-module type conversion errors.
     [void] AddChild([object]$child) {
         try {
             if ($child -eq $this) { throw [System.ArgumentException]::new("Cannot add an element as its own child.") }
@@ -85,8 +84,7 @@ class UIElement {
         }
     }
 
-    # FIX: Removed the [UIElement] type hint from the $child parameter
-    # to prevent cross-module type conversion errors.
+    # FIX: Removed the [UIElement] type hint from the $child parameter to prevent cross-module type conversion errors.
     [void] RemoveChild([object]$child) {
         try {
             if ($this.Children.Remove($child)) {
@@ -331,8 +329,7 @@ class Screen : UIElement {
         }
     }
 
-    # FIX: Removed the [UIElement] type hint from the $panel parameter
-    # to prevent cross-module type conversion errors.
+    # FIX: Removed the [UIElement] type hint from the $panel parameter to prevent cross-module type conversion errors.
     [void] AddPanel([object]$panel) {
         try {
             $this.Panels.Add($panel)

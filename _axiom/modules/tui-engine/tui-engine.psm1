@@ -475,8 +475,7 @@ function Show-TuiOverlay {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        # FIX: Removed [UIElement] type hint
-        $Element
+        $Element # FIX: Removed [UIElement] type hint
     )
     try {
         Write-Log -Level Debug -Message "Showing overlay: $($Element.Name)"
@@ -520,8 +519,7 @@ function Set-ComponentFocus {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        # FIX: Removed [UIElement] type hint
-        $Component
+        $Component # FIX: Removed [UIElement] type hint
     )
     try {
         if (-not $Component.IsFocusable) {

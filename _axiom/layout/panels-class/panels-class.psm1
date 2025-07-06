@@ -38,16 +38,14 @@ class Panel : UIElement {
         Write-Verbose "Panel: Default constructor called for '$($this.Name)'."
     }
 
-    # FIX: Removed invalid attributes
-    Panel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) {
+    Panel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) { # FIX: Removed invalid attributes
         $this.Name = "Panel_$(Get-Random -Maximum 1000)"
         $this.IsFocusable = $false
         $this.UpdateContentBounds()
         Write-Verbose "Panel: Constructor with dimensions called for '$($this.Name)' at ($x, $y) with $($width)x$($height)."
     }
 
-    # FIX: Removed invalid attributes
-    Panel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height) {
+    Panel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height) { # FIX: Removed invalid attributes
         $this.Name = "Panel_$(Get-Random -Maximum 1000)"
         $this.Title = $title
         $this.IsFocusable = $false
@@ -70,8 +68,7 @@ class Panel : UIElement {
         Write-Verbose "Panel '$($this.Name)': Content bounds updated to ($($this.ContentX), $($this.ContentY)) - $($this.ContentWidth)x$($this.ContentHeight) (HasBorder: $($this.HasBorder))."
     }
 
-    # FIX: Removed invalid attributes
-    [void] OnResize([int]$newWidth, [int]$newHeight) {
+    [void] OnResize([int]$newWidth, [int]$newHeight) { # FIX: Removed invalid attributes
         ([UIElement]$this).OnResize($newWidth, $newHeight) 
         $this.UpdateContentBounds()
         $this.PerformLayout()
@@ -165,16 +162,14 @@ class Panel : UIElement {
         Write-Verbose "Panel '$($this.Name)': Performed Grid Layout for $($this.Children.Count) children ($rows x $cols grid)."
     }
 
-    # FIX: Removed invalid attributes
-    [void] SetBorderStyle([string]$style, [ConsoleColor]$color) {
+    [void] SetBorderStyle([string]$style, [ConsoleColor]$color) { # FIX: Removed invalid attributes
         $this.BorderStyle = $style
         $this.BorderColor = $color
         $this.RequestRedraw()
         Write-Verbose "Panel '$($this.Name)': Border style set to '$style' with color '$color'."
     }
 
-    # FIX: Removed invalid attributes
-    [void] SetBorder([bool]$hasBorder) {
+    [void] SetBorder([bool]$hasBorder) { # FIX: Removed invalid attributes
         if ($this.HasBorder -eq $hasBorder) {
             Write-Verbose "Panel '$($this.Name)': Border status already $($hasBorder). No change."
             return
@@ -186,8 +181,7 @@ class Panel : UIElement {
         Write-Verbose "Panel '$($this.Name)': Border set to '$hasBorder'. Content bounds updated and layout performed."
     }
 
-    # FIX: Removed invalid attributes
-    [void] SetTitle([string]$title) {
+    [void] SetTitle([string]$title) { # FIX: Removed invalid attributes
         if ($this.Title -eq $title) {
             Write-Verbose "Panel '$($this.Name)': Title already set to '$title'. No change."
             return
@@ -197,8 +191,7 @@ class Panel : UIElement {
         Write-Verbose "Panel '$($this.Name)': Title set to '$title'."
     }
 
-    # FIX: Removed invalid attributes
-    [bool] ContainsContentPoint([int]$x, [int]$y) {
+    [bool] ContainsContentPoint([int]$x, [int]$y) { # FIX: Removed invalid attributes
         return ($x -ge $this.ContentX -and $x -lt ($this.ContentX + $this.ContentWidth) -and 
                 $y -ge $this.ContentY -and $y -lt ($this.ContentY + $this.ContentHeight))
     }
@@ -206,8 +199,7 @@ class Panel : UIElement {
     [hashtable] GetContentBounds() { return @{ X = $this.ContentX; Y = $this.ContentY; Width = $this.ContentWidth; Height = $this.ContentHeight } }
     [hashtable] GetContentArea() { return $this.GetContentBounds() }
     
-    # FIX: Removed invalid attributes
-    [void] WriteToBuffer([int]$x, [int]$y, [string]$text, [ConsoleColor]$fg, [ConsoleColor]$bg) {
+    [void] WriteToBuffer([int]$x, [int]$y, [string]$text, [ConsoleColor]$fg, [ConsoleColor]$bg) { # FIX: Removed invalid attributes
         if ($null -eq $this._private_buffer) { 
             Write-Warning "Panel '$($this.Name)': Internal buffer is null, cannot write text. (Call OnRender first)."
             return 
@@ -216,8 +208,7 @@ class Panel : UIElement {
         Write-Verbose "Panel '$($this.Name)': Wrote text to buffer at ($x, $y)."
     }
     
-    # FIX: Removed invalid attributes
-    [void] DrawBoxToBuffer([int]$x, [int]$y, [int]$width, [int]$height, [ConsoleColor]$borderColor, [ConsoleColor]$bgColor) {
+    [void] DrawBoxToBuffer([int]$x, [int]$y, [int]$width, [int]$height, [ConsoleColor]$borderColor, [ConsoleColor]$bgColor) { # FIX: Removed invalid attributes
         if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
         if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
         if ($null -eq $this._private_buffer) { 
@@ -271,13 +262,13 @@ class Panel : UIElement {
         }
     }
 
-    [UIElement] GetFirstFocusableChild() {
+    [object] GetFirstFocusableChild() {
         foreach ($child in $this.Children | Sort-Object TabIndex) {
             if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
                 Write-Verbose "Panel '$($this.Name)': Found first focusable child '$($child.Name)'."
                 return $child
             }
-            if ($child -is [Panel]) {
+            if ($child.PSObject.TypeNames -contains 'Panel') {
                 $nestedChild = $child.GetFirstFocusableChild()
                 if ($null -ne $nestedChild) {
                     Write-Verbose "Panel '$($this.Name)': Found nested focusable child '$($nestedChild.Name)'."
@@ -289,8 +280,8 @@ class Panel : UIElement {
         return $null
     }
 
-    [System.Collections.Generic.List[UIElement]] GetFocusableChildren() {
-        $focusable = [System.Collections.Generic.List[UIElement]]::new()
+    [System.Collections.Generic.List[object]] GetFocusableChildren() {
+        $focusable = [System.Collections.Generic.List[object]]::new()
         foreach ($child in $this.Children | Sort-Object TabIndex) {
             if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
                 [void]$focusable.Add($child)
@@ -304,8 +295,7 @@ class Panel : UIElement {
         return $focusable
     }
 
-    # FIX: Removed invalid attributes
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) { # FIX: Removed invalid attributes
         try {
             ([UIElement]$this).HandleInput($keyInfo)
             if ($this.CanFocus -and $this.IsFocused) {
@@ -367,16 +357,14 @@ class ScrollablePanel : Panel {
         Write-Verbose "ScrollablePanel: Default constructor called for '$($this.Name)'."
     }
 
-    # FIX: Removed invalid attributes
-    ScrollablePanel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) {
+    ScrollablePanel([int]$x, [int]$y, [int]$width, [int]$height) : base($x, $y, $width, $height) { # FIX: Removed invalid attributes
         $this.Name = "ScrollablePanel_$(Get-Random -Maximum 1000)"
         $this.IsFocusable = $true
         $this.CanFocus = $true
         Write-Verbose "ScrollablePanel: Constructor with dimensions called for '$($this.Name)'."
     }
 
-    # FIX: Removed invalid attributes
-    [void] SetVirtualSize([int]$width, [int]$height) {
+    [void] SetVirtualSize([int]$width, [int]$height) { # FIX: Removed invalid attributes
         if ($width -lt 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width cannot be negative.") }
         if ($height -lt 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height cannot be negative.") }
         try {
@@ -407,8 +395,7 @@ class ScrollablePanel : Panel {
         }
     }
 
-    # FIX: Removed invalid attributes
-    [void] ScrollTo([int]$x, [int]$y) {
+    [void] ScrollTo([int]$x, [int]$y) { # FIX: Removed invalid attributes
         $maxScrollX = [Math]::Max(0, $this.VirtualWidth - $this.ContentWidth)
         $maxScrollY = [Math]::Max(0, $this.VirtualHeight - $this.ContentHeight)
         $newScrollX = [Math]::Max(0, [Math]::Min($x, $maxScrollX))
@@ -423,14 +410,12 @@ class ScrollablePanel : Panel {
         Write-Verbose "ScrollablePanel '$($this.Name)': Scrolled to ($($this.ScrollX), $($this.ScrollY))."
     }
 
-    # FIX: Removed invalid attributes
-    [void] ScrollBy([int]$deltaX, [int]$deltaY) {
+    [void] ScrollBy([int]$deltaX, [int]$deltaY) { # FIX: Removed invalid attributes
         $this.ScrollTo($this.ScrollX + $deltaX, $this.ScrollY + $deltaY)
         Write-Verbose "ScrollablePanel '$($this.Name)': Scrolled by ($deltaX, $deltaY)."
     }
 
-    # FIX: Removed invalid attributes
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) { # FIX: Removed invalid attributes
         try {
             ([Panel]$this).HandleInput($keyInfo)
             if ($this.IsFocused) {
@@ -498,7 +483,7 @@ class ScrollablePanel : Panel {
         }
     }
 
-    [TuiBuffer] GetVirtualBuffer() { return $this._virtual_buffer }
+    [object] GetVirtualBuffer() { return $this._virtual_buffer }
 
     [string] ToString() {
         return "ScrollablePanel(Name='$($this.Name)', Pos=($($this.X),$($this.Y)), Size=$($this.Width)x$($this.Height), VirtualSize=$($this.VirtualWidth)x$($this.VirtualHeight), Scroll=($($this.ScrollX),$($this.ScrollY)))"
@@ -521,8 +506,7 @@ class GroupPanel : Panel {
         Write-Verbose "GroupPanel: Default constructor called for '$($this.Name)'."
     }
 
-    # FIX: Removed invalid attributes
-    GroupPanel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height, $title) {
+    GroupPanel([int]$x, [int]$y, [int]$width, [int]$height, [string]$title) : base($x, $y, $width, $height, $title) { # FIX: Removed invalid attributes
         if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
         if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
         $this.Name = "GroupPanel_$(Get-Random -Maximum 1000)"
@@ -555,8 +539,7 @@ class GroupPanel : Panel {
         }
     }
 
-    # FIX: Removed invalid attributes
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) { # FIX: Removed invalid attributes
         try {
             ([Panel]$this).HandleInput($keyInfo)
             if ($this.IsFocused) {

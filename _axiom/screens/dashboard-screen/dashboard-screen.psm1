@@ -190,8 +190,7 @@ class DashboardScreen : Screen {
         # Force the panel to render its background
         $panel.OnRender()
 
-        # FIX: Changed $PID to $global:PID to access the global automatic variable from within a class method.
-        $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
+        $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 } # FIX: Changed $PID to $global:PID to access the global automatic variable from within a class method.
 
         $headerColor = Get-ThemeColor 'Header'
         $subtleColor = Get-ThemeColor 'Subtle'
