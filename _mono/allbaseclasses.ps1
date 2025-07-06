@@ -194,7 +194,7 @@ class TuiCell {
 
 #region TuiBuffer Class - 2D Array of TuiCells
 class TuiBuffer {
-    [TuiCell[,]] $Cells       
+    $Cells       # 2D array of TuiCells - no type constraint to avoid assignment issues
     [int] $Width             
     [int] $Height            
     [string] $Name            
@@ -206,7 +206,9 @@ class TuiBuffer {
         $this.Width = $width
         $this.Height = $height
         $this.Name = $name
-        $this.Cells = New-Object 'TuiCell[,]' $height, $width
+        # Create 2D array using exact PowerShell syntax
+        $dimensions = @($height, $width)
+        $this.Cells = [System.Array]::CreateInstance([object], $dimensions)
         $this.Clear()
         # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
     }
@@ -293,8 +295,9 @@ class TuiBuffer {
         $oldHeight = $this.Height
         $this.Width = $newWidth
         $this.Height = $newHeight
-        $this.Cells = New-Object 'TuiCell[,]' $newHeight, $newWidth
-        $this.Clear()
+        # Create new 2D array using exact PowerShell syntax
+        $dimensions = @($newHeight, $newWidth)
+        $this.Cells = [System.Array]::CreateInstance([object], $dimensions)
         $copyWidth = [Math]::Min($oldWidth, $newWidth)
         $copyHeight = [Math]::Min($oldHeight, $newHeight)
         for ($y = 0; $y -lt $copyHeight; $y++) {

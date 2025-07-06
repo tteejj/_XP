@@ -35,9 +35,9 @@ class ActionService {
             $actionData = @{
                 Name = $actionName
                 Action = $action
-                Category = $metadata.Category ?? "General"
-                Description = $metadata.Description ?? ""
-                Hotkey = $metadata.Hotkey ?? ""
+                Category = if ($metadata.ContainsKey('Category')) { $metadata.Category } else { "General" }
+                Description = if ($metadata.ContainsKey('Description')) { $metadata.Description } else { "" }
+                Hotkey = if ($metadata.ContainsKey('Hotkey')) { $metadata.Hotkey } else { "" }
                 RegisteredAt = [datetime]::Now
                 ExecutionCount = 0
                 LastExecuted = $null
@@ -972,14 +972,14 @@ class ThemeManager {
     }
     
     [void] LoadTheme([string]$themeName) {
-        $themePath = Join-Path $this.ThemePath "$themeName.json"
+        $themeFile = Join-Path $this.ThemePath "$themeName.json"
         
-        if (-not (Test-Path $themePath)) {
-            throw "Theme file not found: $themePath"
+        if (-not (Test-Path $themeFile)) {
+            throw "Theme file not found: $themeFile"
         }
         
         try {
-            $themeData = Get-Content -Path $themePath -Raw | ConvertFrom-Json -AsHashtable
+            $themeData = Get-Content -Path $themeFile -Raw | ConvertFrom-Json -AsHashtable
             
             # Convert color values
             $this.CurrentTheme.Clear()
@@ -1009,7 +1009,7 @@ class ThemeManager {
     }
     
     [void] SaveTheme([string]$themeName) {
-        $themePath = Join-Path $this.ThemePath "$themeName.json"
+        $themeFile = Join-Path $this.ThemePath "$themeName.json"
         
         try {
             # Convert ConsoleColor enums to strings for JSON
@@ -1025,7 +1025,7 @@ class ThemeManager {
             }
             
             $jsonContent = $themeData | ConvertTo-Json -Depth 10
-            Set-Content -Path $themePath -Value $jsonContent -Force
+            Set-Content -Path $themeFile -Value $jsonContent -Force
             
             Write-Verbose "ThemeManager: Saved theme '$themeName' to file"
         }
