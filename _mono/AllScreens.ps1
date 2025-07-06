@@ -29,19 +29,39 @@ class DashboardScreen : Screen {
             return
         }
         
-        $this._mainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "Axiom-Phoenix Dashboard")
+        $this._mainPanel = [Panel]::new("Axiom-Phoenix Dashboard")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = "Axiom-Phoenix Dashboard"
         $this.AddChild($this._mainPanel)
 
         $summaryWidth = [Math]::Floor($this.Width * 0.5)
-        $this._summaryPanel = [Panel]::new(1, 1, $summaryWidth, 12, "Task Summary")
+        $this._summaryPanel = [Panel]::new("Task Summary")
+        $this._summaryPanel.X = 1
+        $this._summaryPanel.Y = 1
+        $this._summaryPanel.Width = $summaryWidth
+        $this._summaryPanel.Height = 12
+        $this._summaryPanel.Title = "Task Summary"
         $this._mainPanel.AddChild($this._summaryPanel)
 
         $helpX = $summaryWidth + 2
         $helpWidth = $this.Width - $helpX - 1
-        $this._helpPanel = [Panel]::new($helpX, 1, $helpWidth, 12, "Quick Start")
+        $this._helpPanel = [Panel]::new("Quick Start")
+        $this._helpPanel.X = $helpX
+        $this._helpPanel.Y = 1
+        $this._helpPanel.Width = $helpWidth
+        $this._helpPanel.Height = 12
+        $this._helpPanel.Title = "Quick Start"
         $this._mainPanel.AddChild($this._helpPanel)
 
-        $this._statusPanel = [Panel]::new(1, 14, $this.Width - 2, $this.Height - 15, "System Status")
+        $this._statusPanel = [Panel]::new("System Status")
+        $this._statusPanel.X = 1
+        $this._statusPanel.Y = 14
+        $this._statusPanel.Width = $this.Width - 2
+        $this._statusPanel.Height = $this.Height - 15
+        $this._statusPanel.Title = "System Status"
         $this._mainPanel.AddChild($this._statusPanel)
     }
 
@@ -71,9 +91,15 @@ class DashboardScreen : Screen {
             $this._pendingTasks = 0
         } else {
             $allTasks = $dataManager.GetTasks()
-            $this._totalTasks = $allTasks.Count
-            $this._completedTasks = ($allTasks | Where-Object { $_.Completed }).Count
-            $this._pendingTasks = $this._totalTasks - $this._completedTasks
+            if ($allTasks) {
+                $this._totalTasks = @($allTasks).Count
+                $this._completedTasks = @($allTasks | Where-Object { $_.Completed }).Count
+                $this._pendingTasks = $this._totalTasks - $this._completedTasks
+            } else {
+                $this._totalTasks = 0
+                $this._completedTasks = 0
+                $this._pendingTasks = 0
+            }
         }
         $this._UpdateDisplay()
     }
@@ -98,7 +124,10 @@ class DashboardScreen : Screen {
 
         # Simple text rendering using buffer
         $buffer.WriteString($contentX + 1, $contentY, "Task Overview", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * ($panel.ContentWidth - 2)), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        if ($lineWidth -gt 0) {
+            $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * $lineWidth), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+        }
         
         $buffer.WriteString($contentX + 1, $contentY + 3, "Total Tasks:    $($this._totalTasks)", [ConsoleColor]::White, [ConsoleColor]::Black)
         $buffer.WriteString($contentX + 1, $contentY + 4, "Completed:      $($this._completedTasks)", [ConsoleColor]::White, [ConsoleColor]::Black)
@@ -125,7 +154,10 @@ class DashboardScreen : Screen {
         $contentY = $panel.ContentY
         
         $buffer.WriteString($contentX + 1, $contentY + 0, "Welcome to Axiom-Phoenix!", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * ($panel.ContentWidth - 2)), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        if ($lineWidth -gt 0) {
+            $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * $lineWidth), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+        }
         
         $buffer.WriteString($contentX + 1, $contentY + 3, "Press ", [ConsoleColor]::White, [ConsoleColor]::Black)
         $buffer.WriteString($contentX + 7, $contentY + 3, $paletteHotkey, [ConsoleColor]::Yellow, [ConsoleColor]::Black)
@@ -152,7 +184,10 @@ class DashboardScreen : Screen {
         $contentY = $panel.ContentY
         
         $buffer.WriteString($contentX + 1, $contentY, "Environment", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * ($panel.ContentWidth - 2)), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        if ($lineWidth -gt 0) {
+            $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * $lineWidth), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+        }
         
         $buffer.WriteString($contentX + 1, $contentY + 3, "PowerShell Version: $($global:PSVersionTable.PSVersion)", [ConsoleColor]::White, [ConsoleColor]::Black)
         $buffer.WriteString($contentX + 1, $contentY + 4, "Memory Usage: ${memoryMB} MB", [ConsoleColor]::White, [ConsoleColor]::Black)
@@ -165,9 +200,11 @@ class DashboardScreen : Screen {
         if ($this._totalTasks -eq 0) { return "[No Tasks]" }
         $percentage = [Math]::Round(($this._completedTasks / $this._totalTasks) * 100)
         $barWidth = 20
-        $filled = [Math]::Floor($barWidth * ($percentage / 100))
-        $empty = $barWidth - $filled
-        return "[" + ('█' * $filled) + ('░' * $empty) + "] $percentage%"
+        $filled = [Math]::Max(0, [Math]::Floor($barWidth * ($percentage / 100)))
+        $empty = [Math]::Max(0, $barWidth - $filled)
+        $filledBar = if ($filled -gt 0) { '█' * $filled } else { '' }
+        $emptyBar = if ($empty -gt 0) { '░' * $empty } else { '' }
+        return "[" + $filledBar + $emptyBar + "] $percentage%"
     }
 
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
@@ -201,22 +238,41 @@ class TaskListScreen : Screen {
             return
         }
         
-        $this._mainPanel = [Panel]::new(0, 0, $this.Width, $this.Height, "Task List")
+        $this._mainPanel = [Panel]::new("Task List")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = "Task List"
         $this.AddChild($this._mainPanel)
 
         # Task list panel (left side)
         $listWidth = [Math]::Floor($this.Width * 0.6)
-        $this._taskListPanel = [ScrollablePanel]::new(1, 1, $listWidth, $this.Height - 4, "Tasks")
+        $this._taskListPanel = [ScrollablePanel]::new("Tasks")
+        $this._taskListPanel.X = 1
+        $this._taskListPanel.Y = 1
+        $this._taskListPanel.Width = $listWidth
+        $this._taskListPanel.Height = $this.Height - 4
+        $this._taskListPanel.Title = "Tasks"
         $this._mainPanel.AddChild($this._taskListPanel)
 
         # Detail panel (right side)
         $detailX = $listWidth + 2
         $detailWidth = $this.Width - $detailX - 1
-        $this._detailPanel = [Panel]::new($detailX, 1, $detailWidth, $this.Height - 4, "Task Details")
+        $this._detailPanel = [Panel]::new("Task Details")
+        $this._detailPanel.X = $detailX
+        $this._detailPanel.Y = 1
+        $this._detailPanel.Width = $detailWidth
+        $this._detailPanel.Height = $this.Height - 4
+        $this._detailPanel.Title = "Task Details"
         $this._mainPanel.AddChild($this._detailPanel)
 
         # Status bar
-        $this._statusBar = [Panel]::new(1, $this.Height - 2, $this.Width - 2, 1)
+        $this._statusBar = [Panel]::new("StatusBar")
+        $this._statusBar.X = 1
+        $this._statusBar.Y = $this.Height - 2
+        $this._statusBar.Width = $this.Width - 2
+        $this._statusBar.Height = 1
         $this._statusBar.HasBorder = $false
         $this._mainPanel.AddChild($this._statusBar)
         
@@ -240,27 +296,41 @@ class TaskListScreen : Screen {
         
         $allTasks = $dataManager.GetTasks()
         $this._tasks.Clear()
-        $this._tasks.AddRange($allTasks)
+        if ($allTasks -and $allTasks.Count -gt 0) {
+            $this._tasks.AddRange($allTasks)
+        }
         
         # Apply filters if any
         if (-not [string]::IsNullOrEmpty($this._filterText)) {
-            $this._tasks = $this._tasks | Where-Object { 
+            $filtered = $this._tasks | Where-Object { 
                 $_.Title -like "*$($this._filterText)*" -or 
                 $_.Description -like "*$($this._filterText)*" 
+            }
+            $this._tasks.Clear()
+            if ($filtered) {
+                $this._tasks.AddRange(@($filtered))
             }
         }
         
         if ($null -ne $this._filterStatus) {
-            $this._tasks = $this._tasks | Where-Object { $_.Status -eq $this._filterStatus }
+            $filtered = $this._tasks | Where-Object { $_.Status -eq $this._filterStatus }
+            $this._tasks.Clear()
+            if ($filtered) {
+                $this._tasks.AddRange(@($filtered))
+            }
         }
         
         if ($null -ne $this._filterPriority) {
-            $this._tasks = $this._tasks | Where-Object { $_.Priority -eq $this._filterPriority }
+            $filtered = $this._tasks | Where-Object { $_.Priority -eq $this._filterPriority }
+            $this._tasks.Clear()
+            if ($filtered) {
+                $this._tasks.AddRange(@($filtered))
+            }
         }
         
         # Update selection
-        if ($this._selectedIndex -ge $this._tasks.Count) {
-            $this._selectedIndex = [Math]::Max(0, $this._tasks.Count - 1)
+        if ($this._selectedIndex -ge @($this._tasks).Count) {
+            $this._selectedIndex = [Math]::Max(0, @($this._tasks).Count - 1)
         }
         
         if ($this._tasks.Count -gt 0) {

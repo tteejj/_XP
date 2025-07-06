@@ -5,6 +5,36 @@
 
 #region Script Configuration
 
+# Clean session by removing any existing types
+if ($global:TuiState) {
+    Write-Host "Cleaning previous session..." -ForegroundColor Yellow
+    try {
+        if ($global:TuiState.Running) {
+            $global:TuiState.Running = $false
+        }
+        Remove-Variable -Name TuiState -Scope Global -Force -ErrorAction SilentlyContinue
+    } catch {}
+}
+
+# Remove any loaded types from previous runs
+$typesToRemove = @(
+    'TuiAnsiHelper', 'TuiCell', 'TuiBuffer', 'UIElement', 'Component', 'Screen', 'ServiceContainer',
+    'ValidationBase', 'PmcTask', 'PmcProject', 'TimeEntry', 'NavigationItem',
+    'LabelComponent', 'ButtonComponent', 'TextBoxComponent', 'CheckBoxComponent', 'RadioButtonComponent',
+    'Panel', 'ScrollablePanel', 'GroupPanel', 'ListBox', 'TextBox', 'CommandPalette',
+    'ActionService', 'KeybindingService', 'DataManager', 'NavigationService', 'ThemeManager', 'Logger', 'EventManager'
+)
+
+foreach ($typeName in $typesToRemove) {
+    try {
+        [System.Management.Automation.PSObject].Assembly.GetTypes() | 
+            Where-Object { $_.Name -eq $typeName } | 
+            ForEach-Object { 
+                Remove-TypeData -TypeName $_.FullName -ErrorAction SilentlyContinue 
+            }
+    } catch {}
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $VerbosePreference = 'SilentlyContinue'  # Change to 'Continue' for debug output

@@ -206,11 +206,20 @@ class TuiBuffer {
         $this.Width = $width
         $this.Height = $height
         $this.Name = $name
-        # Create 2D array using exact PowerShell syntax
-        $dimensions = @($height, $width)
-        $this.Cells = [System.Array]::CreateInstance([object], $dimensions)
-        $this.Clear()
+        # Initialize cells in a simple way
+        $this.InitializeCells()
         # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
+    }
+
+    hidden [void] InitializeCells() {
+        # Create 2D array step by step to avoid assignment issues
+        $tempArray = New-Object 'System.Object[,]' $this.Height,$this.Width
+        for ($y = 0; $y -lt $this.Height; $y++) {
+            for ($x = 0; $x -lt $this.Width; $x++) {
+                $tempArray[$y,$x] = [TuiCell]::new()
+            }
+        }
+        $this.Cells = $tempArray
     }
 
     [void] Clear() { $this.Clear([TuiCell]::new()) }
@@ -295,9 +304,8 @@ class TuiBuffer {
         $oldHeight = $this.Height
         $this.Width = $newWidth
         $this.Height = $newHeight
-        # Create new 2D array using exact PowerShell syntax
-        $dimensions = @($newHeight, $newWidth)
-        $this.Cells = [System.Array]::CreateInstance([object], $dimensions)
+        # Create new 2D array using helper method
+        $this.InitializeCells()
         $copyWidth = [Math]::Min($oldWidth, $newWidth)
         $copyHeight = [Math]::Min($oldHeight, $newHeight)
         for ($y = 0; $y -lt $copyHeight; $y++) {
@@ -379,6 +387,7 @@ class UIElement {
     [bool] $Enabled = $true    
     [bool] $IsFocusable = $false 
     [bool] $IsFocused = $false  
+    [bool] $IsOverlay = $false
     [int] $TabIndex = 0        
     [int] $ZIndex = 0          
     [UIElement] $Parent = $null 
@@ -630,6 +639,7 @@ class Screen : UIElement {
     
     $LastFocusedComponent
     
+    hidden [bool] $_isInitialized = $false
     hidden [System.Collections.Generic.Dictionary[string, string]] $EventSubscriptions 
 
     Screen([string]$name, [hashtable]$services) : base($name) {
@@ -756,7 +766,8 @@ class Screen : UIElement {
     }
 
     [string] ToString() {
-        return "Screen(Name='$($this.Name)', Panels=$($this.Panels.Count), Visible=$($this.Visible))"
+        $panelCount = if ($this.Panels) { $this.Panels.Count } else { 0 }
+        return "Screen(Name='$($this.Name)', Panels=$panelCount, Visible=$($this.Visible))"
     }
 
     [void] Render([TuiBuffer]$buffer) {

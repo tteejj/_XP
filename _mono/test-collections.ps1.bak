@@ -1,0 +1,32 @@
+# Test script to check array/collection issues
+Write-Host "Testing array operations..." -ForegroundColor Cyan
+
+# Test 1: Basic array
+Write-Host "`nTest 1: Basic array"
+$arr = @()
+Write-Host "Empty array count: $($arr.Count)"
+Write-Host "Empty array with @() wrapper: $(@($arr).Count)"
+
+# Test 2: Null
+Write-Host "`nTest 2: Null value"
+$null_var = $null
+try {
+    Write-Host "Null count: $($null_var.Count)"
+} catch {
+    Write-Host "Error accessing Count on null: $_" -ForegroundColor Yellow
+}
+Write-Host "Null with @() wrapper: $(@($null_var).Count)"
+
+# Test 3: Hashtable
+Write-Host "`nTest 3: Hashtable"
+$ht = @{}
+Write-Host "Empty hashtable count: $($ht.Count)"
+Write-Host "Hashtable.Values count: $($ht.Values.Count)"
+Write-Host "Hashtable.Values with @() wrapper: $(@($ht.Values).Count)"
+
+# Test 4: List
+Write-Host "`nTest 4: Generic List"
+$list = [System.Collections.Generic.List[object]]::new()
+Write-Host "Empty list count: $($list.Count)"
+
+Write-Host "`nDone!" -ForegroundColor Green

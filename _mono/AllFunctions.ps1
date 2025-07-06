@@ -5,6 +5,109 @@
 
 #region TUI Drawing Functions
 
+function Write-TuiBox {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [TuiBuffer]$Buffer,
+        
+        [Parameter(Mandatory)]
+        [int]$X,
+        
+        [Parameter(Mandatory)]
+        [int]$Y,
+        
+        [Parameter(Mandatory)]
+        [int]$Width,
+        
+        [Parameter(Mandatory)]
+        [int]$Height,
+        
+        [ConsoleColor]$ForegroundColor = [ConsoleColor]::White,
+        [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black,
+        [string]$BorderStyle = "Single",
+        [string]$Title = ""
+    )
+    
+    try {
+        if ($Width -le 0 -or $Height -le 0) {
+            Write-Warning "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
+            return
+        }
+        
+        $borders = Get-TuiBorderChars -Style $BorderStyle
+        
+        # Calculate effective drawing area
+        $drawStartX = [Math]::Max(0, $X)
+        $drawStartY = [Math]::Max(0, $Y)
+        $drawEndX = [Math]::Min($Buffer.Width, $X + $Width)
+        $drawEndY = [Math]::Min($Buffer.Height, $Y + $Height)
+        
+        if ($drawEndX -le $drawStartX -or $drawEndY -le $drawStartY) {
+            Write-Verbose "Write-TuiBox: Effective drawing area is invalid after clipping. Skipping."
+            return
+        }
+        
+        # Fill background
+        $fillCell = [TuiCell]::new(' ', $BorderColor, $BackgroundColor)
+        for ($currentY = $drawStartY; $currentY -lt $drawEndY; $currentY++) {
+            for ($currentX = $drawStartX; $currentX -lt $drawEndX; $currentX++) {
+                $Buffer.SetCell($currentX, $currentY, [TuiCell]::new($fillCell))
+            }
+        }
+        
+        # Draw corners
+        if ($X -ge 0 -and $Y -ge 0) { 
+            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.TopLeft, $BorderColor, $BackgroundColor))
+        }
+        if (($X + $Width - 1) -lt $Buffer.Width -and $Y -ge 0) { 
+            $Buffer.SetCell($X + $Width - 1, $Y, [TuiCell]::new($borders.TopRight, $BorderColor, $BackgroundColor))
+        }
+        if ($X -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { 
+            $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.BottomLeft, $BorderColor, $BackgroundColor))
+        }
+        if (($X + $Width - 1) -lt $Buffer.Width -and ($Y + $Height - 1) -lt $Buffer.Height) { 
+            $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, [TuiCell]::new($borders.BottomRight, $BorderColor, $BackgroundColor))
+        }
+        
+        # Draw horizontal lines
+        for ($i = 1; $i -lt $Width - 1; $i++) {
+            if ($Y -ge 0 -and ($X + $i) -ge 0 -and ($X + $i) -lt $Buffer.Width) {
+                $Buffer.SetCell($X + $i, $Y, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
+            }
+            if (($Y + $Height - 1) -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height -and ($X + $i) -ge 0 -and ($X + $i) -lt $Buffer.Width) {
+                $Buffer.SetCell($X + $i, $Y + $Height - 1, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
+            }
+        }
+        
+        # Draw vertical lines
+        for ($i = 1; $i -lt $Height - 1; $i++) {
+            if ($X -ge 0 -and ($Y + $i) -ge 0 -and ($Y + $i) -lt $Buffer.Height) {
+                $Buffer.SetCell($X, $Y + $i, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
+            }
+            if (($X + $Width - 1) -ge 0 -and ($X + $Width - 1) -lt $Buffer.Width -and ($Y + $i) -ge 0 -and ($Y + $i) -lt $Buffer.Height) {
+                $Buffer.SetCell($X + $Width - 1, $Y + $i, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
+            }
+        }
+        
+        # Draw title if provided
+        if ($Title -and $Title.Length -gt 0 -and $Y -ge 0) {
+            $titleWithSpace = " $Title "
+            $titleX = $X + [Math]::Floor(($Width - $titleWithSpace.Length) / 2)
+            if ($titleX -ge 0) {
+                $maxTitleLength = [Math]::Min($titleWithSpace.Length, $Width - 2)
+                if ($maxTitleLength -gt 0) {
+                    $displayTitle = $titleWithSpace.Substring(0, $maxTitleLength)
+                    $Buffer.WriteString($titleX, $Y, $displayTitle, $BorderColor, $BackgroundColor)
+                }
+            }
+        }
+    }
+    catch {
+        Write-Error "Write-TuiBox error: $_"
+    }
+}
+
 function Write-TuiText {
     [CmdletBinding()]
     param(
@@ -454,6 +557,116 @@ function Publish-Event {
         $global:TuiState.Services.EventManager.Publish($EventName, $EventData)
     }
     Write-Verbose "Published event '$EventName' with data: $($EventData | ConvertTo-Json -Compress)"
+}
+
+#endregion
+
+#region Initialize Functions
+
+function Initialize-Logger {
+    [CmdletBinding()]
+    param()
+    
+    $logger = [Logger]::new()
+    Write-Verbose "Logger initialized at: $($logger.LogPath)"
+    return $logger
+}
+
+function Initialize-EventManager {
+    [CmdletBinding()]
+    param()
+    
+    $eventManager = [EventManager]::new()
+    Write-Verbose "EventManager initialized"
+    return $eventManager
+}
+
+function Initialize-ThemeManager {
+    [CmdletBinding()]
+    param()
+    
+    $themeManager = [ThemeManager]::new()
+    Write-Verbose "ThemeManager initialized with theme: $($themeManager.ThemeName)"
+    return $themeManager
+}
+
+function Initialize-ActionService {
+    [CmdletBinding()]
+    param(
+        [EventManager]$EventManager = $null
+    )
+    
+    $actionService = if ($EventManager) {
+        [ActionService]::new($EventManager)
+    } else {
+        [ActionService]::new()
+    }
+    Write-Verbose "ActionService initialized"
+    return $actionService
+}
+
+function Initialize-DataManager {
+    [CmdletBinding()]
+    param(
+        [string]$DataPath = (Join-Path $env:APPDATA "AxiomPhoenix\data.json"),
+        [EventManager]$EventManager = $null
+    )
+    
+    $dataManager = if ($EventManager) {
+        [DataManager]::new($DataPath, $EventManager)
+    } else {
+        [DataManager]::new($DataPath)
+    }
+    Write-Verbose "DataManager initialized with path: $($dataManager.DataPath)"
+    return $dataManager
+}
+
+function Initialize-ServiceContainer {
+    [CmdletBinding()]
+    param()
+    
+    $container = [ServiceContainer]::new()
+    Write-Verbose "ServiceContainer initialized"
+    return $container
+}
+
+function Initialize-NavigationService {
+    [CmdletBinding()]
+    param(
+        [EventManager]$EventManager = $null
+    )
+    
+    $navService = if ($EventManager) {
+        [NavigationService]::new($EventManager)
+    } else {
+        [NavigationService]::new()
+    }
+    Write-Verbose "NavigationService initialized"
+    return $navService
+}
+
+function Initialize-KeybindingService {
+    [CmdletBinding()]
+    param(
+        [ActionService]$ActionService = $null
+    )
+    
+    $kbService = if ($ActionService) {
+        [KeybindingService]::new($ActionService)
+    } else {
+        [KeybindingService]::new()
+    }
+    Write-Verbose "KeybindingService initialized"
+    return $kbService
+}
+
+function Initialize-TuiFrameworkService {
+    [CmdletBinding()]
+    param()
+    
+    $framework = [TuiFrameworkService]::new()
+    Write-Verbose "TuiFrameworkService initialized"
+    return $framework
 }
 
 #endregion

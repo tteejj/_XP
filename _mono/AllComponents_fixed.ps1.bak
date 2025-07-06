@@ -1678,8 +1678,8 @@ class Panel : UIElement {
             # Calculate content area
             $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
             $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
-            $this.ContentWidth = [Math]::Max(0, $this.Width - (if ($this.HasBorder) { 2 } else { 0 }))
-            $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
+            $this.ContentWidth = $this.Width - (if ($this.HasBorder) { 2 } else { 0 })
+            $this.ContentHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
 
             if ($this.HasBorder) {
                 $borderColorToUse = $this.BorderColor
@@ -1702,45 +1702,45 @@ class Panel : UIElement {
     [void] ApplyLayout() {
         if ($this.LayoutType -eq "Manual") { return }
 
-        $layoutX = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
-        $layoutY = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
-        $layoutWidth = [Math]::Max(0, $this.Width - (2 * $layoutX))
-        $layoutHeight = [Math]::Max(0, $this.Height - (2 * $layoutY))
+        $contentX = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        $contentY = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        $contentWidth = $this.Width - (2 * $contentX)
+        $contentHeight = $this.Height - (2 * $contentY)
 
         $visibleChildren = @($this.Children | Where-Object { $_.Visible })
         if ($visibleChildren.Count -eq 0) { return }
 
         switch ($this.LayoutType) {
             "Vertical" {
-                $currentY = $layoutY
+                $currentY = $contentY
                 foreach ($child in $visibleChildren) {
-                    $child.X = $layoutX
+                    $child.X = $contentX
                     $child.Y = $currentY
-                    $child.Width = [Math]::Min($child.Width, $layoutWidth)
+                    $child.Width = [Math]::Min($child.Width, $contentWidth)
                     $currentY += $child.Height + $this.Spacing
                 }
             }
             "Horizontal" {
-                $currentX = $layoutX
+                $currentX = $contentX
                 foreach ($child in $visibleChildren) {
                     $child.X = $currentX
-                    $child.Y = $layoutY
-                    $child.Height = [Math]::Min($child.Height, $layoutHeight)
+                    $child.Y = $contentY
+                    $child.Height = [Math]::Min($child.Height, $contentHeight)
                     $currentX += $child.Width + $this.Spacing
                 }
             }
             "Grid" {
                 # Simple grid layout - arrange in rows
-                $cols = [Math]::Max(1, [Math]::Floor($layoutWidth / 20))  # Assume 20 char min width
+                $cols = [Math]::Max(1, [Math]::Floor($contentWidth / 20))  # Assume 20 char min width
                 $col = 0
                 $row = 0
-                $cellWidth = [Math]::Max(1, [Math]::Floor($layoutWidth / $cols))
+                $cellWidth = [Math]::Floor($contentWidth / $cols)
                 $cellHeight = 3  # Default height
                 
                 foreach ($child in $visibleChildren) {
-                    $child.X = $layoutX + ($col * $cellWidth)
-                    $child.Y = $layoutY + ($row * ($cellHeight + $this.Spacing))
-                    $child.Width = [Math]::Max(1, $cellWidth - $this.Spacing)
+                    $child.X = $contentX + ($col * $cellWidth)
+                    $child.Y = $contentY + ($row * ($cellHeight + $this.Spacing))
+                    $child.Width = $cellWidth - $this.Spacing
                     $child.Height = $cellHeight
                     
                     $col++
@@ -1758,8 +1758,8 @@ class Panel : UIElement {
             X = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
             Y = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
         }
-        $area.Width = [Math]::Max(0, $this.Width - (2 * $area.X))
-        $area.Height = [Math]::Max(0, $this.Height - (2 * $area.Y))
+        $area.Width = $this.Width - (2 * $area.X)
+        $area.Height = $this.Height - (2 * $area.Y)
         return $area
     }
 }
@@ -1977,55 +1977,56 @@ class GroupPanel : Panel {
 
 #endregion Panel Components
 
-#region Composite Components
+#region Specialized Components
 
 # ===== CLASS: ListBox =====
-# Module: tui-components (wrapper)
-# Dependencies: UIElement, TuiCell
+# Module: tui-components
+# Dependencies: UIElement
 # Purpose: Scrollable item list with selection
 class ListBox : UIElement {
-    [List[object]]$Items
+    [List[string]]$Items
     [int]$SelectedIndex = -1
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
     [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$SelectedForegroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::Cyan
+    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
+    [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::DarkBlue
+    [ConsoleColor]$SelectedForegroundColor = [ConsoleColor]::Yellow
     [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
-    hidden [int]$ScrollOffset = 0
+    [int]$ScrollOffset = 0
 
     ListBox([string]$name) : base($name) {
         $this.IsFocusable = $true
-        $this.Items = [List[object]]::new()
+        $this.Items = [List[string]]::new()
         $this.Width = 30
         $this.Height = 10
     }
 
-    [void] AddItem([object]$item) {
+    [void] AddItem([string]$item) {
         $this.Items.Add($item)
         if ($this.SelectedIndex -eq -1 -and $this.Items.Count -eq 1) {
             $this.SelectedIndex = 0
         }
-        $this.RequestRedraw()
     }
 
     [void] ClearItems() {
         $this.Items.Clear()
         $this.SelectedIndex = -1
         $this.ScrollOffset = 0
-        $this.RequestRedraw()
     }
 
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $this._private_buffer.Clear([TuiCell]::new(' ', $this.ForegroundColor, $this.BackgroundColor))
+            $bgColor = $this.BackgroundColor
+            $fgColor = $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
+            
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
             # Draw border
-            $borderColorToUse = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColorToUse -BackgroundColor $this.BackgroundColor `
+                -ForegroundColor $borderColorValue -BackgroundColor $bgColor `
                 -BorderStyle Single
             
             # Calculate visible area
@@ -2035,55 +2036,71 @@ class ListBox : UIElement {
             $contentWidth = $this.Width - 2
             
             # Ensure selected item is visible
-            $this.EnsureVisible($this.SelectedIndex)
+            if ($this.SelectedIndex -ne -1) {
+                if ($this.SelectedIndex -lt $this.ScrollOffset) {
+                    $this.ScrollOffset = $this.SelectedIndex
+                }
+                elseif ($this.SelectedIndex -ge $this.ScrollOffset + $contentHeight) {
+                    $this.ScrollOffset = $this.SelectedIndex - $contentHeight + 1
+                }
+            }
             
             # Draw items
-            for ($i = 0; $i -lt $contentHeight -and ($i + $this.ScrollOffset) -lt $this.Items.Count; $i++) {
+            for ($i = 0; $i -lt $contentHeight; $i++) {
                 $itemIndex = $i + $this.ScrollOffset
+                if ($itemIndex -ge $this.Items.Count) { break }
+                
                 $item = $this.Items[$itemIndex]
-                $itemText = if ($item -is [string]) { $item } else { $item.ToString() }
-                
-                if ($itemText.Length -gt $contentWidth) {
-                    $itemText = $itemText.Substring(0, $contentWidth - 3) + "..."
-                }
-                
-                $fg = $this.ForegroundColor
-                $bg = $this.BackgroundColor
+                $itemFg = $fgColor
+                $itemBg = $bgColor
                 
                 if ($itemIndex -eq $this.SelectedIndex) {
-                    $fg = $this.SelectedForegroundColor
-                    $bg = $this.SelectedBackgroundColor
-                    
-                    # Fill entire row with selection color
-                    for ($x = $contentX; $x -lt $contentX + $contentWidth; $x++) {
-                        $this._private_buffer.SetCell($x, $contentY + $i, 
-                            [TuiCell]::new(' ', $fg, $bg))
-                    }
+                    $itemFg = $this.SelectedForegroundColor
+                    $itemBg = $this.SelectedBackgroundColor
                 }
                 
-                $this._private_buffer.WriteString($contentX, $contentY + $i, $itemText, $fg, $bg)
+                # Clear line
+                for ($x = $contentX; $x -lt $contentX + $contentWidth; $x++) {
+                    $this._private_buffer.SetCell($x, $contentY + $i, 
+                        [TuiCell]::new(' ', $itemFg, $itemBg))
+                }
+                
+                # Draw item text
+                $displayText = $item
+                if ($displayText.Length -gt $contentWidth) {
+                    $displayText = $displayText.Substring(0, $contentWidth - 3) + "..."
+                }
+                
+                $this._private_buffer.WriteString($contentX, $contentY + $i, 
+                    $displayText, $itemFg, $itemBg)
             }
             
             # Draw scrollbar if needed
             if ($this.Items.Count -gt $contentHeight) {
-                $scrollbarX = $this.Width - 2
-                $scrollbarHeight = $contentHeight
-                $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this.Items.Count))
-                $thumbPos = [int]($scrollbarHeight * $this.ScrollOffset / $this.Items.Count)
-                
-                for ($i = 0; $i -lt $scrollbarHeight; $i++) {
-                    if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
-                        $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                            [TuiCell]::new('█', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-                    }
-                    else {
-                        $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                            [TuiCell]::new('│', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-                    }
-                }
+                $this.DrawScrollbar()
             }
         }
         catch {}
+    }
+
+    hidden [void] DrawScrollbar() {
+        $scrollbarX = $this.Width - 2
+        $scrollbarY = 1
+        $scrollbarHeight = $this.Height - 2
+        
+        $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this.Items.Count))
+        $thumbPos = [int]($scrollbarHeight * $this.ScrollOffset / $this.Items.Count)
+        
+        for ($i = 0; $i -lt $scrollbarHeight; $i++) {
+            if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
+                $this._private_buffer.SetCell($scrollbarX, $scrollbarY + $i, 
+                    [TuiCell]::new('█', [ConsoleColor]::DarkGray, $this.BackgroundColor))
+            }
+            else {
+                $this._private_buffer.SetCell($scrollbarX, $scrollbarY + $i, 
+                    [TuiCell]::new('│', [ConsoleColor]::DarkGray, $this.BackgroundColor))
+            }
+        }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -2095,26 +2112,32 @@ class ListBox : UIElement {
             ([ConsoleKey]::UpArrow) {
                 if ($this.SelectedIndex -gt 0) {
                     $this.SelectedIndex--
+                    $this.EnsureVisible($this.SelectedIndex)
                 }
             }
             ([ConsoleKey]::DownArrow) {
                 if ($this.SelectedIndex -lt $this.Items.Count - 1) {
                     $this.SelectedIndex++
+                    $this.EnsureVisible($this.SelectedIndex)
                 }
             }
             ([ConsoleKey]::Home) {
                 $this.SelectedIndex = 0
+                $this.EnsureVisible($this.SelectedIndex)
             }
             ([ConsoleKey]::End) {
                 $this.SelectedIndex = $this.Items.Count - 1
+                $this.EnsureVisible($this.SelectedIndex)
             }
             ([ConsoleKey]::PageUp) {
                 $pageSize = $this.Height - 2
                 $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $pageSize)
+                $this.EnsureVisible($this.SelectedIndex)
             }
             ([ConsoleKey]::PageDown) {
                 $pageSize = $this.Height - 2
                 $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $pageSize)
+                $this.EnsureVisible($this.SelectedIndex)
             }
             default {
                 $handled = $false
@@ -2129,21 +2152,19 @@ class ListBox : UIElement {
     }
 
     [void] EnsureVisible([int]$index) {
-        if ($index -lt 0 -or $index -ge $this.Items.Count) { return }
-        
-        $visibleHeight = $this.Height - 2
+        $contentHeight = $this.Height - 2
         
         if ($index -lt $this.ScrollOffset) {
             $this.ScrollOffset = $index
         }
-        elseif ($index -ge $this.ScrollOffset + $visibleHeight) {
-            $this.ScrollOffset = $index - $visibleHeight + 1
+        elseif ($index -ge $this.ScrollOffset + $contentHeight) {
+            $this.ScrollOffset = $index - $contentHeight + 1
         }
     }
 }
 
 # ===== CLASS: TextBox =====
-# Module: tui-components (wrapper)
+# Module: tui-components
 # Dependencies: TextBoxComponent
 # Purpose: Enhanced wrapper around TextBoxComponent
 class TextBox : UIElement {
@@ -2155,28 +2176,30 @@ class TextBox : UIElement {
         $this.IsFocusable = $true
     }
 
-    [string] GetText() { return $this._textBox.Text }
-    [void] SetText([string]$value) { $this._textBox.Text = $value }
-    
+    [string] GetText() {
+        return $this._textBox.Text
+    }
+
+    [void] SetText([string]$text) {
+        $this._textBox.Text = $text
+        $this._textBox.CursorPosition = $text.Length
+    }
+
     [void] Clear() {
         $this._textBox.Text = ""
         $this._textBox.CursorPosition = 0
-        $this._textBox.RequestRedraw()
     }
 
     [void] Focus() {
-        if ($this.Parent -and $this.Parent._focusManager) {
-            $this.Parent._focusManager.SetFocus($this)
-        }
+        $this._textBox.IsFocused = $true
+        $this.IsFocused = $true
     }
 
     [void] OnResize() {
-        if ($this._textBox) {
-            $this._textBox.Width = $this.Width
-            $this._textBox.Height = $this.Height
-            $this._textBox.X = 0
-            $this._textBox.Y = 0
-        }
+        $this._textBox.Width = $this.Width
+        $this._textBox.Height = $this.Height
+        $this._textBox.X = 0
+        $this._textBox.Y = 0
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -2186,140 +2209,104 @@ class TextBox : UIElement {
 
 # ===== CLASS: CommandPalette =====
 # Module: command-palette
-# Dependencies: UIElement, Panel, ListBox, TextBox
+# Dependencies: UIElement, Panel, ListBox, TextBoxComponent
 # Purpose: Searchable command interface
 class CommandPalette : UIElement {
     hidden [ListBox]$_listBox
-    hidden [TextBox]$_searchBox
+    hidden [TextBoxComponent]$_searchBox
     hidden [Panel]$_panel
-    hidden [List[object]]$_allActions
-    hidden [List[object]]$_filteredActions
-    hidden [object]$_actionService
-    hidden [scriptblock]$OnCancel
-    hidden [scriptblock]$OnSelect
+    [hashtable]$Actions = @{}
+    [scriptblock]$OnExecute
+    hidden [List[string]]$_filteredActions
 
-    CommandPalette([string]$name, [object]$actionService) : base($name) {
+    CommandPalette([string]$name) : base($name) {
+        $this.Width = 60
+        $this.Height = 20
         $this.IsFocusable = $true
         $this.Visible = $false
         $this.IsOverlay = $true
-        $this.Width = 60
-        $this.Height = 20
-        $this._actionService = $actionService
+        $this._filteredActions = [List[string]]::new()
         
         $this.Initialize()
     }
 
     hidden [void] Initialize() {
-        # Create main panel
-        $this._panel = [Panel]::new("CommandPalette_Panel")
-        $this._panel.HasBorder = $true
+        # Main panel
+        $this._panel = [Panel]::new($this.Name + "_Panel")
+        $this._panel.Title = "Command Palette"
         $this._panel.BorderStyle = "Double"
         $this._panel.BorderColor = [ConsoleColor]::Cyan
         $this._panel.BackgroundColor = [ConsoleColor]::Black
-        $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
-
-        # Create search box
-        $this._searchBox = [TextBox]::new("CommandPalette_Search")
-        $this._searchBox.X = 2
-        $this._searchBox.Y = 1
+        
+        # Search box
+        $this._searchBox = [TextBoxComponent]::new($this.Name + "_Search")
+        $this._searchBox.Placeholder = "Type to search commands..."
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
-        $this._searchBox._textBox.Placeholder = "Type to search commands..."
-        $this._searchBox._textBox.OnChange = {
+        $this._searchBox.X = 2
+        $this._searchBox.Y = 2
+        $this._searchBox.OnChange = {
             param($sender, $text)
             $this.FilterActions($text)
         }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
-
-        # Create list box
-        $this._listBox = [ListBox]::new("CommandPalette_List")
-        $this._listBox.X = 2
-        $this._listBox.Y = 4
+        
+        # List box
+        $this._listBox = [ListBox]::new($this.Name + "_List")
         $this._listBox.Width = $this.Width - 4
-        $this._listBox.Height = $this.Height - 6
+        $this._listBox.Height = $this.Height - 7
+        $this._listBox.X = 2
+        $this._listBox.Y = 5
         $this._panel.AddChild($this._listBox)
-
-        # Initialize action lists
-        $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[object]]::new()
     }
 
     [void] Show() {
-        $this.RefreshActions()
-        $this._searchBox.Clear()
-        $this.FilterActions("")
         $this.Visible = $true
-        $this._searchBox.Focus()
+        $this._searchBox.Text = ""
+        $this._searchBox.CursorPosition = 0
+        $this._searchBox.IsFocused = $true
+        $this.RefreshActions()
         $this.RequestRedraw()
     }
 
     [void] Hide() {
         $this.Visible = $false
-        if ($this.OnCancel) {
-            & $this.OnCancel
-        }
         $this.RequestRedraw()
     }
 
     [void] RefreshActions() {
-        $this._allActions.Clear()
+        $this._listBox.ClearItems()
+        $this._filteredActions.Clear()
         
-        if ($this._actionService) {
-            $actions = $this._actionService.GetAllActions()
-            if ($actions -and $actions.Values) {
-                foreach ($action in $actions.Values) {
-                    if ($action) {
-                        $this._allActions.Add($action)
-                    }
-                }
-            }
-        }
-        
-        # Sort by category and name
-        $sorted = $this._allActions | Sort-Object Category, Name
-        $this._allActions.Clear()
-        foreach ($item in $sorted) {
-            $this._allActions.Add($item)
+        foreach ($actionName in $this.Actions.Keys | Sort-Object) {
+            $this._listBox.AddItem($actionName)
+            $this._filteredActions.Add($actionName)
         }
     }
 
     [void] FilterActions([string]$searchText) {
-        $this._filteredActions.Clear()
         $this._listBox.ClearItems()
+        $this._filteredActions.Clear()
         
         if ([string]::IsNullOrWhiteSpace($searchText)) {
-            # Show all actions
-            foreach ($action in $this._allActions) {
-                $this._filteredActions.Add($action)
-                $displayText = if ($action.Category) { 
-                    "[$($action.Category)] $($action.Name) - $($action.Description)" 
-                } else { 
-                    "$($action.Name) - $($action.Description)" 
-                }
-                $this._listBox.AddItem($displayText)
+            $this.RefreshActions()
+            return
+        }
+        
+        $searchLower = $searchText.ToLower()
+        
+        foreach ($actionName in $this.Actions.Keys | Sort-Object) {
+            if ($actionName.ToLower().Contains($searchLower)) {
+                $this._listBox.AddItem($actionName)
+                $this._filteredActions.Add($actionName)
             }
         }
-        else {
-            # Fuzzy search
-            $searchLower = $searchText.ToLower()
-            foreach ($action in $this._allActions) {
-                $nameMatch = $action.Name.ToLower().Contains($searchLower)
-                $descMatch = $action.Description.ToLower().Contains($searchLower)
-                $catMatch = $action.Category -and $action.Category.ToLower().Contains($searchLower)
-                
-                if ($nameMatch -or $descMatch -or $catMatch) {
-                    $this._filteredActions.Add($action)
-                    $displayText = if ($action.Category) { 
-                        "[$($action.Category)] $($action.Name) - $($action.Description)" 
-                    } else { 
-                        "$($action.Name) - $($action.Description)" 
-                    }
-                    $this._listBox.AddItem($displayText)
-                }
-            }
+        
+        if ($this._listBox.Items.Count -gt 0) {
+            $this._listBox.SelectedIndex = 0
         }
     }
 
@@ -2331,72 +2318,77 @@ class CommandPalette : UIElement {
             return $true
         }
         
-        if ($key.Key -eq [ConsoleKey]::Enter -and $this._listBox.SelectedIndex -ge 0) {
-            $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-            if ($selectedAction) {
-                $this.Hide()
-                if ($this.OnSelect) {
-                    & $this.OnSelect $selectedAction
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            if ($this._listBox.SelectedIndex -ge 0 -and 
+                $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                
+                $actionName = $this._filteredActions[$this._listBox.SelectedIndex]
+                if ($this.Actions.ContainsKey($actionName)) {
+                    $action = $this.Actions[$actionName]
+                    
+                    $this.Hide()
+                    
+                    if ($this.OnExecute) {
+                        & $this.OnExecute $actionName $action
+                    }
+                    
+                    if ($action -is [scriptblock]) {
+                        & $action
+                    }
                 }
-                else {
-                    # Execute action directly
-                    $this._actionService.ExecuteAction($selectedAction.Name)
-                }
+                
+                return $true
             }
-            return $true
         }
         
-        # Pass input to search box or list box
+        # Handle navigation keys
         if ($key.Key -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, 
                           [ConsoleKey]::PageUp, [ConsoleKey]::PageDown)) {
             return $this._listBox.HandleInput($key)
         }
-        else {
-            return $this._searchBox.HandleInput($key)
-        }
+        
+        # All other input goes to search box
+        return $this._searchBox.HandleInput($key)
     }
 
     [void] OnResize() {
-        if ($this._panel) {
-            $this._panel.Width = $this.Width
-            $this._panel.Height = $this.Height
-            
-            $this._searchBox.Width = $this.Width - 4
-            $this._listBox.Width = $this.Width - 4
-            $this._listBox.Height = $this.Height - 6
-        }
+        $this._panel.Width = $this.Width
+        $this._panel.Height = $this.Height
+        
+        $this._searchBox.Width = $this.Width - 4
+        $this._listBox.Width = $this.Width - 4
+        $this._listBox.Height = $this.Height - 7
     }
 }
 
-#endregion Composite Components
+#endregion Specialized Components
 
 #region Dialog Components
 
 # ===== CLASS: Dialog =====
 # Module: dialog-system-class
 # Dependencies: UIElement, Panel
-# Purpose: Base class for modal dialogs
+# Purpose: Base dialog class
 class Dialog : UIElement {
     [string]$Title = ""
     [string]$Message = ""
-    hidden [Panel]$_panel
-    hidden [object]$Result = $null
-    hidden [bool]$_isComplete = $false
+    [object]$Result = $null
     [scriptblock]$OnClose
+    hidden [Panel]$_panel
+    hidden [bool]$_isComplete = $false
 
     Dialog([string]$name) : base($name) {
+        $this.Width = 50
+        $this.Height = 10
         $this.IsFocusable = $true
         $this.Visible = $false
         $this.IsOverlay = $true
-        $this.Width = 50
-        $this.Height = 10
         
         $this.InitializeDialog()
     }
 
     hidden [void] InitializeDialog() {
         $this._panel = [Panel]::new($this.Name + "_Panel")
-        $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
         $this._panel.BorderColor = [ConsoleColor]::Yellow
         $this._panel.BackgroundColor = [ConsoleColor]::Black
@@ -2408,9 +2400,9 @@ class Dialog : UIElement {
     [void] Show([string]$title, [string]$message) {
         $this.Title = $title
         $this.Message = $message
-        $this._panel.Title = " $title "
-        $this._isComplete = $false
+        $this._panel.Title = $title
         $this.Result = $null
+        $this._isComplete = $false
         $this.Visible = $true
         $this.RequestRedraw()
     }

@@ -12,7 +12,7 @@ $global:TuiState = @{
     BufferHeight = 0
     CompositorBuffer = $null
     PreviousCompositorBuffer = $null
-    ScreenStack = [System.Collections.Stack]::new()
+    ScreenStack = @()  # Simple array instead of Stack
     CurrentScreen = $null
     IsDirty = $true
     FocusedComponent = $null
@@ -20,7 +20,8 @@ $global:TuiState = @{
     Services = @{}
     LastRenderTime = [datetime]::Now
     FrameCount = 0
-    InputQueue = [System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]]::new()
+    InputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]'
+    OverlayStack = @()  # Simple array instead of Stack
 }
 
 #endregion
@@ -206,11 +207,35 @@ function Invoke-TuiRender {
         
         # Render current screen
         if ($global:TuiState.CurrentScreen) {
-            $global:TuiState.CurrentScreen.OnRender($global:TuiState.CompositorBuffer)
+            $global:TuiState.CurrentScreen.Render()
+            $screenBuffer = $global:TuiState.CurrentScreen.GetBuffer()
+            if ($screenBuffer) {
+                $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
+            }
             
             # Render command palette if visible
             if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                $global:TuiState.CommandPalette.OnRender($global:TuiState.CompositorBuffer)
+                $global:TuiState.CommandPalette.Render()
+                $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
+                if ($paletteBuffer) {
+                    $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
+                        [Math]::Floor(($global:TuiState.BufferWidth - $global:TuiState.CommandPalette.Width) / 2),
+                        [Math]::Floor(($global:TuiState.BufferHeight - $global:TuiState.CommandPalette.Height) / 2)
+                    )
+                }
+            }
+            
+            # Render overlays
+            if ($global:TuiState.ContainsKey('OverlayStack') -and $global:TuiState.OverlayStack -and @($global:TuiState.OverlayStack).Count -gt 0) {
+                foreach ($overlay in $global:TuiState.OverlayStack) {
+                    if ($overlay -and $overlay.Visible) {
+                        $overlay.Render()
+                        $overlayBuffer = $overlay.GetBuffer()
+                        if ($overlayBuffer) {
+                            $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
+                        }
+                    }
+                }
             }
         }
         
@@ -388,10 +413,15 @@ function Push-Screen {
     try {
         Write-Verbose "Pushing screen: $($Screen.Name)"
         
+        # Ensure ScreenStack exists
+        if ($null -eq $global:TuiState.ScreenStack) {
+            $global:TuiState.ScreenStack = @()
+        }
+        
         # Exit current screen
         if ($global:TuiState.CurrentScreen) {
             $global:TuiState.CurrentScreen.OnExit()
-            $global:TuiState.ScreenStack.Push($global:TuiState.CurrentScreen)
+            $global:TuiState.ScreenStack += $global:TuiState.CurrentScreen
         }
         
         # Initialize and enter new screen
@@ -416,7 +446,12 @@ function Pop-Screen {
     param()
     
     try {
-        if ($global:TuiState.ScreenStack.Count -eq 0) {
+        # Ensure ScreenStack exists
+        if ($null -eq $global:TuiState.ScreenStack) {
+            $global:TuiState.ScreenStack = @()
+        }
+        
+        if (@($global:TuiState.ScreenStack).Count -eq 0) {
             Write-Warning "No screens to pop"
             return
         }
@@ -429,7 +464,18 @@ function Pop-Screen {
         }
         
         # Resume previous screen
-        $previousScreen = $global:TuiState.ScreenStack.Pop()
+        $previousScreen = $global:TuiState.ScreenStack[-1]
+        if (@($global:TuiState.ScreenStack).Count -eq 1) {
+            $global:TuiState.ScreenStack = @()
+        } else {
+            $count = @($global:TuiState.ScreenStack).Count
+            $endIndex = $count - 2
+            if ($endIndex -ge 0) {
+                $global:TuiState.ScreenStack = @($global:TuiState.ScreenStack)[0..$endIndex]
+            } else {
+                $global:TuiState.ScreenStack = @()
+            }
+        }
         $global:TuiState.CurrentScreen = $previousScreen
         $previousScreen.OnResume()
         
@@ -469,6 +515,91 @@ function Switch-Screen {
     }
     catch {
         Write-Error "Failed to switch screen: $_"
+        throw
+    }
+}
+
+#endregion
+
+#region Overlay Management
+
+function Show-TuiOverlay {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [UIElement]$Element
+    )
+    
+    try {
+        Write-Verbose "Showing overlay: $($Element.Name)"
+        
+        # Initialize overlay stack if needed
+        if (-not $global:TuiState.ContainsKey('OverlayStack')) {
+            $global:TuiState.OverlayStack = @()
+        }
+        
+        # Push to overlay stack
+        $global:TuiState.OverlayStack += $Element
+        
+        # Initialize if needed
+        if ($Element -and $Element.PSObject.Methods.Match('Initialize') -and -not $Element._isInitialized) {
+            $Element.Initialize()
+            $Element._isInitialized = $true
+        }
+        
+        # Enter the overlay
+        if ($Element -and $Element.PSObject.Methods.Match('OnEnter')) {
+            $Element.OnEnter()
+        }
+        
+        $global:TuiState.IsDirty = $true
+    }
+    catch {
+        Write-Error "Failed to show overlay: $_"
+        throw
+    }
+}
+
+function Close-TopTuiOverlay {
+    [CmdletBinding()]
+    param()
+    
+    try {
+        if (-not $global:TuiState.ContainsKey('OverlayStack') -or @($global:TuiState.OverlayStack).Count -eq 0) {
+            Write-Warning "No overlays to close"
+            return
+        }
+        
+        Write-Verbose "Closing top overlay"
+        
+        # Pop from overlay stack
+        $overlay = $global:TuiState.OverlayStack[-1]
+        if (@($global:TuiState.OverlayStack).Count -eq 1) {
+            $global:TuiState.OverlayStack = @()
+        } else {
+            $count = @($global:TuiState.OverlayStack).Count
+            $endIndex = $count - 2
+            if ($endIndex -ge 0) {
+                $global:TuiState.OverlayStack = @($global:TuiState.OverlayStack)[0..$endIndex]
+            } else {
+                $global:TuiState.OverlayStack = @()
+            }
+        }
+        
+        # Exit the overlay
+        if ($overlay -and $overlay.PSObject.Methods.Match('OnExit')) {
+            $overlay.OnExit()
+        }
+        
+        # Cleanup if disposable
+        if ($overlay -and $overlay.PSObject.Methods.Match('Cleanup')) {
+            $overlay.Cleanup()
+        }
+        
+        $global:TuiState.IsDirty = $true
+    }
+    catch {
+        Write-Error "Failed to close overlay: $_"
         throw
     }
 }
@@ -595,14 +726,19 @@ function Start-AxiomPhoenix {
         }
         
         # Create command palette if available
-        if ($ServiceContainer.GetService("ActionService")) {
-            $global:TuiState.CommandPalette = [CommandPalette]::new()
-            $global:TuiState.CommandPalette.ActionService = $ServiceContainer.GetService("ActionService")
+        $actionService = $ServiceContainer.GetService("ActionService")
+        if ($actionService) {
+            $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
             $global:TuiState.CommandPalette.RefreshActions()
         }
         
         # Initialize engine
         Initialize-TuiEngine
+        
+        # Verify ScreenStack still exists after engine init
+        if ($null -eq $global:TuiState.ScreenStack) {
+            $global:TuiState.ScreenStack = @()
+        }
         
         # Set initial screen
         if ($InitialScreen) {
@@ -617,6 +753,8 @@ function Start-AxiomPhoenix {
     }
     catch {
         Write-Error "Application startup failed: $_"
+        Write-Error "Error occurred at: $($_.InvocationInfo.ScriptLineNumber) in $($_.InvocationInfo.ScriptName)"
+        Write-Error "Statement: $($_.InvocationInfo.Line)"
         Invoke-PanicHandler $_
     }
     finally {

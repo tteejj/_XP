@@ -124,12 +124,12 @@ class ActionService {
         return $this.ActionRegistry[$actionName]
     }
     
-    [hashtable[]] GetAllActions() {
-        return $this.ActionRegistry.Values | ForEach-Object { $_ }
+    [hashtable] GetAllActions() {
+        return $this.ActionRegistry
     }
     
     [hashtable[]] GetActionsByCategory([string]$category) {
-        return $this.ActionRegistry.Values | Where-Object { $_.Category -eq $category }
+        return @($this.ActionRegistry.Values | Where-Object { $_.Category -eq $category })
     }
     
     [void] RegisterDefaultActions() {
@@ -513,7 +513,11 @@ class DataManager {
     
     # Task operations
     [PmcTask[]] GetTasks() {
-        return $this.Tasks.Values | ForEach-Object { $_ }
+        if ($null -eq $this.Tasks) {
+            Write-Warning "DataManager: Tasks collection is null"
+            return @()
+        }
+        return @($this.Tasks.Values)
     }
     
     [PmcTask] GetTask([string]$id) {
@@ -623,7 +627,7 @@ class DataManager {
     
     # Project operations
     [PmcProject[]] GetProjects() {
-        return $this.Projects.Values | ForEach-Object { $_ }
+        return @($this.Projects.Values)
     }
     
     [PmcProject] GetProject([string]$key) {
