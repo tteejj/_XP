@@ -45,6 +45,8 @@ function Initialize-TuiEngine {
         $global:TuiState.BufferWidth = [Console]::WindowWidth
         $global:TuiState.BufferHeight = [Console]::WindowHeight
         
+        Write-Host "Console size: $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)" -ForegroundColor Yellow
+        
         # Create compositor buffers
         $global:TuiState.CompositorBuffer = [TuiBuffer]::new(
             $global:TuiState.BufferWidth,
@@ -427,6 +429,9 @@ function Push-Screen {
         # Initialize and enter new screen
         $global:TuiState.CurrentScreen = $Screen
         
+        # Resize screen to match console
+        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+        
         if (-not $Screen._isInitialized) {
             $Screen.Initialize()
             $Screen._isInitialized = $true
@@ -504,6 +509,9 @@ function Switch-Screen {
         
         # Initialize and enter new screen
         $global:TuiState.CurrentScreen = $Screen
+        
+        # Resize screen to match console
+        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
         
         if (-not $Screen._isInitialized) {
             $Screen.Initialize()

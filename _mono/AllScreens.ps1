@@ -24,6 +24,8 @@ class DashboardScreen : Screen {
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
     [void] Initialize() {
+        Write-Host "DashboardScreen.Initialize called. Screen size: $($this.Width)x$($this.Height)" -ForegroundColor Green
+        
         if (-not $this.ServiceContainer) {
             Write-Warning "DashboardScreen.Initialize: ServiceContainer is null"
             return
