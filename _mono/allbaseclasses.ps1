@@ -19,7 +19,7 @@ using namespace System.Threading
 # Disable verbose output during TUI rendering
 $script:TuiVerbosePreference = 'SilentlyContinue'
 
-<!-- PAGE: ABC.001 - TuiAnsiHelper Class -->
+#<!-- PAGE: ABC.001 - TuiAnsiHelper Class -->
 #region TuiAnsiHelper - ANSI Code Generation with Truecolor Support
 class TuiAnsiHelper {
     # No caches needed, sequences are generated dynamically now.
@@ -75,9 +75,9 @@ class TuiAnsiHelper {
     static [string] Reset() { return "`e[0m" }
 }
 #endregion
-<!-- END_PAGE: ABC.001 -->
+#<!-- END_PAGE: ABC.001 -->
 
-<!-- PAGE: ABC.002 - TuiCell Class -->
+#<!-- PAGE: ABC.002 - TuiCell Class -->
 #region TuiCell Class - Core Compositor Unit with Truecolor Support
 class TuiCell {
     [char] $Char = ' '
@@ -174,9 +174,9 @@ class TuiCell {
     }
 }
 #endregion
-<!-- END_PAGE: ABC.002 -->
+#<!-- END_PAGE: ABC.002 -->
 
-<!-- PAGE: ABC.003 - TuiBuffer Class -->
+#<!-- PAGE: ABC.003 - TuiBuffer Class -->
 #region TuiBuffer Class - 2D Array of TuiCells
 class TuiBuffer {
     $Cells       # 2D array of TuiCells - no type constraint to avoid assignment issues
@@ -351,9 +351,9 @@ class TuiBuffer {
     }
 }
 #endregion
-<!-- END_PAGE: ABC.003 -->
+#<!-- END_PAGE: ABC.003 -->
 
-<!-- PAGE: ABC.004 - UIElement Class -->
+#<!-- PAGE: ABC.004 - UIElement Class -->
 #region UIElement - Base Class for all UI Components
 class UIElement {
     [string] $Name = "UIElement" 
@@ -633,9 +633,9 @@ class UIElement {
     }
 }
 #endregion
-<!-- END_PAGE: ABC.004 -->
+#<!-- END_PAGE: ABC.004 -->
 
-<!-- PAGE: ABC.005 - Component Class -->
+#<!-- PAGE: ABC.005 - Component Class -->
 #region Component - A generic container component
 class Component : UIElement {
     Component([string]$name) : base($name) {
@@ -653,9 +653,9 @@ class Component : UIElement {
     }
 }
 #endregion
-<!-- END_PAGE: ABC.005 -->
+#<!-- END_PAGE: ABC.005 -->
 
-<!-- PAGE: ABC.006 - Screen Class -->
+#<!-- PAGE: ABC.006 - Screen Class -->
 #region Screen - Top-level Container for Application Views
 class Screen : UIElement {
     [hashtable]$Services
@@ -810,9 +810,9 @@ class Screen : UIElement {
     }
 }
 #endregion
-<!-- END_PAGE: ABC.006 -->
+#<!-- END_PAGE: ABC.006 -->
 
-<!-- PAGE: ABC.007 - ServiceContainer Class -->
+#<!-- PAGE: ABC.007 - ServiceContainer Class -->
 #region ServiceContainer Class
 class ServiceContainer {
     hidden [hashtable] $_services = @{}
@@ -966,4 +966,4 @@ class ServiceContainer {
     }
 }
 #endregion
-<!-- END_PAGE: ABC.007 -->
+#<!-- END_PAGE: ABC.007 -->
