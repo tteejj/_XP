@@ -376,7 +376,21 @@ function Write-Log {
         [object]$Data = $null
     )
     
-    $logger = $global:TuiState.Services.Logger
+    # Try to get logger from global state first
+    $logger = $null
+    try {
+        if ($global:TuiState -and 
+            $global:TuiState.Services -and 
+            $global:TuiState.Services -is [hashtable] -and
+            $global:TuiState.Services.ContainsKey('Logger')) {
+            $logger = $global:TuiState.Services['Logger']
+        }
+    }
+    catch {
+        # Silently ignore any errors accessing global state
+        $logger = $null
+    }
+    
     if ($logger) {
         # Combine message and data into a single log entry for better correlation
         $finalMessage = $Message

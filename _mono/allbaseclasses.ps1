@@ -819,9 +819,7 @@ class ServiceContainer {
     hidden [hashtable] $_serviceFactories = @{}
 
     ServiceContainer() {
-        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Info -Message "ServiceContainer created."
-        }
+        # Don't use Write-Log during construction - Logger doesn't exist yet
         Write-Verbose "ServiceContainer: Instance constructed."
     }
 

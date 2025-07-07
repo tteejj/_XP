@@ -328,6 +328,42 @@ class KeybindingService {
         $this.GlobalHandlers.Remove($handlerId)
         Write-Verbose "KeybindingService: Unregistered global handler '$handlerId'"
     }
+    
+    [void] SetDefaultBindings() {
+        # Application control
+        $this.SetBinding("Ctrl+Q", "app.exit", "Global")
+        $this.SetBinding("Escape", "app.cancel", "Global")
+        $this.SetBinding("F1", "app.help", "Global")
+        $this.SetBinding("Ctrl+P", "app.commandPalette", "Global")
+        
+        # Navigation
+        $this.SetBinding("Tab", "nav.nextField", "Global")
+        $this.SetBinding("Shift+Tab", "nav.previousField", "Global")
+        $this.SetBinding("Enter", "nav.select", "Global")
+        $this.SetBinding("Space", "nav.toggle", "Global")
+        
+        # Movement
+        $this.SetBinding("UpArrow", "nav.up", "Global")
+        $this.SetBinding("DownArrow", "nav.down", "Global")
+        $this.SetBinding("LeftArrow", "nav.left", "Global")
+        $this.SetBinding("RightArrow", "nav.right", "Global")
+        $this.SetBinding("PageUp", "nav.pageUp", "Global")
+        $this.SetBinding("PageDown", "nav.pageDown", "Global")
+        $this.SetBinding("Home", "nav.home", "Global")
+        $this.SetBinding("End", "nav.end", "Global")
+        
+        # Screen navigation
+        $this.SetBinding("Ctrl+N", "screen.new", "Global")
+        $this.SetBinding("Ctrl+D", "screen.dashboard", "Global")
+        $this.SetBinding("Ctrl+T", "screen.tasks", "Global")
+        $this.SetBinding("Ctrl+B", "nav.back", "Global")
+    }
+    
+    [void] Cleanup() {
+        $this.KeyMap.Clear()
+        $this.GlobalHandlers.Clear()
+        $this.ContextStack.Clear()
+    }
 }
 
 #endregion
