@@ -123,8 +123,8 @@ class TuiCell {
         if ($null -eq $other) { return $this }
         
         # If Z-Indexes are different, the higher one wins.
-        if ($other.ZIndex > $this.ZIndex) { return [TuiCell]::new($other) }
-        if ($other.ZIndex < $this.ZIndex) { return $this }
+        if ($other.ZIndex -gt $this.ZIndex) { return [TuiCell]::new($other) }
+        if ($other.ZIndex -lt $this.ZIndex) { return $this }
 
         # If Z-Indexes are the same, the 'other' (top) cell wins by default.
         # This is the most common and intuitive blending mode.

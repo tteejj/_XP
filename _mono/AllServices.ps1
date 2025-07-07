@@ -168,6 +168,460 @@ class ActionService {
     }
 }
 
+# ===== CLASS: DataManager =====
+# Module: data-manager (from axiom)
+# Dependencies: EventManager (optional), PmcTask, PmcProject
+# Purpose: High-performance data management with transactions, backups, and robust serialization
+class DataManager : System.IDisposable {
+    # Private fields for high-performance indexes
+    hidden [System.Collections.Generic.Dictionary[string, PmcTask]]$_taskIndex
+    hidden [System.Collections.Generic.Dictionary[string, PmcProject]]$_projectIndex
+    hidden [string]$_dataFilePath
+    hidden [string]$_backupPath
+    hidden [datetime]$_lastSaveTime
+    hidden [bool]$_dataModified = $false
+    hidden [int]$_updateTransactionCount = 0
+    
+    # Public properties
+    [hashtable]$Metadata = @{}
+    [bool]$AutoSave = $true
+    [int]$BackupCount = 5
+    [EventManager]$EventManager = $null
+    
+    DataManager([string]$dataPath) {
+        $this._dataFilePath = $dataPath
+        $this._Initialize()
+    }
+    
+    DataManager([string]$dataPath, [EventManager]$eventManager) {
+        $this._dataFilePath = $dataPath
+        $this.EventManager = $eventManager
+        $this._Initialize()
+    }
+    
+    hidden [void] _Initialize() {
+        # Initialize indexes
+        $this._taskIndex = [System.Collections.Generic.Dictionary[string, PmcTask]]::new()
+        $this._projectIndex = [System.Collections.Generic.Dictionary[string, PmcProject]]::new()
+        
+        # Set up directories
+        $baseDir = Split-Path -Path $this._dataFilePath -Parent
+        $this._backupPath = Join-Path $baseDir "backups"
+        
+        # Ensure directories exist
+        if (-not (Test-Path $baseDir)) {
+            New-Item -ItemType Directory -Path $baseDir -Force | Out-Null
+        }
+        if (-not (Test-Path $this._backupPath)) {
+            New-Item -ItemType Directory -Path $this._backupPath -Force | Out-Null
+        }
+        
+        Write-Verbose "DataManager: Initialized with path '$($this._dataFilePath)'"
+    }
+    
+    [void] LoadData() {
+        try {
+            if (-not (Test-Path $this._dataFilePath)) {
+                Write-Verbose "DataManager: No existing data file found at '$($this._dataFilePath)'"
+                return
+            }
+            
+            $jsonContent = Get-Content -Path $this._dataFilePath -Raw -Encoding UTF8
+            if ([string]::IsNullOrWhiteSpace($jsonContent)) {
+                Write-Verbose "DataManager: Data file is empty"
+                return
+            }
+            
+            $data = $jsonContent | ConvertFrom-Json -AsHashtable
+            
+            # Clear existing data
+            $this._taskIndex.Clear()
+            $this._projectIndex.Clear()
+            
+            # Load tasks using FromLegacyFormat
+            if ($data.ContainsKey('Tasks')) {
+                foreach ($taskData in $data.Tasks) {
+                    try {
+                        $task = [PmcTask]::FromLegacyFormat($taskData)
+                        $this._taskIndex[$task.Id] = $task
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load task: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # Load projects using FromLegacyFormat
+            if ($data.ContainsKey('Projects')) {
+                foreach ($projectData in $data.Projects) {
+                    try {
+                        $project = [PmcProject]::FromLegacyFormat($projectData)
+                        $this._projectIndex[$project.Key] = $project
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load project: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # Load metadata
+            if ($data.ContainsKey('Metadata')) {
+                $this.Metadata = $data.Metadata.Clone()
+            }
+            
+            $this._lastSaveTime = [datetime]::Now
+            $this._dataModified = $false
+            
+            Write-Verbose "DataManager: Loaded $($this._taskIndex.Count) tasks and $($this._projectIndex.Count) projects"
+            
+            # Publish event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Data.Loaded", @{
+                    TaskCount = $this._taskIndex.Count
+                    ProjectCount = $this._projectIndex.Count
+                    Source = $this._dataFilePath
+                })
+            }
+        }
+        catch {
+            Write-Error "DataManager: Failed to load data from '$($this._dataFilePath)': $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    [void] SaveData() {
+        if ($this._updateTransactionCount -gt 0) {
+            Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this._updateTransactionCount))"
+            return
+        }
+        
+        try {
+            $this.CreateBackup()
+            
+            $saveData = @{
+                Tasks = @()
+                Projects = @()
+                Metadata = $this.Metadata.Clone()
+                SavedAt = [datetime]::Now
+                Version = "4.0"
+            }
+            
+            # Convert tasks to legacy format for serialization
+            foreach ($task in $this._taskIndex.Values) {
+                $saveData.Tasks += $task.ToLegacyFormat()
+            }
+            
+            # Convert projects to legacy format for serialization
+            foreach ($project in $this._projectIndex.Values) {
+                $saveData.Projects += $project.ToLegacyFormat()
+            }
+            
+            $saveData | ConvertTo-Json -Depth 10 | Set-Content -Path $this._dataFilePath -Encoding UTF8 -Force
+            $this._lastSaveTime = [datetime]::Now
+            $this._dataModified = $false
+            
+            Write-Verbose "DataManager: Data saved to '$($this._dataFilePath)'"
+            
+            # Publish event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Data.Saved", @{
+                    TaskCount = $saveData.Tasks.Count
+                    ProjectCount = $saveData.Projects.Count
+                    Destination = $this._dataFilePath
+                })
+            }
+        }
+        catch {
+            Write-Error "DataManager: Failed to save data: $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    hidden [void] CreateBackup() {
+        try {
+            if (Test-Path $this._dataFilePath) {
+                $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
+                $backupFileName = "data-backup-$timestamp.json"
+                $backupFilePath = Join-Path $this._backupPath $backupFileName
+                
+                Copy-Item -Path $this._dataFilePath -Destination $backupFilePath -Force
+                
+                # Manage backup rotation
+                if ($this.BackupCount -gt 0) {
+                    $backups = Get-ChildItem -Path $this._backupPath -Filter "data-backup-*.json" | 
+                               Sort-Object LastWriteTime -Descending
+                    
+                    if ($backups.Count -gt $this.BackupCount) {
+                        $backupsToDelete = $backups | Select-Object -Skip $this.BackupCount
+                        foreach ($backup in $backupsToDelete) {
+                            Remove-Item -Path $backup.FullName -Force
+                            Write-Verbose "DataManager: Removed old backup '$($backup.Name)'"
+                        }
+                    }
+                }
+                
+                Write-Verbose "DataManager: Created backup '$backupFileName'"
+            }
+        }
+        catch {
+            Write-Warning "DataManager: Failed to create backup: $($_.Exception.Message)"
+        }
+    }
+    
+    # Transactional update methods
+    [void] BeginUpdate() {
+        $this._updateTransactionCount++
+        Write-Verbose "DataManager: Began update transaction. Depth: $($this._updateTransactionCount)"
+    }
+    
+    [void] EndUpdate() {
+        $this.EndUpdate($false)
+    }
+    
+    [void] EndUpdate([bool]$forceSave) {
+        if ($this._updateTransactionCount -gt 0) {
+            $this._updateTransactionCount--
+        }
+        
+        Write-Verbose "DataManager: Ended update transaction. Depth: $($this._updateTransactionCount)"
+        
+        if ($this._updateTransactionCount -eq 0 -and ($this._dataModified -or $forceSave)) {
+            if ($this.AutoSave -or $forceSave) {
+                $this.SaveData()
+            }
+        }
+    }
+    
+    # Task management methods
+    [PmcTask[]] GetTasks() {
+        return @($this._taskIndex.Values)
+    }
+    
+    [PmcTask] GetTask([string]$taskId) {
+        if ($this._taskIndex.ContainsKey($taskId)) {
+            return $this._taskIndex[$taskId]
+        }
+        return $null
+    }
+    
+    [PmcTask[]] GetTasksByProject([string]$projectKey) {
+        return @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+    }
+    
+    [PmcTask] AddTask([PmcTask]$task) {
+        if ($null -eq $task) {
+            throw [System.ArgumentNullException]::new("task", "Task cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($task.Id)) {
+            $task.Id = [guid]::NewGuid().ToString()
+        }
+        
+        if ($this._taskIndex.ContainsKey($task.Id)) {
+            throw [System.InvalidOperationException]::new("Task with ID '$($task.Id)' already exists")
+        }
+        
+        $this._taskIndex[$task.Id] = $task
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Created"; Task = $task })
+        }
+        
+        Write-Verbose "DataManager: Added task '$($task.Title)' with ID '$($task.Id)'"
+        return $task
+    }
+    
+    [PmcTask] UpdateTask([PmcTask]$task) {
+        if ($null -eq $task) {
+            throw [System.ArgumentNullException]::new("task", "Task cannot be null")
+        }
+        
+        if (-not $this._taskIndex.ContainsKey($task.Id)) {
+            throw [System.InvalidOperationException]::new("Task with ID '$($task.Id)' not found")
+        }
+        
+        $task.UpdatedAt = [datetime]::Now
+        $this._taskIndex[$task.Id] = $task
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Updated"; Task = $task })
+        }
+        
+        Write-Verbose "DataManager: Updated task '$($task.Title)' with ID '$($task.Id)'"
+        return $task
+    }
+    
+    [bool] DeleteTask([string]$taskId) {
+        if (-not $this._taskIndex.ContainsKey($taskId)) {
+            Write-Verbose "DataManager: Task '$taskId' not found for deletion"
+            return $false
+        }
+        
+        $task = $this._taskIndex[$taskId]
+        $this._taskIndex.Remove($taskId) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Deleted"; TaskId = $taskId })
+        }
+        
+        Write-Verbose "DataManager: Deleted task with ID '$taskId'"
+        return $true
+    }
+    
+    # Project management methods
+    [PmcProject[]] GetProjects() {
+        return @($this._projectIndex.Values)
+    }
+    
+    [PmcProject] GetProject([string]$projectKey) {
+        if ($this._projectIndex.ContainsKey($projectKey)) {
+            return $this._projectIndex[$projectKey]
+        }
+        return $null
+    }
+    
+    [PmcProject] AddProject([PmcProject]$project) {
+        if ($null -eq $project) {
+            throw [System.ArgumentNullException]::new("project", "Project cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($project.Key)) {
+            throw [System.ArgumentException]::new("Project Key is required")
+        }
+        
+        if ($this._projectIndex.ContainsKey($project.Key)) {
+            throw [System.InvalidOperationException]::new("Project with Key '$($project.Key)' already exists")
+        }
+        
+        $this._projectIndex[$project.Key] = $project
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ Action = "Created"; Project = $project })
+        }
+        
+        Write-Verbose "DataManager: Added project '$($project.Name)' with Key '$($project.Key)'"
+        return $project
+    }
+    
+    [PmcProject] UpdateProject([PmcProject]$project) {
+        if ($null -eq $project) {
+            throw [System.ArgumentNullException]::new("project", "Project cannot be null")
+        }
+        
+        if (-not $this._projectIndex.ContainsKey($project.Key)) {
+            throw [System.InvalidOperationException]::new("Project with Key '$($project.Key)' not found")
+        }
+        
+        $project.UpdatedAt = [datetime]::Now
+        $this._projectIndex[$project.Key] = $project
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ Action = "Updated"; Project = $project })
+        }
+        
+        Write-Verbose "DataManager: Updated project '$($project.Name)' with Key '$($project.Key)'"
+        return $project
+    }
+    
+    [bool] DeleteProject([string]$projectKey) {
+        if (-not $this._projectIndex.ContainsKey($projectKey)) {
+            Write-Verbose "DataManager: Project '$projectKey' not found for deletion"
+            return $false
+        }
+        
+        # Delete all tasks associated with this project
+        $tasksToDelete = @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        foreach ($task in $tasksToDelete) {
+            $this.DeleteTask($task.Id) | Out-Null
+        }
+        
+        $project = $this._projectIndex[$projectKey]
+        $this._projectIndex.Remove($projectKey) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ 
+                Action = "Deleted"
+                ProjectKey = $projectKey
+                DeletedTaskCount = $tasksToDelete.Count
+            })
+        }
+        
+        Write-Verbose "DataManager: Deleted project '$projectKey' and $($tasksToDelete.Count) associated tasks"
+        return $true
+    }
+    
+    # Utility methods
+    [datetime] GetLastSaveTime() {
+        return $this._lastSaveTime
+    }
+    
+    [void] ForceSave() {
+        $originalTransactionCount = $this._updateTransactionCount
+        $this._updateTransactionCount = 0
+        try {
+            $this.SaveData()
+        }
+        finally {
+            $this._updateTransactionCount = $originalTransactionCount
+        }
+    }
+    
+    # IDisposable implementation
+    [void] Dispose() {
+        Write-Verbose "DataManager: Disposing - checking for unsaved data"
+        
+        if ($this._dataModified) {
+            $originalTransactionCount = $this._updateTransactionCount
+            $this._updateTransactionCount = 0
+            try {
+                $this.SaveData()
+                Write-Verbose "DataManager: Performed final save during dispose"
+            }
+            catch {
+                Write-Warning "DataManager: Failed to save data during dispose: $($_.Exception.Message)"
+            }
+            finally {
+                $this._updateTransactionCount = $originalTransactionCount
+            }
+        }
+    }
+    
+    # Cleanup method (alias for Dispose)
+    [void] Cleanup() {
+        $this.Dispose()
+    }
+}
+
 # ===== CLASS: KeybindingService =====
 # Module: keybinding-service (from axiom)
 # Dependencies: ActionService (optional)
@@ -312,387 +766,6 @@ class KeybindingService {
     [void] UnregisterGlobalHandler([string]$handlerId) {
         $this.GlobalHandlers.Remove($handlerId)
         Write-Verbose "KeybindingService: Unregistered global handler '$handlerId'"
-    }
-}
-
-# ===== CLASS: DataManager =====
-# Module: data-manager (from axiom)
-# Dependencies: EventManager (optional), PmcTask, PmcProject
-# Purpose: High-performance data management with transactions
-class DataManager {
-    [hashtable]$Tasks = @{}
-    [hashtable]$Projects = @{}
-    [hashtable]$TasksByProject = @{}
-    [string]$DataPath
-    [EventManager]$EventManager
-    [bool]$IsDirty = $false
-    [bool]$AutoSave = $true
-    [int]$BatchUpdateCount = 0
-    [datetime]$LastSave = [datetime]::Now
-    [hashtable]$Metadata = @{}
-    [int]$MaxBackups = 5
-    
-    DataManager() {
-        $this.DataPath = Join-Path $env:APPDATA "AxiomPhoenix\data.json"
-        $this._Initialize()
-    }
-    
-    DataManager([string]$dataPath) {
-        $this.DataPath = $dataPath
-        $this._Initialize()
-    }
-    
-    DataManager([string]$dataPath, [EventManager]$eventManager) {
-        $this.DataPath = $dataPath
-        $this.EventManager = $eventManager
-        $this._Initialize()
-    }
-    
-    hidden [void] _Initialize() {
-        $dataDir = Split-Path -Parent $this.DataPath
-        if (-not (Test-Path $dataDir)) {
-            New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
-        }
-        
-        Write-Verbose "DataManager: Initialized with data path: $($this.DataPath)"
-    }
-    
-    [void] LoadData() {
-        try {
-            if (Test-Path $this.DataPath) {
-                $jsonContent = Get-Content -Path $this.DataPath -Raw
-                $data = $jsonContent | ConvertFrom-Json -AsHashtable
-                
-                # Load tasks
-                $this.Tasks.Clear()
-                $this.TasksByProject.Clear()
-                
-                if ($data.ContainsKey('Tasks')) {
-                    foreach ($taskData in $data.Tasks) {
-                        # Re-hydrating an object from a PSObject is the most robust way
-                        $task = [PmcTask]::new()
-                        foreach($prop in $taskData.PSObject.Properties) {
-                            if ($task.PSObject.Properties[$prop.Name]) {
-                                try {
-                                    # Handle enums correctly during assignment
-                                    $targetType = $task.PSObject.Properties[$prop.Name].TypeNameOfValue
-                                    if ($targetType -match "TaskStatus" -or $targetType -match "TaskPriority") {
-                                        # Parse enum value from string
-                                        $enumType = $task.PSObject.Properties[$prop.Name].TypeNameOfValue -replace '.*\[|\].*', ''
-                                        $task.($prop.Name) = [Enum]::Parse($enumType, $prop.Value)
-                                    } else {
-                                        $task.($prop.Name) = $prop.Value
-                                    }
-                                } catch {
-                                    # Log error if a property can't be set
-                                    Write-Verbose "DataManager: Could not set property '$($prop.Name)' on task: $_"
-                                }
-                            }
-                        }
-                        $this.Tasks[$task.Id] = $task
-                        
-                        # Update project index
-                        if (-not $this.TasksByProject.ContainsKey($task.ProjectKey)) {
-                            $this.TasksByProject[$task.ProjectKey] = @()
-                        }
-                        $this.TasksByProject[$task.ProjectKey] += $task.Id
-                    }
-                }
-                
-                # Load projects
-                $this.Projects.Clear()
-                if ($data.ContainsKey('Projects')) {
-                    foreach ($projectData in $data.Projects) {
-                        $project = [PmcProject]::new()
-                        foreach($prop in $projectData.PSObject.Properties) {
-                            if ($project.PSObject.Properties[$prop.Name]) {
-                                try {
-                                    $project.($prop.Name) = $prop.Value
-                                } catch {
-                                    # Log error if a property can't be set
-                                    Write-Verbose "DataManager: Could not set property '$($prop.Name)' on project: $_"
-                                }
-                            }
-                        }
-                        $this.Projects[$project.Key] = $project
-                    }
-                }
-                
-                # Load metadata
-                if ($data.ContainsKey('Metadata')) {
-                    $this.Metadata = $data.Metadata
-                }
-                
-                $this.IsDirty = $false
-                Write-Verbose "DataManager: Loaded $($this.Tasks.Count) tasks and $($this.Projects.Count) projects"
-                
-                if ($this.EventManager) {
-                    $this.EventManager.Publish("Data.Loaded", @{
-                        TaskCount = $this.Tasks.Count
-                        ProjectCount = $this.Projects.Count
-                    })
-                }
-            }
-            else {
-                Write-Verbose "DataManager: No data file found at $($this.DataPath)"
-            }
-        }
-        catch {
-            Write-Error "Failed to load data: $_"
-            throw [DataLoadException]::new("Failed to load data from $($this.DataPath)", "DataManager", @{}, $_)
-        }
-    }
-    
-    [void] SaveData() {
-        try {
-            if ($this.BatchUpdateCount -gt 0) {
-                Write-Verbose "DataManager: Save deferred - batch update in progress"
-                return
-            }
-            
-            # Create backup if file exists
-            if (Test-Path $this.DataPath) {
-                $this._CreateBackup()
-            }
-            
-            $data = @{
-                # Let PowerShell and JSON serializer do the work.
-                # This automatically includes any new properties added to the class.
-                Tasks = @($this.Tasks.Values)
-                Projects = @($this.Projects.Values)
-                Metadata = $this.Metadata
-                SavedAt = [datetime]::Now
-            }
-            
-            $jsonContent = $data | ConvertTo-Json -Depth 10
-            Set-Content -Path $this.DataPath -Value $jsonContent -Force
-            
-            $this.IsDirty = $false
-            $this.LastSave = [datetime]::Now
-            
-            Write-Verbose "DataManager: Saved $($this.Tasks.Count) tasks and $($this.Projects.Count) projects"
-            
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Data.Saved", @{
-                    TaskCount = $this.Tasks.Count
-                    ProjectCount = $this.Projects.Count
-                })
-            }
-        }
-        catch {
-            Write-Error "Failed to save data: $_"
-            throw
-        }
-    }
-    
-    hidden [void] _CreateBackup() {
-        try {
-            $backupDir = Join-Path (Split-Path -Parent $this.DataPath) "backups"
-            if (-not (Test-Path $backupDir)) {
-                New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
-            }
-            
-            $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-            $backupPath = Join-Path $backupDir "data_$timestamp.json"
-            
-            Copy-Item -Path $this.DataPath -Destination $backupPath -Force
-            
-            # Clean old backups
-            $backups = Get-ChildItem -Path $backupDir -Filter "data_*.json" | 
-                       Sort-Object -Property LastWriteTime -Descending
-            
-            if ($backups.Count -gt $this.MaxBackups) {
-                $backups | Select-Object -Skip $this.MaxBackups | Remove-Item -Force
-            }
-            
-            Write-Verbose "DataManager: Created backup at $backupPath"
-        }
-        catch {
-            Write-Warning "Failed to create backup: $_"
-        }
-    }
-    
-    # Task operations
-    [PmcTask[]] GetTasks() {
-        if ($null -eq $this.Tasks) {
-            Write-Warning "DataManager: Tasks collection is null"
-            return @()
-        }
-        return @($this.Tasks.Values)
-    }
-    
-    [PmcTask] GetTask([string]$id) {
-        return $this.Tasks[$id]
-    }
-    
-    [PmcTask[]] GetTasksByProject([string]$projectKey) {
-        if ($this.TasksByProject.ContainsKey($projectKey)) {
-            return $this.TasksByProject[$projectKey] | ForEach-Object { $this.Tasks[$_] } | Where-Object { $_ }
-        }
-        return @()
-    }
-    
-    [void] AddTask([PmcTask]$task) {
-        if (-not $task) {
-            throw [ArgumentNullException]::new("task")
-        }
-        
-        $this.Tasks[$task.Id] = $task
-        
-        # Update project index
-        if (-not $this.TasksByProject.ContainsKey($task.ProjectKey)) {
-            $this.TasksByProject[$task.ProjectKey] = @()
-        }
-        $this.TasksByProject[$task.ProjectKey] += $task.Id
-        
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.TaskAdded", @{ Task = $task })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Added task '$($task.Title)' with ID: $($task.Id)"
-    }
-    
-    [void] UpdateTask([PmcTask]$task) {
-        if (-not $task) {
-            throw [ArgumentNullException]::new("task")
-        }
-        
-        if (-not $this.Tasks.ContainsKey($task.Id)) {
-            throw "Task with ID '$($task.Id)' not found"
-        }
-        
-        $oldTask = $this.Tasks[$task.Id]
-        
-        # Update project index if project changed
-        if ($oldTask.ProjectKey -ne $task.ProjectKey) {
-            # Remove from old project
-            if ($this.TasksByProject.ContainsKey($oldTask.ProjectKey)) {
-                $this.TasksByProject[$oldTask.ProjectKey] = 
-                    $this.TasksByProject[$oldTask.ProjectKey] | Where-Object { $_ -ne $task.Id }
-            }
-            
-            # Add to new project
-            if (-not $this.TasksByProject.ContainsKey($task.ProjectKey)) {
-                $this.TasksByProject[$task.ProjectKey] = @()
-            }
-            $this.TasksByProject[$task.ProjectKey] += $task.Id
-        }
-        
-        $this.Tasks[$task.Id] = $task
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.TaskUpdated", @{ 
-                Task = $task
-                OldTask = $oldTask
-            })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Updated task '$($task.Title)'"
-    }
-    
-    [void] RemoveTask([string]$id) {
-        if ($this.Tasks.ContainsKey($id)) {
-            $task = $this.Tasks[$id]
-            
-            # Remove from project index
-            if ($this.TasksByProject.ContainsKey($task.ProjectKey)) {
-                $this.TasksByProject[$task.ProjectKey] = 
-                    $this.TasksByProject[$task.ProjectKey] | Where-Object { $_ -ne $id }
-            }
-            
-            $this.Tasks.Remove($id)
-            $this.IsDirty = $true
-            
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Data.TaskRemoved", @{ TaskId = $id })
-            }
-            
-            if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-                $this.SaveData()
-            }
-            
-            Write-Verbose "DataManager: Removed task with ID: $id"
-        }
-    }
-    
-    # Project operations
-    [PmcProject[]] GetProjects() {
-        return @($this.Projects.Values)
-    }
-    
-    [PmcProject] GetProject([string]$key) {
-        return $this.Projects[$key]
-    }
-    
-    [void] AddProject([PmcProject]$project) {
-        if (-not $project) {
-            throw [ArgumentNullException]::new("project")
-        }
-        
-        $this.Projects[$project.Key] = $project
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.ProjectAdded", @{ Project = $project })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Added project '$($project.Name)' with key: $($project.Key)"
-    }
-    
-    [void] UpdateProject([PmcProject]$project) {
-        if (-not $project) {
-            throw [ArgumentNullException]::new("project")
-        }
-        
-        if (-not $this.Projects.ContainsKey($project.Key)) {
-            throw "Project with key '$($project.Key)' not found"
-        }
-        
-        $oldProject = $this.Projects[$project.Key]
-        $this.Projects[$project.Key] = $project
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.ProjectUpdated", @{ 
-                Project = $project
-                OldProject = $oldProject
-            })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Updated project '$($project.Name)'"
-    }
-    
-    # Transaction support
-    [void] BeginUpdate() {
-        $this.BatchUpdateCount++
-        Write-Verbose "DataManager: Began batch update (level: $($this.BatchUpdateCount))"
-    }
-    
-    [void] EndUpdate() {
-        $this.BatchUpdateCount--
-        if ($this.BatchUpdateCount -eq 0 -and $this.IsDirty -and $this.AutoSave) {
-            $this.SaveData()
-        }
-        Write-Verbose "DataManager: Ended batch update (level: $($this.BatchUpdateCount))"
     }
 }
 
@@ -857,217 +930,151 @@ class NavigationService {
 # ===== CLASS: ThemeManager =====
 # Module: theme-manager (from axiom)
 # Dependencies: None
-# Purpose: Visual theming system with hot-swapping
+# Purpose: Visual theming system with consistent hex color output
 class ThemeManager {
     [hashtable]$CurrentTheme = @{}
     [string]$ThemeName = "Default"
-    [hashtable]$ThemeRegistry = @{}
-    [string]$ThemePath
     
     ThemeManager() {
-        $this.ThemePath = Join-Path $env:APPDATA "AxiomPhoenix\themes"
-        $this._Initialize()
-    }
-    
-    ThemeManager([string]$themePath) {
-        $this.ThemePath = $themePath
-        $this._Initialize()
-    }
-    
-    hidden [void] _Initialize() {
-        if (-not (Test-Path $this.ThemePath)) {
-            New-Item -ItemType Directory -Path $this.ThemePath -Force | Out-Null
-        }
-        
         $this.LoadDefaultTheme()
-        Write-Verbose "ThemeManager: Initialized with theme path: $($this.ThemePath)"
+        Write-Verbose "ThemeManager: Initialized with theme '$($this.ThemeName)'"
     }
     
     [void] LoadDefaultTheme() {
+        # Default dark theme with all hex colors
         $this.CurrentTheme = @{
-            # Core colors (all hex now)
-            Background = "#000000"
-            Foreground = "#FFFFFF"
-            Primary = "#1E90FF"
-            Accent = "#FFD700"
-            Error = "#FF4444"
-            Warning = "#FFA500"
-            Success = "#32CD32"
-            Info = "#00CED1"
-            Subtle = "#808080"
+            # Base colors
+            "Background" = "#000000"
+            "Foreground" = "#FFFFFF"
+            "Primary" = "#00FFFF"
+            "Secondary" = "#008080"
+            "Accent" = "#FFFF00"
+            "Subtle" = "#808080"
+            "Success" = "#00FF00"
+            "Warning" = "#FFFF00"
+            "Error" = "#FF0000"
+            "Info" = "#00FFFF"
             
             # Component colors
-            "component.border" = "#808080"
-            "component.title" = "#FFFFFF"
             "component.background" = "#000000"
-            "component.foreground" = "#FFFFFF"
+            "component.border" = "#808080"
+            "component.title" = "#00FFFF"
             
-            # Button states
+            # Button colors
             "button.normal.fg" = "#FFFFFF"
             "button.normal.bg" = "#333333"
             "button.focused.fg" = "#000000"
-            "button.focused.bg" = "#1E90FF"
+            "button.focused.bg" = "#00FFFF"
             "button.pressed.fg" = "#FFFFFF"
-            "button.pressed.bg" = "#0066CC"
-            "button.disabled.fg" = "#808080"
-            "button.disabled.bg" = "#1A1A1A"
+            "button.pressed.bg" = "#008080"
+            "button.disabled.fg" = "#666666"
+            "button.disabled.bg" = "#222222"
             
-            # List/Table
-            "list.header.fg" = "#FFD700"
-            "list.header.bg" = "#1A1A1A"
+            # Input colors
+            "input.background" = "#000000"
+            "input.foreground" = "#FFFFFF"
+            "input.border" = "#808080"
+            "input.cursor" = "#00FFFF"
+            "input.placeholder" = "#666666"
+            
+            # List colors
             "list.item.normal" = "#FFFFFF"
             "list.item.selected" = "#000000"
-            "list.item.selected.background" = "#1E90FF"
+            "list.item.selected.background" = "#00FFFF"
+            "list.header.fg" = "#FFFF00"
+            "list.header.bg" = "#333333"
             "list.scrollbar" = "#808080"
             
-            # Dialog
-            "dialog.background" = "#1A1A1A"
+            # Dialog colors
+            "dialog.border" = "#00FFFF"
+            "dialog.background" = "#000000"
             "dialog.foreground" = "#FFFFFF"
-            "dialog.border" = "#1E90FF"
-            "dialog.title" = "#FFD700"
             
-            # Status
-            "status.bar.bg" = "#333333"
-            "status.bar.fg" = "#FFFFFF"
-            
-            # Input
-            "input.background" = "#1A1A1A"
-            "input.foreground" = "#FFFFFF"
-            "input.placeholder" = "#808080"
-            "input.cursor" = "#FFD700"
+            # Status colors
+            "status.background" = "#333333"
+            "status.foreground" = "#FFFFFF"
         }
-        
         $this.ThemeName = "Default"
-        # Write-Log -Level Debug -Message "ThemeManager: Loaded default theme with hex colors"
     }
     
     [object] GetColor([string]$colorName) {
+        if ([string]::IsNullOrWhiteSpace($colorName)) {
+            return "#808080" # Default fallback hex
+        }
+        
         if ($this.CurrentTheme.ContainsKey($colorName)) {
-            return $this.CurrentTheme[$colorName]
-        }
-        
-        # Fallback to base color
-        if ($colorName -match '\.') {
-            $baseColor = $colorName.Split('.')[0]
-            if ($this.CurrentTheme.ContainsKey($baseColor)) {
-                return $this.CurrentTheme[$baseColor]
+            $color = $this.CurrentTheme[$colorName]
+            
+            # Ensure we always return hex format (fixes issue #18)
+            if ($color -is [ConsoleColor]) {
+                # Convert ConsoleColor to hex immediately
+                $hexMap = @{
+                    [ConsoleColor]::Black = "#000000"
+                    [ConsoleColor]::DarkBlue = "#000080"
+                    [ConsoleColor]::DarkGreen = "#008000"
+                    [ConsoleColor]::DarkCyan = "#008080"
+                    [ConsoleColor]::DarkRed = "#800000"
+                    [ConsoleColor]::DarkMagenta = "#800080"
+                    [ConsoleColor]::DarkYellow = "#808000"
+                    [ConsoleColor]::Gray = "#C0C0C0"
+                    [ConsoleColor]::DarkGray = "#808080"
+                    [ConsoleColor]::Blue = "#0000FF"
+                    [ConsoleColor]::Green = "#00FF00"
+                    [ConsoleColor]::Cyan = "#00FFFF"
+                    [ConsoleColor]::Red = "#FF0000"
+                    [ConsoleColor]::Magenta = "#FF00FF"
+                    [ConsoleColor]::Yellow = "#FFFF00"
+                    [ConsoleColor]::White = "#FFFFFF"
+                }
+                return $hexMap[$color] ?? "#808080"
             }
+            
+            # Already a hex string or other format
+            return $color
         }
         
-        # Write-Log -Level Debug -Message "ThemeManager: Color '$colorName' not found in theme, using default hex #FFFFFF"
-        return "#FFFFFF" # Return hex string instead of ConsoleColor enum
+        # Write-Log -Level Debug -Message "ThemeManager: Color '$colorName' not found in theme, using default hex #808080"
+        return "#808080" # Always return hex string, never ConsoleColor enum
     }
     
-    [void] SetColor([string]$colorName, [object]$color) {
-        $this.CurrentTheme[$colorName] = $color
-        Write-Verbose "ThemeManager: Set color '$colorName' to '$color'"
+    [void] SetColor([string]$colorName, [string]$hexColor) {
+        if ([string]::IsNullOrWhiteSpace($colorName)) {
+            throw "Color name cannot be null or empty"
+        }
+        
+        # Validate hex color format
+        if (-not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
+            throw "Color must be in hex format (#RRGGBB)"
+        }
+        
+        $this.CurrentTheme[$colorName] = $hexColor
+        Write-Verbose "ThemeManager: Set color '$colorName' to '$hexColor'"
     }
     
     [void] LoadTheme([string]$themeName) {
-        $themeFile = Join-Path $this.ThemePath "$themeName.json"
-        
-        if (-not (Test-Path $themeFile)) {
-            throw "Theme file not found: $themeFile"
-        }
-        
-        try {
-            $themeData = Get-Content -Path $themeFile -Raw | ConvertFrom-Json -AsHashtable
-            
-            # Convert color values
-            $this.CurrentTheme.Clear()
-            foreach ($key in $themeData.Keys) {
-                $value = $themeData[$key]
-                
-                # Handle ConsoleColor enum values - convert to hex
-                if ($value -is [string] -and [Enum]::TryParse([ConsoleColor], $value, [ref]$null)) {
-                    $consoleColor = [Enum]::Parse([ConsoleColor], $value)
-                    # Convert ConsoleColor to hex
-                    $hexMap = @{
-                        'Black' = '#000000'; 'DarkBlue' = '#000080'; 'DarkGreen' = '#008000';
-                        'DarkCyan' = '#008080'; 'DarkRed' = '#800000'; 'DarkMagenta' = '#800080';
-                        'DarkYellow' = '#808000'; 'Gray' = '#C0C0C0'; 'DarkGray' = '#808080';
-                        'Blue' = '#0000FF'; 'Green' = '#00FF00'; 'Cyan' = '#00FFFF';
-                        'Red' = '#FF0000'; 'Magenta' = '#FF00FF'; 'Yellow' = '#FFFF00';
-                        'White' = '#FFFFFF'
-                    }
-                    $this.CurrentTheme[$key] = $hexMap[$consoleColor.ToString()] ?? '#FFFFFF'
-                }
-                # Handle hex colors
-                elseif ($value -is [string] -and $value -match '^#[0-9A-Fa-f]{6}$') {
-                    $this.CurrentTheme[$key] = $value
-                }
-                else {
-                    $this.CurrentTheme[$key] = $value
-                }
+        # In a full implementation, this would load from JSON files
+        # For now, just support the default theme
+        switch ($themeName.ToLower()) {
+            "default" {
+                $this.LoadDefaultTheme()
             }
-            
-            $this.ThemeName = $themeName
-            Write-Verbose "ThemeManager: Loaded theme '$themeName' from file"
-        }
-        catch {
-            Write-Error "Failed to load theme '$themeName': $_"
-            throw
-        }
-    }
-    
-    [void] SaveTheme([string]$themeName) {
-        $themeFile = Join-Path $this.ThemePath "$themeName.json"
-        
-        try {
-            # Convert ConsoleColor enums to strings for JSON
-            $themeData = @{}
-            foreach ($key in $this.CurrentTheme.Keys) {
-                $value = $this.CurrentTheme[$key]
-                if ($value -is [ConsoleColor]) {
-                    # Convert ConsoleColor to hex string for saving
-                    $hexMap = @{
-                        'Black' = '#000000'; 'DarkBlue' = '#000080'; 'DarkGreen' = '#008000';
-                        'DarkCyan' = '#008080'; 'DarkRed' = '#800000'; 'DarkMagenta' = '#800080';
-                        'DarkYellow' = '#808000'; 'Gray' = '#C0C0C0'; 'DarkGray' = '#808080';
-                        'Blue' = '#0000FF'; 'Green' = '#00FF00'; 'Cyan' = '#00FFFF';
-                        'Red' = '#FF0000'; 'Magenta' = '#FF00FF'; 'Yellow' = '#FFFF00';
-                        'White' = '#FFFFFF'
-                    }
-                    $themeData[$key] = $hexMap[$value.ToString()] ?? '#FFFFFF'
-                }
-                else {
-                    $themeData[$key] = $value
-                }
+            "dark" {
+                $this.LoadDefaultTheme() # Same as default for now
             }
-            
-            $jsonContent = $themeData | ConvertTo-Json -Depth 10
-            Set-Content -Path $themeFile -Value $jsonContent -Force
-            
-            Write-Verbose "ThemeManager: Saved theme '$themeName' to file"
+            default {
+                Write-Warning "ThemeManager: Unknown theme '$themeName', loading default"
+                $this.LoadDefaultTheme()
+            }
         }
-        catch {
-            Write-Error "Failed to save theme '$themeName': $_"
-            throw
-        }
+        Write-Verbose "ThemeManager: Loaded theme '$themeName'"
     }
     
-    [hashtable] CreateTheme([string]$themeName, [hashtable]$baseTheme = @{}) {
-        $newTheme = if ($baseTheme.Count -gt 0) { 
-            $baseTheme.Clone() 
-        } else { 
-            $this.CurrentTheme.Clone() 
-        }
-        
-        $this.ThemeRegistry[$themeName] = $newTheme
-        Write-Verbose "ThemeManager: Created theme '$themeName'"
-        
-        return $newTheme
+    [hashtable] GetAllColors() {
+        return $this.CurrentTheme.Clone()
     }
     
-    [void] ApplyTheme([string]$themeName) {
-        if ($this.ThemeRegistry.ContainsKey($themeName)) {
-            $this.CurrentTheme = $this.ThemeRegistry[$themeName].Clone()
-            $this.ThemeName = $themeName
-            Write-Verbose "ThemeManager: Applied theme '$themeName' from registry"
-        }
-        else {
-            $this.LoadTheme($themeName)
-        }
+    [void] Cleanup() {
+        Write-Verbose "ThemeManager: Cleanup complete"
     }
 }
 

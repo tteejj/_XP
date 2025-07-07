@@ -211,17 +211,20 @@ class TextBoxComponent : UIElement {
                     Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
                 }
                 
-                # Draw cursor if focused
+                # Draw cursor if focused (non-destructive - inverts colors)
                 if ($this.IsFocused) {
                     $cursorScreenPos = $this.CursorPosition - $this._scrollOffset
                     if ($cursorScreenPos -ge 0 -and $cursorScreenPos -lt $contentWidth) {
                         $cursorX = $contentStartX + $cursorScreenPos
-                        $cursorChar = if ($cursorScreenPos -lt $visibleText.Length) { 
-                            $visibleText[$cursorScreenPos] 
-                        } else { ' ' }
                         
-                        $cursorStyle = @{ FG = Get-ThemeColor("input.cursor"); BG = $bgColor; Bold = $true }
-                        $this._private_buffer.SetCell($cursorX, $contentY, [TuiCell]::new($cursorChar, $cursorStyle.FG, $cursorStyle.BG, $cursorStyle.Bold))
+                        # Get the cell that is ALREADY at the cursor's position
+                        $cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
+                        
+                        # Invert its colors to represent the cursor (non-destructive)
+                        $cursorFg = $cellUnderCursor.BackgroundColor
+                        $cursorBg = $cellUnderCursor.ForegroundColor
+                        $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true) # Make it bold
+                        $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
                     }
                 }
             }

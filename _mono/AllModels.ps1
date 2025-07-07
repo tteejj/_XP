@@ -1,5 +1,5 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Models (No UI Dependencies)
+# Axiom-Phoenix v4.0 - All Models (No UI Dependencies) - UPDATED
 # Data models, enums, and validation classes
 # ==============================================================================
 
@@ -182,6 +182,56 @@ class PmcTask : ValidationBase {
         return $clone
     }
     
+    # ToLegacyFormat: Converts task to hashtable for JSON serialization
+    [hashtable] ToLegacyFormat() {
+        return @{
+            Id = $this.Id
+            Title = $this.Title
+            Description = $this.Description
+            Status = $this.Status.ToString()
+            Priority = $this.Priority.ToString()
+            ProjectKey = $this.ProjectKey
+            Category = $this.Category
+            CreatedAt = $this.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            UpdatedAt = $this.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            DueDate = if ($this.DueDate) { $this.DueDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            Tags = $this.Tags
+            Progress = $this.Progress
+            Completed = $this.Completed
+        }
+    }
+    
+    # FromLegacyFormat: Creates task from hashtable (JSON deserialization)
+    static [PmcTask] FromLegacyFormat([hashtable]$data) {
+        $task = [PmcTask]::new()
+        
+        if ($data.ContainsKey('Id')) { $task.Id = $data.Id }
+        if ($data.ContainsKey('Title')) { $task.Title = $data.Title }
+        if ($data.ContainsKey('Description')) { $task.Description = $data.Description }
+        if ($data.ContainsKey('Status')) { 
+            $task.Status = [System.Enum]::Parse([TaskStatus], $data.Status, $true)
+        }
+        if ($data.ContainsKey('Priority')) { 
+            $task.Priority = [System.Enum]::Parse([TaskPriority], $data.Priority, $true)
+        }
+        if ($data.ContainsKey('ProjectKey')) { $task.ProjectKey = $data.ProjectKey }
+        if ($data.ContainsKey('Category')) { $task.Category = $data.Category }
+        if ($data.ContainsKey('CreatedAt')) { 
+            $task.CreatedAt = [DateTime]::Parse($data.CreatedAt)
+        }
+        if ($data.ContainsKey('UpdatedAt')) { 
+            $task.UpdatedAt = [DateTime]::Parse($data.UpdatedAt)
+        }
+        if ($data.ContainsKey('DueDate') -and $data.DueDate) { 
+            $task.DueDate = [DateTime]::Parse($data.DueDate)
+        }
+        if ($data.ContainsKey('Tags')) { $task.Tags = @($data.Tags) }
+        if ($data.ContainsKey('Progress')) { $task.Progress = [int]$data.Progress }
+        if ($data.ContainsKey('Completed')) { $task.Completed = [bool]$data.Completed }
+        
+        return $task
+    }
+    
     # ToString: Returns a string representation of the task.
     [string] ToString() {
         $statusSymbol = switch ($this.Status) {
@@ -280,6 +330,42 @@ class PmcProject : ValidationBase {
     # GetMetadata: Gets a metadata value by key
     [object] GetMetadata([string]$key) {
         return $this.Metadata[$key]
+    }
+    
+    # ToLegacyFormat: Converts project to hashtable for JSON serialization
+    [hashtable] ToLegacyFormat() {
+        return @{
+            Key = $this.Key
+            Name = $this.Name
+            Description = $this.Description
+            CreatedAt = $this.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            UpdatedAt = $this.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            Owner = $this.Owner
+            Tags = $this.Tags
+            Metadata = $this.Metadata.Clone()
+            IsActive = $this.IsActive
+        }
+    }
+    
+    # FromLegacyFormat: Creates project from hashtable (JSON deserialization)
+    static [PmcProject] FromLegacyFormat([hashtable]$data) {
+        $project = [PmcProject]::new()
+        
+        if ($data.ContainsKey('Key')) { $project.Key = $data.Key }
+        if ($data.ContainsKey('Name')) { $project.Name = $data.Name }
+        if ($data.ContainsKey('Description')) { $project.Description = $data.Description }
+        if ($data.ContainsKey('CreatedAt')) { 
+            $project.CreatedAt = [DateTime]::Parse($data.CreatedAt)
+        }
+        if ($data.ContainsKey('UpdatedAt')) { 
+            $project.UpdatedAt = [DateTime]::Parse($data.UpdatedAt)
+        }
+        if ($data.ContainsKey('Owner')) { $project.Owner = $data.Owner }
+        if ($data.ContainsKey('Tags')) { $project.Tags = @($data.Tags) }
+        if ($data.ContainsKey('Metadata')) { $project.Metadata = $data.Metadata.Clone() }
+        if ($data.ContainsKey('IsActive')) { $project.IsActive = [bool]$data.IsActive }
+        
+        return $project
     }
 
     # ToString: Returns a string representation of the project
