@@ -25,15 +25,26 @@ class LabelComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear()
-            $fg = $this.ForegroundColor ?? [ConsoleColor]::White
-            $bg = [ConsoleColor]::Black
-            $this._private_buffer.WriteString(0, 0, $this.Text, $fg, $bg)
+        # Clear buffer with theme background
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Get foreground color
+        $fg = if ($this.ForegroundColor) {
+            if ($this.ForegroundColor -is [ConsoleColor]) {
+                # Convert ConsoleColor to hex if needed
+                Get-ThemeColor("Foreground") # Use theme default instead
+            } else {
+                $this.ForegroundColor # Assume it's already hex
+            }
+        } else {
+            Get-ThemeColor("Foreground")
         }
-        catch {
-            # Silently handle errors in render
-        }
+        
+        # Draw text
+        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -Style @{ FG = $fg; BG = $bgColor }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -59,32 +70,44 @@ class ButtonComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $bgColor = if ($this.IsPressed) { [ConsoleColor]::DarkGray } else { [ConsoleColor]::Black }
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
-            $fgColor = if ($this.IsPressed) { [ConsoleColor]::Black } else { [ConsoleColor]::White }
-
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
-            
-            for ($x = 0; $x -lt $this.Width; $x++) {
-                $this._private_buffer.SetCell($x, 0, [TuiCell]::new('-', $borderColor, $bgColor))
-                $this._private_buffer.SetCell($x, $this.Height - 1, [TuiCell]::new('-', $borderColor, $bgColor))
-            }
-            for ($y = 0; $y -lt $this.Height; $y++) {
-                $this._private_buffer.SetCell(0, $y, [TuiCell]::new('|', $borderColor, $bgColor))
-                $this._private_buffer.SetCell($this.Width - 1, $y, [TuiCell]::new('|', $borderColor, $bgColor))
-            }
-            
-            $this._private_buffer.SetCell(0, 0, [TuiCell]::new('+', $borderColor, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, 0, [TuiCell]::new('+', $borderColor, $bgColor))
-            $this._private_buffer.SetCell(0, $this.Height - 1, [TuiCell]::new('+', $borderColor, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, $this.Height - 1, [TuiCell]::new('+', $borderColor, $bgColor))
-            
-            $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
-            $textY = [Math]::Floor(($this.Height - 1) / 2)
-            $this._private_buffer.WriteString($textX, $textY, $this.Text, $fgColor, $bgColor)
+        # Clear buffer with theme background
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Determine colors based on state
+        $fgColor = "#FFFFFF"
+        $bgColor = "#333333"
+        
+        if ($this.IsPressed) {
+            $fgColor = Get-ThemeColor("button.pressed.fg")
+            $bgColor = Get-ThemeColor("button.pressed.bg")
         }
-        catch {}
+        elseif ($this.IsFocused) {
+            $fgColor = Get-ThemeColor("button.focused.fg") 
+            $bgColor = Get-ThemeColor("button.focused.bg")
+        }
+        elseif (-not $this.Enabled) {
+            $fgColor = Get-ThemeColor("button.disabled.fg")
+            $bgColor = Get-ThemeColor("button.disabled.bg")
+        }
+        else {
+            $fgColor = Get-ThemeColor("button.normal.fg")
+            $bgColor = Get-ThemeColor("button.normal.bg")
+        }
+        
+        # Draw button background
+        $style = @{ FG = $fgColor; BG = $bgColor }
+        $this._private_buffer.FillRect(0, 0, $this.Width, $this.Height, ' ', $style)
+        
+        # Draw button text centered
+        if (-not [string]::IsNullOrEmpty($this.Text)) {
+            $textX = [Math]::Max(0, [Math]::Floor(($this.Width - $this.Text.Length) / 2))
+            $textY = [Math]::Floor($this.Height / 2)
+            
+            Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -Style $style
+        }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -138,29 +161,18 @@ class TextBoxComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $bgColor = $this.BackgroundColor
-            $borderColorValue = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
-            $textColor = $this.ForegroundColor
-            $placeholderColorValue = $this.PlaceholderColor
-            
-            $this._private_buffer.Clear([TuiCell]::new(' ', $textColor, $bgColor))
-            
-            # Draw border
-            for ($x = 0; $x -lt $this.Width; $x++) {
-                $this._private_buffer.SetCell($x, 0, [TuiCell]::new('-', $borderColorValue, $bgColor))
-                $this._private_buffer.SetCell($x, $this.Height - 1, [TuiCell]::new('-', $borderColorValue, $bgColor))
-            }
-            for ($y = 0; $y -lt $this.Height; $y++) {
-                $this._private_buffer.SetCell(0, $y, [TuiCell]::new('|', $borderColorValue, $bgColor))
-                $this._private_buffer.SetCell($this.Width - 1, $y, [TuiCell]::new('|', $borderColorValue, $bgColor))
-            }
-            
-            # Corners
-            $this._private_buffer.SetCell(0, 0, [TuiCell]::new('+', $borderColorValue, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, 0, [TuiCell]::new('+', $borderColorValue, $bgColor))
-            $this._private_buffer.SetCell(0, $this.Height - 1, [TuiCell]::new('+', $borderColorValue, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, $this.Height - 1, [TuiCell]::new('+', $borderColorValue, $bgColor))
+        # Clear buffer with theme background
+        $bgColor = Get-ThemeColor("input.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Determine colors
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("input.foreground") } else { Get-ThemeColor("Subtle") }
+        $bgColor = Get-ThemeColor("input.background")
+        $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+        
+        # Draw border
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw text or placeholder
             $contentY = 1
@@ -173,7 +185,8 @@ class TextBoxComponent : UIElement {
                     $this.Placeholder.Substring(0, $contentWidth)
                 } else { $this.Placeholder }
                 
-                $this._private_buffer.WriteString($contentStartX, $contentY, $placeholderText, $placeholderColorValue, $bgColor)
+                $textStyle = @{ FG = Get-ThemeColor("input.placeholder"); BG = $bgColor }
+                Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $placeholderText -Style $textStyle
             }
             else {
                 # Calculate scroll offset
@@ -194,7 +207,8 @@ class TextBoxComponent : UIElement {
                 }
                 
                 if ($visibleText) {
-                    $this._private_buffer.WriteString($contentStartX, $contentY, $visibleText, $textColor, $bgColor)
+                    $textStyle = @{ FG = $fgColor; BG = $bgColor }
+                    Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
                 }
                 
                 # Draw cursor if focused
@@ -206,13 +220,13 @@ class TextBoxComponent : UIElement {
                             $visibleText[$cursorScreenPos] 
                         } else { ' ' }
                         
-                        $this._private_buffer.SetCell($cursorX, $contentY, 
-                            [TuiCell]::new($cursorChar, $bgColor, $textColor))
+                        $cursorStyle = @{ FG = Get-ThemeColor("input.cursor"); BG = $bgColor; Bold = $true }
+                        $this._private_buffer.SetCell($cursorX, $contentY, [TuiCell]::new($cursorChar, $cursorStyle.FG, $cursorStyle.BG, $cursorStyle.Bold))
                     }
                 }
             }
-        }
-        catch {}
+            
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -291,16 +305,16 @@ class CheckBoxComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear()
-            
-            $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
-            $fg = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::White }
-            $bg = [ConsoleColor]::Black
-            
-            $this._private_buffer.WriteString(0, 0, "$checkMark $($this.Text)", $fg, $bg)
-        }
-        catch {}
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
+        $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
+        $fullText = "$checkMark $($this.Text)"
+        
+        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -339,16 +353,16 @@ class RadioButtonComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear()
-            
-            $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
-            $fg = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::White }
-            $bg = [ConsoleColor]::Black
-            
-            $this._private_buffer.WriteString(0, 0, "$radioMark $($this.Text)", $fg, $bg)
-        }
-        catch {}
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
+        $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
+        $fullText = "$radioMark $($this.Text)"
+        
+        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -394,6 +408,154 @@ class RadioButtonComponent : UIElement {
         if ([RadioButtonComponent]::_groups.ContainsKey($this.GroupName)) {
             [RadioButtonComponent]::_groups[$this.GroupName].Remove($this)
         }
+    }
+}
+
+# ===== CLASS: ComboBoxComponent =====
+# Module: advanced-input-components
+# Dependencies: UIElement, ListBox
+# Purpose: Dropdown with search and overlay rendering
+class ComboBoxComponent : UIElement {
+    [string[]]$Items = @()
+    [int]$SelectedIndex = -1
+    [string]$Placeholder = "Select an item..."
+    [bool]$IsExpanded = $false
+    [scriptblock]$OnChange
+    hidden [ListBox]$_dropdown
+    hidden [int]$MaxDropdownHeight = 10
+    
+    ComboBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 30
+        $this.Height = 3
+        
+        # Create dropdown listbox
+        $this._dropdown = [ListBox]::new($this.Name + "_Dropdown")
+        $this._dropdown.Visible = $false
+        $this._dropdown.IsOverlay = $true
+        $this._dropdown.Width = $this.Width
+        $this._dropdown.Height = [Math]::Min($this.MaxDropdownHeight, $this.Items.Count + 2)
+    }
+    
+    [void] SetItems([string[]]$items) {
+        $this.Items = $items
+        $this._dropdown.ClearItems()
+        foreach ($item in $items) {
+            $this._dropdown.AddItem($item)
+        }
+        $this._dropdown.Height = [Math]::Min($this.MaxDropdownHeight, $items.Count + 2)
+    }
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        $bgColor = Get-ThemeColor("input.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Draw main box
+        $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
+        
+        # Draw selected text or placeholder
+        $displayText = if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.Items.Count) {
+            $this.Items[$this.SelectedIndex]
+        } else {
+            $this.Placeholder
+        }
+        
+        $textColor = if ($this.SelectedIndex -ge 0) { 
+            Get-ThemeColor("input.foreground") 
+        } else { 
+            Get-ThemeColor("input.placeholder") 
+        }
+        
+        $maxTextLength = $this.Width - 4
+        if ($displayText.Length -gt $maxTextLength) {
+            $displayText = $displayText.Substring(0, $maxTextLength - 3) + "..."
+        }
+        
+        Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+            -Style @{ FG = $textColor; BG = $bgColor }
+        
+        # Draw dropdown arrow - fix the line continuation issue
+        $arrowChar = if ($this.IsExpanded) { '▲' } else { '▼' }
+        $borderFgColor = Get-ThemeColor("component.border")
+        $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $borderFgColor, $bgColor))
+        
+        $this._needs_redraw = $false
+    }
+    
+    [void] ShowDropdown() {
+        if (-not $this.IsExpanded) {
+            $this.IsExpanded = $true
+            
+            # Position dropdown below combo box
+            $absolutePos = $this.GetAbsolutePosition()
+            $this._dropdown.X = $absolutePos.X
+            $this._dropdown.Y = $absolutePos.Y + $this.Height - 1
+            $this._dropdown.Visible = $true
+            $this._dropdown.SelectedIndex = $this.SelectedIndex
+            
+            # Add to overlay stack
+            if (-not $global:TuiState.OverlayStack.Contains($this._dropdown)) {
+                $global:TuiState.OverlayStack.Add($this._dropdown)
+            }
+            
+            $this.RequestRedraw()
+        }
+    }
+    
+    [void] HideDropdown() {
+        if ($this.IsExpanded) {
+            $this.IsExpanded = $false
+            $this._dropdown.Visible = $false
+            
+            # Remove from overlay stack
+            if ($global:TuiState.OverlayStack.Contains($this._dropdown)) {
+                $global:TuiState.OverlayStack.Remove($this._dropdown)
+            }
+            
+            $this.RequestRedraw()
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        
+        # If dropdown is expanded, let it handle input
+        if ($this.IsExpanded) {
+            if ($key.Key -eq [ConsoleKey]::Escape) {
+                $this.HideDropdown()
+                return $true
+            }
+            elseif ($key.Key -eq [ConsoleKey]::Enter) {
+                $this.SelectedIndex = $this._dropdown.SelectedIndex
+                $this.HideDropdown()
+                if ($this.OnChange) {
+                    & $this.OnChange $this.SelectedIndex
+                }
+                return $true
+            }
+            else {
+                return $this._dropdown.HandleInput($key)
+            }
+        }
+        else {
+            # Combo box is collapsed
+            if ($key.Key -eq [ConsoleKey]::Enter -or $key.Key -eq [ConsoleKey]::Spacebar -or 
+                $key.Key -eq [ConsoleKey]::DownArrow) {
+                $this.ShowDropdown()
+                return $true
+            }
+        }
+        
+        return $false
+    }
+    
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        $this.HideDropdown()
     }
 }
 
@@ -1075,19 +1237,15 @@ class ComboBoxComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
-            
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $bgColor = Get-ThemeColor("input.background")
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw main box
-            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
-                -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                -BorderStyle Single
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
             
-            # Draw selected/text value
+            # Draw selected text or placeholder
             $displayText = ""
             if ($this.IsEditable) {
                 $displayText = $this._searchText
@@ -1097,16 +1255,23 @@ class ComboBoxComponent : UIElement {
                 $displayText = $this.GetDisplayText($item)
             }
             
+            $textColor = if ($displayText) { 
+                Get-ThemeColor("input.foreground") 
+            } else { 
+                Get-ThemeColor("input.placeholder") 
+            }
+            
             $maxTextWidth = $this.Width - 4  # Border + dropdown arrow
             if ($displayText.Length -gt $maxTextWidth) {
                 $displayText = $displayText.Substring(0, $maxTextWidth)
             }
             
-            $this._private_buffer.WriteString(1, 1, $displayText, $fgColor, $bgColor)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayText `
+                -Style @{ FG = $textColor; BG = $bgColor }
             
             # Draw dropdown arrow
             $arrowChar = if ($this._isDropdownOpen) { '▲' } else { '▼' }
-            $arrowColor = if ($this.IsFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::DarkGray }
+            $arrowColor = if ($this.IsFocused) { Get-ThemeColor("Accent") } else { Get-ThemeColor("Subtle") }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $arrowColor, $bgColor))
             
             # Draw dropdown if open (as overlay)
@@ -1135,8 +1300,7 @@ class ComboBoxComponent : UIElement {
         # Draw dropdown border
         Write-TuiBox -Buffer $dropdownBuffer -X 0 -Y 0 `
             -Width $this.Width -Height $dropdownHeight `
-            -ForegroundColor [ConsoleColor]::Gray -BackgroundColor [ConsoleColor]::Black `
-            -BorderStyle Single
+            -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = Get-ThemeColor("input.background"); BorderStyle = "Single" }
         
         # Draw items
         $itemY = 1
@@ -1152,15 +1316,15 @@ class ComboBoxComponent : UIElement {
             $item = $this.Items[$itemIndex]
             $itemText = $this.GetDisplayText($item)
             
-            $itemFg = [ConsoleColor]::White
-            $itemBg = [ConsoleColor]::Black
+            $itemFg = Get-ThemeColor("list.item.normal")
+            $itemBg = Get-ThemeColor("input.background")
             
             if ($i -eq $this._highlightedIndex) {
-                $itemFg = [ConsoleColor]::Black
-                $itemBg = [ConsoleColor]::Cyan
+                $itemFg = Get-ThemeColor("list.item.selected")
+                $itemBg = Get-ThemeColor("list.item.selected.background")
             }
             elseif ($itemIndex -eq $this.SelectedIndex) {
-                $itemFg = [ConsoleColor]::Yellow
+                $itemFg = Get-ThemeColor("Accent")
             }
             
             # Clear line and draw item
@@ -1173,7 +1337,7 @@ class ComboBoxComponent : UIElement {
                 $itemText = $itemText.Substring(0, $maxTextWidth - 3) + "..."
             }
             
-            $dropdownBuffer.WriteString(1, $itemY, $itemText, $itemFg, $itemBg)
+            Write-TuiText -Buffer $dropdownBuffer -X 1 -Y $itemY -Text $itemText -Style @{ FG = $itemFg; BG = $itemBg }
             $itemY++
         }
         
@@ -1416,11 +1580,11 @@ class Table : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
-            $headerBg = [ConsoleColor]::DarkBlue
-            $selectedBg = [ConsoleColor]::DarkCyan
+            $bgColor = Get-ThemeColor("component.background")
+            $fgColor = Get-ThemeColor("Foreground")
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            $headerBg = Get-ThemeColor("list.header.bg")
+            $selectedBg = Get-ThemeColor("list.item.selected.background")
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
@@ -1433,8 +1597,7 @@ class Table : UIElement {
             if ($this.ShowBorder) {
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                    -BorderStyle Single
+                    -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
                 
                 $contentX = 1
                 $contentY = 1
@@ -1484,7 +1647,7 @@ class Table : UIElement {
                 
                 if ($this.AllowSelection -and $itemIndex -eq $this.SelectedIndex) {
                     $rowBg = $selectedBg
-                    $rowFg = [ConsoleColor]::White
+                    $rowFg = Get-ThemeColor("list.item.selected")
                 }
                 
                 $this.DrawRow($item, $contentX, $currentY, $contentWidth, $rowFg, $rowBg)
@@ -1499,7 +1662,7 @@ class Table : UIElement {
         catch {}
     }
     
-    hidden [void] DrawHeader([int]$x, [int]$y, [int]$maxWidth, [ConsoleColor]$headerBg) {
+    hidden [void] DrawHeader([int]$x, [int]$y, [int]$maxWidth, [string]$headerBg) {
         $currentX = $x - $this._horizontalScroll
         
         foreach ($col in $this.Columns) {
@@ -1519,7 +1682,7 @@ class Table : UIElement {
                     }
                     
                     $drawX = [Math]::Max($x, $currentX)
-                    $this._private_buffer.WriteString($drawX, $y, $headerText, [ConsoleColor]::White, $headerBg)
+                    Write-TuiText -Buffer $this._private_buffer -X $drawX -Y $y -Text $headerText -Style @{ FG = Get-ThemeColor("list.header.fg"); BG = $headerBg }
                 }
             }
             
@@ -1528,7 +1691,7 @@ class Table : UIElement {
         }
     }
     
-    hidden [void] DrawRow([PSObject]$item, [int]$x, [int]$y, [int]$maxWidth, [ConsoleColor]$fg, [ConsoleColor]$bg) {
+    hidden [void] DrawRow([PSObject]$item, [int]$x, [int]$y, [int]$maxWidth, [string]$fg, [string]$bg) {
         # Clear row first
         for ($i = 0; $i -lt $maxWidth; $i++) {
             $this._private_buffer.SetCell($x + $i, $y, [TuiCell]::new(' ', $fg, $bg))
@@ -1557,7 +1720,7 @@ class Table : UIElement {
                     }
                     
                     $drawX = [Math]::Max($x, $currentX)
-                    $this._private_buffer.WriteString($drawX, $y, $value, $fg, $bg)
+                    Write-TuiText -Buffer $this._private_buffer -X $drawX -Y $y -Text $value -Style @{ FG = $fg; BG = $bg }
                 }
             }
             
@@ -1570,13 +1733,12 @@ class Table : UIElement {
         $scrollbarHeight = [Math]::Max(1, [int]($height * $height / $this.Items.Count))
         $scrollbarPos = [int](($height - $scrollbarHeight) * $this._scrollOffset / ($this.Items.Count - $height))
         
+        $scrollbarColor = Get-ThemeColor("list.scrollbar")
+        $bgColor = Get-ThemeColor("component.background")
+        
         for ($i = 0; $i -lt $height; $i++) {
-            if ($i -ge $scrollbarPos -and $i -lt $scrollbarPos + $scrollbarHeight) {
-                $this._private_buffer.SetCell($x, $y + $i, [TuiCell]::new('█', [ConsoleColor]::DarkGray, [ConsoleColor]::Black))
-            }
-            else {
-                $this._private_buffer.SetCell($x, $y + $i, [TuiCell]::new('│', [ConsoleColor]::DarkGray, [ConsoleColor]::Black))
-            }
+            $char = if ($i -ge $scrollbarPos -and $i -lt $scrollbarPos + $scrollbarHeight) { '█' } else { '│' }
+            $this._private_buffer.SetCell($x, $y + $i, [TuiCell]::new($char, $scrollbarColor, $bgColor))
         }
     }
     
@@ -1672,7 +1834,8 @@ class Panel : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
+            $bgColor = Get-ThemeColor("component.background")
+            $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
             $this._private_buffer.Clear($bgCell)
 
             # Calculate content area
@@ -1682,15 +1845,12 @@ class Panel : UIElement {
             $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
 
             if ($this.HasBorder) {
-                $borderColorToUse = $this.BorderColor
-                if ($this.IsFocused) {
-                    $borderColorToUse = [ConsoleColor]::Cyan
-                }
+                $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -ForegroundColor $borderColorToUse -BackgroundColor $this.BackgroundColor `
-                    -BorderStyle $this.BorderStyle -Title $this.Title
+                    -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor("component.title") } `
+                    -Title $this.Title
             }
 
             # Apply layout to children
@@ -1772,147 +1932,190 @@ class ScrollablePanel : Panel {
     [int]$ScrollOffsetY = 0
     [int]$MaxScrollY = 0
     [bool]$ShowScrollbar = $true
-    hidden [int]$_contentHeight = 0
+    hidden [int]$_contentHeight = 0 # This will be the virtual content height
+    hidden [TuiBuffer]$_virtual_buffer = $null # NEW: To hold the entire scrollable content
 
     ScrollablePanel([string]$name) : base($name) {
         $this.IsFocusable = $true
+        # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
+        # Start with max possible height or a reasonable large value, will grow as children are added
+        $this.{_virtual_buffer} = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
     }
 
-    [void] OnRender() {
-        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-        
-        # First render the base panel
-        ([Panel]$this).OnRender()
+    # Override OnResize to ensure virtual buffer matches actual content area needs
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        # Call base Panel resize, which updates Width, Height, and _private_buffer
+        ([Panel]$this).Resize($newWidth, $newHeight) 
 
-        # Calculate content height
-        $this._contentHeight = 0
-        foreach ($child in $this.Children) {
-            $childBottom = $child.Y + $child.Height
-            if ($childBottom -gt $this._contentHeight) {
-                $this._contentHeight = $childBottom
+        # Ensure the virtual buffer is wide enough for the content area
+        $targetVirtualWidth = $this.ContentWidth 
+        if ($this.{_virtual_buffer}.Width -ne $targetVirtualWidth) {
+            $this.{_virtual_buffer}.Resize($targetVirtualWidth, $this.{_virtual_buffer}.Height) # Only resize width for now
+        }
+        $this.UpdateMaxScroll() # Recalculate max scroll on resize
+        $this.RequestRedraw()
+    }
+
+    # Override _RenderContent to implement virtual scrolling logic
+    hidden [void] _RenderContent() {
+        # 1. First, render the base Panel. This clears its own _private_buffer and draws borders/title.
+        # This implicitly calls ([Panel]$this).OnRender()
+        ([Panel]$this)._RenderContent()
+
+        # 2. Render all children onto the _virtual_buffer
+        $this.{_virtual_buffer}.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
+        
+        $actualContentBottom = 0
+        foreach ($child in $this.Children | Sort-Object ZIndex) {
+            if ($child.Visible) {
+                # Render each child to its own private buffer
+                $child.Render() 
+                if ($null -ne $child._private_buffer) {
+                    # Blend child's buffer onto our _virtual_buffer at its original coordinates
+                    # (relative to the panel's content area)
+                    $this.{_virtual_buffer}.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
+                }
+                # Track the maximum vertical extent of children to determine virtual height
+                $childExtent = ($child.Y - $this.ContentY) + $child.Height
+                if ($childExtent -gt $actualContentBottom) {
+                    $actualContentBottom = $childExtent
+                }
             }
         }
+        $this._contentHeight = $actualContentBottom # Update actual content height
 
-        # Calculate viewport
-        $viewportHeight = $this.Height
-        if ($this.HasBorder) { $viewportHeight -= 2 }
+        # 3. Update MaxScrollY and clamp ScrollOffsetY
+        $this.UpdateMaxScroll()
+
+        # 4. Extract the visible portion from _virtual_buffer and blend it onto _private_buffer
+        #    This accounts for the scroll offset when drawing to screen.
+        $viewportWidth = $this.ContentWidth
+        $viewportHeight = $this.ContentHeight
         
-        $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
+        # Ensure target size for sub-buffer is positive
+        $viewportWidth = [Math]::Max(1, $viewportWidth)
+        $viewportHeight = [Math]::Max(1, $viewportHeight)
 
-        # Draw scrollbar if needed
+        $sourceX = 0 # No horizontal scrolling for now, but easily extendable
+        $sourceY = $this.ScrollOffsetY
+        
+        # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
+        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this.{_virtual_buffer}.Height - $sourceY)
+        if ($effectiveSourceHeight -le 0) {
+            # No content to display in viewport
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
+            return
+        }
+
+        $visiblePortion = $this.{_virtual_buffer}.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
+        
+        # Blend the visible portion onto our own _private_buffer, at the content area
+        $this.{_private_buffer}.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
+
+        # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
         if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
             $this.DrawScrollbar()
         }
+
+        $this._needs_redraw = $false
     }
 
-    hidden [void] DrawScrollbar() {
-        $scrollbarX = $this.Width - 1
-        if (-not $this.HasBorder) { $scrollbarX = $this.Width - 1 }
+    # Helper method to calculate MaxScrollY and clamp ScrollOffsetY
+    [void] UpdateMaxScroll() {
+        $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
         
+        # Ensure virtual buffer height is at least content height
+        $currentVirtualHeight = $this.{_virtual_buffer}.Height
+        $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
+        if ($newVirtualHeight -ne $currentVirtualHeight) {
+            $this.{_virtual_buffer}.Resize($this.{_virtual_buffer}.Width, $newVirtualHeight)
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
+        }
+
+        $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
+        $this.ScrollOffsetY = [Math]::Max(0, [Math]::Min($this.ScrollOffsetY, $this.MaxScrollY))
+        # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': ContentHeight=$($this._contentHeight), ViewportHeight=$($viewportHeight), MaxScrollY=$($this.MaxScrollY), ScrollOffsetY=$($this.ScrollOffsetY)."
+    }
+
+    # Keep DrawScrollbar, HandleInput, ScrollUp/Down/PageUp/Down/ToTop/Bottom methods.
+    # Ensure DrawScrollbar uses the correct ScrollOffsetY, MaxScrollY, and _contentHeight for calculations.
+    # Update SetCell calls in DrawScrollbar to use hex colors.
+    [void] DrawScrollbar() {
+        $scrollbarX = $this.Width - 1
         $scrollbarY = if ($this.HasBorder) { 1 } else { 0 }
-        $scrollbarHeight = $this.Height
-        if ($this.HasBorder) { $scrollbarHeight -= 2 }
+        $scrollbarTrackHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+
+        if ($this._contentHeight -le $scrollbarTrackHeight) { 
+            # If content fits, clear any previous scrollbar
+            for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
+                $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', Get-ThemeColor("Background"), Get-ThemeColor("Background")))
+            }
+            return 
+        } 
+
+        $scrollFg = Get-ThemeColor("list.scrollbar")
+        $scrollBg = Get-ThemeColor("Background")
 
         # Calculate thumb size and position
-        $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this._contentHeight))
-        $thumbPos = [int]($scrollbarHeight * $this.ScrollOffsetY / $this._contentHeight)
-
-        # Draw scrollbar track and thumb
-        for ($i = 0; $i -lt $scrollbarHeight; $i++) {
+        $thumbSize = [Math]::Max(1, [int]($scrollbarTrackHeight * $scrollbarTrackHeight / $this._contentHeight))
+        $thumbPos = [int](($scrollbarTrackHeight - $thumbSize) * $this.ScrollOffsetY / $this.MaxScrollY)
+        
+        for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
             $y = $scrollbarY + $i
+            $char = '│' # Default track character
+            
             if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
-                $this._private_buffer.SetCell($scrollbarX, $y, 
-                    [TuiCell]::new('█', [ConsoleColor]::DarkGray, $this.BackgroundColor))
+                $char = '█' # Thumb character
             }
-            else {
-                $this._private_buffer.SetCell($scrollbarX, $y, 
-                    [TuiCell]::new('│', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-            }
+            $this.{_private_buffer}.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
         }
     }
 
-    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key) { return $false }
-        
-        $handled = $false
-        
-        switch ($key.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this.ScrollOffsetY -gt 0) {
-                    $this.ScrollUp()
-                    $handled = $true
-                }
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this.ScrollOffsetY -lt $this.MaxScrollY) {
-                    $this.ScrollDown()
-                    $handled = $true
-                }
-            }
-            ([ConsoleKey]::PageUp) {
-                $this.ScrollPageUp()
-                $handled = $true
-            }
-            ([ConsoleKey]::PageDown) {
-                $this.ScrollPageDown()
-                $handled = $true
-            }
-            ([ConsoleKey]::Home) {
-                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                    $this.ScrollToTop()
-                    $handled = $true
-                }
-            }
-            ([ConsoleKey]::End) {
-                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                    $this.ScrollToBottom()
-                    $handled = $true
-                }
-            }
-        }
-
-        if ($handled) {
-            $this.RequestRedraw()
-        }
-
-        return $handled
-    }
-
+    # Ensure other scrolling methods call RequestRedraw and UpdateMaxScroll
     [void] ScrollUp([int]$lines = 1) {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Max(0, $this.ScrollOffsetY - $lines)
-        $this.UpdateChildrenPositions()
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled up to $($this.ScrollOffsetY)."
+        }
     }
 
     [void] ScrollDown([int]$lines = 1) {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Min($this.MaxScrollY, $this.ScrollOffsetY + $lines)
-        $this.UpdateChildrenPositions()
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled down to $($this.ScrollOffsetY)."
+        }
     }
 
     [void] ScrollPageUp() {
-        $pageSize = $this.Height
-        if ($this.HasBorder) { $pageSize -= 2 }
+        $pageSize = $this.ContentHeight
         $this.ScrollUp($pageSize)
     }
 
     [void] ScrollPageDown() {
-        $pageSize = $this.Height
-        if ($this.HasBorder) { $pageSize -= 2 }
+        $pageSize = $this.ContentHeight
         $this.ScrollDown($pageSize)
     }
 
     [void] ScrollToTop() {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = 0
-        $this.UpdateChildrenPositions()
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to top."
+        }
     }
 
     [void] ScrollToBottom() {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = $this.MaxScrollY
-        $this.UpdateChildrenPositions()
-    }
-
-    hidden [void] UpdateChildrenPositions() {
-        # Virtual scrolling - adjust render positions based on scroll offset
-        # This is handled during rendering by the compositor
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to bottom."
+        }
     }
 }
 
@@ -2018,15 +2221,12 @@ class ListBox : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear([TuiCell]::new(' ', $this.ForegroundColor, $this.BackgroundColor))
-            
-            # Draw border
-            $borderColorToUse = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
-            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
-                -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColorToUse -BackgroundColor $this.BackgroundColor `
-                -BorderStyle Single
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Draw border
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = $bgColor; BorderStyle = "Single" }
             
             # Calculate visible area
             $contentY = 1
@@ -2047,21 +2247,24 @@ class ListBox : UIElement {
                     $itemText = $itemText.Substring(0, $contentWidth - 3) + "..."
                 }
                 
-                $fg = $this.ForegroundColor
-                $bg = $this.BackgroundColor
-                
-                if ($itemIndex -eq $this.SelectedIndex) {
-                    $fg = $this.SelectedForegroundColor
-                    $bg = $this.SelectedBackgroundColor
-                    
-                    # Fill entire row with selection color
-                    for ($x = $contentX; $x -lt $contentX + $contentWidth; $x++) {
-                        $this._private_buffer.SetCell($x, $contentY + $i, 
-                            [TuiCell]::new(' ', $fg, $bg))
-                    }
+                $isSelected = ($itemIndex -eq $this.SelectedIndex)
+                $fgColor = if ($isSelected) { 
+                    Get-ThemeColor("list.item.selected") 
+                } else { 
+                    Get-ThemeColor("list.item.normal") 
+                }
+                $itemBgColor = if ($isSelected) { 
+                    Get-ThemeColor("list.item.selected.background") 
+                } else { 
+                    $bgColor 
                 }
                 
-                $this._private_buffer.WriteString($contentX, $contentY + $i, $itemText, $fg, $bg)
+                # Draw item background
+                $this._private_buffer.FillRect(1, $contentY + $i, $this.Width - 2, 1, ' ', @{ BG = $itemBgColor })
+                
+                # Draw item text
+                Write-TuiText -Buffer $this._private_buffer -X $contentX -Y ($contentY + $i) -Text $itemText `
+                    -Style @{ FG = $fgColor; BG = $itemBgColor }
             }
             
             # Draw scrollbar if needed
@@ -2072,18 +2275,11 @@ class ListBox : UIElement {
                 $thumbPos = [int]($scrollbarHeight * $this.ScrollOffset / $this.Items.Count)
                 
                 for ($i = 0; $i -lt $scrollbarHeight; $i++) {
-                    if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
-                        $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                            [TuiCell]::new('█', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-                    }
-                    else {
-                        $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                            [TuiCell]::new('│', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-                    }
+                    $char = if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) { '█' } else { '│' }
+                    $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
+                        [TuiCell]::new($char, Get-ThemeColor("list.scrollbar"), $bgColor))
                 }
             }
-        }
-        catch {}
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -2398,8 +2594,8 @@ class Dialog : UIElement {
         $this._panel = [Panel]::new($this.Name + "_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = [ConsoleColor]::Yellow
-        $this._panel.BackgroundColor = [ConsoleColor]::Black
+        $this._panel.BorderColor = Get-ThemeColor("dialog.border")
+        $this._panel.BackgroundColor = Get-ThemeColor("dialog.background")
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
@@ -2415,14 +2611,42 @@ class Dialog : UIElement {
         $this.RequestRedraw()
     }
 
-    [void] Close([object]$result) {
+    # Renamed from Close to Complete to match guide
+    [void] Complete([object]$result) {
         $this.Result = $result
         $this._isComplete = $true
-        $this.Visible = $false
+        
+        # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
-            & $this.OnClose $result
+            try { & $this.OnClose $result } catch { # Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" }
         }
-        $this.RequestRedraw()
+        
+        # Publish a general dialog close event for DialogManager to pick up
+        if ($global:TuiState.Services.EventManager) {
+            $global:TuiState.Services.EventManager.Publish("Dialog.Completed", @{ Dialog = $this; Result = $result })
+        }
+        # The DialogManager will then call HideDialog for actual UI removal and focus restoration.
+    }
+
+    # Legacy method for compatibility
+    [void] Close([object]$result) {
+        $this.Complete($result)
+    }
+
+    # New method for DialogManager to call to set initial focus within the dialog
+    [void] SetInitialFocus() {
+        $firstFocusable = $this.Children | Where-Object { $_.IsFocusable -and $_.Visible -and $_.Enabled } | Sort-Object TabIndex, Y, X | Select-Object -First 1
+        if ($firstFocusable -and $global:TuiState.Services.FocusManager) {
+            $global:TuiState.Services.FocusManager.SetFocus($firstFocusable)
+            # Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
+        }
+    }
+
+    # Update Title on render
+    [void] OnRender() {
+        # Base Panel's OnRender already draws border and title using ThemeManager colors
+        $this._panel.Title = " $this.Title " # Ensure title is updated on panel
+        $this._panel.OnRender() # Render the internal panel
     }
 
     [object] ShowDialog([string]$title, [string]$message) {
@@ -2453,7 +2677,7 @@ class AlertDialog : Dialog {
         $this._okButton.Width = 10
         $this._okButton.Height = 3
         $this._okButton.OnClick = {
-            $this.Close($true)
+            $this.Complete($true)
         }.GetNewClosure()
         $this._panel.AddChild($this._okButton)
     }
@@ -2470,21 +2694,20 @@ class AlertDialog : Dialog {
         ([Dialog]$this).OnRender()
         
         if ($this.Visible -and $this.Message) {
-            # Draw message
-            $messageX = 2
-            $messageY = 2
-            $maxWidth = $this.Width - 4
-            
-            # Simple word wrap
+            # Draw message within the dialog's panel content area
+            $panelContentX = $this._panel.ContentX
+            $panelContentY = $this._panel.ContentY
+            $maxWidth = $this.Width - 4 # Panel width - 2*border - 2*padding
+
+            # Simple word wrap (use Write-TuiText)
             $words = $this.Message -split ' '
             $currentLine = ""
-            $currentY = $messageY
-            
+            $currentY = $panelContentY + 1 # Start drawing message below title
+
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
                     if ($currentLine) {
-                        $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                            $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
                         $currentY++
                     }
                     $currentLine = $word
@@ -2493,21 +2716,28 @@ class AlertDialog : Dialog {
                     $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
                 }
             }
-            
             if ($currentLine) {
-                $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                    $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
             }
         }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+
+        # Let OK button handle input first
+        if ($this._okButton.HandleInput($key)) { return $true }
+        
         if ($key.Key -eq [ConsoleKey]::Escape -or $key.Key -eq [ConsoleKey]::Enter) {
-            $this.Close($true)
+            $this.Complete($true) # Complete dialog
             return $true
         }
-        
-        return $this._okButton.HandleInput($key)
+        return $false
+    }
+
+    [void] OnEnter() {
+        # Set focus to the OK button when dialog appears
+        $global:TuiState.Services.FocusManager?.SetFocus($this._okButton)
     }
 }
 
@@ -2532,7 +2762,7 @@ class ConfirmDialog : Dialog {
         $this._yesButton.Width = 10
         $this._yesButton.Height = 3
         $this._yesButton.OnClick = {
-            $this.Close($true)
+            $this.Complete($true)
         }.GetNewClosure()
         $this._panel.AddChild($this._yesButton)
 
@@ -2542,7 +2772,7 @@ class ConfirmDialog : Dialog {
         $this._noButton.Width = 10
         $this._noButton.Height = 3
         $this._noButton.OnClick = {
-            $this.Close($false)
+            $this.Complete($false)
         }.GetNewClosure()
         $this._panel.AddChild($this._noButton)
     }
@@ -2576,19 +2806,18 @@ class ConfirmDialog : Dialog {
         
         if ($this.Visible -and $this.Message) {
             # Draw message (same as AlertDialog)
-            $messageX = 2
-            $messageY = 2
+            $panelContentX = $this._panel.ContentX
+            $panelContentY = $this._panel.ContentY
             $maxWidth = $this.Width - 4
             
             $words = $this.Message -split ' '
             $currentLine = ""
-            $currentY = $messageY
+            $currentY = $panelContentY + 1
             
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
                     if ($currentLine) {
-                        $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                            $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
                         $currentY++
                     }
                     $currentLine = $word
@@ -2599,8 +2828,7 @@ class ConfirmDialog : Dialog {
             }
             
             if ($currentLine) {
-                $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                    $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
             }
         }
     }

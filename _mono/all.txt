@@ -14,107 +14,88 @@ $script:TuiVerbosePreference = 'SilentlyContinue'
 
 #region TuiAnsiHelper - ANSI Code Generation with Truecolor Support
 class TuiAnsiHelper {
-    hidden static [System.Collections.Concurrent.ConcurrentDictionary[string, string]] $_fgCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
-    hidden static [System.Collections.Concurrent.ConcurrentDictionary[string, string]] $_bgCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
+    # No caches needed, sequences are generated dynamically now.
 
-    static [hashtable] $ColorMap = @{
-        Black = 30; DarkBlue = 34; DarkGreen = 32; DarkCyan = 36
-        DarkRed = 31; DarkMagenta = 35; DarkYellow = 33; Gray = 37
-        DarkGray = 90; Blue = 94; Green = 92; Cyan = 96
-        Red = 91; Magenta = 95; Yellow = 93; White = 97
-    }
-
-    static [int[]] ParseHexColor([string]$hexColor) {
-        if ([string]::IsNullOrWhiteSpace($hexColor) -or -not $hexColor.StartsWith("#")) { return $null }
-        $hex = $hexColor.Substring(1)
-        if ($hex.Length -eq 3) { $hex = "$($hex[0])$($hex[0])$($hex[1])$($hex[1])$($hex[2])$($hex[2])" }
-        if ($hex.Length -ne 6) { return $null }
+    static [hashtable] HexToRgb([string]$hexColor) {
+        if ([string]::IsNullOrEmpty($hexColor) -or -not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
+            # Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor'" # Use Write-Log
+            return $null
+        }
         try {
-            $r = [System.Convert]::ToInt32($hex.Substring(0, 2), 16)
-            $g = [System.Convert]::ToInt32($hex.Substring(2, 2), 16)
-            $b = [System.Convert]::ToInt32($hex.Substring(4, 2), 16)
-            return @($r, $g, $b)
-        } catch { return $null }
-    }
-
-    static [string] GetForegroundCode($color) {
-        if ($color -is [ConsoleColor]) {
-            return "`e[$([TuiAnsiHelper]::ColorMap[$color.ToString()] ?? 37)m"
-        } elseif ($color -is [string] -and $color.StartsWith("#")) {
-            return [TuiAnsiHelper]::GetForegroundSequence($color)
-        } else {
-            return "`e[37m" 
+            return @{
+                R = [System.Convert]::ToInt32($hexColor.Substring(1, 2), 16)
+                G = [System.Convert]::ToInt32($hexColor.Substring(3, 2), 16)
+                B = [System.Convert]::ToInt32($hexColor.Substring(5, 2), 16)
+            }
+        } catch {
+            # Write-Log -Level Warning -Message "Error parsing hex color '$hexColor': $($_.Exception.Message)" -Data $_
+            return $null
         }
     }
 
-    static [string] GetBackgroundCode($color) {
-        if ($color -is [ConsoleColor]) {
-            $code = ([TuiAnsiHelper]::ColorMap[$color.ToString()] ?? 30) + 10
-            return "`e[${code}m"
-        } elseif ($color -is [string] -and $color.StartsWith("#")) {
-            return [TuiAnsiHelper]::GetBackgroundSequence($color)
-        } else {
-            return "`e[40m" 
+    static [string] GetAnsiSequence([string]$fgHex, [string]$bgHex, [hashtable]$attributes) {
+        $sequences = [System.Collections.Generic.List[string]]::new()
+
+        # Foreground color (Truecolor - SGR 38;2)
+        if (-not [string]::IsNullOrEmpty($fgHex)) {
+            $rgb = [TuiAnsiHelper]::HexToRgb($fgHex)
+            if ($rgb) {
+                $sequences.Add("38;2;$($rgb.R);$($rgb.G);$($rgb.B)")
+            }
         }
+
+        # Background color (Truecolor - SGR 48;2)
+        if (-not [string]::IsNullOrEmpty($bgHex)) {
+            $rgb = [TuiAnsiHelper]::HexToRgb($bgHex)
+            if ($rgb) {
+                $sequences.Add("48;2;$($rgb.R);$($rgb.G);$($rgb.B)")
+            }
+        }
+
+        # Style attributes
+        if ($attributes) {
+            if ([bool]($attributes.Bold ?? $false)) { $sequences.Add("1") }
+            if ([bool]($attributes.Italic ?? $false)) { $sequences.Add("3") }
+            if ([bool]($attributes.Underline ?? $false)) { $sequences.Add("4") }
+            if ([bool]($attributes.Strikethrough ?? $false)) { $sequences.Add("9") }
+        }
+
+        if ($sequences.Count -eq 0) { return "" }
+        return "`e[$($sequences -join ';')m"
     }
 
-    static [string] GetForegroundSequence([string]$hexColor) {
-        if ([string]::IsNullOrEmpty($hexColor)) { return "" }
-        if ([TuiAnsiHelper]::_fgCache.ContainsKey($hexColor)) { 
-            return [TuiAnsiHelper]::_fgCache[$hexColor] 
-        }
-        $rgb = [TuiAnsiHelper]::ParseHexColor($hexColor)
-        if (-not $rgb) { return "" }
-        $sequence = "`e[38;2;$($rgb[0]);$($rgb[1]);$($rgb[2])m"
-        [TuiAnsiHelper]::_fgCache[$hexColor] = $sequence
-        return $sequence
-    }
-    
-    static [string] GetBackgroundSequence([string]$hexColor) {
-        if ([string]::IsNullOrEmpty($hexColor)) { return "" }
-        if ([TuiAnsiHelper]::_bgCache.ContainsKey($hexColor)) { 
-            return [TuiAnsiHelper]::_bgCache[$hexColor] 
-        }
-        $rgb = [TuiAnsiHelper]::ParseHexColor($hexColor)
-        if (-not $rgb) { return "" }
-        $sequence = "`e[48;2;$($rgb[0]);$($rgb[1]);$($rgb[2])m"
-        [TuiAnsiHelper]::_bgCache[$hexColor] = $sequence
-        return $sequence
-    }
-    
     static [string] Reset() { return "`e[0m" }
-    static [string] Bold() { return "`e[1m" }
-    static [string] Underline() { return "`e[4m" }
-    static [string] Italic() { return "`e[3m" }
 }
 #endregion
 
 #region TuiCell Class - Core Compositor Unit with Truecolor Support
 class TuiCell {
     [char] $Char = ' '
-    $ForegroundColor = [ConsoleColor]::White
-    $BackgroundColor = [ConsoleColor]::Black
+    [string] $ForegroundColor = "#FFFFFF" # Changed to string for hex color
+    [string] $BackgroundColor = "#000000" # Changed to string for hex color
     [bool] $Bold = $false
     [bool] $Underline = $false
     [bool] $Italic = $false
-    [string] $StyleFlags = "" 
+    [bool] $Strikethrough = $false # NEW Property for additional style
+    [string] $StyleFlags = "" # Can keep this, but individual bools are preferred.
     [int] $ZIndex = 0        
     [object] $Metadata = $null 
 
     TuiCell() { }
     TuiCell([char]$char) { $this.Char = $char }
-    TuiCell([char]$char, $fg, $bg) {
-        $this.Char = $char
-        $this.ForegroundColor = $fg
-        $this.BackgroundColor = $bg
-    }
-    TuiCell([char]$char, $fg, $bg, [bool]$bold, [bool]$underline) {
+    
+    # Updated Constructor: Consolidate previous fg/bg and fg/bg/bold/underline constructors
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold=$false, [bool]$italic=$false, [bool]$underline=$false, [bool]$strikethrough=$false) {
         $this.Char = $char
         $this.ForegroundColor = $fg
         $this.BackgroundColor = $bg
         $this.Bold = $bold
+        $this.Italic = $italic
         $this.Underline = $underline
+        $this.Strikethrough = $strikethrough # Assign new property
     }
+    
+    # Copy Constructor: Ensure it copies all new properties
     TuiCell([object]$other) {
         $this.Char = $other.Char
         $this.ForegroundColor = $other.ForegroundColor
@@ -122,12 +103,13 @@ class TuiCell {
         $this.Bold = $other.Bold
         $this.Underline = $other.Underline
         $this.Italic = $other.Italic
+        $this.Strikethrough = $other.Strikethrough # Make sure this is copied
         $this.StyleFlags = $other.StyleFlags
         $this.ZIndex = $other.ZIndex
         $this.Metadata = $other.Metadata
     }
 
-    [TuiCell] WithStyle($fg, $bg) {
+    [TuiCell] WithStyle([string]$fg, [string]$bg) { # Parameter types changed
         $copy = [TuiCell]::new($this)
         $copy.ForegroundColor = $fg
         $copy.BackgroundColor = $bg
@@ -168,19 +150,17 @@ class TuiCell {
                 $this.Bold -ne $other.Bold -or
                 $this.Underline -ne $other.Underline -or
                 $this.Italic -ne $other.Italic -or
+                $this.Strikethrough -ne $other.Strikethrough -or # NEW: Compare Strikethrough
                 $this.ZIndex -ne $other.ZIndex)
     }
 
     [string] ToAnsiString() {
-        $sb = [System.Text.StringBuilder]::new()
-        $fgCode = [TuiAnsiHelper]::GetForegroundCode($this.ForegroundColor)
-        $bgCode = [TuiAnsiHelper]::GetBackgroundCode($this.BackgroundColor)
-        [void]$sb.Append($fgCode).Append($bgCode)
-        if ($this.Bold) { [void]$sb.Append([TuiAnsiHelper]::Bold()) }
-        if ($this.Underline) { [void]$sb.Append([TuiAnsiHelper]::Underline()) }
-        if ($this.Italic) { [void]$sb.Append([TuiAnsiHelper]::Italic()) }
-        [void]$sb.Append($this.Char)
-        return $sb.ToString()
+        # This is the crucial update to use the new TuiAnsiHelper.GetAnsiSequence
+        $attributes = @{ 
+            Bold=$this.Bold; Italic=$this.Italic; Underline=$this.Underline; Strikethrough=$this.Strikethrough 
+        }
+        $sequence = [TuiAnsiHelper]::GetAnsiSequence($this.ForegroundColor, $this.BackgroundColor, $attributes)
+        return "$sequence$($this.Char)" # Append character directly
     }
 
     [hashtable] ToLegacyFormat() {
@@ -188,7 +168,7 @@ class TuiCell {
     }
     
     [string] ToString() {
-        return "TuiCell(Char='$($this.Char)', FG='$($this.ForegroundColor)', BG='$($this.BackgroundColor)', Bold=$($this.Bold), Underline=$($this.Underline), Italic=$($this.Italic), ZIndex=$($this.ZIndex))"
+        return "TuiCell(Char='$($this.Char)', FG='$($this.ForegroundColor)', BG='$($this.BackgroundColor)', Bold=$($this.Bold), Underline=$($this.Underline), Italic=$($this.Italic), Strikethrough=$($this.Strikethrough), ZIndex=$($this.ZIndex))"
     }
 }
 #endregion
@@ -249,21 +229,34 @@ class TuiBuffer {
         }
     }
 
-    [void] WriteString([int]$x, [int]$y, [string]$text, $fg, $bg) {
-        if ($y -lt 0 -or $y -ge $this.Height) {
-            # Write-Warning "Skipping WriteString: Y coordinate ($y) out of bounds for buffer '$($this.Name)' (0..$($this.Height-1)). Text: '$text'."
+    [void] WriteString([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
+        if ([string]::IsNullOrEmpty($text) -or $y -lt 0 -or $y -ge $this.Height) {
+            # Write-Log -Level Debug -Message "WriteString: Skipped for buffer '$($this.Name)' due to empty text or out-of-bounds Y."
             return
         }
+        
+        # Extract properties from the style object, providing safe defaults (now expecting hex colors)
+        $fg = $style.FG ?? "#FFFFFF" # Default Foreground hex
+        $bg = $style.BG ?? "#000000" # Default Background hex
+        $bold = [bool]($style.Bold ?? $false)
+        $italic = [bool]($style.Italic ?? $false)
+        $underline = [bool]($style.Underline ?? $false)
+        $strikethrough = [bool]($style.Strikethrough ?? $false) # NEW
+        $zIndex = [int]($style.ZIndex ?? 0)
+
         $currentX = $x
         foreach ($char in $text.ToCharArray()) {
             if ($currentX -ge $this.Width) { break } 
             if ($currentX -ge 0) {
-                $this.SetCell($currentX, $y, [TuiCell]::new($char, $fg, $bg))
+                # Pass all style parameters to TuiCell constructor
+                $cell = [TuiCell]::new($char, $fg, $bg, $bold, $italic, $underline, $strikethrough)
+                $cell.ZIndex = $zIndex # Assign ZIndex
+                $this.SetCell($currentX, $y, $cell)
             }
             $currentX++
         }
         $this.IsDirty = $true
-        # Write-Verbose "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
+        # Write-Log -Level Debug -Message "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
     }
 
     [void] BlendBuffer([object]$other, [int]$offsetX, [int]$offsetY) {
@@ -323,45 +316,23 @@ class TuiBuffer {
     }
 
     # Additional helper methods needed by rendering pipeline
-    [void] DrawText([int]$x, [int]$y, [string]$text, $fg, $bg) {
-        $this.WriteString($x, $y, $text, $fg, $bg)
+    [void] DrawText([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
+        $this.WriteString($x, $y, $text, $style)
     }
     
-    [void] DrawBox([int]$x, [int]$y, [int]$width, [int]$height, $fg, $bg, [bool]$doubleLine = $false) {
-        if ($doubleLine) {
-            $topLeft = '╔'; $topRight = '╗'; $bottomLeft = '╚'; $bottomRight = '╝'
-            $horizontal = '═'; $vertical = '║'
-        } else {
-            $topLeft = '┌'; $topRight = '┐'; $bottomLeft = '└'; $bottomRight = '┘'
-            $horizontal = '─'; $vertical = '│'
-        }
-        
-        # Top line
-        $this.SetCell($x, $y, [TuiCell]::new($topLeft, $fg, $bg))
-        for ($i = 1; $i -lt $width - 1; $i++) {
-            $this.SetCell($x + $i, $y, [TuiCell]::new($horizontal, $fg, $bg))
-        }
-        $this.SetCell($x + $width - 1, $y, [TuiCell]::new($topRight, $fg, $bg))
-        
-        # Vertical lines
-        for ($i = 1; $i -lt $height - 1; $i++) {
-            $this.SetCell($x, $y + $i, [TuiCell]::new($vertical, $fg, $bg))
-            $this.SetCell($x + $width - 1, $y + $i, [TuiCell]::new($vertical, $fg, $bg))
-        }
-        
-        # Bottom line
-        $this.SetCell($x, $y + $height - 1, [TuiCell]::new($bottomLeft, $fg, $bg))
-        for ($i = 1; $i -lt $width - 1; $i++) {
-            $this.SetCell($x + $i, $y + $height - 1, [TuiCell]::new($horizontal, $fg, $bg))
-        }
-        $this.SetCell($x + $width - 1, $y + $height - 1, [TuiCell]::new($bottomRight, $fg, $bg))
+    [void] DrawBox([int]$x, [int]$y, [int]$width, [int]$height, [hashtable]$style = @{}) {
+        # This will now internally call the new Write-TuiBox function in AllFunctions.ps1
+        # It's better to delegate complex drawing like boxes to the global functions.
+        Write-TuiBox -Buffer $this -X $x -Y $y -Width $width -Height $height -Style $style
     }
     
-    [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$char, $fg, $bg) {
+    [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$char, [hashtable]$style = @{}) {
+        # Create a single character string and use WriteString to fill the rectangle
+        # This simplifies the logic by leveraging WriteString's styling capabilities.
+        $charString = "$char" # Convert char to string
         for ($py = $y; $py -lt $y + $height; $py++) {
-            for ($px = $x; $px -lt $x + $width; $px++) {
-                $this.SetCell($px, $py, [TuiCell]::new($char, $fg, $bg))
-            }
+            # Write a line of characters
+            $this.WriteString($x, $py, $charString * $width, $style)
         }
     }
     
@@ -937,6 +908,7 @@ class ServiceContainer {
 }
 #endregion
 
+
 ####\AllComponents.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Components
@@ -965,15 +937,26 @@ class LabelComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear()
-            $fg = $this.ForegroundColor ?? [ConsoleColor]::White
-            $bg = [ConsoleColor]::Black
-            $this._private_buffer.WriteString(0, 0, $this.Text, $fg, $bg)
+        # Clear buffer with theme background
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Get foreground color
+        $fg = if ($this.ForegroundColor) {
+            if ($this.ForegroundColor -is [ConsoleColor]) {
+                # Convert ConsoleColor to hex if needed
+                Get-ThemeColor("Foreground") # Use theme default instead
+            } else {
+                $this.ForegroundColor # Assume it's already hex
+            }
+        } else {
+            Get-ThemeColor("Foreground")
         }
-        catch {
-            # Silently handle errors in render
-        }
+        
+        # Draw text
+        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -Style @{ FG = $fg; BG = $bgColor }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -999,32 +982,44 @@ class ButtonComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $bgColor = if ($this.IsPressed) { [ConsoleColor]::DarkGray } else { [ConsoleColor]::Black }
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
-            $fgColor = if ($this.IsPressed) { [ConsoleColor]::Black } else { [ConsoleColor]::White }
-
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
-            
-            for ($x = 0; $x -lt $this.Width; $x++) {
-                $this._private_buffer.SetCell($x, 0, [TuiCell]::new('-', $borderColor, $bgColor))
-                $this._private_buffer.SetCell($x, $this.Height - 1, [TuiCell]::new('-', $borderColor, $bgColor))
-            }
-            for ($y = 0; $y -lt $this.Height; $y++) {
-                $this._private_buffer.SetCell(0, $y, [TuiCell]::new('|', $borderColor, $bgColor))
-                $this._private_buffer.SetCell($this.Width - 1, $y, [TuiCell]::new('|', $borderColor, $bgColor))
-            }
-            
-            $this._private_buffer.SetCell(0, 0, [TuiCell]::new('+', $borderColor, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, 0, [TuiCell]::new('+', $borderColor, $bgColor))
-            $this._private_buffer.SetCell(0, $this.Height - 1, [TuiCell]::new('+', $borderColor, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, $this.Height - 1, [TuiCell]::new('+', $borderColor, $bgColor))
-            
-            $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
-            $textY = [Math]::Floor(($this.Height - 1) / 2)
-            $this._private_buffer.WriteString($textX, $textY, $this.Text, $fgColor, $bgColor)
+        # Clear buffer with theme background
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Determine colors based on state
+        $fgColor = "#FFFFFF"
+        $bgColor = "#333333"
+        
+        if ($this.IsPressed) {
+            $fgColor = Get-ThemeColor("button.pressed.fg")
+            $bgColor = Get-ThemeColor("button.pressed.bg")
         }
-        catch {}
+        elseif ($this.IsFocused) {
+            $fgColor = Get-ThemeColor("button.focused.fg") 
+            $bgColor = Get-ThemeColor("button.focused.bg")
+        }
+        elseif (-not $this.Enabled) {
+            $fgColor = Get-ThemeColor("button.disabled.fg")
+            $bgColor = Get-ThemeColor("button.disabled.bg")
+        }
+        else {
+            $fgColor = Get-ThemeColor("button.normal.fg")
+            $bgColor = Get-ThemeColor("button.normal.bg")
+        }
+        
+        # Draw button background
+        $style = @{ FG = $fgColor; BG = $bgColor }
+        $this._private_buffer.FillRect(0, 0, $this.Width, $this.Height, ' ', $style)
+        
+        # Draw button text centered
+        if (-not [string]::IsNullOrEmpty($this.Text)) {
+            $textX = [Math]::Max(0, [Math]::Floor(($this.Width - $this.Text.Length) / 2))
+            $textY = [Math]::Floor($this.Height / 2)
+            
+            Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -Style $style
+        }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -1078,29 +1073,18 @@ class TextBoxComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $bgColor = $this.BackgroundColor
-            $borderColorValue = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
-            $textColor = $this.ForegroundColor
-            $placeholderColorValue = $this.PlaceholderColor
-            
-            $this._private_buffer.Clear([TuiCell]::new(' ', $textColor, $bgColor))
-            
-            # Draw border
-            for ($x = 0; $x -lt $this.Width; $x++) {
-                $this._private_buffer.SetCell($x, 0, [TuiCell]::new('-', $borderColorValue, $bgColor))
-                $this._private_buffer.SetCell($x, $this.Height - 1, [TuiCell]::new('-', $borderColorValue, $bgColor))
-            }
-            for ($y = 0; $y -lt $this.Height; $y++) {
-                $this._private_buffer.SetCell(0, $y, [TuiCell]::new('|', $borderColorValue, $bgColor))
-                $this._private_buffer.SetCell($this.Width - 1, $y, [TuiCell]::new('|', $borderColorValue, $bgColor))
-            }
-            
-            # Corners
-            $this._private_buffer.SetCell(0, 0, [TuiCell]::new('+', $borderColorValue, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, 0, [TuiCell]::new('+', $borderColorValue, $bgColor))
-            $this._private_buffer.SetCell(0, $this.Height - 1, [TuiCell]::new('+', $borderColorValue, $bgColor))
-            $this._private_buffer.SetCell($this.Width - 1, $this.Height - 1, [TuiCell]::new('+', $borderColorValue, $bgColor))
+        # Clear buffer with theme background
+        $bgColor = Get-ThemeColor("input.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Determine colors
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("input.foreground") } else { Get-ThemeColor("Subtle") }
+        $bgColor = Get-ThemeColor("input.background")
+        $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+        
+        # Draw border
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw text or placeholder
             $contentY = 1
@@ -1113,7 +1097,8 @@ class TextBoxComponent : UIElement {
                     $this.Placeholder.Substring(0, $contentWidth)
                 } else { $this.Placeholder }
                 
-                $this._private_buffer.WriteString($contentStartX, $contentY, $placeholderText, $placeholderColorValue, $bgColor)
+                $textStyle = @{ FG = Get-ThemeColor("input.placeholder"); BG = $bgColor }
+                Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $placeholderText -Style $textStyle
             }
             else {
                 # Calculate scroll offset
@@ -1134,7 +1119,8 @@ class TextBoxComponent : UIElement {
                 }
                 
                 if ($visibleText) {
-                    $this._private_buffer.WriteString($contentStartX, $contentY, $visibleText, $textColor, $bgColor)
+                    $textStyle = @{ FG = $fgColor; BG = $bgColor }
+                    Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
                 }
                 
                 # Draw cursor if focused
@@ -1146,13 +1132,13 @@ class TextBoxComponent : UIElement {
                             $visibleText[$cursorScreenPos] 
                         } else { ' ' }
                         
-                        $this._private_buffer.SetCell($cursorX, $contentY, 
-                            [TuiCell]::new($cursorChar, $bgColor, $textColor))
+                        $cursorStyle = @{ FG = Get-ThemeColor("input.cursor"); BG = $bgColor; Bold = $true }
+                        $this._private_buffer.SetCell($cursorX, $contentY, [TuiCell]::new($cursorChar, $cursorStyle.FG, $cursorStyle.BG, $cursorStyle.Bold))
                     }
                 }
             }
-        }
-        catch {}
+            
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -1231,16 +1217,16 @@ class CheckBoxComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear()
-            
-            $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
-            $fg = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::White }
-            $bg = [ConsoleColor]::Black
-            
-            $this._private_buffer.WriteString(0, 0, "$checkMark $($this.Text)", $fg, $bg)
-        }
-        catch {}
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
+        $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
+        $fullText = "$checkMark $($this.Text)"
+        
+        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -1279,16 +1265,16 @@ class RadioButtonComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear()
-            
-            $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
-            $fg = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::White }
-            $bg = [ConsoleColor]::Black
-            
-            $this._private_buffer.WriteString(0, 0, "$radioMark $($this.Text)", $fg, $bg)
-        }
-        catch {}
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
+        $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
+        $fullText = "$radioMark $($this.Text)"
+        
+        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
+        
+        $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -1334,6 +1320,154 @@ class RadioButtonComponent : UIElement {
         if ([RadioButtonComponent]::_groups.ContainsKey($this.GroupName)) {
             [RadioButtonComponent]::_groups[$this.GroupName].Remove($this)
         }
+    }
+}
+
+# ===== CLASS: ComboBoxComponent =====
+# Module: advanced-input-components
+# Dependencies: UIElement, ListBox
+# Purpose: Dropdown with search and overlay rendering
+class ComboBoxComponent : UIElement {
+    [string[]]$Items = @()
+    [int]$SelectedIndex = -1
+    [string]$Placeholder = "Select an item..."
+    [bool]$IsExpanded = $false
+    [scriptblock]$OnChange
+    hidden [ListBox]$_dropdown
+    hidden [int]$MaxDropdownHeight = 10
+    
+    ComboBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 30
+        $this.Height = 3
+        
+        # Create dropdown listbox
+        $this._dropdown = [ListBox]::new($this.Name + "_Dropdown")
+        $this._dropdown.Visible = $false
+        $this._dropdown.IsOverlay = $true
+        $this._dropdown.Width = $this.Width
+        $this._dropdown.Height = [Math]::Min($this.MaxDropdownHeight, $this.Items.Count + 2)
+    }
+    
+    [void] SetItems([string[]]$items) {
+        $this.Items = $items
+        $this._dropdown.ClearItems()
+        foreach ($item in $items) {
+            $this._dropdown.AddItem($item)
+        }
+        $this._dropdown.Height = [Math]::Min($this.MaxDropdownHeight, $items.Count + 2)
+    }
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        $bgColor = Get-ThemeColor("input.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Draw main box
+        $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
+        
+        # Draw selected text or placeholder
+        $displayText = if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.Items.Count) {
+            $this.Items[$this.SelectedIndex]
+        } else {
+            $this.Placeholder
+        }
+        
+        $textColor = if ($this.SelectedIndex -ge 0) { 
+            Get-ThemeColor("input.foreground") 
+        } else { 
+            Get-ThemeColor("input.placeholder") 
+        }
+        
+        $maxTextLength = $this.Width - 4
+        if ($displayText.Length -gt $maxTextLength) {
+            $displayText = $displayText.Substring(0, $maxTextLength - 3) + "..."
+        }
+        
+        Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
+            -Style @{ FG = $textColor; BG = $bgColor }
+        
+        # Draw dropdown arrow - fix the line continuation issue
+        $arrowChar = if ($this.IsExpanded) { '▲' } else { '▼' }
+        $borderFgColor = Get-ThemeColor("component.border")
+        $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $borderFgColor, $bgColor))
+        
+        $this._needs_redraw = $false
+    }
+    
+    [void] ShowDropdown() {
+        if (-not $this.IsExpanded) {
+            $this.IsExpanded = $true
+            
+            # Position dropdown below combo box
+            $absolutePos = $this.GetAbsolutePosition()
+            $this._dropdown.X = $absolutePos.X
+            $this._dropdown.Y = $absolutePos.Y + $this.Height - 1
+            $this._dropdown.Visible = $true
+            $this._dropdown.SelectedIndex = $this.SelectedIndex
+            
+            # Add to overlay stack
+            if (-not $global:TuiState.OverlayStack.Contains($this._dropdown)) {
+                $global:TuiState.OverlayStack.Add($this._dropdown)
+            }
+            
+            $this.RequestRedraw()
+        }
+    }
+    
+    [void] HideDropdown() {
+        if ($this.IsExpanded) {
+            $this.IsExpanded = $false
+            $this._dropdown.Visible = $false
+            
+            # Remove from overlay stack
+            if ($global:TuiState.OverlayStack.Contains($this._dropdown)) {
+                $global:TuiState.OverlayStack.Remove($this._dropdown)
+            }
+            
+            $this.RequestRedraw()
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        
+        # If dropdown is expanded, let it handle input
+        if ($this.IsExpanded) {
+            if ($key.Key -eq [ConsoleKey]::Escape) {
+                $this.HideDropdown()
+                return $true
+            }
+            elseif ($key.Key -eq [ConsoleKey]::Enter) {
+                $this.SelectedIndex = $this._dropdown.SelectedIndex
+                $this.HideDropdown()
+                if ($this.OnChange) {
+                    & $this.OnChange $this.SelectedIndex
+                }
+                return $true
+            }
+            else {
+                return $this._dropdown.HandleInput($key)
+            }
+        }
+        else {
+            # Combo box is collapsed
+            if ($key.Key -eq [ConsoleKey]::Enter -or $key.Key -eq [ConsoleKey]::Spacebar -or 
+                $key.Key -eq [ConsoleKey]::DownArrow) {
+                $this.ShowDropdown()
+                return $true
+            }
+        }
+        
+        return $false
+    }
+    
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        $this.HideDropdown()
     }
 }
 
@@ -2015,19 +2149,15 @@ class ComboBoxComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
-            
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $bgColor = Get-ThemeColor("input.background")
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw main box
-            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
-                -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                -BorderStyle Single
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
             
-            # Draw selected/text value
+            # Draw selected text or placeholder
             $displayText = ""
             if ($this.IsEditable) {
                 $displayText = $this._searchText
@@ -2037,16 +2167,23 @@ class ComboBoxComponent : UIElement {
                 $displayText = $this.GetDisplayText($item)
             }
             
+            $textColor = if ($displayText) { 
+                Get-ThemeColor("input.foreground") 
+            } else { 
+                Get-ThemeColor("input.placeholder") 
+            }
+            
             $maxTextWidth = $this.Width - 4  # Border + dropdown arrow
             if ($displayText.Length -gt $maxTextWidth) {
                 $displayText = $displayText.Substring(0, $maxTextWidth)
             }
             
-            $this._private_buffer.WriteString(1, 1, $displayText, $fgColor, $bgColor)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayText `
+                -Style @{ FG = $textColor; BG = $bgColor }
             
             # Draw dropdown arrow
             $arrowChar = if ($this._isDropdownOpen) { '▲' } else { '▼' }
-            $arrowColor = if ($this.IsFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::DarkGray }
+            $arrowColor = if ($this.IsFocused) { Get-ThemeColor("Accent") } else { Get-ThemeColor("Subtle") }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $arrowColor, $bgColor))
             
             # Draw dropdown if open (as overlay)
@@ -2075,8 +2212,7 @@ class ComboBoxComponent : UIElement {
         # Draw dropdown border
         Write-TuiBox -Buffer $dropdownBuffer -X 0 -Y 0 `
             -Width $this.Width -Height $dropdownHeight `
-            -ForegroundColor [ConsoleColor]::Gray -BackgroundColor [ConsoleColor]::Black `
-            -BorderStyle Single
+            -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = Get-ThemeColor("input.background"); BorderStyle = "Single" }
         
         # Draw items
         $itemY = 1
@@ -2092,15 +2228,15 @@ class ComboBoxComponent : UIElement {
             $item = $this.Items[$itemIndex]
             $itemText = $this.GetDisplayText($item)
             
-            $itemFg = [ConsoleColor]::White
-            $itemBg = [ConsoleColor]::Black
+            $itemFg = Get-ThemeColor("list.item.normal")
+            $itemBg = Get-ThemeColor("input.background")
             
             if ($i -eq $this._highlightedIndex) {
-                $itemFg = [ConsoleColor]::Black
-                $itemBg = [ConsoleColor]::Cyan
+                $itemFg = Get-ThemeColor("list.item.selected")
+                $itemBg = Get-ThemeColor("list.item.selected.background")
             }
             elseif ($itemIndex -eq $this.SelectedIndex) {
-                $itemFg = [ConsoleColor]::Yellow
+                $itemFg = Get-ThemeColor("Accent")
             }
             
             # Clear line and draw item
@@ -2113,7 +2249,7 @@ class ComboBoxComponent : UIElement {
                 $itemText = $itemText.Substring(0, $maxTextWidth - 3) + "..."
             }
             
-            $dropdownBuffer.WriteString(1, $itemY, $itemText, $itemFg, $itemBg)
+            Write-TuiText -Buffer $dropdownBuffer -X 1 -Y $itemY -Text $itemText -Style @{ FG = $itemFg; BG = $itemBg }
             $itemY++
         }
         
@@ -2356,11 +2492,11 @@ class Table : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
-            $headerBg = [ConsoleColor]::DarkBlue
-            $selectedBg = [ConsoleColor]::DarkCyan
+            $bgColor = Get-ThemeColor("component.background")
+            $fgColor = Get-ThemeColor("Foreground")
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            $headerBg = Get-ThemeColor("list.header.bg")
+            $selectedBg = Get-ThemeColor("list.item.selected.background")
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
@@ -2373,8 +2509,7 @@ class Table : UIElement {
             if ($this.ShowBorder) {
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                    -BorderStyle Single
+                    -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
                 
                 $contentX = 1
                 $contentY = 1
@@ -2424,7 +2559,7 @@ class Table : UIElement {
                 
                 if ($this.AllowSelection -and $itemIndex -eq $this.SelectedIndex) {
                     $rowBg = $selectedBg
-                    $rowFg = [ConsoleColor]::White
+                    $rowFg = Get-ThemeColor("list.item.selected")
                 }
                 
                 $this.DrawRow($item, $contentX, $currentY, $contentWidth, $rowFg, $rowBg)
@@ -2439,7 +2574,7 @@ class Table : UIElement {
         catch {}
     }
     
-    hidden [void] DrawHeader([int]$x, [int]$y, [int]$maxWidth, [ConsoleColor]$headerBg) {
+    hidden [void] DrawHeader([int]$x, [int]$y, [int]$maxWidth, [string]$headerBg) {
         $currentX = $x - $this._horizontalScroll
         
         foreach ($col in $this.Columns) {
@@ -2459,7 +2594,7 @@ class Table : UIElement {
                     }
                     
                     $drawX = [Math]::Max($x, $currentX)
-                    $this._private_buffer.WriteString($drawX, $y, $headerText, [ConsoleColor]::White, $headerBg)
+                    Write-TuiText -Buffer $this._private_buffer -X $drawX -Y $y -Text $headerText -Style @{ FG = Get-ThemeColor("list.header.fg"); BG = $headerBg }
                 }
             }
             
@@ -2468,7 +2603,7 @@ class Table : UIElement {
         }
     }
     
-    hidden [void] DrawRow([PSObject]$item, [int]$x, [int]$y, [int]$maxWidth, [ConsoleColor]$fg, [ConsoleColor]$bg) {
+    hidden [void] DrawRow([PSObject]$item, [int]$x, [int]$y, [int]$maxWidth, [string]$fg, [string]$bg) {
         # Clear row first
         for ($i = 0; $i -lt $maxWidth; $i++) {
             $this._private_buffer.SetCell($x + $i, $y, [TuiCell]::new(' ', $fg, $bg))
@@ -2497,7 +2632,7 @@ class Table : UIElement {
                     }
                     
                     $drawX = [Math]::Max($x, $currentX)
-                    $this._private_buffer.WriteString($drawX, $y, $value, $fg, $bg)
+                    Write-TuiText -Buffer $this._private_buffer -X $drawX -Y $y -Text $value -Style @{ FG = $fg; BG = $bg }
                 }
             }
             
@@ -2510,13 +2645,12 @@ class Table : UIElement {
         $scrollbarHeight = [Math]::Max(1, [int]($height * $height / $this.Items.Count))
         $scrollbarPos = [int](($height - $scrollbarHeight) * $this._scrollOffset / ($this.Items.Count - $height))
         
+        $scrollbarColor = Get-ThemeColor("list.scrollbar")
+        $bgColor = Get-ThemeColor("component.background")
+        
         for ($i = 0; $i -lt $height; $i++) {
-            if ($i -ge $scrollbarPos -and $i -lt $scrollbarPos + $scrollbarHeight) {
-                $this._private_buffer.SetCell($x, $y + $i, [TuiCell]::new('█', [ConsoleColor]::DarkGray, [ConsoleColor]::Black))
-            }
-            else {
-                $this._private_buffer.SetCell($x, $y + $i, [TuiCell]::new('│', [ConsoleColor]::DarkGray, [ConsoleColor]::Black))
-            }
+            $char = if ($i -ge $scrollbarPos -and $i -lt $scrollbarPos + $scrollbarHeight) { '█' } else { '│' }
+            $this._private_buffer.SetCell($x, $y + $i, [TuiCell]::new($char, $scrollbarColor, $bgColor))
         }
     }
     
@@ -2612,7 +2746,8 @@ class Panel : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgCell = [TuiCell]::new(' ', [ConsoleColor]::White, $this.BackgroundColor)
+            $bgColor = Get-ThemeColor("component.background")
+            $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
             $this._private_buffer.Clear($bgCell)
 
             # Calculate content area
@@ -2622,15 +2757,12 @@ class Panel : UIElement {
             $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
 
             if ($this.HasBorder) {
-                $borderColorToUse = $this.BorderColor
-                if ($this.IsFocused) {
-                    $borderColorToUse = [ConsoleColor]::Cyan
-                }
+                $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -ForegroundColor $borderColorToUse -BackgroundColor $this.BackgroundColor `
-                    -BorderStyle $this.BorderStyle -Title $this.Title
+                    -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor("component.title") } `
+                    -Title $this.Title
             }
 
             # Apply layout to children
@@ -2712,147 +2844,190 @@ class ScrollablePanel : Panel {
     [int]$ScrollOffsetY = 0
     [int]$MaxScrollY = 0
     [bool]$ShowScrollbar = $true
-    hidden [int]$_contentHeight = 0
+    hidden [int]$_contentHeight = 0 # This will be the virtual content height
+    hidden [TuiBuffer]$_virtual_buffer = $null # NEW: To hold the entire scrollable content
 
     ScrollablePanel([string]$name) : base($name) {
         $this.IsFocusable = $true
+        # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
+        # Start with max possible height or a reasonable large value, will grow as children are added
+        $this.{_virtual_buffer} = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
     }
 
-    [void] OnRender() {
-        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-        
-        # First render the base panel
-        ([Panel]$this).OnRender()
+    # Override OnResize to ensure virtual buffer matches actual content area needs
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        # Call base Panel resize, which updates Width, Height, and _private_buffer
+        ([Panel]$this).Resize($newWidth, $newHeight) 
 
-        # Calculate content height
-        $this._contentHeight = 0
-        foreach ($child in $this.Children) {
-            $childBottom = $child.Y + $child.Height
-            if ($childBottom -gt $this._contentHeight) {
-                $this._contentHeight = $childBottom
+        # Ensure the virtual buffer is wide enough for the content area
+        $targetVirtualWidth = $this.ContentWidth 
+        if ($this.{_virtual_buffer}.Width -ne $targetVirtualWidth) {
+            $this.{_virtual_buffer}.Resize($targetVirtualWidth, $this.{_virtual_buffer}.Height) # Only resize width for now
+        }
+        $this.UpdateMaxScroll() # Recalculate max scroll on resize
+        $this.RequestRedraw()
+    }
+
+    # Override _RenderContent to implement virtual scrolling logic
+    hidden [void] _RenderContent() {
+        # 1. First, render the base Panel. This clears its own _private_buffer and draws borders/title.
+        # This implicitly calls ([Panel]$this).OnRender()
+        ([Panel]$this)._RenderContent()
+
+        # 2. Render all children onto the _virtual_buffer
+        $this.{_virtual_buffer}.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
+        
+        $actualContentBottom = 0
+        foreach ($child in $this.Children | Sort-Object ZIndex) {
+            if ($child.Visible) {
+                # Render each child to its own private buffer
+                $child.Render() 
+                if ($null -ne $child._private_buffer) {
+                    # Blend child's buffer onto our _virtual_buffer at its original coordinates
+                    # (relative to the panel's content area)
+                    $this.{_virtual_buffer}.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
+                }
+                # Track the maximum vertical extent of children to determine virtual height
+                $childExtent = ($child.Y - $this.ContentY) + $child.Height
+                if ($childExtent -gt $actualContentBottom) {
+                    $actualContentBottom = $childExtent
+                }
             }
         }
+        $this._contentHeight = $actualContentBottom # Update actual content height
 
-        # Calculate viewport
-        $viewportHeight = $this.Height
-        if ($this.HasBorder) { $viewportHeight -= 2 }
+        # 3. Update MaxScrollY and clamp ScrollOffsetY
+        $this.UpdateMaxScroll()
+
+        # 4. Extract the visible portion from _virtual_buffer and blend it onto _private_buffer
+        #    This accounts for the scroll offset when drawing to screen.
+        $viewportWidth = $this.ContentWidth
+        $viewportHeight = $this.ContentHeight
         
-        $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
+        # Ensure target size for sub-buffer is positive
+        $viewportWidth = [Math]::Max(1, $viewportWidth)
+        $viewportHeight = [Math]::Max(1, $viewportHeight)
 
-        # Draw scrollbar if needed
+        $sourceX = 0 # No horizontal scrolling for now, but easily extendable
+        $sourceY = $this.ScrollOffsetY
+        
+        # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
+        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this.{_virtual_buffer}.Height - $sourceY)
+        if ($effectiveSourceHeight -le 0) {
+            # No content to display in viewport
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
+            return
+        }
+
+        $visiblePortion = $this.{_virtual_buffer}.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
+        
+        # Blend the visible portion onto our own _private_buffer, at the content area
+        $this.{_private_buffer}.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
+
+        # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
         if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
             $this.DrawScrollbar()
         }
+
+        $this._needs_redraw = $false
     }
 
-    hidden [void] DrawScrollbar() {
-        $scrollbarX = $this.Width - 1
-        if (-not $this.HasBorder) { $scrollbarX = $this.Width - 1 }
+    # Helper method to calculate MaxScrollY and clamp ScrollOffsetY
+    [void] UpdateMaxScroll() {
+        $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
         
+        # Ensure virtual buffer height is at least content height
+        $currentVirtualHeight = $this.{_virtual_buffer}.Height
+        $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
+        if ($newVirtualHeight -ne $currentVirtualHeight) {
+            $this.{_virtual_buffer}.Resize($this.{_virtual_buffer}.Width, $newVirtualHeight)
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
+        }
+
+        $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
+        $this.ScrollOffsetY = [Math]::Max(0, [Math]::Min($this.ScrollOffsetY, $this.MaxScrollY))
+        # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': ContentHeight=$($this._contentHeight), ViewportHeight=$($viewportHeight), MaxScrollY=$($this.MaxScrollY), ScrollOffsetY=$($this.ScrollOffsetY)."
+    }
+
+    # Keep DrawScrollbar, HandleInput, ScrollUp/Down/PageUp/Down/ToTop/Bottom methods.
+    # Ensure DrawScrollbar uses the correct ScrollOffsetY, MaxScrollY, and _contentHeight for calculations.
+    # Update SetCell calls in DrawScrollbar to use hex colors.
+    [void] DrawScrollbar() {
+        $scrollbarX = $this.Width - 1
         $scrollbarY = if ($this.HasBorder) { 1 } else { 0 }
-        $scrollbarHeight = $this.Height
-        if ($this.HasBorder) { $scrollbarHeight -= 2 }
+        $scrollbarTrackHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+
+        if ($this._contentHeight -le $scrollbarTrackHeight) { 
+            # If content fits, clear any previous scrollbar
+            for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
+                $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', Get-ThemeColor("Background"), Get-ThemeColor("Background")))
+            }
+            return 
+        } 
+
+        $scrollFg = Get-ThemeColor("list.scrollbar")
+        $scrollBg = Get-ThemeColor("Background")
 
         # Calculate thumb size and position
-        $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this._contentHeight))
-        $thumbPos = [int]($scrollbarHeight * $this.ScrollOffsetY / $this._contentHeight)
-
-        # Draw scrollbar track and thumb
-        for ($i = 0; $i -lt $scrollbarHeight; $i++) {
+        $thumbSize = [Math]::Max(1, [int]($scrollbarTrackHeight * $scrollbarTrackHeight / $this._contentHeight))
+        $thumbPos = [int](($scrollbarTrackHeight - $thumbSize) * $this.ScrollOffsetY / $this.MaxScrollY)
+        
+        for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
             $y = $scrollbarY + $i
+            $char = '│' # Default track character
+            
             if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
-                $this._private_buffer.SetCell($scrollbarX, $y, 
-                    [TuiCell]::new('█', [ConsoleColor]::DarkGray, $this.BackgroundColor))
+                $char = '█' # Thumb character
             }
-            else {
-                $this._private_buffer.SetCell($scrollbarX, $y, 
-                    [TuiCell]::new('│', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-            }
+            $this.{_private_buffer}.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
         }
     }
 
-    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key) { return $false }
-        
-        $handled = $false
-        
-        switch ($key.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this.ScrollOffsetY -gt 0) {
-                    $this.ScrollUp()
-                    $handled = $true
-                }
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this.ScrollOffsetY -lt $this.MaxScrollY) {
-                    $this.ScrollDown()
-                    $handled = $true
-                }
-            }
-            ([ConsoleKey]::PageUp) {
-                $this.ScrollPageUp()
-                $handled = $true
-            }
-            ([ConsoleKey]::PageDown) {
-                $this.ScrollPageDown()
-                $handled = $true
-            }
-            ([ConsoleKey]::Home) {
-                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                    $this.ScrollToTop()
-                    $handled = $true
-                }
-            }
-            ([ConsoleKey]::End) {
-                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                    $this.ScrollToBottom()
-                    $handled = $true
-                }
-            }
-        }
-
-        if ($handled) {
-            $this.RequestRedraw()
-        }
-
-        return $handled
-    }
-
+    # Ensure other scrolling methods call RequestRedraw and UpdateMaxScroll
     [void] ScrollUp([int]$lines = 1) {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Max(0, $this.ScrollOffsetY - $lines)
-        $this.UpdateChildrenPositions()
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled up to $($this.ScrollOffsetY)."
+        }
     }
 
     [void] ScrollDown([int]$lines = 1) {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Min($this.MaxScrollY, $this.ScrollOffsetY + $lines)
-        $this.UpdateChildrenPositions()
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled down to $($this.ScrollOffsetY)."
+        }
     }
 
     [void] ScrollPageUp() {
-        $pageSize = $this.Height
-        if ($this.HasBorder) { $pageSize -= 2 }
+        $pageSize = $this.ContentHeight
         $this.ScrollUp($pageSize)
     }
 
     [void] ScrollPageDown() {
-        $pageSize = $this.Height
-        if ($this.HasBorder) { $pageSize -= 2 }
+        $pageSize = $this.ContentHeight
         $this.ScrollDown($pageSize)
     }
 
     [void] ScrollToTop() {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = 0
-        $this.UpdateChildrenPositions()
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to top."
+        }
     }
 
     [void] ScrollToBottom() {
+        $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = $this.MaxScrollY
-        $this.UpdateChildrenPositions()
-    }
-
-    hidden [void] UpdateChildrenPositions() {
-        # Virtual scrolling - adjust render positions based on scroll offset
-        # This is handled during rendering by the compositor
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to bottom."
+        }
     }
 }
 
@@ -2958,15 +3133,12 @@ class ListBox : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        try {
-            $this._private_buffer.Clear([TuiCell]::new(' ', $this.ForegroundColor, $this.BackgroundColor))
-            
-            # Draw border
-            $borderColorToUse = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
-            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
-                -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColorToUse -BackgroundColor $this.BackgroundColor `
-                -BorderStyle Single
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Draw border
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = $bgColor; BorderStyle = "Single" }
             
             # Calculate visible area
             $contentY = 1
@@ -2987,21 +3159,24 @@ class ListBox : UIElement {
                     $itemText = $itemText.Substring(0, $contentWidth - 3) + "..."
                 }
                 
-                $fg = $this.ForegroundColor
-                $bg = $this.BackgroundColor
-                
-                if ($itemIndex -eq $this.SelectedIndex) {
-                    $fg = $this.SelectedForegroundColor
-                    $bg = $this.SelectedBackgroundColor
-                    
-                    # Fill entire row with selection color
-                    for ($x = $contentX; $x -lt $contentX + $contentWidth; $x++) {
-                        $this._private_buffer.SetCell($x, $contentY + $i, 
-                            [TuiCell]::new(' ', $fg, $bg))
-                    }
+                $isSelected = ($itemIndex -eq $this.SelectedIndex)
+                $fgColor = if ($isSelected) { 
+                    Get-ThemeColor("list.item.selected") 
+                } else { 
+                    Get-ThemeColor("list.item.normal") 
+                }
+                $itemBgColor = if ($isSelected) { 
+                    Get-ThemeColor("list.item.selected.background") 
+                } else { 
+                    $bgColor 
                 }
                 
-                $this._private_buffer.WriteString($contentX, $contentY + $i, $itemText, $fg, $bg)
+                # Draw item background
+                $this._private_buffer.FillRect(1, $contentY + $i, $this.Width - 2, 1, ' ', @{ BG = $itemBgColor })
+                
+                # Draw item text
+                Write-TuiText -Buffer $this._private_buffer -X $contentX -Y ($contentY + $i) -Text $itemText `
+                    -Style @{ FG = $fgColor; BG = $itemBgColor }
             }
             
             # Draw scrollbar if needed
@@ -3012,18 +3187,11 @@ class ListBox : UIElement {
                 $thumbPos = [int]($scrollbarHeight * $this.ScrollOffset / $this.Items.Count)
                 
                 for ($i = 0; $i -lt $scrollbarHeight; $i++) {
-                    if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
-                        $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                            [TuiCell]::new('█', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-                    }
-                    else {
-                        $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                            [TuiCell]::new('│', [ConsoleColor]::DarkGray, $this.BackgroundColor))
-                    }
+                    $char = if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) { '█' } else { '│' }
+                    $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
+                        [TuiCell]::new($char, Get-ThemeColor("list.scrollbar"), $bgColor))
                 }
             }
-        }
-        catch {}
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -3338,8 +3506,8 @@ class Dialog : UIElement {
         $this._panel = [Panel]::new($this.Name + "_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = [ConsoleColor]::Yellow
-        $this._panel.BackgroundColor = [ConsoleColor]::Black
+        $this._panel.BorderColor = Get-ThemeColor("dialog.border")
+        $this._panel.BackgroundColor = Get-ThemeColor("dialog.background")
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
@@ -3355,14 +3523,42 @@ class Dialog : UIElement {
         $this.RequestRedraw()
     }
 
-    [void] Close([object]$result) {
+    # Renamed from Close to Complete to match guide
+    [void] Complete([object]$result) {
         $this.Result = $result
         $this._isComplete = $true
-        $this.Visible = $false
+        
+        # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
-            & $this.OnClose $result
+            try { & $this.OnClose $result } catch { # Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" }
         }
-        $this.RequestRedraw()
+        
+        # Publish a general dialog close event for DialogManager to pick up
+        if ($global:TuiState.Services.EventManager) {
+            $global:TuiState.Services.EventManager.Publish("Dialog.Completed", @{ Dialog = $this; Result = $result })
+        }
+        # The DialogManager will then call HideDialog for actual UI removal and focus restoration.
+    }
+
+    # Legacy method for compatibility
+    [void] Close([object]$result) {
+        $this.Complete($result)
+    }
+
+    # New method for DialogManager to call to set initial focus within the dialog
+    [void] SetInitialFocus() {
+        $firstFocusable = $this.Children | Where-Object { $_.IsFocusable -and $_.Visible -and $_.Enabled } | Sort-Object TabIndex, Y, X | Select-Object -First 1
+        if ($firstFocusable -and $global:TuiState.Services.FocusManager) {
+            $global:TuiState.Services.FocusManager.SetFocus($firstFocusable)
+            # Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
+        }
+    }
+
+    # Update Title on render
+    [void] OnRender() {
+        # Base Panel's OnRender already draws border and title using ThemeManager colors
+        $this._panel.Title = " $this.Title " # Ensure title is updated on panel
+        $this._panel.OnRender() # Render the internal panel
     }
 
     [object] ShowDialog([string]$title, [string]$message) {
@@ -3393,7 +3589,7 @@ class AlertDialog : Dialog {
         $this._okButton.Width = 10
         $this._okButton.Height = 3
         $this._okButton.OnClick = {
-            $this.Close($true)
+            $this.Complete($true)
         }.GetNewClosure()
         $this._panel.AddChild($this._okButton)
     }
@@ -3410,21 +3606,20 @@ class AlertDialog : Dialog {
         ([Dialog]$this).OnRender()
         
         if ($this.Visible -and $this.Message) {
-            # Draw message
-            $messageX = 2
-            $messageY = 2
-            $maxWidth = $this.Width - 4
-            
-            # Simple word wrap
+            # Draw message within the dialog's panel content area
+            $panelContentX = $this._panel.ContentX
+            $panelContentY = $this._panel.ContentY
+            $maxWidth = $this.Width - 4 # Panel width - 2*border - 2*padding
+
+            # Simple word wrap (use Write-TuiText)
             $words = $this.Message -split ' '
             $currentLine = ""
-            $currentY = $messageY
-            
+            $currentY = $panelContentY + 1 # Start drawing message below title
+
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
                     if ($currentLine) {
-                        $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                            $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
                         $currentY++
                     }
                     $currentLine = $word
@@ -3433,21 +3628,28 @@ class AlertDialog : Dialog {
                     $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
                 }
             }
-            
             if ($currentLine) {
-                $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                    $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
             }
         }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+
+        # Let OK button handle input first
+        if ($this._okButton.HandleInput($key)) { return $true }
+        
         if ($key.Key -eq [ConsoleKey]::Escape -or $key.Key -eq [ConsoleKey]::Enter) {
-            $this.Close($true)
+            $this.Complete($true) # Complete dialog
             return $true
         }
-        
-        return $this._okButton.HandleInput($key)
+        return $false
+    }
+
+    [void] OnEnter() {
+        # Set focus to the OK button when dialog appears
+        $global:TuiState.Services.FocusManager?.SetFocus($this._okButton)
     }
 }
 
@@ -3472,7 +3674,7 @@ class ConfirmDialog : Dialog {
         $this._yesButton.Width = 10
         $this._yesButton.Height = 3
         $this._yesButton.OnClick = {
-            $this.Close($true)
+            $this.Complete($true)
         }.GetNewClosure()
         $this._panel.AddChild($this._yesButton)
 
@@ -3482,7 +3684,7 @@ class ConfirmDialog : Dialog {
         $this._noButton.Width = 10
         $this._noButton.Height = 3
         $this._noButton.OnClick = {
-            $this.Close($false)
+            $this.Complete($false)
         }.GetNewClosure()
         $this._panel.AddChild($this._noButton)
     }
@@ -3516,19 +3718,18 @@ class ConfirmDialog : Dialog {
         
         if ($this.Visible -and $this.Message) {
             # Draw message (same as AlertDialog)
-            $messageX = 2
-            $messageY = 2
+            $panelContentX = $this._panel.ContentX
+            $panelContentY = $this._panel.ContentY
             $maxWidth = $this.Width - 4
             
             $words = $this.Message -split ' '
             $currentLine = ""
-            $currentY = $messageY
+            $currentY = $panelContentY + 1
             
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
                     if ($currentLine) {
-                        $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                            $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
                         $currentY++
                     }
                     $currentLine = $word
@@ -3539,8 +3740,7 @@ class ConfirmDialog : Dialog {
             }
             
             if ($currentLine) {
-                $this._panel._private_buffer.WriteString($messageX, $currentY, 
-                    $currentLine, [ConsoleColor]::White, [ConsoleColor]::Black)
+                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
             }
         }
     }
@@ -3857,6 +4057,7 @@ class NavigationMenu : UIElement {
 #endregion Navigation Components
 
 
+
 ####\AllFunctions.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Functions (Load After Classes)
@@ -3865,109 +4066,6 @@ class NavigationMenu : UIElement {
 
 #region TUI Drawing Functions
 
-function Write-TuiBox {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [TuiBuffer]$Buffer,
-        
-        [Parameter(Mandatory)]
-        [int]$X,
-        
-        [Parameter(Mandatory)]
-        [int]$Y,
-        
-        [Parameter(Mandatory)]
-        [int]$Width,
-        
-        [Parameter(Mandatory)]
-        [int]$Height,
-        
-        [ConsoleColor]$ForegroundColor = [ConsoleColor]::White,
-        [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black,
-        [string]$BorderStyle = "Single",
-        [string]$Title = ""
-    )
-    
-    try {
-        if ($Width -le 0 -or $Height -le 0) {
-            Write-Warning "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
-            return
-        }
-        
-        $borders = Get-TuiBorderChars -Style $BorderStyle
-        
-        # Calculate effective drawing area
-        $drawStartX = [Math]::Max(0, $X)
-        $drawStartY = [Math]::Max(0, $Y)
-        $drawEndX = [Math]::Min($Buffer.Width, $X + $Width)
-        $drawEndY = [Math]::Min($Buffer.Height, $Y + $Height)
-        
-        if ($drawEndX -le $drawStartX -or $drawEndY -le $drawStartY) {
-            Write-Verbose "Write-TuiBox: Effective drawing area is invalid after clipping. Skipping."
-            return
-        }
-        
-        # Fill background
-        $fillCell = [TuiCell]::new(' ', $BorderColor, $BackgroundColor)
-        for ($currentY = $drawStartY; $currentY -lt $drawEndY; $currentY++) {
-            for ($currentX = $drawStartX; $currentX -lt $drawEndX; $currentX++) {
-                $Buffer.SetCell($currentX, $currentY, [TuiCell]::new($fillCell))
-            }
-        }
-        
-        # Draw corners
-        if ($X -ge 0 -and $Y -ge 0) { 
-            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.TopLeft, $BorderColor, $BackgroundColor))
-        }
-        if (($X + $Width - 1) -lt $Buffer.Width -and $Y -ge 0) { 
-            $Buffer.SetCell($X + $Width - 1, $Y, [TuiCell]::new($borders.TopRight, $BorderColor, $BackgroundColor))
-        }
-        if ($X -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { 
-            $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.BottomLeft, $BorderColor, $BackgroundColor))
-        }
-        if (($X + $Width - 1) -lt $Buffer.Width -and ($Y + $Height - 1) -lt $Buffer.Height) { 
-            $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, [TuiCell]::new($borders.BottomRight, $BorderColor, $BackgroundColor))
-        }
-        
-        # Draw horizontal lines
-        for ($i = 1; $i -lt $Width - 1; $i++) {
-            if ($Y -ge 0 -and ($X + $i) -ge 0 -and ($X + $i) -lt $Buffer.Width) {
-                $Buffer.SetCell($X + $i, $Y, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
-            }
-            if (($Y + $Height - 1) -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height -and ($X + $i) -ge 0 -and ($X + $i) -lt $Buffer.Width) {
-                $Buffer.SetCell($X + $i, $Y + $Height - 1, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
-            }
-        }
-        
-        # Draw vertical lines
-        for ($i = 1; $i -lt $Height - 1; $i++) {
-            if ($X -ge 0 -and ($Y + $i) -ge 0 -and ($Y + $i) -lt $Buffer.Height) {
-                $Buffer.SetCell($X, $Y + $i, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
-            }
-            if (($X + $Width - 1) -ge 0 -and ($X + $Width - 1) -lt $Buffer.Width -and ($Y + $i) -ge 0 -and ($Y + $i) -lt $Buffer.Height) {
-                $Buffer.SetCell($X + $Width - 1, $Y + $i, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
-            }
-        }
-        
-        # Draw title if provided
-        if ($Title -and $Title.Length -gt 0 -and $Y -ge 0) {
-            $titleWithSpace = " $Title "
-            $titleX = $X + [Math]::Floor(($Width - $titleWithSpace.Length) / 2)
-            if ($titleX -ge 0) {
-                $maxTitleLength = [Math]::Min($titleWithSpace.Length, $Width - 2)
-                if ($maxTitleLength -gt 0) {
-                    $displayTitle = $titleWithSpace.Substring(0, $maxTitleLength)
-                    $Buffer.WriteString($titleX, $Y, $displayTitle, $BorderColor, $BackgroundColor)
-                }
-            }
-        }
-    }
-    catch {
-        Write-Error "Write-TuiBox error: $_"
-    }
-}
-
 function Write-TuiText {
     [CmdletBinding()]
     param(
@@ -3975,33 +4073,19 @@ function Write-TuiText {
         [Parameter(Mandatory)][int]$X,
         [Parameter(Mandatory)][int]$Y,
         [Parameter(Mandatory)][string]$Text,
-        [object]$ForegroundColor = [ConsoleColor]::White,
-        [object]$BackgroundColor = [ConsoleColor]::Black,
-        [bool]$Bold = $false,
-        [bool]$Underline = $false,
-        [bool]$Italic = $false,
-        [int]$ZIndex = 0
+        [hashtable]$Style = @{} # Accepts a hashtable for all style properties
     )
     
     try {
-        if ($Y -lt 0 -or $Y -ge $Buffer.Height) {
-            Write-Warning "Write-TuiText: Y coordinate ($Y) is out of bounds for buffer '$($Buffer.Name)' (0..$($Buffer.Height-1)). Text: '$Text'."
-            return
+        if ($null -eq $Buffer -or [string]::IsNullOrEmpty($Text)) { 
+            # Write-Log -Level Debug -Message "Write-TuiText: Skipped for buffer '$($Buffer.Name)' due to empty text."
+            return 
         }
         
-        $currentX = $X
-        foreach ($char in $Text.ToCharArray()) {
-            if ($currentX -ge $Buffer.Width) { break }
-            if ($currentX -ge 0) {
-                $cell = [TuiCell]::new($char, $ForegroundColor, $BackgroundColor, $Bold, $Underline)
-                $cell.Italic = $Italic
-                $cell.ZIndex = $ZIndex
-                $Buffer.SetCell($currentX, $Y, $cell)
-            }
-            $currentX++
-        }
+        # Now simply pass the style hashtable to TuiBuffer.WriteString
+        $Buffer.WriteString($X, $Y, $Text, $Style)
         
-        Write-Verbose "Write-TuiText: Wrote '$Text' to buffer '$($Buffer.Name)' at ($X, $Y)."
+        # Write-Log -Level Debug -Message "Write-TuiText: Wrote '$Text' to buffer '$($Buffer.Name)' at ($X, $Y)."
     }
     catch {
         Write-Error "Failed to write text to buffer '$($Buffer.Name)' at ($X, $Y): $($_.Exception.Message)"
@@ -4017,87 +4101,73 @@ function Write-TuiBox {
         [Parameter(Mandatory)][int]$Y,
         [Parameter(Mandatory)][int]$Width,
         [Parameter(Mandatory)][int]$Height,
-        [ValidateSet("Single", "Double", "Rounded", "Thick")][string]$BorderStyle = "Single",
-        [object]$BorderColor = [ConsoleColor]::White,
-        [object]$BackgroundColor = [ConsoleColor]::Black,
-        [string]$Title = ""
+        [string]$Title = "",
+        [hashtable]$Style = @{} # All visual aspects now passed via Style hashtable
     )
     
     try {
-        if ($Width -le 0 -or $Height -le 0) {
-            Write-Warning "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
+        if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) {
+            # Write-Log -Level Warning -Message "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
             return
         }
+
+        # Extract properties from the style object with safe fallbacks.
+        $borderStyleName = $Style.BorderStyle ?? "Single"
+        $borderColor = $Style.BorderFG ?? "#808080" # Default border color (gray hex)
+        $bgColor = $Style.BG ?? "#000000"           # Default background color (black hex)
+        $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color
+        $fillChar = [char]($Style.FillChar ?? ' ')   # Optional fill character
+
+        $borders = Get-TuiBorderChars -Style $borderStyleName
         
-        $borders = Get-TuiBorderChars -Style $BorderStyle
+        # Define style objects for child calls to Write-TuiText.
+        $generalStyle = @{ FG = $borderColor; BG = $bgColor } # For borders
+        $fillStyle = @{ FG = $borderColor; BG = $bgColor }    # For fill area (fill char uses border fg)
         
-        # Calculate effective drawing area
-        $drawStartX = [Math]::Max(0, $X)
-        $drawStartY = [Math]::Max(0, $Y)
-        $drawEndX = [Math]::Min($Buffer.Width, $X + $Width)
-        $drawEndY = [Math]::Min($Buffer.Height, $Y + $Height)
-        
-        if ($drawEndX -le $drawStartX -or $drawEndY -le $drawStartY) {
-            Write-Verbose "Write-TuiBox: Effective drawing area is invalid after clipping. Skipping."
-            return
+        $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
+        # Merge any additional title style overrides (e.g., Bold = $true for title)
+        if ($Style.TitleStyle) {
+            foreach ($key in $Style.TitleStyle.Keys) { $titleTextStyle[$key] = $Style.TitleStyle[$key] }
         }
+
+        # Fill background of the entire box area first
+        $Buffer.FillRect($X, $Y, $Width, $Height, $fillChar, $fillStyle)
         
-        # Fill background
-        $fillCell = [TuiCell]::new(' ', $BorderColor, $BackgroundColor)
-        for ($currentY = $drawStartY; $currentY -lt $drawEndY; $currentY++) {
-            for ($currentX = $drawStartX; $currentX -lt $drawEndX; $currentX++) {
-                $Buffer.SetCell($currentX, $currentY, [TuiCell]::new($fillCell))
+        # Top border
+        if ($Width -gt 1 -and $Height -gt 0) {
+            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$($borders.Horizontal * ($Width - 2))$($borders.TopRight)" -Style $generalStyle
+        } elseif ($Width -eq 1 -and $Height -gt 0) {
+            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
+        }
+
+        # Side borders
+        for ($i = 1; $i -lt ($Height - 1); $i++) {
+            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
+            if ($Width -gt 1) {
+                Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
             }
         }
         
-        # Draw corners
-        if ($X -ge 0 -and $Y -ge 0) { 
-            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.TopLeft, $BorderColor, $BackgroundColor))
-        }
-        if (($X + $Width - 1) -lt $Buffer.Width -and $Y -ge 0) { 
-            $Buffer.SetCell($X + $Width - 1, $Y, [TuiCell]::new($borders.TopRight, $BorderColor, $BackgroundColor))
-        }
-        if ($X -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { 
-            $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.BottomLeft, $BorderColor, $BackgroundColor))
-        }
-        if (($X + $Width - 1) -lt $Buffer.Width -and ($Y + $Height - 1) -lt $Buffer.Height) { 
-            $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, [TuiCell]::new($borders.BottomRight, $BorderColor, $BackgroundColor))
-        }
-        
-        # Draw horizontal borders
-        for ($cx = 1; $cx -lt ($Width - 1); $cx++) {
-            if (($X + $cx) -ge 0 -and ($X + $cx) -lt $Buffer.Width) {
-                if ($Y -ge 0 -and $Y -lt $Buffer.Height) { 
-                    $Buffer.SetCell($X + $cx, $Y, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
-                }
-                if ($Height -gt 1 -and ($Y + $Height - 1) -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { 
-                    $Buffer.SetCell($X + $cx, $Y + $Height - 1, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
-                }
+        # Bottom border
+        if ($Height -gt 1) {
+            if ($Width -gt 1) {
+                Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$($borders.Horizontal * ($Width - 2))$($borders.BottomRight)" -Style $generalStyle
+            } elseif ($Width -eq 1) {
+                $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
             }
         }
-        
-        # Draw vertical borders
-        for ($cy = 1; $cy -lt ($Height - 1); $cy++) {
-            if (($Y + $cy) -ge 0 -and ($Y + $cy) -lt $Buffer.Height) {
-                if ($X -ge 0 -and $X -lt $Buffer.Width) { 
-                    $Buffer.SetCell($X, $Y + $cy, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
-                }
-                if ($Width -gt 1 -and ($X + $Width - 1) -ge 0 -and ($X + $Width - 1) -lt $Buffer.Width) { 
-                    $Buffer.SetCell($X + $Width - 1, $Y + $cy, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
-                }
-            }
-        }
-        
-        # Draw title if provided
+
+        # Draw title if specified
         if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
             $titleText = " $Title "
             if ($titleText.Length -le ($Width - 2)) { 
                 $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
-                Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -ForegroundColor $BorderColor -BackgroundColor $BackgroundColor
+                Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -Style $titleTextStyle
             }
         }
         
-        Write-Verbose "Write-TuiBox: Drew '$BorderStyle' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
+        $Buffer.IsDirty = $true
+        # Write-Log -Level Debug -Message "Write-TuiBox: Drew '$borderStyleName' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
     }
     catch {
         Write-Error "Failed to draw TUI box on buffer '$($Buffer.Name)' at ($X, $Y), $($Width)x$($Height): $($_.Exception.Message)"
@@ -4161,118 +4231,114 @@ function New-TuiBuffer {
 }
 
 function New-TuiLabel {
-    [CmdletBinding()]
-    param([hashtable]$Props = @{})
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Text = "",
+        [int]$X = 0,
+        [int]$Y = 0,
+        [string]$ForegroundColor = $null
+    )
     
-    try {
-        $labelName = $Props.Name ?? "Label_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-        $label = [LabelComponent]::new($labelName)
-        
-        $Props.GetEnumerator() | ForEach-Object {
-            if ($label.PSObject.Properties.Match($_.Name)) {
-                $label.($_.Name) = $_.Value
-            }
-        }
-        
-        Write-Verbose "Created label '$labelName' with $($Props.Count) properties"
-        return $label
+    $label = [LabelComponent]::new($Name)
+    $label.Text = $Text
+    $label.X = $X
+    $label.Y = $Y
+    if ($ForegroundColor) {
+        $label.ForegroundColor = $ForegroundColor
     }
-    catch {
-        Write-Error "Failed to create label: $($_.Exception.Message)"
-        throw
-    }
+    return $label
 }
 
 function New-TuiButton {
-    [CmdletBinding()]
-    param([hashtable]$Props = @{})
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Text = "Button",
+        [int]$X = 0,
+        [int]$Y = 0,
+        [int]$Width = 10,
+        [int]$Height = 3,
+        [scriptblock]$OnClick = $null
+    )
     
-    try {
-        $buttonName = $Props.Name ?? "Button_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-        $button = [ButtonComponent]::new($buttonName)
-        
-        $Props.GetEnumerator() | ForEach-Object {
-            if ($button.PSObject.Properties.Match($_.Name)) {
-                $button.($_.Name) = $_.Value
-            }
-        }
-        
-        Write-Verbose "Created button '$buttonName' with $($Props.Count) properties"
-        return $button
+    $button = [ButtonComponent]::new($Name)
+    $button.Text = $Text
+    $button.X = $X
+    $button.Y = $Y
+    $button.Width = $Width
+    $button.Height = $Height
+    if ($OnClick) {
+        $button.OnClick = $OnClick
     }
-    catch {
-        Write-Error "Failed to create button: $($_.Exception.Message)"
-        throw
-    }
+    return $button
 }
 
 function New-TuiTextBox {
-    [CmdletBinding()]
-    param([hashtable]$Props = @{})
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Placeholder = "",
+        [int]$X = 0,
+        [int]$Y = 0,
+        [int]$Width = 20,
+        [int]$Height = 3,
+        [int]$MaxLength = 100,
+        [scriptblock]$OnChange = $null
+    )
     
-    try {
-        $textBoxName = $Props.Name ?? "TextBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-        $textBox = [TextBoxComponent]::new($textBoxName)
-        
-        $Props.GetEnumerator() | ForEach-Object {
-            if ($textBox.PSObject.Properties.Match($_.Name)) {
-                $textBox.($_.Name) = $_.Value
-            }
-        }
-        
-        Write-Verbose "Created textbox '$textBoxName' with $($Props.Count) properties"
-        return $textBox
+    $textBox = [TextBoxComponent]::new($Name)
+    $textBox.Placeholder = $Placeholder
+    $textBox.X = $X
+    $textBox.Y = $Y
+    $textBox.Width = $Width
+    $textBox.Height = $Height
+    $textBox.MaxLength = $MaxLength
+    if ($OnChange) {
+        $textBox.OnChange = $OnChange
     }
-    catch {
-        Write-Error "Failed to create textbox: $($_.Exception.Message)"
-        throw
-    }
+    return $textBox
 }
 
 function New-TuiCheckBox {
-    [CmdletBinding()]
-    param([hashtable]$Props = @{})
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Text = "Checkbox",
+        [int]$X = 0,
+        [int]$Y = 0,
+        [bool]$Checked = $false,
+        [scriptblock]$OnChange = $null
+    )
     
-    try {
-        $checkBoxName = $Props.Name ?? "CheckBox_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-        $checkBox = [CheckBoxComponent]::new($checkBoxName)
-        
-        $Props.GetEnumerator() | ForEach-Object {
-            if ($checkBox.PSObject.Properties.Match($_.Name)) {
-                $checkBox.($_.Name) = $_.Value
-            }
-        }
-        
-        Write-Verbose "Created checkbox '$checkBoxName' with $($Props.Count) properties"
-        return $checkBox
+    $checkBox = [CheckBoxComponent]::new($Name)
+    $checkBox.Text = $Text
+    $checkBox.X = $X
+    $checkBox.Y = $Y
+    $checkBox.Checked = $Checked
+    if ($OnChange) {
+        $checkBox.OnChange = $OnChange
     }
-    catch {
-        Write-Error "Failed to create checkbox: $($_.Exception.Message)"
-        throw
-    }
+    return $checkBox
 }
 
 function New-TuiRadioButton {
-    [CmdletBinding()]
-    param([hashtable]$Props = @{})
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Text = "Radio",
+        [string]$GroupName = "default",
+        [int]$X = 0,
+        [int]$Y = 0,
+        [bool]$Selected = $false,
+        [scriptblock]$OnChange = $null
+    )
     
-    try {
-        $radioButtonName = $Props.Name ?? "RadioButton_$([Guid]::NewGuid().ToString('N').Substring(0,8))"
-        $radioButton = [RadioButtonComponent]::new($radioButtonName)
-        
-        $Props.GetEnumerator() | ForEach-Object {
-            if ($radioButton.PSObject.Properties.Match($_.Name)) {
-                $radioButton.($_.Name) = $_.Value
-            }
-        }
-        
-        Write-Verbose "Created radio button '$radioButtonName' with $($Props.Count) properties"
-        return $radioButton
+    $radioButton = [RadioButtonComponent]::new($Name)
+    $radioButton.Text = $Text
+    $radioButton.GroupName = $GroupName
+    $radioButton.X = $X
+    $radioButton.Y = $Y
+    $radioButton.Selected = $Selected
+    if ($OnChange) {
+        $radioButton.OnChange = $OnChange
     }
-    catch {
-        Write-Error "Failed to create radio button: $($_.Exception.Message)"
-        throw
-    }
+    return $radioButton
 }
 
 #endregion
@@ -4282,40 +4348,86 @@ function New-TuiRadioButton {
 function Get-ThemeColor {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$ColorName
+        [Parameter(Mandatory)]
+        [string]$ColorName,
+        
+        [string]$DefaultColor = "#808080"
     )
     
-    if ($global:TuiState.Services.ThemeManager) {
-        return $global:TuiState.Services.ThemeManager.GetColor($ColorName)
+    $themeManager = $global:TuiState.Services.ThemeManager
+    if ($themeManager) {
+        $color = $themeManager.GetColor($ColorName)
+        if ($color) {
+            # Ensure we return hex format
+            if ($color -is [ConsoleColor]) {
+                # Convert ConsoleColor to hex
+                $hexMap = @{
+                    [ConsoleColor]::Black = "#000000"
+                    [ConsoleColor]::DarkBlue = "#000080"
+                    [ConsoleColor]::DarkGreen = "#008000"
+                    [ConsoleColor]::DarkCyan = "#008080"
+                    [ConsoleColor]::DarkRed = "#800000"
+                    [ConsoleColor]::DarkMagenta = "#800080"
+                    [ConsoleColor]::DarkYellow = "#808000"
+                    [ConsoleColor]::Gray = "#C0C0C0"
+                    [ConsoleColor]::DarkGray = "#808080"
+                    [ConsoleColor]::Blue = "#0000FF"
+                    [ConsoleColor]::Green = "#00FF00"
+                    [ConsoleColor]::Cyan = "#00FFFF"
+                    [ConsoleColor]::Red = "#FF0000"
+                    [ConsoleColor]::Magenta = "#FF00FF"
+                    [ConsoleColor]::Yellow = "#FFFF00"
+                    [ConsoleColor]::White = "#FFFFFF"
+                }
+                return $hexMap[$color] ?? $DefaultColor
+            }
+            return $color
+        }
     }
     
-    # Fallback if theme manager not available
-    $defaultTheme = @{
-        'Foreground' = [ConsoleColor]::White
-        'Background' = [ConsoleColor]::Black
-        'Accent' = [ConsoleColor]::Cyan
-        'Header' = [ConsoleColor]::Cyan
-        'Subtle' = [ConsoleColor]::DarkGray
-        'Highlight' = [ConsoleColor]::Yellow
-        'Border' = [ConsoleColor]::Gray
-        'Selection' = [ConsoleColor]::DarkBlue
-        'button.normal.background' = [ConsoleColor]::Black
-        'button.normal.foreground' = [ConsoleColor]::White
-        'button.normal.border' = [ConsoleColor]::Gray
-        'button.focus.background' = [ConsoleColor]::Black
-        'button.focus.foreground' = [ConsoleColor]::White
-        'button.focus.border' = [ConsoleColor]::Cyan
-        'button.pressed.background' = [ConsoleColor]::DarkGray
-        'button.pressed.foreground' = [ConsoleColor]::Black
-        'button.pressed.border' = [ConsoleColor]::Cyan
-    }
-    
-    return $defaultTheme[$ColorName] ?? [ConsoleColor]::White
+    # Write-Log -Level Debug -Message "Get-ThemeColor: Color '$ColorName' not found, using default '$DefaultColor'"
+    return $DefaultColor
 }
 
 #endregion
 
 #region Utility Functions
+
+function Write-Log {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('Trace', 'Debug', 'Info', 'Warning', 'Error', 'Fatal')]
+        [string]$Level,
+        
+        [Parameter(Mandatory)]
+        [string]$Message,
+        
+        [object]$Data = $null
+    )
+    
+    $logger = $global:TuiState.Services.Logger
+    if ($logger) {
+        # Logger.Log method signature is: Log([string]$message, [string]$level = "Info")
+        $logger.Log($Message, $Level)
+        if ($Data) {
+            $logger.Log("Additional data: $($Data | ConvertTo-Json -Compress)", 'Debug')
+        }
+    }
+    else {
+        # Fallback to console if logger not available
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $prefix = "[$timestamp] [$Level]"
+        
+        switch ($Level) {
+            'Error' { Write-Host "$prefix $Message" -ForegroundColor Red }
+            'Warning' { Write-Host "$prefix $Message" -ForegroundColor Yellow }
+            'Info' { Write-Host "$prefix $Message" -ForegroundColor Cyan }
+            'Debug' { Write-Host "$prefix $Message" -ForegroundColor Gray }
+            default { Write-Host "$prefix $Message" }
+        }
+    }
+}
 
 function Set-ComponentFocus {
     [CmdletBinding()]
@@ -4323,51 +4435,12 @@ function Set-ComponentFocus {
         [Parameter(Mandatory)][UIElement]$Component
     )
     
-    # Find parent screen/container and clear other focus
-    $parent = $Component.Parent
-    while ($parent -and -not ($parent -is [Screen])) {
-        $parent = $parent.Parent
-    }
-    
-    if ($parent) {
-        # Clear focus from all other focusable components
-        $parent.Children | ForEach-Object {
-            if ($_.IsFocusable -and $_.IsFocused -and $_ -ne $Component) {
-                $_.IsFocused = $false
-                $_.OnBlur()
-                $_.RequestRedraw()
-            }
-        }
-    }
-    
-    # Set focus on target component
-    if ($Component.IsFocusable) {
-        $Component.IsFocused = $true
-        $Component.OnFocus()
-        $Component.RequestRedraw()
-        Write-Verbose "Set focus to component: $($Component.Name)"
+    # This function is now obsolete - use FocusManager service instead
+    $focusManager = $global:TuiState.Services.FocusManager
+    if ($focusManager) {
+        $focusManager.SetFocus($Component)
     } else {
-        Write-Warning "Component '$($Component.Name)' is not focusable"
-    }
-}
-
-function Write-Log {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Message,
-        [ValidateSet('Info', 'Warning', 'Error', 'Debug')]
-        [string]$Level = 'Info'
-    )
-    
-    # Simplified logging - in full app this would use Logger service
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $logMessage = "[$timestamp] [$Level] $Message"
-    
-    switch ($Level) {
-        'Error' { Write-Error $logMessage }
-        'Warning' { Write-Warning $logMessage }
-        'Debug' { Write-Debug $logMessage }
-        default { Write-Verbose $logMessage }
+        Write-Warning "Set-ComponentFocus is deprecated. FocusManager service not available."
     }
 }
 
@@ -4530,6 +4603,7 @@ function Initialize-TuiFrameworkService {
 }
 
 #endregion
+
 
 
 ####\AllModels.ps1
@@ -5037,6 +5111,7 @@ class NavigationItem {
 #endregion
 
 
+
 ####\AllRuntime.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
@@ -5052,7 +5127,7 @@ $global:TuiState = @{
     BufferHeight = 0
     CompositorBuffer = $null
     PreviousCompositorBuffer = $null
-    ScreenStack = @()  # Simple array instead of Stack
+    ScreenStack = [System.Collections.Generic.Stack[Screen]]::new() # CHANGED TO GENERIC STACK
     CurrentScreen = $null
     IsDirty = $true
     FocusedComponent = $null
@@ -5061,7 +5136,59 @@ $global:TuiState = @{
     LastRenderTime = [datetime]::Now
     FrameCount = 0
     InputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]'
-    OverlayStack = @()  # Simple array instead of Stack
+    OverlayStack = [System.Collections.Generic.List[UIElement]]::new() # CHANGED TO GENERIC LIST
+    # Added for input thread management
+    CancellationTokenSource = $null
+    InputRunspace = $null
+    InputPowerShell = $null
+    InputAsyncResult = $null
+}
+
+#endregion
+
+#region Error Handling
+
+function Invoke-WithErrorHandling {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Component,
+        
+        [Parameter(Mandatory)]
+        [string]$Context,
+        
+        [Parameter(Mandatory)]
+        [scriptblock]$ScriptBlock,
+        
+        [hashtable]$AdditionalData = @{}
+    )
+    
+    try {
+        & $ScriptBlock
+    }
+    catch {
+        $errorDetails = @{
+            Component = $Component
+            Context = $Context
+            ErrorMessage = $_.Exception.Message
+            ErrorType = $_.Exception.GetType().FullName
+            StackTrace = $_.ScriptStackTrace
+            Timestamp = [datetime]::Now
+        }
+        
+        foreach ($key in $AdditionalData.Keys) {
+            $errorDetails[$key] = $AdditionalData[$key]
+        }
+        
+        $logger = $global:TuiState.Services.Logger
+        if ($logger) {
+            $logger.Log("Error", "Error in $Component during $Context : $($_.Exception.Message)")
+            $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress)")
+        }
+        
+        # Re-throw for caller to handle if needed
+        throw
+    }
 }
 
 #endregion
@@ -5073,38 +5200,40 @@ function Initialize-TuiEngine {
     param()
     
     try {
-        Write-Verbose "Initializing TUI Engine..."
+        Write-Log -Level Info -Message "Initializing TUI engine..."
         
-        # Hide cursor
+        # Store original console state
+        $global:TuiState.OriginalWindowTitle = $Host.UI.RawUI.WindowTitle
+        $global:TuiState.OriginalCursorVisible = [Console]::CursorVisible
+        
+        # Configure console
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         [Console]::CursorVisible = $false
+        $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
         
-        # Clear screen
-        [Console]::Clear()
+        # Clear screen and hide cursor
+        Clear-Host
+        [Console]::SetCursorPosition(0, 0)
         
-        # Get initial console size
-        $global:TuiState.BufferWidth = [Console]::WindowWidth
-        $global:TuiState.BufferHeight = [Console]::WindowHeight
-        
-        Write-Host "Console size: $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)" -ForegroundColor Yellow
+        # Get initial size
+        Update-TuiEngineSize
         
         # Create compositor buffers
-        $global:TuiState.CompositorBuffer = [TuiBuffer]::new(
-            $global:TuiState.BufferWidth,
-            $global:TuiState.BufferHeight,
-            "Compositor"
-        )
+        $width = $global:TuiState.BufferWidth
+        $height = $global:TuiState.BufferHeight
+        $global:TuiState.CompositorBuffer = [TuiBuffer]::new($width, $height, "Compositor")
+        $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($width, $height, "PreviousCompositor")
         
-        $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new(
-            $global:TuiState.BufferWidth,
-            $global:TuiState.BufferHeight,
-            "PreviousCompositor"
-        )
+        # Clear with theme background
+        $bgColor = Get-ThemeColor("Background")
+        $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        $global:TuiState.PreviousCompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        Write-Verbose "TUI Engine initialized with buffer size: $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)"
+        Write-Log -Level Info -Message "TUI engine initialized. Buffer size: ${width}x${height}"
     }
     catch {
-        Write-Error "Failed to initialize TUI engine: $_"
-        throw
+        Invoke-WithErrorHandling -Component "TuiEngine" -Context "Initialization" -ScriptBlock { throw } `
+            -AdditionalData @{ Phase = "EngineInit" }
     }
 }
 
@@ -5247,23 +5376,45 @@ function Invoke-TuiRender {
         # Clear compositor buffer
         $global:TuiState.CompositorBuffer.Clear()
         
+        Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
+        
         # Render current screen
         if ($global:TuiState.CurrentScreen) {
-            $global:TuiState.CurrentScreen.Render()
-            $screenBuffer = $global:TuiState.CurrentScreen.GetBuffer()
-            if ($screenBuffer) {
-                $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
+            try {
+                # Render the screen which will update its internal buffer
+                $global:TuiState.CurrentScreen.Render()
+                
+                # Get the screen's buffer
+                $screenBuffer = $global:TuiState.CurrentScreen.GetBuffer()
+                
+                if ($screenBuffer) {
+                    # Blend screen buffer into compositor
+                    $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
+                }
+                else {
+                    Write-Warning "Screen buffer is null for $($global:TuiState.CurrentScreen.Name)"
+                }
+            }
+            catch {
+                Write-Error "Error rendering screen: $_"
+                throw
             }
             
             # Render command palette if visible
             if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                $global:TuiState.CommandPalette.Render()
-                $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
-                if ($paletteBuffer) {
-                    $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
-                        [Math]::Floor(($global:TuiState.BufferWidth - $global:TuiState.CommandPalette.Width) / 2),
-                        [Math]::Floor(($global:TuiState.BufferHeight - $global:TuiState.CommandPalette.Height) / 2)
-                    )
+                try {
+                    $global:TuiState.CommandPalette.Render()
+                    $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
+                    if ($paletteBuffer) {
+                        # Command palette position was set during initialization
+                        $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
+                            $global:TuiState.CommandPalette.X,
+                            $global:TuiState.CommandPalette.Y
+                        )
+                    }
+                }
+                catch {
+                    Write-Warning "Error rendering command palette: $_"
                 }
             }
             
@@ -5281,10 +5432,28 @@ function Invoke-TuiRender {
             }
         }
         
-        # Differential rendering
+        # Debug: Add a test message to see if rendering is working
+        if ($global:TuiState.FrameCount -eq 0) {
+            $testMsg = "RENDERING IS WORKING - Frame: $($global:TuiState.FrameCount)"
+            $global:TuiState.CompositorBuffer.WriteString(2, 2, $testMsg, @{ FG = "#FFFF00"; BG = "#000000" })
+        }
+        
+        # Force full redraw on first frame by making previous buffer different
+        if ($global:TuiState.FrameCount -eq 0) {
+            Write-Host "First frame - initializing previous buffer for differential rendering" -ForegroundColor Green
+            # Fill previous buffer with different content to force full redraw
+            for ($y = 0; $y -lt $global:TuiState.PreviousCompositorBuffer.Height; $y++) {
+                for ($x = 0; $x -lt $global:TuiState.PreviousCompositorBuffer.Width; $x++) {
+                    $global:TuiState.PreviousCompositorBuffer.SetCell($x, $y, 
+                        [TuiCell]::new('?', "#404040", "#404040"))
+                }
+            }
+        }
+        
+        # Differential rendering - compare current compositor to previous
         Render-DifferentialBuffer
         
-        # Swap buffers
+        # Swap buffers for next frame
         $temp = $global:TuiState.PreviousCompositorBuffer
         $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
         $global:TuiState.CompositorBuffer = $temp
@@ -5310,12 +5479,9 @@ function Render-DifferentialBuffer {
         $previous = $global:TuiState.PreviousCompositorBuffer
         
         $ansiBuilder = [System.Text.StringBuilder]::new()
-        $lastBgColor = $null
-        $lastFgColor = $null
-        $lastBold = $false
-        $lastUnderline = $false
         $currentX = -1
         $currentY = -1
+        $changeCount = 0
         
         for ($y = 0; $y -lt $current.Height; $y++) {
             for ($x = 0; $x -lt $current.Width; $x++) {
@@ -5323,6 +5489,8 @@ function Render-DifferentialBuffer {
                 $previousCell = $previous.GetCell($x, $y)
                 
                 if ($currentCell.DiffersFrom($previousCell)) {
+                    $changeCount++
+                    
                     # Move cursor if needed
                     if ($currentX -ne $x -or $currentY -ne $y) {
                         [void]$ansiBuilder.Append("`e[$($y + 1);$($x + 1)H")
@@ -5330,35 +5498,19 @@ function Render-DifferentialBuffer {
                         $currentY = $y
                     }
                     
-                    # Apply styling if changed
-                    if ($currentCell.BackgroundColor -ne $lastBgColor) {
-                        [void]$ansiBuilder.Append([TuiAnsiHelper]::GetBackgroundCode($currentCell.BackgroundColor))
-                        $lastBgColor = $currentCell.BackgroundColor
-                    }
-                    
-                    if ($currentCell.ForegroundColor -ne $lastFgColor) {
-                        [void]$ansiBuilder.Append([TuiAnsiHelper]::GetForegroundCode($currentCell.ForegroundColor))
-                        $lastFgColor = $currentCell.ForegroundColor
-                    }
-                    
-                    if ($currentCell.Bold -ne $lastBold) {
-                        [void]$ansiBuilder.Append($(if ($currentCell.Bold) { "`e[1m" } else { "`e[22m" }))
-                        $lastBold = $currentCell.Bold
-                    }
-                    
-                    if ($currentCell.Underline -ne $lastUnderline) {
-                        [void]$ansiBuilder.Append($(if ($currentCell.Underline) { "`e[4m" } else { "`e[24m" }))
-                        $lastUnderline = $currentCell.Underline
-                    }
-                    
-                    # Write character
-                    [void]$ansiBuilder.Append($currentCell.Char)
+                    # Use cell's ToAnsiString method which handles all styling
+                    [void]$ansiBuilder.Append($currentCell.ToAnsiString())
                     $currentX++
                     
                     # Copy to previous buffer
                     $previous.SetCell($x, $y, [TuiCell]::new($currentCell))
                 }
             }
+        }
+        
+        # Log changes on first few frames
+        if ($global:TuiState.FrameCount -lt 5) {
+            Write-Host "Frame $($global:TuiState.FrameCount): $changeCount cells changed" -ForegroundColor Cyan
         }
         
         # Reset styling at end
@@ -5385,37 +5537,59 @@ function Process-TuiInput {
         if ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # Check command palette first
-            if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                $handled = $global:TuiState.CommandPalette.HandleInput($keyInfo)
-                if ($handled) {
+            # Check for global command palette keybind (Ctrl+P) at the highest priority
+            if ($keyInfo.Key -eq [ConsoleKey]::P -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+                if ($global:TuiState.CommandPalette) {
+                    $global:TuiState.CommandPalette.Show()
                     $global:TuiState.IsDirty = $true
                     return
                 }
             }
+
+            # If there's an active overlay (like a dialog), give it priority
+            if ($global:TuiState.OverlayStack.Count -gt 0) {
+                $topOverlay = $global:TuiState.OverlayStack[-1]
+                if ($topOverlay -and $topOverlay.Visible) {
+                    if ($topOverlay.HandleInput($keyInfo)) {
+                        $global:TuiState.IsDirty = $true
+                        return
+                    }
+                }
+            }
             
-            # Check global hotkeys
+            # Check command palette if visible
+            if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
+                if ($global:TuiState.CommandPalette.HandleInput($keyInfo)) {
+                    $global:TuiState.IsDirty = $true
+                    return
+                }
+            }
+
+            # Handle Tab for focus navigation (globally managed by FocusManager)
+            if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    $reverse = ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) -ne 0
+                    $focusManager.MoveFocus($reverse)
+                    $global:TuiState.IsDirty = $true
+                    return
+                }
+            }
+
+            # Give the currently focused component a chance to handle the input
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager -and $focusManager.FocusedComponent) {
+                if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
+                    $global:TuiState.IsDirty = $true
+                    return
+                }
+            }
+
+            # Check global hotkeys via KeybindingService
             if ($global:TuiState.Services.KeybindingService) {
                 $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
-                
                 if ($action) {
-                    Write-Verbose "Processing global action: $action"
-                    
-                    switch ($action) {
-                        "app.exit" {
-                            $global:TuiState.Running = $false
-                            return
-                        }
-                        "app.commandPalette" {
-                            if ($global:TuiState.CommandPalette) {
-                                $global:TuiState.CommandPalette.Show()
-                                $global:TuiState.IsDirty = $true
-                            }
-                            return
-                        }
-                    }
-                    
-                    # Try to execute via ActionService
+                    # Execute action via ActionService
                     if ($global:TuiState.Services.ActionService) {
                         try {
                             $global:TuiState.Services.ActionService.ExecuteAction($action)
@@ -5423,16 +5597,16 @@ function Process-TuiInput {
                             return
                         }
                         catch {
-                            Write-Verbose "Action execution failed: $_"
+                            Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
                         }
                     }
                 }
             }
             
-            # Pass to current screen
-            if ($global:TuiState.CurrentScreen) {
-                $global:TuiState.CurrentScreen.HandleInput($keyInfo)
+            # Finally, give the current screen a chance to handle the input
+            if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                 $global:TuiState.IsDirty = $true
+                return
             }
         }
     }
@@ -5440,130 +5614,10 @@ function Process-TuiInput {
         Write-Error "Input processing error: $_"
     }
 }
-
-#endregion
-
-#region Screen Management
-
-function Push-Screen {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [Screen]$Screen
-    )
-    
-    try {
-        Write-Verbose "Pushing screen: $($Screen.Name)"
-        
-        # Ensure ScreenStack exists
-        if ($null -eq $global:TuiState.ScreenStack) {
-            $global:TuiState.ScreenStack = @()
         }
-        
-        # Exit current screen
-        if ($global:TuiState.CurrentScreen) {
-            $global:TuiState.CurrentScreen.OnExit()
-            $global:TuiState.ScreenStack += $global:TuiState.CurrentScreen
-        }
-        
-        # Initialize and enter new screen
-        $global:TuiState.CurrentScreen = $Screen
-        
-        # Resize screen to match console
-        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
-        
-        if (-not $Screen._isInitialized) {
-            $Screen.Initialize()
-            $Screen._isInitialized = $true
-        }
-        
-        $Screen.OnEnter()
-        $global:TuiState.IsDirty = $true
     }
     catch {
-        Write-Error "Failed to push screen: $_"
-        throw
-    }
-}
-
-function Pop-Screen {
-    [CmdletBinding()]
-    param()
-    
-    try {
-        # Ensure ScreenStack exists
-        if ($null -eq $global:TuiState.ScreenStack) {
-            $global:TuiState.ScreenStack = @()
-        }
-        
-        if (@($global:TuiState.ScreenStack).Count -eq 0) {
-            Write-Warning "No screens to pop"
-            return
-        }
-        
-        Write-Verbose "Popping screen"
-        
-        # Exit current screen
-        if ($global:TuiState.CurrentScreen) {
-            $global:TuiState.CurrentScreen.OnExit()
-        }
-        
-        # Resume previous screen
-        $previousScreen = $global:TuiState.ScreenStack[-1]
-        if (@($global:TuiState.ScreenStack).Count -eq 1) {
-            $global:TuiState.ScreenStack = @()
-        } else {
-            $count = @($global:TuiState.ScreenStack).Count
-            $endIndex = $count - 2
-            if ($endIndex -ge 0) {
-                $global:TuiState.ScreenStack = @($global:TuiState.ScreenStack)[0..$endIndex]
-            } else {
-                $global:TuiState.ScreenStack = @()
-            }
-        }
-        $global:TuiState.CurrentScreen = $previousScreen
-        $previousScreen.OnResume()
-        
-        $global:TuiState.IsDirty = $true
-    }
-    catch {
-        Write-Error "Failed to pop screen: $_"
-        throw
-    }
-}
-
-function Switch-Screen {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [Screen]$Screen
-    )
-    
-    try {
-        Write-Verbose "Switching to screen: $($Screen.Name)"
-        
-        # Exit current screen without pushing to stack
-        if ($global:TuiState.CurrentScreen) {
-            $global:TuiState.CurrentScreen.OnExit()
-        }
-        
-        # Initialize and enter new screen
-        $global:TuiState.CurrentScreen = $Screen
-        
-        # Resize screen to match console
-        $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
-        
-        if (-not $Screen._isInitialized) {
-            $Screen.Initialize()
-            $Screen._isInitialized = $true
-        }
-        
-        $Screen.OnEnter()
-        $global:TuiState.IsDirty = $true
-    }
-    catch {
-        Write-Error "Failed to switch screen: $_"
-        throw
+        Write-Error "Input processing error: $_"
     }
 }
 
@@ -5575,81 +5629,65 @@ function Show-TuiOverlay {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [UIElement]$Element
+        [UIElement]$Overlay
     )
     
-    try {
-        Write-Verbose "Showing overlay: $($Element.Name)"
-        
-        # Initialize overlay stack if needed
-        if (-not $global:TuiState.ContainsKey('OverlayStack')) {
-            $global:TuiState.OverlayStack = @()
+    # Use DialogManager if the overlay is a Dialog
+    if ($Overlay -is [Dialog]) {
+        $dialogManager = $global:TuiState.Services.DialogManager
+        if ($dialogManager) {
+            $dialogManager.ShowDialog($Overlay)
+            return
         }
-        
-        # Push to overlay stack
-        $global:TuiState.OverlayStack += $Element
-        
-        # Initialize if needed
-        if ($Element -and $Element.PSObject.Methods.Match('Initialize') -and -not $Element._isInitialized) {
-            $Element.Initialize()
-            $Element._isInitialized = $true
-        }
-        
-        # Enter the overlay
-        if ($Element -and $Element.PSObject.Methods.Match('OnEnter')) {
-            $Element.OnEnter()
-        }
-        
-        $global:TuiState.IsDirty = $true
     }
-    catch {
-        Write-Error "Failed to show overlay: $_"
-        throw
+    
+    # For non-dialog overlays, handle manually
+    if (-not $global:TuiState.OverlayStack) {
+        $global:TuiState.OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
     }
+    
+    # Position overlay at center
+    $consoleWidth = $global:TuiState.BufferWidth
+    $consoleHeight = $global:TuiState.BufferHeight
+    $Overlay.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $Overlay.Width) / 2))
+    $Overlay.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $Overlay.Height) / 2))
+    
+    $Overlay.Visible = $true
+    $Overlay.IsOverlay = $true
+    $global:TuiState.OverlayStack.Add($Overlay)
+    $global:TuiState.IsDirty = $true
+    
+    # Write-Log -Level Debug -Message "Show-TuiOverlay: Displayed overlay '$($Overlay.Name)' at X=$($Overlay.X), Y=$($Overlay.Y)"
 }
 
 function Close-TopTuiOverlay {
     [CmdletBinding()]
     param()
     
-    try {
-        if (-not $global:TuiState.ContainsKey('OverlayStack') -or @($global:TuiState.OverlayStack).Count -eq 0) {
-            Write-Warning "No overlays to close"
+    if ($global:TuiState.OverlayStack.Count -eq 0) {
+        # Write-Log -Level Warning -Message "Close-TopTuiOverlay: No overlays to close"
+        return
+    }
+    
+    $topOverlay = $global:TuiState.OverlayStack[-1]
+    
+    # Use DialogManager if it's a Dialog
+    if ($topOverlay -is [Dialog]) {
+        $dialogManager = $global:TuiState.Services.DialogManager
+        if ($dialogManager) {
+            $dialogManager.HideDialog($topOverlay)
             return
         }
-        
-        Write-Verbose "Closing top overlay"
-        
-        # Pop from overlay stack
-        $overlay = $global:TuiState.OverlayStack[-1]
-        if (@($global:TuiState.OverlayStack).Count -eq 1) {
-            $global:TuiState.OverlayStack = @()
-        } else {
-            $count = @($global:TuiState.OverlayStack).Count
-            $endIndex = $count - 2
-            if ($endIndex -ge 0) {
-                $global:TuiState.OverlayStack = @($global:TuiState.OverlayStack)[0..$endIndex]
-            } else {
-                $global:TuiState.OverlayStack = @()
-            }
-        }
-        
-        # Exit the overlay
-        if ($overlay -and $overlay.PSObject.Methods.Match('OnExit')) {
-            $overlay.OnExit()
-        }
-        
-        # Cleanup if disposable
-        if ($overlay -and $overlay.PSObject.Methods.Match('Cleanup')) {
-            $overlay.Cleanup()
-        }
-        
-        $global:TuiState.IsDirty = $true
     }
-    catch {
-        Write-Error "Failed to close overlay: $_"
-        throw
-    }
+    
+    # Manual removal for non-dialog overlays
+    $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
+    $topOverlay.Visible = $false
+    $topOverlay.IsOverlay = $false
+    $topOverlay.Cleanup()
+    $global:TuiState.IsDirty = $true
+    
+    # Write-Log -Level Debug -Message "Close-TopTuiOverlay: Closed overlay '$($topOverlay.Name)'"
 }
 
 #endregion
@@ -5738,6 +5776,104 @@ $($global:TuiState | ConvertTo-Json -Depth 3)
 
 #endregion
 
+#region Panic Handler
+
+function Invoke-PanicHandler {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$ErrorRecord
+    )
+    
+    # Ensure we're in a safe state to write to console
+    try {
+        [Console]::ResetColor()
+        [Console]::CursorVisible = $true
+        Clear-Host
+    } catch { }
+    
+    Write-Host "`n`n" -NoNewline
+    Write-Host "================================ PANIC HANDLER ================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "An unrecoverable error has occurred:" -ForegroundColor Yellow
+    Write-Host ""
+    
+    # Error details
+    Write-Host "ERROR: " -ForegroundColor Red -NoNewline
+    Write-Host $ErrorRecord.Exception.Message
+    Write-Host ""
+    Write-Host "TYPE: " -ForegroundColor Yellow -NoNewline
+    Write-Host $ErrorRecord.Exception.GetType().FullName
+    Write-Host ""
+    
+    # Stack trace
+    Write-Host "STACK TRACE:" -ForegroundColor Yellow
+    $stackLines = $ErrorRecord.ScriptStackTrace -split "`n"
+    foreach ($line in $stackLines) {
+        Write-Host "  $line" -ForegroundColor DarkGray
+    }
+    Write-Host ""
+    
+    # System info
+    Write-Host "SYSTEM INFO:" -ForegroundColor Yellow
+    Write-Host "  PowerShell: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
+    Write-Host "  Platform: $($PSVersionTable.Platform)" -ForegroundColor DarkGray
+    Write-Host "  OS: $($PSVersionTable.OS)" -ForegroundColor DarkGray
+    Write-Host "  Host: $($Host.Name) v$($Host.Version)" -ForegroundColor DarkGray
+    Write-Host ""
+    
+    # Save crash report
+    $crashDir = Join-Path $env:TEMP "AxiomPhoenix\Crashes"
+    if (-not (Test-Path $crashDir)) {
+        New-Item -ItemType Directory -Path $crashDir -Force | Out-Null
+    }
+    
+    $crashFile = Join-Path $crashDir "crash_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+    $crashReport = @{
+        Timestamp = [datetime]::Now
+        Error = @{
+            Message = $ErrorRecord.Exception.Message
+            Type = $ErrorRecord.Exception.GetType().FullName
+            StackTrace = $ErrorRecord.ScriptStackTrace
+            InnerException = if ($ErrorRecord.Exception.InnerException) { $ErrorRecord.Exception.InnerException.Message } else { $null }
+        }
+        System = @{
+            PowerShell = $PSVersionTable.PSVersion.ToString()
+            Platform = $PSVersionTable.Platform
+            OS = $PSVersionTable.OS
+            Host = "$($Host.Name) v$($Host.Version)"
+        }
+        GlobalState = @{
+            Running = $global:TuiState.Running
+            BufferSize = "$($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)"
+            CurrentScreen = if ($global:TuiState.CurrentScreen) { $global:TuiState.CurrentScreen.Name } else { "None" }
+            OverlayCount = if ($global:TuiState.OverlayStack) { $global:TuiState.OverlayStack.Count } else { 0 }
+        }
+    }
+    
+    try {
+        $crashReport | ConvertTo-Json -Depth 10 | Out-File -FilePath $crashFile -Encoding UTF8
+        Write-Host "Crash report saved to: $crashFile" -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to save crash report: $($_.Exception.Message)" -ForegroundColor Red
+    }
+    
+    Write-Host ""
+    Write-Host "=============================================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Press any key to exit..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    
+    # Final cleanup
+    try {
+        Stop-TuiEngine -Force
+    } catch { }
+    
+    exit 1
+}
+
+#endregion
+
 #region Application Entry
 
 function Start-AxiomPhoenix {
@@ -5748,7 +5884,7 @@ function Start-AxiomPhoenix {
     )
     
     try {
-        Write-Verbose "Starting Axiom-Phoenix application..."
+        # Write-Log -Level Info -Message "Starting Axiom-Phoenix application..."
         
         # Store services
         $global:TuiState.Services = @{
@@ -5758,7 +5894,7 @@ function Start-AxiomPhoenix {
         # Extract key services for quick access
         $serviceNames = @(
             'ActionService', 'KeybindingService', 'NavigationService', 
-            'DataManager', 'ThemeManager', 'EventManager', 'Logger'
+            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager' # Add new services
         )
         
         foreach ($serviceName in $serviceNames) {
@@ -5769,12 +5905,12 @@ function Start-AxiomPhoenix {
                 }
             }
             catch {
-                Write-Warning "Failed to get service '$serviceName': $_"
+                # Write-Log -Level Warning -Message "Failed to get service '$serviceName': $($_.Exception.Message)" -Data $_
             }
         }
         
         # Create command palette if available
-        $actionService = $ServiceContainer.GetService("ActionService")
+        $actionService = $global:TuiState.Services.ActionService
         if ($actionService) {
             $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
             $global:TuiState.CommandPalette.RefreshActions()
@@ -5783,34 +5919,31 @@ function Start-AxiomPhoenix {
         # Initialize engine
         Initialize-TuiEngine
         
-        # Verify ScreenStack still exists after engine init
-        if ($null -eq $global:TuiState.ScreenStack) {
-            $global:TuiState.ScreenStack = @()
-        }
-        
-        # Set initial screen
+        # Get the NavigationService instance directly from global state
+        $navService = $global:TuiState.Services.NavigationService
+
+        # Set initial screen using NavigationService (CRUCIAL FIX)
         if ($InitialScreen) {
-            Push-Screen -Screen $InitialScreen
+            $navService.NavigateTo($InitialScreen) # Use the service directly
         }
         else {
-            Write-Warning "No initial screen provided"
+            # Write-Log -Level Warning -Message "No initial screen provided. Application might not display anything."
         }
         
         # Start main loop
         Start-TuiEngine
     }
     catch {
-        Write-Error "Application startup failed: $_"
-        Write-Error "Error occurred at: $($_.InvocationInfo.ScriptLineNumber) in $($_.InvocationInfo.ScriptName)"
-        Write-Error "Statement: $($_.InvocationInfo.Line)"
+        # Use Invoke-PanicHandler for critical startup errors
         Invoke-PanicHandler $_
     }
     finally {
-        Stop-TuiEngine
+        Stop-TuiEngine # Ensure cleanup even if startup fails
     }
 }
 
 #endregion
+
 
 
 ####\AllScreens.ps1
@@ -5941,19 +6074,19 @@ class DashboardScreen : Screen {
         $contentY = $panel.ContentY
 
         # Simple text rendering using buffer
-        $buffer.WriteString($contentX + 1, $contentY, "Task Overview", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Task Overview" -Style @{ FG = Get-ThemeColor("Primary"); BG = Get-ThemeColor("Background") }
         $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
         if ($lineWidth -gt 0) {
-            $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * $lineWidth), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
         }
         
-        $buffer.WriteString($contentX + 1, $contentY + 3, "Total Tasks:    $($this._totalTasks)", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 4, "Completed:      $($this._completedTasks)", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 5, "Pending:        $($this._pendingTasks)", [ConsoleColor]::White, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -Style @{ FG = Get-ThemeColor("Success"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -Style @{ FG = Get-ThemeColor("Warning"); BG = Get-ThemeColor("Background") }
         
-        $progress = $this._GetProgressBar()
-        $buffer.WriteString($contentX + 1, $contentY + 7, "Overall Progress:", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 8, $progress, [ConsoleColor]::Yellow, [ConsoleColor]::Black)
+        # Draw progress bar
+        $percentage = if ($this._totalTasks -eq 0) { 0 } else { [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) }
+        $this._DrawProgressBar($buffer, $contentX + 1, $contentY + 7, 20, $percentage, "Overall Progress")
         
         $panel.RequestRedraw()
     }
@@ -5971,19 +6104,19 @@ class DashboardScreen : Screen {
         $contentX = $panel.ContentX
         $contentY = $panel.ContentY
         
-        $buffer.WriteString($contentX + 1, $contentY + 0, "Welcome to Axiom-Phoenix!", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 0) -Text "Welcome to Axiom-Phoenix!" -Style @{ FG = Get-ThemeColor("Primary"); BG = Get-ThemeColor("Background") }
         $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
         if ($lineWidth -gt 0) {
-            $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * $lineWidth), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
         }
         
-        $buffer.WriteString($contentX + 1, $contentY + 3, "Press ", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 7, $contentY + 3, $paletteHotkey, [ConsoleColor]::Yellow, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 7 + $paletteHotkey.Length, $contentY + 3, " to open the", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 4, "Command Palette.", [ConsoleColor]::White, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Press " -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 7) -Y ($contentY + 3) -Text $paletteHotkey -Style @{ FG = Get-ThemeColor("Accent"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 7 + $paletteHotkey.Length) -Y ($contentY + 3) -Text " to open the" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Command Palette." -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
 
-        $buffer.WriteString($contentX + 1, $contentY + 6, "All navigation and actions are", [ConsoleColor]::Gray, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 7, "now available from there.", [ConsoleColor]::Gray, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 6) -Text "All navigation and actions are" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "now available from there." -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
         
         $panel.RequestRedraw()
     }
@@ -6001,28 +6134,47 @@ class DashboardScreen : Screen {
         $contentX = $panel.ContentX
         $contentY = $panel.ContentY
         
-        $buffer.WriteString($contentX + 1, $contentY, "Environment", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Environment" -Style @{ FG = Get-ThemeColor("Primary"); BG = Get-ThemeColor("Background") }
         $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
         if ($lineWidth -gt 0) {
-            $buffer.WriteString($contentX + 1, $contentY + 1, ('─' * $lineWidth), [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
         }
         
-        $buffer.WriteString($contentX + 1, $contentY + 3, "PowerShell Version: $($global:PSVersionTable.PSVersion)", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 4, "Memory Usage: ${memoryMB} MB", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $contentY + 5, "Host: $($global:Host.Name)", [ConsoleColor]::White, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "PowerShell Version: $($global:PSVersionTable.PSVersion)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Memory Usage: ${memoryMB} MB" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Host: $($global:Host.Name)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
         
         $panel.RequestRedraw()
     }
     
-    hidden [string] _GetProgressBar() {
-        if ($this._totalTasks -eq 0) { return "[No Tasks]" }
-        $percentage = [Math]::Round(($this._completedTasks / $this._totalTasks) * 100)
-        $barWidth = 20
-        $filled = [Math]::Max(0, [Math]::Floor($barWidth * ($percentage / 100)))
-        $empty = [Math]::Max(0, $barWidth - $filled)
-        $filledBar = if ($filled -gt 0) { '█' * $filled } else { '' }
-        $emptyBar = if ($empty -gt 0) { '░' * $empty } else { '' }
-        return "[" + $filledBar + $emptyBar + "] $percentage%"
+    hidden [void] _DrawProgressBar([TuiBuffer]$buffer, [int]$x, [int]$y, [int]$width, [float]$percentage, [string]$label) {
+        $filledWidth = [int]($width * ($percentage / 100))
+        $emptyWidth = $width - $filledWidth
+        
+        # Draw label
+        Write-TuiText -Buffer $buffer -X $x -Y $y -Text $label -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        
+        # Draw progress bar
+        $progressY = $y + 1
+        Write-TuiText -Buffer $buffer -X $x -Y $progressY -Text "[" -Style @{ FG = Get-ThemeColor("component.border"); BG = Get-ThemeColor("Background") }
+        
+        if ($filledWidth -gt 0) {
+            Write-TuiText -Buffer $buffer -X ($x + 1) -Y $progressY -Text ("█" * $filledWidth) `
+                -Style @{ FG = Get-ThemeColor("Success"); BG = Get-ThemeColor("Background") }
+        }
+        
+        if ($emptyWidth -gt 0) {
+            Write-TuiText -Buffer $buffer -X ($x + 1 + $filledWidth) -Y $progressY -Text ("░" * $emptyWidth) `
+                -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+        }
+        
+        Write-TuiText -Buffer $buffer -X ($x + 1 + $width) -Y $progressY -Text "]" `
+            -Style @{ FG = Get-ThemeColor("component.border"); BG = Get-ThemeColor("Background") }
+        
+        # Draw percentage
+        $percentText = " $([int]$percentage)%"
+        Write-TuiText -Buffer $buffer -X ($x + $width + 3) -Y $progressY -Text $percentText `
+            -Style @{ FG = Get-ThemeColor("Info"); BG = Get-ThemeColor("Background") }
     }
 
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
@@ -6180,21 +6332,22 @@ class TaskListScreen : Screen {
         $contentHeight = $panel.ContentHeight
         
         if ($this._tasks.Count -eq 0) {
-            $buffer.WriteString($contentX + 2, $contentY + 2, "No tasks found.", [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $buffer -X ($contentX + 2) -Y ($contentY + 2) -Text "No tasks found." -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+            $panel._contentHeight = ($contentY + 2) + 1 # At least enough height for this message
+            $panel.UpdateMaxScroll() # Ensure scroll is updated even for empty list
             return
         }
         
-        # Render tasks
-        $startIndex = $panel.ScrollOffsetY
-        $endIndex = [Math]::Min($startIndex + $contentHeight, $this._tasks.Count)
+        # Determine how many lines to draw based on panel's virtual content height
+        $maxVirtualContentHeight = 0 # Track the max y position if all tasks were drawn
         
-        for ($i = $startIndex; $i -lt $endIndex; $i++) {
+        for ($i = 0; $i -lt $this._tasks.Count; $i++) {
             $task = $this._tasks[$i]
-            $y = $contentY + ($i - $startIndex)
+            $y = $contentY + $i # The 'virtual' Y position if all tasks were shown without scrolling
             
             # Highlight selected task
-            $bgColor = if ($i -eq $this._selectedIndex) { [ConsoleColor]::DarkGray } else { [ConsoleColor]::Black }
-            $fgColor = if ($i -eq $this._selectedIndex) { [ConsoleColor]::White } else { [ConsoleColor]::Gray }
+            $fgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
+            $bgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
             
             # Status indicator
             $statusChar = switch ($task.Status) {
@@ -6214,7 +6367,7 @@ class TaskListScreen : Screen {
             }
             
             # Truncate title if needed
-            $maxTitleLength = $panel.ContentWidth - 10
+            $maxTitleLength = $panel.ContentWidth - 6 # Adjusted for status/priority chars and padding
             $title = if ($task.Title.Length -gt $maxTitleLength) {
                 $task.Title.Substring(0, $maxTitleLength - 3) + "..."
             } else {
@@ -6223,16 +6376,20 @@ class TaskListScreen : Screen {
             
             $taskLine = "$statusChar $priorityChar $title"
             
-            # Fill entire line with background color
-            for ($x = 0; $x -lt $panel.ContentWidth; $x++) {
-                $buffer.SetCell($contentX + $x, $y, [TuiCell]::new(' ', $fgColor, $bgColor))
-            }
+            # Draw on panel's buffer with proper style
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $y -Text $taskLine -Style @{ FG = $fgColor; BG = $bgColor }
             
-            $buffer.WriteString($contentX + 1, $y, $taskLine, $fgColor, $bgColor)
+            # Update the max content height based on the maximum Y coordinate that would be drawn
+            if (($y + 1) -gt $maxVirtualContentHeight) {
+                $maxVirtualContentHeight = $y + 1
+            }
         }
         
-        # Update scrollbar
-        $panel.UpdateMaxScroll()
+        # Crucial: Inform the ScrollablePanel about the total virtual content height
+        $panel._contentHeight = $maxVirtualContentHeight
+        
+        # Update scrollbar (this method should be called by ScrollablePanel's _RenderContent, not here)
+        # $panel.UpdateMaxScroll() # This call is now redundant here if _RenderContent handles it.
     }
 
     hidden [void] _UpdateDetailPanel() {
@@ -6249,13 +6406,13 @@ class TaskListScreen : Screen {
         
         # Task details
         $y = $contentY
-        $buffer.WriteString($contentX + 1, $y++, "Title: $($task.Title)", [ConsoleColor]::White, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $y++, "Status: $($task.Status)", [ConsoleColor]::Cyan, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $y++, "Priority: $($task.Priority)", [ConsoleColor]::Yellow, [ConsoleColor]::Black)
-        $buffer.WriteString($contentX + 1, $y++, "Progress: $($task.Progress)%", [ConsoleColor]::Green, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Title: $($task.Title)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Status: $($task.Status)" -Style @{ FG = Get-ThemeColor("Info"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Priority: $($task.Priority)" -Style @{ FG = Get-ThemeColor("Warning"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Progress: $($task.Progress)%" -Style @{ FG = Get-ThemeColor("Success"); BG = Get-ThemeColor("Background") }
         
         $y++
-        $buffer.WriteString($contentX + 1, $y++, "Description:", [ConsoleColor]::Gray, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Description:" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
         
         if (-not [string]::IsNullOrEmpty($task.Description)) {
             # Word wrap description
@@ -6266,7 +6423,7 @@ class TaskListScreen : Screen {
             foreach ($word in $words) {
                 if (($line + " " + $word).Length -gt $maxLineLength) {
                     if ($line) {
-                        $buffer.WriteString($contentX + 1, $y++, $line, [ConsoleColor]::White, [ConsoleColor]::Black)
+                        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text $line -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
                     }
                     $line = $word
                 } else {
@@ -6275,10 +6432,10 @@ class TaskListScreen : Screen {
             }
             
             if ($line) {
-                $buffer.WriteString($contentX + 1, $y++, $line, [ConsoleColor]::White, [ConsoleColor]::Black)
+                Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text $line -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
             }
         } else {
-            $buffer.WriteString($contentX + 1, $y++, "(No description)", [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "(No description)" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
         }
         
         $panel.RequestRedraw()
@@ -6295,13 +6452,13 @@ class TaskListScreen : Screen {
             $statusText += " | Filter: '$($this._filterText)'"
         }
         
-        $buffer.WriteString(0, 0, $statusText, [ConsoleColor]::White, [ConsoleColor]::Black)
+        Write-TuiText -Buffer $buffer -X 0 -Y 0 -Text $statusText -Style @{ FG = Get-ThemeColor("status.bar.fg"); BG = Get-ThemeColor("status.bar.bg") }
         
         # Keyboard hints
         $hints = "↑↓: Navigate | Enter: Edit | D: Delete | N: New"
         $hintsX = $this.Width - $hints.Length - 3
         if ($hintsX -gt $statusText.Length + 2) {
-            $buffer.WriteString($hintsX, 0, $hints, [ConsoleColor]::DarkGray, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $buffer -X $hintsX -Y 0 -Text $hints -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("status.bar.bg") }
         }
         
         $panel.RequestRedraw()
@@ -6392,6 +6549,7 @@ class TaskListScreen : Screen {
 }
 
 #endregion
+
 
 
 ####\AllServices.ps1
@@ -7097,61 +7255,49 @@ class DataManager {
 # Dependencies: EventManager (optional)
 # Purpose: Screen navigation and history management
 class NavigationService {
-    [System.Collections.Generic.Stack[Screen]]$NavigationStack
+    [System.Collections.Generic.Stack[Screen]]$NavigationStack = [System.Collections.Generic.Stack[Screen]]::new() # Explicitly initialize
     [Screen]$CurrentScreen
     [EventManager]$EventManager
     [hashtable]$ScreenRegistry = @{}
     [int]$MaxStackSize = 10
-    
-    NavigationService() {
-        $this.NavigationStack = [System.Collections.Generic.Stack[Screen]]::new()
+    [hashtable]$Services # Added to store access to all services (for creating screens)
+
+    # Add constructor that takes ServiceContainer (or hashtable of services)
+    NavigationService([hashtable]$services) {
+        $this.Services = $services
+        $this.EventManager = $services.EventManager # Get EventManager if present
     }
-    
-    NavigationService([EventManager]$eventManager) {
-        $this.NavigationStack = [System.Collections.Generic.Stack[Screen]]::new()
-        $this.EventManager = $eventManager
-    }
-    
-    [void] RegisterScreen([string]$name, [Screen]$screen) {
-        $this.ScreenRegistry[$name] = $screen
-        Write-Verbose "NavigationService: Registered screen '$name'"
-    }
-    
+
+    # IMPORTANT: Update NavigateTo method
     [void] NavigateTo([Screen]$screen) {
-        if (-not $screen) {
-            throw [ArgumentNullException]::new("screen")
-        }
+        if ($null -eq $screen) { throw [System.ArgumentNullException]::new("screen", "Cannot navigate to a null screen.") }
         
         try {
-            # Exit current screen
+            # Exit current screen if one exists
             if ($this.CurrentScreen) {
-                Write-Verbose "NavigationService: Exiting screen '$($this.CurrentScreen.Name)'"
+                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)'"
                 $this.CurrentScreen.OnExit()
                 $this.NavigationStack.Push($this.CurrentScreen)
                 
-                # Limit stack size
-                if ($this.NavigationStack.Count -gt $this.MaxStackSize) {
-                    $tempStack = [System.Collections.Generic.Stack[Screen]]::new()
-                    for ($i = 0; $i -lt $this.MaxStackSize - 1; $i++) {
-                        $tempStack.Push($this.NavigationStack.Pop())
-                    }
-                    $this.NavigationStack.Clear()
-                    while ($tempStack.Count -gt 0) {
-                        $this.NavigationStack.Push($tempStack.Pop())
-                    }
-                }
+                # Limit stack size (optional, complex to trim from bottom of Stack)
+                # If MaxStackSize is critical, consider switching NavigationStack to List<Screen> and managing explicitly.
             }
             
             # Enter new screen
             $this.CurrentScreen = $screen
-            Write-Verbose "NavigationService: Entering screen '$($screen.Name)'"
+            # Write-Log -Level Debug -Message "NavigationService: Entering screen '$($screen.Name)'"
             
+            # Initialize if not already (screens passed via registry should be initialized via factory)
             if (-not $screen._isInitialized) {
+                # Write-Log -Level Debug -Message "NavigationService: Initializing screen '$($screen.Name)'"
                 $screen.Initialize()
                 $screen._isInitialized = $true
             }
             
-            $screen.OnEnter()
+            # Resize screen to match current console dimensions
+            $screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+            
+            $screen.OnEnter() # Call lifecycle method
             
             # Publish navigation event
             if ($this.EventManager) {
@@ -7162,24 +7308,21 @@ class NavigationService {
                 })
             }
             
-            # Update global state
+            # Update global TUI state directly (CRUCIAL FIX)
             $global:TuiState.CurrentScreen = $screen
-            $global:TuiState.IsDirty = $true
+            $global:TuiState.IsDirty = $true # Force redraw
+            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnEnter should set new focus
+
         }
         catch {
             Write-Error "NavigationService: Failed to navigate to screen '$($screen.Name)': $_"
-            throw [NavigationException]::new(
-                "Failed to navigate to screen '$($screen.Name)'",
-                "NavigationService",
-                @{ ScreenName = $screen.Name },
-                $_
-            )
+            throw
         }
     }
-    
+
     [void] NavigateToByName([string]$screenName) {
         if (-not $this.ScreenRegistry.ContainsKey($screenName)) {
-            throw "Screen '$screenName' not found in registry"
+            throw [System.ArgumentException]::new("Screen '$screenName' not found in registry. Registered: $($this.ScreenRegistry.Keys -join ', ').", "screenName")
         }
         
         $this.NavigateTo($this.ScreenRegistry[$screenName])
@@ -7189,25 +7332,31 @@ class NavigationService {
         return $this.NavigationStack.Count -gt 0
     }
     
+    # IMPORTANT: Update GoBack method
     [void] GoBack() {
         if (-not $this.CanGoBack()) {
-            Write-Warning "NavigationService: Cannot go back - navigation stack is empty"
+            # Write-Log -Level Warning -Message "NavigationService: Cannot go back - navigation stack is empty"
             return
         }
         
         try {
             # Exit current screen
             if ($this.CurrentScreen) {
-                Write-Verbose "NavigationService: Exiting screen '$($this.CurrentScreen.Name)' (going back)"
+                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)' (going back)"
                 $this.CurrentScreen.OnExit()
+                $this.CurrentScreen.Cleanup() # Clean up the screen being exited/popped
             }
             
             # Pop and resume previous screen
             $previousScreen = $this.NavigationStack.Pop()
             $this.CurrentScreen = $previousScreen
             
-            Write-Verbose "NavigationService: Resuming screen '$($previousScreen.Name)'"
-            $previousScreen.OnResume()
+            # Write-Log -Level Debug -Message "NavigationService: Resuming screen '$($previousScreen.Name)'"
+            
+            # Resize screen to match current console dimensions
+            $previousScreen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+
+            $previousScreen.OnResume() # Call lifecycle method
             
             # Publish navigation event
             if ($this.EventManager) {
@@ -7218,46 +7367,35 @@ class NavigationService {
                 })
             }
             
-            # Update global state
+            # Update global TUI state directly (CRUCIAL FIX)
             $global:TuiState.CurrentScreen = $previousScreen
-            $global:TuiState.IsDirty = $true
+            $global:TuiState.IsDirty = $true # Force redraw
+            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnResume should set new focus
+
         }
         catch {
             Write-Error "NavigationService: Failed to go back: $_"
-            throw [NavigationException]::new(
-                "Failed to navigate back",
-                "NavigationService",
-                @{ StackDepth = $this.NavigationStack.Count },
-                $_
-            )
+            throw
         }
     }
     
     [void] Reset() {
-        # Clean up all screens in stack
+        # Cleanup all screens in stack and current screen
         while ($this.NavigationStack.Count -gt 0) {
             $screen = $this.NavigationStack.Pop()
-            try {
-                $screen.Cleanup()
-            }
-            catch {
-                Write-Warning "NavigationService: Error cleaning up screen '$($screen.Name)': $_"
+            try { $screen.Cleanup() } catch { # Write-Log -Level Warning -Message "NavigationService: Error cleaning up stacked screen '$($screen.Name)': $($_.Exception.Message)" }
             }
         }
         
-        # Clean up current screen
         if ($this.CurrentScreen) {
-            try {
+            try { 
                 $this.CurrentScreen.OnExit()
-                $this.CurrentScreen.Cleanup()
-            }
-            catch {
-                Write-Warning "NavigationService: Error cleaning up current screen: $_"
+                $this.CurrentScreen.Cleanup() 
+            } catch { # Write-Log -Level Warning -Message "NavigationService: Error cleaning up current screen '$($this.CurrentScreen.Name)': $($_.Exception.Message)" }
             }
             $this.CurrentScreen = $null
         }
-        
-        Write-Verbose "NavigationService: Reset complete"
+        # Write-Log -Level Debug -Message "NavigationService: Reset complete, all screens cleaned up."
     }
 }
 
@@ -7292,62 +7430,60 @@ class ThemeManager {
     
     [void] LoadDefaultTheme() {
         $this.CurrentTheme = @{
-            # Base colors
-            'Foreground' = [ConsoleColor]::White
-            'Background' = [ConsoleColor]::Black
-            'Accent' = [ConsoleColor]::Cyan
-            'Header' = [ConsoleColor]::Cyan
-            'Subtle' = [ConsoleColor]::DarkGray
-            'Highlight' = [ConsoleColor]::Yellow
-            'Border' = [ConsoleColor]::Gray
-            'Selection' = [ConsoleColor]::DarkBlue
-            'Error' = [ConsoleColor]::Red
-            'Warning' = [ConsoleColor]::Yellow
-            'Success' = [ConsoleColor]::Green
-            'Info' = [ConsoleColor]::Cyan
+            # Core colors (all hex now)
+            Background = "#000000"
+            Foreground = "#FFFFFF"
+            Primary = "#1E90FF"
+            Accent = "#FFD700"
+            Error = "#FF4444"
+            Warning = "#FFA500"
+            Success = "#32CD32"
+            Info = "#00CED1"
+            Subtle = "#808080"
             
-            # Component-specific colors
-            'button.normal.background' = [ConsoleColor]::Black
-            'button.normal.foreground' = [ConsoleColor]::White
-            'button.normal.border' = [ConsoleColor]::Gray
-            'button.focus.background' = [ConsoleColor]::Black
-            'button.focus.foreground' = [ConsoleColor]::White
-            'button.focus.border' = [ConsoleColor]::Cyan
-            'button.pressed.background' = [ConsoleColor]::DarkGray
-            'button.pressed.foreground' = [ConsoleColor]::Black
-            'button.pressed.border' = [ConsoleColor]::Cyan
+            # Component colors
+            "component.border" = "#808080"
+            "component.title" = "#FFFFFF"
+            "component.background" = "#000000"
+            "component.foreground" = "#FFFFFF"
             
-            'textbox.normal.background' = [ConsoleColor]::Black
-            'textbox.normal.foreground' = [ConsoleColor]::White
-            'textbox.normal.border' = [ConsoleColor]::Gray
-            'textbox.focus.background' = [ConsoleColor]::Black
-            'textbox.focus.foreground' = [ConsoleColor]::White
-            'textbox.focus.border' = [ConsoleColor]::Cyan
-            'textbox.placeholder' = [ConsoleColor]::DarkGray
+            # Button states
+            "button.normal.fg" = "#FFFFFF"
+            "button.normal.bg" = "#333333"
+            "button.focused.fg" = "#000000"
+            "button.focused.bg" = "#1E90FF"
+            "button.pressed.fg" = "#FFFFFF"
+            "button.pressed.bg" = "#0066CC"
+            "button.disabled.fg" = "#808080"
+            "button.disabled.bg" = "#1A1A1A"
             
-            'checkbox.normal.foreground' = [ConsoleColor]::White
-            'checkbox.checked.foreground' = [ConsoleColor]::Green
-            'checkbox.focus.foreground' = [ConsoleColor]::Cyan
+            # List/Table
+            "list.header.fg" = "#FFD700"
+            "list.header.bg" = "#1A1A1A"
+            "list.item.normal" = "#FFFFFF"
+            "list.item.selected" = "#000000"
+            "list.item.selected.background" = "#1E90FF"
+            "list.scrollbar" = "#808080"
             
-            'panel.background' = [ConsoleColor]::Black
-            'panel.foreground' = [ConsoleColor]::White
-            'panel.border' = [ConsoleColor]::Gray
-            'panel.title' = [ConsoleColor]::Cyan
+            # Dialog
+            "dialog.background" = "#1A1A1A"
+            "dialog.foreground" = "#FFFFFF"
+            "dialog.border" = "#1E90FF"
+            "dialog.title" = "#FFD700"
             
-            'list.item.normal' = [ConsoleColor]::White
-            'list.item.selected' = [ConsoleColor]::Black
-            'list.item.selected.background' = [ConsoleColor]::Cyan
-            'list.scrollbar' = [ConsoleColor]::DarkGray
+            # Status
+            "status.bar.bg" = "#333333"
+            "status.bar.fg" = "#FFFFFF"
             
-            'dialog.background' = [ConsoleColor]::Black
-            'dialog.foreground' = [ConsoleColor]::White
-            'dialog.border' = [ConsoleColor]::Yellow
-            'dialog.title' = [ConsoleColor]::Yellow
-            'dialog.shadow' = [ConsoleColor]::DarkGray
+            # Input
+            "input.background" = "#1A1A1A"
+            "input.foreground" = "#FFFFFF"
+            "input.placeholder" = "#808080"
+            "input.cursor" = "#FFD700"
         }
         
         $this.ThemeName = "Default"
-        Write-Verbose "ThemeManager: Loaded default theme"
+        # Write-Log -Level Debug -Message "ThemeManager: Loaded default theme with hex colors"
     }
     
     [object] GetColor([string]$colorName) {
@@ -7850,167 +7986,347 @@ class TuiFrameworkService {
     }
 }
 
+# ===== CLASS: FocusManager =====
+# Module: focus-manager (new service)
+# Dependencies: EventManager (optional)
+# Purpose: Centralized focus management for UI components
+class FocusManager {
+    [UIElement]$FocusedComponent = $null
+    [EventManager]$EventManager = $null
+
+    FocusManager([EventManager]$eventManager) {
+        $this.EventManager = $eventManager
+        # Write-Log -Level Debug -Message "FocusManager: Initialized."
+    }
+
+    [void] SetFocus([UIElement]$component) {
+        if ($this.FocusedComponent -eq $component) {
+            # Write-Log -Level Debug -Message "FocusManager: Component '$($component.Name)' already has focus."
+            return
+        }
+        
+        if ($null -ne $this.FocusedComponent) {
+            $this.FocusedComponent.IsFocused = $false
+            $this.FocusedComponent.OnBlur()
+            $this.FocusedComponent.RequestRedraw()
+            # Write-Log -Level Debug -Message "FocusManager: Blurred '$($this.FocusedComponent.Name)'."
+        }
+
+        $this.FocusedComponent = $null # Clear current focus temporarily
+        if ($null -ne $component -and $component.IsFocusable -and $component.Enabled -and $component.Visible) {
+            $this.FocusedComponent = $component
+            $component.IsFocused = $true
+            $component.OnFocus()
+            $component.RequestRedraw()
+            # Write-Log -Level Debug -Message "FocusManager: Focused '$($component.Name)'."
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Focus.Changed", @{ ComponentName = $component.Name; Component = $component })
+            }
+        } else {
+            # Write-Log -Level Debug -Message "FocusManager: Attempted to focus non-focusable, disabled, invisible, or null component."
+        }
+        $global:TuiState.IsDirty = $true # Request global redraw to ensure focus state is reflected.
+    }
+
+    [void] MoveFocus([bool]$reverse = $false) {
+        if (-not $global:TuiState.CurrentScreen) { return }
+
+        $focusableComponents = [System.Collections.Generic.List[UIElement]]::new()
+        
+        # Helper to recursively find all focusable components within the current screen
+        function Find-Focusable([UIElement]$comp, [System.Collections.Generic.List[UIElement]]$list) {
+            if ($comp -and $comp.IsFocusable -and $comp.Visible -and $comp.Enabled) {
+                $list.Add($comp)
+            }
+            foreach ($child in $comp.Children) { Find-Focusable $child $list }
+        }
+        
+        Find-Focusable $global:TuiState.CurrentScreen $focusableComponents
+        
+        if ($focusableComponents.Count -eq 0) {
+            $this.SetFocus($null) # Clear focus if no focusable components
+            return
+        }
+        
+        # Sort components by TabIndex, then Y, then X for consistent order
+        $sorted = $focusableComponents | Sort-Object { $_.TabIndex * 10000 + $_.Y * 100 + $_.X }
+
+        $currentIndex = -1
+        if ($this.FocusedComponent) {
+            for ($i = 0; $i -lt $sorted.Count; $i++) {
+                if ($sorted[$i] -eq $this.FocusedComponent) {
+                    $currentIndex = $i
+                    break
+                }
+            }
+        }
+        
+        $nextIndex = -1
+        if ($reverse) {
+            $nextIndex = ($currentIndex - 1 + $sorted.Count) % $sorted.Count
+        } else {
+            $nextIndex = ($currentIndex + 1) % $sorted.Count
+        }
+
+        # If no component was focused or current one not found, default to first/last
+        if ($currentIndex -eq -1) {
+            $nextIndex = if ($reverse) { $sorted.Count - 1 } else { 0 }
+        }
+
+        $this.SetFocus($sorted[$nextIndex])
+    }
+
+    [void] ReleaseFocus() {
+        $this.SetFocus($null)
+        # Write-Log -Level Debug -Message "FocusManager: All focus released."
+    }
+
+    [void] Cleanup() {
+        $this.FocusedComponent = $null
+        # Write-Log -Level Debug -Message "FocusManager: Cleanup complete."
+    }
+}
+
+# ===== CLASS: DialogManager =====
+# Module: dialog-manager (new service)
+# Dependencies: EventManager, FocusManager
+# Purpose: Centralized dialog management
+class DialogManager {
+    [System.Collections.Generic.List[UIElement]] $_activeDialogs = [System.Collections.Generic.List[UIElement]]::new()
+    [EventManager]$EventManager = $null
+    [FocusManager]$FocusManager = $null
+
+    DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
+        $this.EventManager = $eventManager
+        $this.FocusManager = $focusManager
+        # Write-Log -Level Debug -Message "DialogManager: Initialized."
+    }
+
+    [void] ShowDialog([UIElement]$dialog) {
+        if ($null -eq $dialog) {
+            throw [System.ArgumentException]::new("Provided element is null.", "dialog")
+        }
+        
+        # Calculate center position based on console size
+        $consoleWidth = $global:TuiState.BufferWidth
+        $consoleHeight = $global:TuiState.BufferHeight
+
+        $dialog.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $dialog.Width) / 2))
+        $dialog.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $dialog.Height) / 2))
+
+        # If there's a currently focused component, save it
+        if ($this.FocusManager) {
+            # Use metadata to store previous focus for restoration
+            $dialog.Metadata.PreviousFocus = $this.FocusManager.FocusedComponent
+            $this.FocusManager.ReleaseFocus() # Release current focus
+        }
+
+        # Add to local tracking list and global overlay stack
+        $this.{_activeDialogs}.Add($dialog)
+        $dialog.Visible = $true
+        $dialog.IsOverlay = $true # Mark as an overlay for rendering
+
+        # Explicitly add to global overlay stack
+        $global:TuiState.OverlayStack.Add($dialog)
+        
+        # Initialize and enter the dialog if it implements these methods
+        if ($dialog.PSObject.Methods['Initialize'] -and -not $dialog._isInitialized) {
+            $dialog.Initialize()
+            $dialog._isInitialized = $true
+        }
+        if ($dialog.PSObject.Methods['OnEnter']) {
+            $dialog.OnEnter()
+        }
+
+        $dialog.RequestRedraw()
+        # Write-Log -Level Info -Message "DialogManager: Showing dialog '$($dialog.Name)' at X=$($dialog.X), Y=$($dialog.Y)."
+        
+        # Set focus to the dialog itself or its first focusable child
+        if ($this.FocusManager) {
+            # Let the dialog class handle finding its first internal focusable
+            if ($dialog.PSObject.Methods['SetInitialFocus']) {
+                $dialog.SetInitialFocus()
+            } else {
+                $this.FocusManager.SetFocus($dialog) # Fallback to focusing the dialog container
+            }
+        }
+    }
+
+    [void] HideDialog([UIElement]$dialog) {
+        if ($null -eq $dialog) { return }
+
+        if ($this.{_activeDialogs}.Remove($dialog)) {
+            $dialog.Visible = $false
+            $dialog.IsOverlay = $false
+
+            # Remove from global overlay stack
+            if ($global:TuiState.OverlayStack.Contains($dialog)) {
+                $global:TuiState.OverlayStack.Remove($dialog)
+            }
+
+            # Call Cleanup on the dialog to release its resources
+            $dialog.Cleanup()
+
+            # Restore previous focus
+            if ($this.FocusManager -and $dialog.Metadata.PreviousFocus -is [UIElement]) {
+                $this.FocusManager.SetFocus($dialog.Metadata.PreviousFocus)
+            } else {
+                $this.FocusManager.ReleaseFocus() # Clear focus if no previous component
+            }
+
+            $dialog.RequestRedraw() # Force redraw to remove dialog from screen
+            # Write-Log -Level Info -Message "DialogManager: Hiding dialog '$($dialog.Name)'."
+        } else {
+            # Write-Log -Level Warning -Message "DialogManager: Attempted to hide a dialog '$($dialog.Name)' that was not active."
+        }
+    }
+
+    [void] Cleanup() {
+        foreach ($dialog in $this.{_activeDialogs}.ToArray()) { # Use ToArray to avoid collection modification during iteration
+            $this.HideDialog($dialog) # This will also cleanup and remove from overlay stack
+        }
+        $this.{_activeDialogs}.Clear()
+        # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
+    }
+}
+
 #endregion
 
 
-####\debug-start-detailed.ps1
-# Debug startup script with detailed error tracing
+
+####\fc2.ps1
+#------------------------------------------------------------------------------------------
+# SCRIPT:      filecopy-and-concatenate.ps1
+#
+# DESCRIPTION: Finds specified file types in a given path and its subdirectories.
+#              For each file, it can create a .txt copy and/or concatenate all
+#              file contents into a single output file.
+#
+# FEATURES:
+#   - Full parameter support for path, file types, and output name.
+#   - Safety features: Supports -WhatIf and -Confirm for all file operations.
+#   - Verbose output: Use the -Verbose switch to see detailed progress.
+#   - Performance: Uses an efficient single-write operation for the concatenated file.
+#   - Robustness: Uses idiomatic PowerShell for path manipulation and error handling.
+#   - Compatibility: Works on Windows PowerShell 5.1 and newer.
+#   - NEW: Can create individual .txt copies of each source file.
+#
+# USAGE:
+#   # Basic run in the current folder for PowerShell files
+#   .\filecopy-and-concatenate.ps1 -Verbose
+#
+#   # Run on a different project, for C# files, with a different output name
+#   .\filecopy-and-concatenate.ps1 -Path "C:\Projects\MyWebApp" -Include "*.cs" -OutputFileName "SourceCode.txt"
+#
+#   # To also create individual .txt copies of each file:
+#   .\filecopy-and-concatenate.ps1 -CreateIndividualCopies -Verbose
+#
+#   # Perform a "dry run" to see what would happen without making any changes
+#   .\filecopy-and-concatenate.ps1 -Path "C:\SomethingImportant" -CreateIndividualCopies -WhatIf
+#
+#------------------------------------------------------------------------------------------
+
+# Enable support for -WhatIf, -Confirm, and advanced parameter binding
+[CmdletBinding(SupportsShouldProcess = $true)]
+param(
+    # The starting directory to search in. Defaults to the current directory.
+    [Parameter(Mandatory = $false, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true, HelpMessage = "The root path to search for files.")]
+    [string]
+    $Path = (Get-Location).Path,
+
+    # An array of file patterns to include. Defaults to PowerShell script files.
+    [Parameter(Mandatory = $false, HelpMessage = "File patterns to include, e.g., '*.ps1', '*.psm1'.")]
+    [string[]]
+    $Include = @("*.ps1", "*.psm1"),
+
+    # The name of the final concatenated output file.
+    [Parameter(Mandatory = $false, HelpMessage = "Name of the concatenated output file.")]
+    [string]
+    $OutputFileName = "all.txt",
+
+    # Switch to create a .txt copy of each individual file found.
+    [Parameter(Mandatory = $false, HelpMessage = "If specified, creates a .txt copy of each found file.")]
+    [switch]
+    $CreateIndividualCopies
+)
+
+# Set strict mode for better error handling
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 
 try {
-    # Set location
-    Set-Location $PSScriptRoot
-    
-    Write-Host "Loading framework files..." -ForegroundColor Cyan
-    
-    # Load in dependency order
-    . .\AllBaseClasses.ps1
-    Write-Host "✓ AllBaseClasses.ps1 loaded" -ForegroundColor Green
-    
-    . .\AllModels.ps1
-    Write-Host "✓ AllModels.ps1 loaded" -ForegroundColor Green
-    
-    . .\AllComponents.ps1
-    Write-Host "✓ AllComponents.ps1 loaded" -ForegroundColor Green
-    
-    . .\AllScreens.ps1
-    Write-Host "✓ AllScreens.ps1 loaded" -ForegroundColor Green
-    
-    . .\AllFunctions.ps1
-    Write-Host "✓ AllFunctions.ps1 loaded" -ForegroundColor Green
-    
-    . .\AllServices.ps1
-    Write-Host "✓ AllServices.ps1 loaded" -ForegroundColor Green
-    
-    . .\AllRuntime.ps1
-    Write-Host "✓ AllRuntime.ps1 loaded" -ForegroundColor Green
-    
-    Write-Host "`nInitializing services..." -ForegroundColor Cyan
-    
-    # Create service container
-    $container = [ServiceContainer]::new()
-    
-    # Register services
-    $container.Register("Logger", [Logger]::new())
-    $container.Register("ThemeManager", [ThemeManager]::new())
-    $container.Register("EventManager", [EventManager]::new())
-    $container.Register("DataManager", [DataManager]::new())
-    $container.Register("ActionService", [ActionService]::new())
-    $container.Register("KeybindingService", [KeybindingService]::new())
-    $container.Register("NavigationService", [NavigationService]::new())
-    
-    Write-Host "✓ Services registered" -ForegroundColor Green
-    
-    # Initialize theme
-    $themeManager = $container.GetService("ThemeManager")
-    $themeManager.LoadDefaultTheme()
-    
-    # Create dashboard
-    Write-Host "`nCreating dashboard screen..." -ForegroundColor Cyan
-    $dashboardScreen = [DashboardScreen]::new($container)
-    Write-Host "✓ Dashboard created" -ForegroundColor Green
-    
-    # Start with detailed error catching
-    Write-Host "`nStarting application..." -ForegroundColor Cyan
-    
-    # Override Process-TuiInput temporarily for debugging
-    $originalProcessInput = Get-Command Process-TuiInput
-    function Process-TuiInput {
-        [CmdletBinding()]
-        param()
-        
-        try {
-            Write-Host "DEBUG: Process-TuiInput called" -ForegroundColor Yellow
-            
-            if ([Console]::KeyAvailable) {
-                $keyInfo = [Console]::ReadKey($true)
-                Write-Host "DEBUG: Key pressed: $($keyInfo.Key)" -ForegroundColor Yellow
-                
-                # Check command palette first
-                if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                    Write-Host "DEBUG: Passing to CommandPalette" -ForegroundColor Yellow
-                    $handled = $global:TuiState.CommandPalette.HandleInput($keyInfo)
-                    if ($handled) {
-                        $global:TuiState.IsDirty = $true
-                        return
-                    }
-                }
-                
-                # Pass to current screen
-                if ($global:TuiState.CurrentScreen) {
-                    Write-Host "DEBUG: Passing to CurrentScreen: $($global:TuiState.CurrentScreen.GetType().Name)" -ForegroundColor Yellow
-                    
-                    # Check if HandleInput exists
-                    if ($global:TuiState.CurrentScreen.PSObject.Methods['HandleInput']) {
-                        Write-Host "DEBUG: HandleInput method exists" -ForegroundColor Yellow
-                        $global:TuiState.CurrentScreen.HandleInput($keyInfo)
-                    } else {
-                        Write-Host "DEBUG: HandleInput method NOT FOUND!" -ForegroundColor Red
-                    }
-                    
-                    $global:TuiState.IsDirty = $true
-                }
+    # Resolve-Path returns a PathInfo object. We use it for robustness.
+    $resolvedPathObject = Resolve-Path -Path $Path
+    $basePathString = $resolvedPathObject.Path # Store the string path for reuse
+    $outputFilePath = Join-Path -Path $basePathString -ChildPath $OutputFileName
+
+    Write-Verbose "Starting operations in: $basePathString"
+    Write-Verbose "Searching for file types: $($Include -join ', ')"
+    Write-Verbose "Output file will be: $outputFilePath"
+    if ($CreateIndividualCopies.IsPresent) {
+        Write-Verbose "Individual .txt copies will be created."
+    }
+
+    # --- Step 1: Find all specified files recursively ---
+    $filesToProcess = Get-ChildItem -Path $basePathString -Recurse -Include $Include -File
+
+    if ($null -eq $filesToProcess) {
+        Write-Warning "No files found matching the specified criteria."
+        return # Exit gracefully if no files are found
+    }
+
+    Write-Verbose "Found $($filesToProcess.Count) files to process."
+
+    # --- Step 2: Clear the existing output file if it exists ---
+    # This is part of the concatenation process, so it's good to do it early.
+    if ((Test-Path $outputFilePath) -and $PSCmdlet.ShouldProcess($outputFilePath, "Remove existing output file")) {
+        Remove-Item $outputFilePath -Force
+    }
+
+    # --- Step 3: Process each file for individual copies (if requested) ---
+    if ($CreateIndividualCopies.IsPresent) {
+        Write-Verbose "Processing files to create individual .txt copies..."
+        foreach ($file in $filesToProcess) {
+            # Create a new filename by changing the extension to .txt
+            $txtCopyPath = [System.IO.Path]::ChangeExtension($file.FullName, ".txt")
+
+            # Use ShouldProcess for -WhatIf and -Confirm support
+            if ($PSCmdlet.ShouldProcess($txtCopyPath, "Copy from '$($file.Name)'")) {
+                Copy-Item -Path $file.FullName -Destination $txtCopyPath -Force
+                Write-Verbose "Created copy: '$txtCopyPath'"
             }
-        }
-        catch {
-            Write-Host "DEBUG ERROR in Process-TuiInput:" -ForegroundColor Red
-            Write-Host "  Message: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "  Type: $($_.Exception.GetType().FullName)" -ForegroundColor Red
-            Write-Host "  Target: $($_.Exception.TargetSite)" -ForegroundColor Red
-            Write-Host "  Stack: $($_.ScriptStackTrace)" -ForegroundColor Red
-            
-            # Check for property access errors
-            if ($_.Exception.Message -like "*property*cannot be found*") {
-                Write-Host "  Property Access Error Detected!" -ForegroundColor Magenta
-                Write-Host "  Attempting to access: $($_.Exception.Message -replace '.*property ''(.*)'' cannot.*', '$1')" -ForegroundColor Magenta
-            }
-            
-            throw
         }
     }
-    
-    Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
+
+    # --- Step 4: Concatenate all files into the output file (Efficiently) ---
+    Write-Verbose "Starting concatenation of all files into '$OutputFileName'..."
+    if ($PSCmdlet.ShouldProcess($outputFilePath, "Concatenate $($filesToProcess.Count) files")) {
+        # Using a subexpression `$(...)` to gather all output before writing to the file once.
+        Set-Content -Path $outputFilePath -Encoding UTF8 -Value $(
+            foreach ($file in $filesToProcess) {
+                # Calculate the relative path for the header
+                $relativePath = $file.FullName.Substring($basePathString.Length)
+                # Ensure consistent format like '\subdir\file.ps1'
+                $relativePath = '\' + $relativePath.TrimStart('\/')
+
+                # Output the header for this file
+                "####$relativePath"
+
+                # Output the file's content
+                Get-Content -Path $file.FullName -Raw -Encoding Default
+
+                # Output two blank lines for separation
+                ""
+                ""
+            }
+        )
+        Write-Host "All operations complete. Concatenated content saved to '$outputFilePath'."
+    }
 }
 catch {
-    Write-Host "`nDETAILED ERROR INFORMATION:" -ForegroundColor Red
-    Write-Host "Message: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "Type: $($_.Exception.GetType().FullName)" -ForegroundColor Red
-    Write-Host "ScriptStackTrace:" -ForegroundColor Red
-    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
-    Write-Host "`nInvocationInfo:" -ForegroundColor Red
-    Write-Host "  Line: $($_.InvocationInfo.Line)" -ForegroundColor Gray
-    Write-Host "  ScriptLineNumber: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Gray
-    Write-Host "  ScriptName: $($_.InvocationInfo.ScriptName)" -ForegroundColor Gray
-    Write-Host "  PositionMessage: $($_.InvocationInfo.PositionMessage)" -ForegroundColor Gray
-    
-    Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-}
-
-
-####\debug-start.ps1
-# Debug startup script
-$DebugPreference = "Continue"
-$VerbosePreference = "Continue"
-
-Write-Host "Starting in debug mode..." -ForegroundColor Yellow
-
-try {
-    & "$PSScriptRoot\Start.ps1"
-} catch {
-    Write-Host "`nDetailed error information:" -ForegroundColor Red
-    Write-Host "Error: $_" -ForegroundColor Red
-    Write-Host "`nException:" -ForegroundColor Yellow
-    Write-Host $_.Exception -ForegroundColor Gray
-    Write-Host "`nStack Trace:" -ForegroundColor Yellow
-    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
-    Write-Host "`nInvocation Info:" -ForegroundColor Yellow
-    Write-Host $_.InvocationInfo.PositionMessage -ForegroundColor Gray
-    
-    # Keep console open
-    Write-Host "`nPress any key to exit..." -ForegroundColor White
-    [Console]::ReadKey($true) | Out-Null
+    # A global catch block for any unexpected, terminating errors.
+    Write-Error "A critical error occurred: $($_.Exception.Message)"
+    Write-Error "Script execution halted at line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line)"
 }
 
 
@@ -8138,6 +8454,7 @@ catch {
     Write-Error "Script execution halted at line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line)"
 }
 
+
 ####\Start.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Application Entry Point
@@ -8239,14 +8556,19 @@ try {
     $eventManager = $container.GetService("EventManager")
     $container.Register("ActionService", [ActionService]::new($eventManager))
     $container.Register("DataManager", [DataManager]::new((Join-Path $env:APPDATA "AxiomPhoenix\data.json"), $eventManager))
-    $container.Register("NavigationService", [NavigationService]::new($eventManager))
-    
+    $container.Register("NavigationService", [NavigationService]::new(@{ EventManager = $eventManager })) # Pass services hashtable
+    $container.Register("FocusManager", [FocusManager]::new($eventManager)) # NEW: Register FocusManager
+
     # Register services that depend on ActionService
     $actionService = $container.GetService("ActionService")
     $container.Register("KeybindingService", [KeybindingService]::new($actionService))
     
-    # Register framework service
-    $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
+    # NEW: Register DialogManager (depends on EventManager and FocusManager)
+    $focusManager = $container.GetService("FocusManager")
+    $container.Register("DialogManager", [DialogManager]::new($eventManager, $focusManager))
+
+    # Register framework service (not implemented in v4.0)
+    # $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
     
     # Initialize default actions
     $actionService.RegisterDefaultActions()
@@ -8401,58 +8723,21 @@ finally {
 #endregion
 
 
-####\test-simple.ps1
-# Simple test runner
-$ErrorActionPreference = 'Stop'
 
+####\test-run.ps1
+# Test runner to check if the fixes work
+Push-Location "C:\Users\jhnhe\Documents\GitHub\_XP\_mono"
 try {
-    Set-Location $PSScriptRoot
-    
-    # Load all files
-    . .\AllBaseClasses.ps1
-    . .\AllModels.ps1
-    . .\AllComponents.ps1
-    . .\AllScreens.ps1
-    . .\AllFunctions.ps1
-    . .\AllServices.ps1
-    . .\AllRuntime.ps1
-    
-    # Create services
-    $container = [ServiceContainer]::new()
-    $container.Register("Logger", [Logger]::new())
-    $container.Register("ThemeManager", [ThemeManager]::new())
-    $container.Register("EventManager", [EventManager]::new())
-    $container.Register("DataManager", [DataManager]::new())
-    $container.Register("ActionService", [ActionService]::new())
-    $container.Register("KeybindingService", [KeybindingService]::new())
-    $container.Register("NavigationService", [NavigationService]::new())
-    
-    # Initialize theme
-    $themeManager = $container.GetService("ThemeManager")
-    $themeManager.LoadDefaultTheme()
-    
-    # Create and start application
-    $dashboardScreen = [DashboardScreen]::new($container)
-    Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
+    Write-Host "Starting test run..." -ForegroundColor Cyan
+    & .\Start.ps1
 }
 catch {
-    Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "Stack: $($_.ScriptStackTrace)" -ForegroundColor Gray
-    Read-Host "Press Enter to exit"
+    Write-Host "Error: $_" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
+}
+finally {
+    Pop-Location
 }
 
-
-####\test.ps1
-# Test if classes and functions load
-cd "C:\Users\jhnhe\Documents\GitHub\_XP\_mono"
-.\Start.ps1 -LoadOnly
-
-# Check if critical components exist
-Write-Host "`nChecking critical components:" -ForegroundColor Cyan
-Write-Host "TuiBuffer class: $([TuiBuffer] -ne $null)" -ForegroundColor Yellow
-Write-Host "TuiCell class: $([TuiCell] -ne $null)" -ForegroundColor Yellow
-Write-Host "ServiceContainer class: $([ServiceContainer] -ne $null)" -ForegroundColor Yellow
-Write-Host "Start-TuiEngine function: $(Get-Command Start-TuiEngine -ErrorAction SilentlyContinue)" -ForegroundColor Yellow
-Write-Host "Initialize-TuiEngine function: $(Get-Command Initialize-TuiEngine -ErrorAction SilentlyContinue)" -ForegroundColor Yellow
 
 

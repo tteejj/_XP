@@ -1,0 +1,1045 @@
+Of course. After a thorough analysis of the entire Axiom-Phoenix v4.0 codebase, I have identified several issues ranging from critical runtime errors that would prevent the application from functioning correctly to major architectural flaws and minor bugs.
+
+Here is a prioritized list of the issues and their solutions, starting with the most critical.
+
+---
+
+### **Critical Runtime Issue #1: The Blank Screen Bug**
+
+This is the most severe issue and will prevent *anything* from being drawn to the screen after the initial `Write-Host` messages.
+
+*   **Symptom:** The application starts, the "Initializing services..." and "Starting Axiom-Phoenix..." messages appear, the console clears, but the screen remains completely blank. The application does not crash but is unusable.
+*   **Root Cause:** The buffer swap logic in the main render loop is executed in the wrong order. The engine renders the screen content to the `CompositorBuffer`, but then immediately swaps it with the `PreviousCompositorBuffer` *before* the differential rendering occurs.
+*   **Location:** `AllRuntime.txt` -> `Invoke-TuiRender` function.
+*   **Impact:** The `Render-DifferentialBuffer` function is called to compare the *newly emptied* `CompositorBuffer` against the `PreviousCompositorBuffer` (which now holds the content that *should* be on screen). Since the "current" buffer is blank, the comparison finds no changes to draw, and nothing is ever written to the console.
+*   **Solution:** Move the buffer swap logic to *after* the `Render-DifferentialBuffer` call.
+
+**File:** `AllRuntime.txt`
+**Function:** `Invoke-TuiRender`
+
+**Incorrect Code:**
+```powershell
+        # ... (code to render screen to CompositorBuffer)
+
+        # Differential rendering - compare current compositor to previous
+        Render-DifferentialBuffer # This call is effectively rendering an empty buffer
+        
+        # Swap buffers for next frame
+        $temp = $global:TuiState.PreviousCompositorBuffer
+        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
+        $global:TuiState.CompositorBuffer = $temp
+        
+        # ...
+```
+
+**Corrected Code:**
+```powershell
+        # ... (code to render screen to CompositorBuffer)
+        
+        # Differential rendering - compare current compositor to previous
+        Render-DifferentialBuffer # Now correctly compares the new frame with the old one
+        
+        # Swap buffers for next frame (this must happen AFTER rendering)
+        $temp = $global:TuiState.CompositorBuffer
+        $global:TuiState.CompositorBuffer = [TuiBuffer]::new($global:TuiState.PreviousCompositorBuffer) # Use copy constructor to avoid reference issues
+        $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($temp)
+        
+        # ...
+```
+*Note: A simple swap `$a = $b; $b = $a` is not sufficient if the buffers are modified. Using a copy constructor or cloning ensures the previous state is properly preserved for the next frame's comparison.*
+
+---
+
+### **Major Functional Issue #2: Broken List Rendering and Scrolling**
+
+The `TaskListScreen` will not render its list correctly, and scrolling will be completely broken.
+
+*   **Symptom:** The `TaskListScreen` will display its main panels, but the list of tasks inside the `ScrollablePanel` will either be empty, drawn incorrectly, or will not respond to scroll inputs (UpArrow, DownArrow, etc.).
+*   **Root Cause:** The `TaskListScreen` violates the component-based rendering model. It attempts to manually draw text directly into the `ScrollablePanel`'s buffer (`Write-TuiText -Buffer $buffer ...`). This fights the `ScrollablePanel`'s own rendering logic, which is designed to render its *children* and manage their virtual positions for scrolling. The screen is essentially trying to do the panel's job for it.
+*   **Location:** `AllScreens.txt` -> `TaskListScreen` class, specifically the `_UpdateTaskList` method.
+*   **Impact:** This breaks the core functionality of the `ScrollablePanel`. The panel's virtual buffer and scroll offset are ignored because the screen is drawing directly to the final display buffer, bypassing the entire virtual scrolling system. Input handling for scrolling will also fail because the panel has no content to scroll.
+*   **Solution:** Refactor `_UpdateTaskList` to create UI components (e.g., `LabelComponent`) for each task and add them as **children** to the `ScrollablePanel`. The panel will then handle rendering and scrolling them correctly.
+
+**File:** `AllScreens.txt`
+**Class:** `TaskListScreen`
+**Method:** `_UpdateTaskList`
+
+**Conceptual Fix (The code is too long to show a direct diff, but here is the required logic):**
+
+```powershell
+hidden [void] _UpdateTaskList() {
+    $panel = $this._taskListPanel
+    if (-not $panel) { return }
+    
+    # CRITICAL: Clear the panel's CHILDREN, not its buffer directly.
+    $panel.Children.Clear()
+    $panel._contentHeight = 0 # Reset virtual content height
+    
+    if ($this._tasks.Count -eq 0) {
+        # Add a label to show there are no tasks
+        $noTasksLabel = [LabelComponent]::new("NoTasksLabel")
+        $noTasksLabel.X = 2
+        $noTasksLabel.Y = 2
+        $noTasksLabel.Text = "No tasks found."
+        $panel.AddChild($noTasksLabel)
+        $panel.RequestRedraw()
+        return
+    }
+    
+    for ($i = 0; $i -lt $this._tasks.Count; $i++) {
+        $task = $this._tasks[$i]
+        
+        # Create a UI component (e.g., a Label) for each task
+        $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
+        $taskLabel.X = 1
+        $taskLabel.Y = $i # Y position is its index in the list
+        
+        # Set styling based on selection
+        $is_selected = ($i -eq $this._selectedIndex)
+        $fgColor = if ($is_selected) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
+        $bgColor = if ($is_selected) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+        $taskLabel.ForegroundColor = $fgColor # Note: LabelComponent needs a BackgroundColor property for this to be perfect.
+
+        # ... (code to format the task line text)
+        $taskLine = "..." # Formatted task text
+        $taskLabel.Text = $taskLine
+        
+        # Add the label as a CHILD of the panel
+        $panel.AddChild($taskLabel)
+    }
+
+    # The ScrollablePanel's own Render method will now correctly handle everything else.
+    $panel.RequestRedraw()
+}
+```
+
+---
+
+### **Architectural Flaw #3: Violation of Encapsulation**
+
+This is the underlying cause of Issue #2 and appears in multiple places. It makes the code brittle and hard to maintain.
+
+*   **Symptom:** Code is difficult to refactor. A change in a child component (like `Panel`) can unexpectedly break a parent screen.
+*   **Root Cause:** Screens (`DashboardScreen`, `TaskListScreen`) directly access and manipulate the internal buffers of their child components (e.g., `$buffer = $panel.GetBuffer()`, `Write-TuiText -Buffer $buffer ...`). A parent component should never modify the internal state of its children directly. It should either configure the child's public properties or add other components as children to it.
+*   **Location:** `AllScreens.txt` -> `DashboardScreen` and `TaskListScreen`.
+*   **Impact:** This creates tight coupling. The screens are completely dependent on the internal implementation of the `Panel` class. If `Panel`'s rendering logic changes, all screens break. The correct component model is for a parent to contain children, and for each component to be responsible for rendering itself and its own children.
+*   **Solution:** Apply the same pattern as in Issue #2. Instead of drawing text directly, create `LabelComponent`, `ButtonComponent`, etc., set their properties (`Text`, `X`, `Y`), and add them as children to the panels.
+
+**Example Fix in `DashboardScreen._UpdateSummaryPanel()`:**
+
+**Incorrect Code:**
+```powershell
+hidden [void] _UpdateSummaryPanel() {
+    $panel = $this._summaryPanel
+    # ...
+    $buffer = $panel.GetBuffer()
+    # ...
+    Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Task Overview" # Direct write
+    # ...
+}
+```
+
+**Corrected Code:**
+```powershell
+hidden [void] _UpdateSummaryPanel() {
+    $panel = $this._summaryPanel
+    if (-not $panel) { return }
+
+    # Clear children from previous render
+    $panel.Children.Clear()
+
+    # Create a Label component for the title
+    $titleLabel = [LabelComponent]::new("SummaryTitle")
+    $titleLabel.Text = "Task Overview"
+    $titleLabel.X = 2 # Relative to panel's content area
+    $titleLabel.Y = 1 # Relative to panel's content area
+    $titleLabel.ForegroundColor = Get-ThemeColor("Primary")
+    
+    # Add the label as a child
+    $panel.AddChild($titleLabel)
+
+    # Do this for all other text elements in the panel...
+    # ...
+
+    $panel.RequestRedraw()
+}
+```
+
+---
+
+### **Minor Issue #4: Input Handling Code Duplication**
+
+*   **Symptom:** No direct visible symptom, but it indicates a copy-paste error and makes the code harder to read and maintain.
+*   **Root Cause:** The `Process-TuiInput` function in `AllRuntime.txt` has a duplicated `try...catch` block at the end.
+*   **Location:** `AllRuntime.txt`, at the end of the `Process-TuiInput` function.
+*   **Solution:** Remove the extraneous, duplicated block.
+
+**File:** `AllRuntime.txt`
+
+**Incorrect Code:**
+```powershell
+# ... (end of Process-TuiInput function)
+        }
+    }
+    catch {
+        Write-Error "Input processing error: $_"
+    }
+}
+        } # <--- Start of duplicated block
+    }
+    catch {
+        Write-Error "Input processing error: $_"
+    }
+}
+```
+
+**Corrected Code:**
+```powershell
+# ... (end of Process-TuiInput function)
+        }
+    }
+    catch {
+        Write-Error "Input processing error: $_"
+    }
+}
+# The duplicated block is completely removed.
+```
+
+Excellent. Let's continue the deep dive into the codebase. Beyond the critical show-stoppers, there are several major architectural and functional issues that would lead to incorrect behavior, bugs, and significant maintenance problems down the line.
+
+Here are the next set of issues, ordered by severity.
+
+---
+
+### **Major Architectural Flaw #5: Broken Navigation Logic**
+
+This is a severe flaw in the application's core state management that would prevent screen transitions from working correctly.
+
+*   **Symptom:** After navigating to a new screen (e.g., from the Dashboard to the Task List via the command palette), the application would either crash, fail to render the new screen, or render a mix of the old and new screens.
+*   **Root Cause:** There is a fundamental disagreement on who "owns" the state of the current screen.
+    1.  The `NavigationService` correctly maintains its own state (`$this.CurrentScreen` and a navigation stack).
+    2.  However, its `NavigateTo` and `GoBack` methods also directly manipulate the *global* state: `$global:TuiState.CurrentScreen = $screen`.
+    3.  The main application loop in `Start-AxiomPhoenix` *also* directly sets `$global:TuiState.CurrentScreen`.
+*   **Location:** `AllServices.txt` -> `NavigationService` class. `AllRuntime.txt` -> `Start-AxiomPhoenix` function.
+*   **Impact:** This creates two sources of truth. The main render loop in `AllRuntime.txt` uses `$global:TuiState.CurrentScreen` for rendering. The `NavigationService` should be the *only* entity that decides which screen is active. The main loop should *query* the service for the current screen each frame, not have its state set by the service. This bug completely breaks the navigation abstraction.
+*   **Solution:** Decouple the service from the global state. The service should only manage its own internal state. The main loop must be updated to get the active screen from the service.
+
+**File:** `AllServices.txt`
+**Class:** `NavigationService`
+**Method:** `NavigateTo` (and `GoBack`)
+
+**Incorrect Code:**
+```powershell
+    [void] NavigateTo([Screen]$screen) {
+        # ... (logic to manage internal stack) ...
+        $this.CurrentScreen = $screen
+        # ...
+        
+        # BAD: Service should not modify global state directly
+        $global:TuiState.CurrentScreen = $screen 
+        $global:TuiState.IsDirty = $true
+        # ...
+    }
+```
+
+**Corrected Code:**
+```powershell
+    [void] NavigateTo([Screen]$screen) {
+        if ($null -eq $screen) { throw [System.ArgumentNullException]::new("screen", "Cannot navigate to a null screen.") }
+        
+        try {
+            # Exit current screen if one exists
+            if ($this.CurrentScreen) {
+                $this.CurrentScreen.OnExit()
+                $this.NavigationStack.Push($this.CurrentScreen)
+            }
+            
+            # Enter new screen
+            $this.CurrentScreen = $screen
+            
+            # Initialize if not already
+            if (-not $screen._isInitialized) {
+                $screen.Initialize()
+                $screen._isInitialized = $true
+            }
+            
+            # Resize and call OnEnter
+            $screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+            $screen.OnEnter()
+            
+            # Publish event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Navigation.ScreenChanged", @{ ScreenName = $screen.Name })
+            }
+            
+            # CRITICAL: This method NO LONGER touches $global:TuiState.
+            # The main loop is responsible for getting this screen from the service.
+        }
+        catch {
+            # ...
+        }
+    }
+```
+
+And the corresponding fix in the main loop:
+
+**File:** `AllRuntime.txt`
+**Function:** `Invoke-TuiRender`
+
+```powershell
+# ... in Invoke-TuiRender ...
+        # Get the current screen FROM the navigation service each frame
+        $navService = $global:TuiState.Services.NavigationService
+        $currentScreenToRender = if ($navService) { $navService.CurrentScreen } else { $null }
+
+        # Render current screen
+        if ($currentScreenToRender) { # Use the variable fetched from the service
+            try {
+                $currentScreenToRender.Render()
+                $screenBuffer = $currentScreenToRender.GetBuffer()
+                # ...
+```
+
+---
+
+### **Major Functional Issue #6: Inconsistent Theme Color System**
+
+This will cause visual bugs and potential runtime errors throughout the application.
+
+*   **Symptom:** Colors are wrong, or the application crashes with an error about being unable to convert a `[ConsoleColor]` object to a `[string]`. For example, a label's color might be ignored, or a box border might be the wrong color.
+*   **Root Cause:** The framework has been partially migrated to use hex color strings (`#RRGGBB`), but several parts still return or expect the old `[ConsoleColor]` enum.
+    1.  `ThemeManager.GetColor` falls back to returning `[ConsoleColor]::White` if a color name isn't found. Functions expecting a hex string will fail.
+    2.  `LabelComponent` has a flawed check for `[ConsoleColor]` and doesn't correctly convert it to hex.
+    3.  Many components still have properties typed as `[ConsoleColor]`, which is now obsolete.
+*   **Location:** `AllServices.txt` -> `ThemeManager`, and various components in `AllComponents.txt`.
+*   **Impact:** The application's visual appearance will be unpredictable and buggy. Type-mismatch errors are very likely.
+*   **Solution:** Enforce the "hex strings everywhere" policy.
+    1.  Update `ThemeManager`'s fallback to return a default hex string (`#FFFFFF`).
+    2.  Fix the `Get-ThemeColor` helper function to correctly use its internal hex map when it receives a `ConsoleColor` value from the theme.
+    3.  Change all component color properties from `[ConsoleColor]` to `[string]`.
+
+**File:** `AllServices.txt`
+**Class:** `ThemeManager`
+**Method:** `GetColor`
+
+**Incorrect Code:**
+```powershell
+    [object] GetColor([string]$colorName) {
+        # ...
+        Write-Warning "ThemeManager: Color '$colorName' not found in theme, using White"
+        return [ConsoleColor]::White # BAD: Returns wrong type
+    }
+```
+
+**Corrected Code:**
+```powershell
+    [object] GetColor([string]$colorName) {
+        if ($this.CurrentTheme.ContainsKey($colorName)) {
+            return $this.CurrentTheme[$colorName]
+        }
+        # ... other fallback logic
+        
+        # Write-Log instead of Write-Warning
+        # Write-Log -Level Debug -Message "ThemeManager: Color '$colorName' not found in theme, using default hex #FFFFFF"
+        return "#FFFFFF" # GOOD: Returns correct type (hex string)
+    }
+```
+
+---
+
+### **Major Maintainability Issue #7: Brittle Data Serialization**
+
+This is a ticking time bomb that guarantees future bugs when data models are changed.
+
+*   **Symptom:** A developer adds a new property to the `PmcTask` class (e.g., `[string]$AssignedTo`). They run the app, assign a value, and save. When they restart the app, the new `AssignedTo` field is gone because it was never saved to the JSON file.
+*   **Root Cause:** The `DataManager.SaveData` method manually lists every single property to be serialized for `PmcTask` and `PmcProject`. This is not scalable or robust.
+*   **Location:** `AllServices.txt` -> `DataManager` class, `SaveData` method.
+*   **Impact:** This makes evolving the data models extremely error-prone. It's a classic maintenance trap.
+*   **Solution:** Instead of manually creating a hashtable, serialize the object directly. `ConvertTo-Json` is smart enough to handle this. If certain properties need to be excluded, use `Select-Object -ExcludeProperty` or a custom `TypeData` definition.
+
+**File:** `AllServices.txt`
+**Class:** `DataManager`
+**Method:** `SaveData`
+
+**Incorrect Code:**
+```powershell
+# ...
+            $data = @{
+                Tasks = $this.Tasks.Values | ForEach-Object {
+                    @{ # Manual mapping is brittle
+                        Id = $_.Id
+                        Title = $_.Title
+                        Description = $_.Description
+                        Status = $_.Status.ToString()
+                        # ... and so on for every property
+                    }
+                }
+# ...
+```
+
+**Corrected Code:**
+```powershell
+# ...
+            $data = @{
+                # Let PowerShell and JSON serializer do the work.
+                # This automatically includes any new properties added to the class.
+                Tasks = @($this.Tasks.Values)
+                Projects = @($this.Projects.Values)
+                Metadata = $this.Metadata
+                SavedAt = [datetime]::Now
+            }
+            
+            # Use ConvertTo-Json directly on the objects.
+            # The serializer will convert enums to strings by default.
+            $jsonContent = $data | ConvertTo-Json -Depth 10 
+# ...
+```
+
+---
+
+### **Architectural Flaw #8: Bypassing the FocusManager**
+
+This undermines the new, centralized focus system and creates an inconsistent user experience.
+
+*   **Symptom:** In a `ConfirmDialog`, pressing `Tab` works, but it feels different from tabbing between components on a main screen. Other dialogs or complex components might not support `Tab` at all.
+*   **Root Cause:** The `ConfirmDialog` implements its own logic for handling `Tab`, `LeftArrow`, and `RightArrow` keys to switch focus between its "Yes" and "No" buttons. It maintains its own state (`$_focusOnYes`) instead of letting the global `FocusManager` handle it.
+*   **Location:** `AllComponents.txt` -> `ConfirmDialog` class, `HandleInput` method.
+*   **Impact:** This defeats the purpose of having a `FocusManager`. The `FocusManager` is designed to provide a consistent tabbing order (`Tab` and `Shift+Tab`) across the entire application. By implementing manual focus logic, the dialog breaks this consistency and reinvents the wheel.
+*   **Solution:** Remove the manual focus logic from `ConfirmDialog`. Instead, rely on the `FocusManager`. Ensure the "Yes" and "No" buttons have appropriate `TabIndex` values so the `FocusManager` can navigate between them correctly. The dialog's `HandleInput` should only process `Enter` on the *currently focused* button and `Escape` to close.
+
+**File:** `AllComponents.txt`
+**Class:** `ConfirmDialog`
+
+**Conceptual Fix:**
+
+```powershell
+class ConfirmDialog : Dialog {
+    # ...
+    # REMOVE: hidden [bool]$_focusOnYes = $true
+    
+    hidden [void] InitializeConfirm() {
+        # ...
+        $this._yesButton = [ButtonComponent]::new(...)
+        $this._yesButton.TabIndex = 0 # Explicitly set tab order
+        # ...
+        $this._noButton = [ButtonComponent]::new(...)
+        $this._noButton.TabIndex = 1 # Explicitly set tab order
+        # ...
+    }
+
+    # REMOVE: hidden [void] UpdateButtonFocus() { ... }
+
+    [void] OnEnter() {
+        # When the dialog is shown, tell the FocusManager to focus the first element.
+        $global:TuiState.Services.FocusManager?.SetFocus($this._yesButton)
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($key.Key -eq [ConsoleKey]::Escape) {
+            $this.Complete($false) # Using new Complete method
+            return $true
+        }
+
+        # The global input handler will now route Tab/Shift+Tab to the FocusManager.
+        # It will also route Enter/Space to the currently focused button's HandleInput.
+        # This dialog no longer needs to manage focus itself.
+        return $false # Let the focused child handle the input.
+    }
+}
+```
+
+---
+
+### **Minor Issue #9: Duplicate Panic Handler and Code Hygiene**
+
+*   **Symptom:** Two nearly identical `Invoke-PanicHandler` functions exist in the same file. This doesn't cause a runtime error (the last one defined wins), but it's confusing and sloppy.
+*   **Root Cause:** A copy-paste error during development.
+*   **Location:** `AllRuntime.txt` contains the function definition twice. The second definition is more detailed and robust.
+*   **Solution:** Delete the first, less-detailed `Invoke-PanicHandler` function definition.
+
+Of course. The codebase still contains several more subtle but important issues related to state management, consistency, and robustness. These might not crash the application outright but would lead to strange behaviors and make development difficult.
+
+Here is the final set of identified issues.
+
+---
+
+### **Major State Management Issue #15: `Start.txt` Has Competing Service Initialization Logic**
+
+This is a significant structural problem that creates confusion and redundancy.
+
+*   **Symptom:** There are two different ways services are being created. In `Start.txt`, services are instantiated directly with `[ActionService]::new($eventManager)`. However, `AllFunctions.txt` contains a full set of `Initialize-*` functions (e.g., `Initialize-ActionService`) that do the exact same thing.
+*   **Root Cause:** This is a leftover from a previous architectural pattern. The `Start.txt` script has adopted a more direct, modern dependency injection style by creating services in one place and passing them into other service constructors. The `Initialize-*` functions are now entirely redundant and unused.
+*   **Location:** `Start.txt` (the direct initialization) and `AllFunctions.txt` (the obsolete `Initialize-*` functions).
+*   **Impact:** This bloats the codebase and creates a major point of confusion for developers. Someone trying to understand how services are created might find the `Initialize-*` functions and incorrectly assume they are the entry point, leading them to debug the wrong code. It violates the "Don't Repeat Yourself" (DRY) principle.
+*   **Solution:** Remove the entire `#region Initialize Functions` from `AllFunctions.txt`. The initialization logic in `Start.txt` is the correct, single source of truth for how the service container is populated.
+
+**File:** `AllFunctions.txt`
+
+**Code to Remove (the entire region):**
+```powershell
+#region Initialize Functions
+
+function Initialize-Logger {
+    # ...
+}
+
+function Initialize-EventManager {
+    # ...
+}
+
+# ... and all other Initialize-* functions in this region ...
+
+function Initialize-TuiFrameworkService {
+    # ...
+}
+
+#endregion
+```
+
+---
+
+### **Bug #16: `Write-TuiBox` Has Flawed Border Drawing Logic**
+
+This bug will cause boxes of specific, small dimensions (e.g., a 1-character wide box) to render incorrectly or cause an error.
+
+*   **Symptom:** A box with a width of 1 or a height of 1 will have missing or incorrect corner characters. A box with a width of 1 and height of 1 might crash due to a negative string multiplication.
+*   **Root Cause:** The logic for drawing the top and bottom borders uses string multiplication `($borders.Horizontal * ($Width - 2))`. If `$Width` is 1, this results in `* -1`, which is an error. The logic also doesn't correctly handle the case where a box is just a single vertical or horizontal line.
+*   **Location:** `AllFunctions.txt` -> `Write-TuiBox` function.
+*   **Impact:** Any UI component that relies on drawing very small boxes (e.g., a thin separator, a progress bar segment) will be visually broken.
+*   **Solution:** Add specific conditional logic to handle the edge cases of `$Width` or `$Height` being 1 or 2.
+
+**File:** `AllFunctions.txt`
+**Function:** `Write-TuiBox`
+
+**Corrected Logic (showing the top border part as an example):**
+```powershell
+        # Top border
+        if ($Height > 0) {
+            if ($Width > 1) {
+                # This handles Width >= 2 correctly.
+                $middlePart = if ($Width > 2) { $borders.Horizontal * ($Width - 2) } else { "" }
+                Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$middlePart$($borders.TopRight)" -Style $generalStyle
+            } elseif ($Width -eq 1) {
+                # Special case for a 1-wide box (just a vertical line segment)
+                Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text $borders.Vertical -Style $generalStyle
+            }
+        }
+        
+        # Similar logic must be applied for the bottom border.
+        # The side border loop is mostly correct but should also be reviewed.
+```
+
+---
+
+### **Inconsistency #17: Multiple, Conflicting `Invoke-PanicHandler` Definitions**
+
+*   **Symptom:** As mentioned previously, there are two panic handlers. The second one is more detailed, but both exist. The first one takes a generic `$Error` object, while the second one is correctly typed to take an `$ErrorRecord`.
+*   **Root Cause:** Code duplication. The first, simpler handler was likely a placeholder that was never removed when the more robust one was written.
+*   **Location:** `AllRuntime.txt`.
+*   **Impact:** This is poor code hygiene. While PowerShell will just use the last definition, it makes the code confusing to read and debug.
+*   **Solution:** Delete the first, simpler `Invoke-PanicHandler` and ensure all `catch` blocks that call it are using the correct parameter (the automatic `$_` variable, which is an `ErrorRecord`).
+
+**File:** `AllRuntime.txt`
+
+**First, Simple Handler to DELETE:**
+```powershell
+function Invoke-PanicHandler {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Error
+    )
+    # ... less detailed implementation
+}
+```
+
+**Second, Robust Handler to KEEP (and ensure it is used):**
+```powershell
+function Invoke-PanicHandler {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$ErrorRecord # Correctly typed
+    )
+    # ... more detailed implementation with JSON report
+}
+```
+
+**Ensure calls are correct:**
+```powershell
+# In Start-AxiomPhoenix's catch block...
+catch {
+    Invoke-PanicHandler $_ # Correctly passing the ErrorRecord
+}
+```
+
+---
+
+### **Robustness Issue #18: `Get-ThemeColor` Can Return the Wrong Type**
+
+*   **Symptom:** If a theme file accidentally contains a `[ConsoleColor]` name (e.g., `"Primary" = "Blue"` instead of `"Primary" = "#0000FF"`), the `Get-ThemeColor` helper function will convert it to a hex string. However, if a color is *not* found, the main `ThemeManager.GetColor` method returns a `[ConsoleColor]` enum, which the helper function doesn't handle, causing potential crashes.
+*   **Root Cause:** The system isn't fully committed to one color format. `Get-ThemeColor` tries to be helpful by converting enums to hex, but the `ThemeManager` itself can return an enum, creating a circular dependency and a potential type error.
+*   **Location:** `AllFunctions.txt` -> `Get-ThemeColor`, and `AllServices.txt` -> `ThemeManager.GetColor`.
+*   **Impact:** An improperly configured theme file or a missing color key could lead to runtime crashes in rendering functions that expect a hex string.
+*   **Solution:** Make the `ThemeManager` the single source of truth and consistency. It should *always* return a hex string.
+    1.  When loading a theme, `ThemeManager` should convert any `[ConsoleColor]` names it finds into their hex equivalents immediately.
+    2.  Its `GetColor` method's fallback should be a default hex string, not a `[ConsoleColor]` enum.
+    3.  This simplifies the `Get-ThemeColor` helper function, which now can trust it will always receive a hex string.
+
+**File:** `AllServices.txt`
+**Class:** `ThemeManager`
+**Method:** `LoadTheme`
+
+**Conceptual Fix:**
+```powershell
+    [void] LoadTheme([string]$themeName) {
+        # ... load json into $themeData
+        
+        # Convert all color values to hex ONCE at load time.
+        foreach ($key in $themeData.Keys) {
+            $value = $themeData[$key]
+            # ... logic to check if $value is a ConsoleColor name ...
+            if ($isConsoleColorName) {
+                # Use a map to convert it to hex and store that instead.
+                $this.CurrentTheme[$key] = $hexMap[$value] 
+            } else {
+                $this.CurrentTheme[$key] = $value
+            }
+        }
+        # ...
+    }
+
+    # As fixed before, ensure the fallback is a hex string:
+    [object] GetColor([string]$colorName) {
+        # ...
+        return "#808080" # Default hex color
+    }
+```
+With this change, the complex conversion logic in the `Get-ThemeColor` helper function in `AllFunctions.txt` becomes unnecessary and can be greatly simplified.
+
+---
+
+### **Final Code Hygiene Issue #19: Unnecessary `try...catch` Blocks**
+
+*   **Symptom:** No visible symptom, but it indicates a misunderstanding of PowerShell error handling and adds unnecessary boilerplate.
+*   **Root Cause:** Many functions wrap their entire body in a `try...catch` block that simply re-throws the exception (`catch { Write-Error "..."; throw }`). With `$ErrorActionPreference = 'Stop'`, any terminating error will halt execution and bubble up the call stack automatically. This pattern is only needed if the function intends to add context, log the error, and then re-throw, or if it intends to handle the error and continue.
+*   **Location:** Throughout the codebase, e.g., in `AllFunctions.txt` -> `Write-TuiText`, `Get-TuiBorderChars`.
+*   **Solution:** Remove these redundant `try...catch` blocks. If an error occurs in a function like `Write-TuiText`, it should be allowed to terminate and be caught by a higher-level handler (like the one in the main application loop or a component's render method), which has more context about what was being attempted.
+
+**File:** `AllFunctions.txt`
+**Function:** `Write-TuiText`
+
+**Redundant Code:**
+```powershell
+function Write-TuiText {
+    #...
+    try {
+        # ... function logic ...
+    }
+    catch {
+        Write-Error "Failed to write text...: $($_.Exception.Message)"
+        throw
+    }
+}
+```
+
+**Cleaner, More Efficient Code:**
+```powershell
+function Write-TuiText {
+    [CmdletBinding()]
+    param(
+        #...
+    )
+    # No try/catch needed. If $Buffer.WriteString throws an error,
+    # it will propagate up the call stack naturally.
+    if ($null -eq $Buffer -or [string]::IsNullOrEmpty($Text)) { return }
+    $Buffer.WriteString($X, $Y, $Text, $Style)
+}
+```
+This cleanup makes the code easier to read and debug, as the stack trace will point directly to the source of the error without an intermediate, unnecessary catch block.
+Of course. The codebase is large and complex, and a fine-toothed comb reveals several more issues related to architectural consistency, robustness, and code hygiene. These are the kinds of problems that might not cause an immediate crash but lead to unpredictable behavior, "ghost" bugs, and make the framework frustrating to extend.
+
+Here is a final list of issues, categorized for clarity.
+
+---
+
+### **Category: Architectural & Design Inconsistencies**
+
+These issues point to conflicts in the framework's design philosophy, creating confusion and making the code harder to reason about.
+
+#### **Issue #20: Hardcoded Keybindings That Bypass the Keybinding Service**
+
+*   **Symptom:** The `KeybindingService` is advertised as the central place for shortcuts, but certain critical keys (`Tab`, `Ctrl+P`) don't seem to be configurable there. A developer trying to change the command palette hotkey would edit the service, but it would have no effect.
+*   **Root Cause:** The main input loop in `Process-TuiInput` has special, high-priority `if` statements that explicitly check for `[ConsoleKey]::Tab` and `Ctrl+P`. These checks happen *before* the code ever asks the `KeybindingService` for an action. This completely bypasses the abstraction that the service is supposed to provide.
+*   **Location:** `AllRuntime.txt` -> `Process-TuiInput`.
+*   **Impact:** This is a major architectural inconsistency. It breaks the "single source of truth" principle for keybindings and makes the system confusing and less flexible.
+*   **Solution:** Remove the special-case `if` blocks from `Process-TuiInput`. The `KeybindingService` is already correctly configured with actions like `"app.commandPalette"` and `"navigation.nextComponent"`. The main loop should be simplified to trust the service for *all* key-to-action lookups.
+
+**File:** `AllRuntime.txt` -> `Process-TuiInput`
+
+**Conceptual Fix:**
+```powershell
+function Process-TuiInput {
+    # ...
+            $keyInfo = [Console]::ReadKey($true)
+            
+            # REMOVE THIS BLOCK
+            # if ($keyInfo.Key -eq [ConsoleKey]::P -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+            #     # ... manual command palette logic ...
+            # }
+
+            # ... (overlay handling) ...
+
+            # REMOVE THIS BLOCK
+            # if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+            #     # ... manual focus manager logic ...
+            # }
+
+            # All input should flow through the services.
+            # Give the currently focused component a chance first...
+            # Then, check the KeybindingService.
+            if ($global:TuiState.Services.KeybindingService) {
+                $actionName = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
+                if ($actionName) {
+                    # This now includes 'app.commandPalette', 'app.exit', etc.
+                    # Special case for Tab navigation which is a framework-level action
+                    if ($actionName -eq "navigation.nextComponent" -or $actionName -eq "navigation.previousComponent") {
+                        $reverse = ($actionName -eq "navigation.previousComponent")
+                        $global:TuiState.Services.FocusManager.MoveFocus($reverse)
+                        return # Handled
+                    }
+                    # All other actions go to the ActionService
+                    $global:TuiState.Services.ActionService.ExecuteAction($actionName)
+                    return # Handled
+                }
+            }
+    # ...
+}
+```
+
+#### **Issue #21: Redundant and Conflicting Overlay/Dialog Management**
+
+*   **Symptom:** A developer is confused about how to show a dialog. Should they use the `DialogManager` service? Or the global `Show-TuiOverlay` function? Both seem to work, but it's unclear which is correct and why two systems exist.
+*   **Root Cause:** Both the `DialogManager` service and the global functions `Show-TuiOverlay`/`Close-TopTuiOverlay` manipulate the same global state array: `$global:TuiState.OverlayStack`. This creates two competing APIs for the same functionality.
+*   **Location:** `AllServices.txt` -> `DialogManager`; `AllRuntime.txt` -> `Show-TuiOverlay`, `Close-TopTuiOverlay`.
+*   **Impact:** This is poor API design. It creates redundancy and confusion. The `DialogManager` should be the sole authority for managing the lifecycle of dialogs.
+*   **Solution:** Deprecate and remove the global `Show-TuiOverlay` and `Close-TopTuiOverlay` functions. All dialogs and overlays should be shown exclusively through a manager service (like `DialogManager`). This centralizes the logic for positioning, managing focus, and cleanup.
+
+---
+
+### **Category: Functional Bugs & Robustness Flaws**
+
+These are specific bugs in the implementation of core features.
+
+#### **Issue #22: Flawed Buffer Blending Logic**
+
+*   **Symptom:** A component with a transparent background (i.e., its characters are spaces) but a non-default background color fails to draw correctly over another component. The background color of the component underneath bleeds through.
+*   **Root Cause:** The `TuiCell.BlendWith` method's logic is flawed. It only blends the top cell if its character is not a space (`$other.Char -ne ' '`). This is incorrect. A "transparent" cell with a specific background color should absolutely be blended to show that color.
+*   **Location:** `AllBaseClasses.txt` -> `TuiCell` class, `BlendWith` method.
+*   **Impact:** This breaks transparency and layering effects, which are crucial for a rich TUI.
+*   **Solution:** Simplify the blending logic. A cell should be blended on top if it has a higher `ZIndex` OR if it's not a "default" empty cell (meaning its character is not a space OR its background color is not the default). A better approach is to assume the top cell always wins unless its background is a special "transparent" color, which isn't currently implemented. The simplest fix is to just let the top cell win.
+
+**File:** `AllBaseClasses.txt` -> `TuiCell.BlendWith`
+
+**Incorrect Logic:**
+```powershell
+    [TuiCell] BlendWith([object]$other) {
+        # ... z-index check ...
+        if ($other.ZIndex -eq $this.ZIndex) {
+            # This logic is too specific and misses many cases
+            if ($other.Char -ne ' ' -or $other.Bold -or $other.Underline -or $other.Italic) {
+                return [TuiCell]::new($other)
+            }
+            # ...
+        }
+    }
+```
+
+**Corrected Logic:**
+```powershell
+    [TuiCell] BlendWith([object]$other) {
+        if ($null -eq $other) { return $this }
+        
+        # If Z-Indexes are different, the higher one wins.
+        if ($other.ZIndex > $this.ZIndex) { return [TuiCell]::new($other) }
+        if ($other.ZIndex < $this.ZIndex) { return $this }
+
+        # If Z-Indexes are the same, the 'other' (top) cell wins by default.
+        # This is the most common and intuitive blending mode.
+        # A more advanced system could check for a special transparent color.
+        return [TuiCell]::new($other)
+    }
+```
+
+#### **Issue #23: Brittle Data Deserialization**
+
+*   **Symptom:** This is the other side of the coin to the "Brittle Data Serialization" issue. When a new property is added to the `PmcTask` class and the `data.json` file is manually updated to include it, the application fails to load that new property.
+*   **Root Cause:** The `DataManager.LoadData` method, just like `SaveData`, manually maps every property from the loaded JSON hashtable to a new `[PmcTask]` object. If a new property exists in the JSON, it's ignored because there's no line of code to handle it.
+*   **Location:** `AllServices.txt` -> `DataManager` class, `LoadData` method.
+*   **Impact:** This makes the data model impossible to evolve without manually updating the loading code every single time, guaranteeing that developers will forget and introduce data loss bugs.
+*   **Solution:** Automate the property mapping. Instead of manual assignment, iterate over the properties of the loaded object and assign them to the new class instance if a property of the same name exists.
+
+**File:** `AllServices.txt` -> `DataManager.LoadData`
+
+**Incorrect Code:**
+```powershell
+                    foreach ($taskData in $data.Tasks) {
+                        $task = [PmcTask]::new()
+                        # Manual mapping is brittle
+                        $taskData.GetEnumerator() | ForEach-Object {
+                            if ($task.PSObject.Properties.Match($_.Name)) {
+                                $task.($_.Name) = $_.Value
+                            }
+                        }
+                        # ...
+                    }
+```
+*Note: The existing code actually attempts an automated mapping, but it's fragile. A better way is to re-hydrate the object.*
+
+**Corrected, More Robust Code:**
+```powershell
+                    foreach ($taskData in $data.Tasks) {
+                        # Re-hydrating an object from a PSObject is the most robust way
+                        $task = [PmcTask]::new()
+                        foreach($prop in $taskData.PSObject.Properties) {
+                            if ($task.PSObject.Properties[$prop.Name]) {
+                                try {
+                                    # Handle enums correctly during assignment
+                                    $targetType = $task.PSObject.Properties[$prop.Name].TypeName
+                                    if ($targetType.Contains("TaskStatus") -or $targetType.Contains("TaskPriority")) {
+                                        $task.($prop.Name) = [System.Enum]::Parse($targetType, $prop.Value)
+                                    } else {
+                                        $task.($prop.Name) = $prop.Value
+                                    }
+                                } catch {
+                                    # Log error if a property can't be set
+                                }
+                            }
+                        }
+                        $this.Tasks[$task.Id] = $task
+                        # ...
+                    }
+```
+
+---
+
+### **Category: Code Hygiene & Minor Omissions**
+
+These are smaller issues that demonstrate a lack of polish and consistency.
+
+#### **Issue #24: Missing `Cleanup` Method in Base UIElement**
+
+*   **Symptom:** A custom component, like one that starts a timer, has no standard, predictable way to stop that timer when its parent screen is closed. The developer has to invent their own method.
+*   **Root Cause:** The `Screen` class has a `Cleanup` method, but the base `UIElement` class does not. This is an oversight. Any UI element could potentially acquire resources that need to be released.
+*   **Location:** `AllBaseClasses.txt` -> `UIElement` class.
+*   **Impact:** This leads to inconsistent API design and potential resource leaks.
+*   **Solution:** Add a virtual `Cleanup` method to the base `UIElement` class. The `Screen`'s `Cleanup` method should then be updated to call `Cleanup` on all of its children recursively.
+
+#### **Issue #25: Redundant `StyleFlags` Property on TuiCell**
+
+*   **Symptom:** When inspecting a `TuiCell` object in the debugger, there are boolean properties like `$Bold` and `$Italic`, but also an empty string property called `$StyleFlags`.
+*   **Root Cause:** This is a leftover from an older design. The boolean properties are the correct, modern way to handle styles as they are type-safe and discoverable. The string flag is obsolete and unused.
+*   **Location:** `AllBaseClasses.txt` -> `TuiCell` class.
+*   **Impact:** Minor code clutter and potential confusion for developers.
+*   **Solution:** Remove the `$StyleFlags` property from the `TuiCell` class definition and its copy constructor.
+Of course. At this stage, we are moving from critical bugs and major architectural flaws to issues of robustness, completeness, and adherence to best practices. While the application might "work" without these changes, they are essential for creating a stable, predictable, and extensible framework.
+
+Here is a final set of issues that a senior developer would flag for improvement.
+
+---
+
+### **Category: State Management & Lifecycle Robustness**
+
+These issues relate to how components and services manage their state throughout their lifecycle, especially during creation and destruction.
+
+#### **Issue #26: Dialogs Don't Restore Focus Correctly**
+
+*   **Symptom:** A user is focused on a text box on the main screen. They open a dialog, interact with it, and close it. Instead of focus returning to the original text box, it is lost, and the user has to tab around to find their place again.
+*   **Root Cause:** The `DialogManager` doesn't save the previously focused component before showing a new dialog, nor does it restore it upon closing the dialog. It simply releases focus.
+*   **Location:** `AllServices.txt` -> `DialogManager` class, `ShowDialog` and `HideDialog` methods.
+*   **Impact:** This creates a jarring and inefficient user experience, a common sign of an unpolished UI framework.
+*   **Solution:** Enhance the `DialogManager` to store the previously focused element before showing a dialog and restore it after the dialog is hidden.
+
+**File:** `AllServices.txt` -> `DialogManager`
+
+**Conceptual Fix for `ShowDialog`:**
+```powershell
+    [void] ShowDialog([UIElement]$dialog) {
+        # ...
+        # If there's a currently focused component, save it on the dialog's metadata
+        if ($this.FocusManager) {
+            $dialog.Metadata['PreviousFocus'] = $this.FocusManager.FocusedComponent
+            $this.FocusManager.ReleaseFocus() # Release focus before showing dialog
+        }
+        # ... show the dialog ...
+    }
+```
+
+**Conceptual Fix for `HideDialog`:**
+```powershell
+    [void] HideDialog([UIElement]$dialog) {
+        # ... hide the dialog ...
+        # Restore previous focus if it was saved
+        if ($this.FocusManager -and $dialog.Metadata.ContainsKey('PreviousFocus') -and $dialog.Metadata.PreviousFocus -is [UIElement]) {
+            $this.FocusManager.SetFocus($dialog.Metadata.PreviousFocus)
+        } else {
+            $this.FocusManager.ReleaseFocus() # Fallback
+        }
+        # ...
+    }
+```
+
+#### **Issue #27: Incomplete Component Lifecycle**
+
+*   **Symptom:** A component that needs to register itself with a global system (like a `RadioButtonComponent` needing to know about others in its group) has no reliable way to do so when it's added to the visual tree.
+*   **Root Cause:** The `UIElement` class lacks `OnAddedToParent` and `OnRemovedFromParent` lifecycle methods. The `RadioButtonComponent` has these methods, but nothing ever calls them.
+*   **Location:** `AllBaseClasses.txt` -> `UIElement` class `AddChild`/`RemoveChild` methods.
+*   **Impact:** This prevents components from performing setup or teardown logic that depends on their context within the UI tree, limiting the creation of more complex, self-managing components.
+*   **Solution:** The `AddChild` and `RemoveChild` methods in the base `UIElement` class should call these lifecycle hooks on the child component.
+
+**File:** `AllBaseClasses.txt` -> `UIElement`
+
+**Corrected `AddChild`:**
+```powershell
+    [void] AddChild([object]$child) {
+        # ... existing logic ...
+        $this.Children.Add($child)
+        
+        # Call the lifecycle hook if the child has it defined
+        if ($child.PSObject.Methods.Match('AddedToParent')) {
+            $child.AddedToParent()
+        }
+
+        $this.RequestRedraw()
+    }
+```
+
+**Corrected `RemoveChild`:**
+```powershell
+    [void] RemoveChild([object]$child) {
+        if ($this.Children.Remove($child)) {
+            $child.Parent = $null
+
+            # Call the lifecycle hook if the child has it defined
+            if ($child.PSObject.Methods.Match('RemovedFromParent')) {
+                $child.RemovedFromParent()
+            }
+            
+            $this.RequestRedraw()
+        }
+    }
+```
+
+---
+
+### **Category: User Experience & Visual Polish**
+
+These issues affect the look, feel, and intuitiveness of the application.
+
+#### **Issue #28: TextBox Cursor is Destructive**
+
+*   **Symptom:** In a `TextBoxComponent`, when the cursor is over a character, it's drawn with a solid block background color, completely obscuring the character underneath. The user can't see what character they are about to delete or insert next to.
+*   **Root Cause:** The `TextBoxComponent.OnRender` logic for drawing the cursor replaces the cell's character with the cursor character, but it also changes the cell's background color, essentially creating an "overwrite" style cursor. A more modern approach uses an "underline" or "I-beam" style cursor, or simply inverts the colors without losing the character.
+*   **Location:** `AllComponents.txt` -> `TextBoxComponent.OnRender`.
+*   **Impact:** This is a minor but noticeable usability issue that deviates from standard text input behavior.
+*   **Solution:** Change the cursor rendering to simply invert the foreground and background colors of the cell at the cursor's position, leaving the character intact.
+
+**File:** `AllComponents.txt` -> `TextBoxComponent.OnRender`
+
+**Incorrect (Destructive) Cursor Logic:**
+```powershell
+# ...
+$cursorChar = if ($cursorScreenPos -lt $visibleText.Length) { 
+    $visibleText[$cursorScreenPos] 
+} else { ' ' }
+
+$cursorStyle = @{ FG = Get-ThemeColor("input.cursor"); BG = $bgColor; Bold = $true }
+$this._private_buffer.SetCell($cursorX, $contentY, [TuiCell]::new($cursorChar, $cursorStyle.FG, $cursorStyle.BG, $cursorStyle.Bold))
+# ...
+```
+
+**Corrected (Non-Destructive) Cursor Logic:**
+```powershell
+# ...
+# Get the cell that is ALREADY at the cursor's position
+$cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
+
+# Invert its colors to represent the cursor
+$cursorFg = $cellUnderCursor.BackgroundColor
+$cursorBg = $cellUnderCursor.ForegroundColor # Or use a specific theme color like Get-ThemeColor("input.cursor")
+$newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true) # Make it bold
+$this._private_buffer.SetCell($cursorX, $contentY, $newCell)
+# ...
+```
+
+#### **Issue #29: `Write-TuiBox` Title is Not Vertically Centered**
+
+*   **Symptom:** When a box has a `Height` greater than 1, the `Title` is always drawn on the top border line (`Y=0`). A centered title within the box area would look more professional for panels.
+*   **Root Cause:** The `Write-TuiBox` function has hardcoded logic to draw the title at the box's `Y` coordinate. There is no option for different title alignments.
+*   **Location:** `AllFunctions.txt` -> `Write-TuiBox`.
+*   **Impact:** This limits the visual design possibilities and makes it hard to create standard "panel" headers.
+*   **Solution:** This is a feature enhancement rather than a bug. The `$Style` hashtable could be extended to support a `TitleAlignment` property (e.g., 'TopBorder', 'Top', 'Center').
+
+**File:** `AllFunctions.txt` -> `Write-TuiBox`
+
+**Conceptual Enhancement:**
+```powershell
+function Write-TuiBox {
+    param(
+        # ...
+        [hashtable]$Style = @{}
+    )
+    # ...
+        $titleAlignment = $Style.TitleAlignment ?? "TopBorder" # Default to current behavior
+    # ...
+        if (-not [string]::IsNullOrEmpty($Title)) {
+            # ... calculate title length and x ...
+            $titleY = $Y # Default
+            if ($titleAlignment -eq "Center") {
+                $titleY = $Y + [Math]::Floor($Height / 2)
+            }
+            Write-TuiText -Buffer $Buffer -X $titleX -Y $titleY -Text $titleText -Style $titleTextStyle
+        }
+    #...
+}
+```
+
+---
+
+### **Category: Final Code Hygiene & Simplification**
+
+These are final cleanup items to improve code clarity and remove dead code.
+
+#### **Issue #30: `Write-Log` Has Redundant Data Parameter**
+
+*   **Symptom:** The `Write-Log` function has a `$Data` parameter that, when used, just makes a second call to the logger.
+*   **Root Cause:** The underlying `Logger` class's `Log` method doesn't have a parameter for structured data. The `Write-Log` function tries to work around this by logging the data as a separate, compressed JSON string on the 'Debug' level.
+*   **Location:** `AllFunctions.txt` -> `Write-Log`.
+*   **Impact:** This is inefficient and clutters the logs. The structured data should ideally be part of the original log entry.
+*   **Solution:** The "right" fix is to enhance the `Logger` class to accept an optional object for structured data. A simpler, immediate fix is to combine the message and data into a single log call.
+
+**File:** `AllFunctions.txt` -> `Write-Log`
+
+**Current Implementation:**
+```powershell
+    #...
+        $logger.Log($Message, $Level)
+        if ($Data) {
+            # This creates a separate, hard-to-correlate log entry
+            $logger.Log("Additional data: $($Data | ConvertTo-Json -Compress)", 'Debug')
+        }
+    #...
+```
+
+**Improved Implementation:**
+```powershell
+    #...
+        $finalMessage = $Message
+        if ($Data) {
+            $dataJson = $Data | ConvertTo-Json -Compress -Depth 5
+            $finalMessage = "$Message | Data: $dataJson"
+        }
+        $logger.Log($finalMessage, $Level)
+    #...
+```
+This concludes the comprehensive review. Addressing this full list of issues would transform the project from a functional-but-flawed proof-of-concept into a robust, stable, and professional-grade TUI framework.
