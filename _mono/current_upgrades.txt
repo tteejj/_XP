@@ -1,4 +1,820 @@
-Okay, let's focus exclusively on *upgrading `mono`* by incorporating the beneficial changes from `acta`, ignoring any lingering issues in `acta` itself. The goal is to make `mono` more robust, efficient, and feature-ready.
+You're right to look for more! The previous upgrades focused on critical stability and performance, but a mature framework always has more areas for refinement. Let's outline additional reasonable upgrades for your `mono` framework, focusing on robustness, developer experience, and architectural consistency.
+
+---
+
+# Additional Upgrade Areas for Axiom-Phoenix v4.0 (`mono` version)
+
+Beyond the previously discussed critical and quality-of-life improvements, here are further recommendations to make your `mono` framework more robust, efficient, and user-friendly.
+
+---
+
+## 1. Centralized Focus Management Service
+
+**Issue:** Focus logic (`Set-ComponentFocus`, `Move-Focus`) is currently implemented as global functions and directly manipulates `global:TuiState.FocusedComponent`. This is less modular and harder to test or extend.
+
+**Upgrade:** Encapsulate focus management within a dedicated `FocusManager` service, registered with the `ServiceContainer`. This service will be responsible for setting, tracking, and moving focus between `UIElement`s.
+
+**Changes:**
+
+*   **`AllServices.ps1`:**
+    *   **New Class: `FocusManager`**
+        ```powershell
+        # ===== CLASS: FocusManager =====
+        # Module: focus-manager-service (new)
+        # Dependencies: UIElement, EventManager (optional)
+        # Purpose: Manages the currently focused UI element
+        class FocusManager {
+            [UIElement]$FocusedComponent = $null
+            [EventManager]$EventManager = $null
+
+            FocusManager() {
+                # Write-Log -Level Debug -Message "FocusManager: Initialized."
+            }
+
+            FocusManager([EventManager]$eventManager) {
+                $this.EventManager = $eventManager
+                # Write-Log -Level Debug -Message "FocusManager: Initialized with EventManager."
+            }
+
+            [void] SetFocus([UIElement]$component) {
+                if ($this.FocusedComponent -eq $component) {
+                    # Write-Log -Level Debug -Message "FocusManager: Component '$($component.Name)' already has focus."
+                    return
+                }
+                
+                if ($null -ne $this.FocusedComponent) {
+                    $this.FocusedComponent.IsFocused = $false
+                    $this.FocusedComponent.OnBlur()
+                    $this.FocusedComponent.RequestRedraw()
+                    # Write-Log -Level Debug -Message "FocusManager: Blurred '$($this.FocusedComponent.Name)'."
+                }
+
+                $this.FocusedComponent = $null
+                if ($null -ne $component -and $component.IsFocusable -and $component.Enabled -and $component.Visible) {
+                    $this.FocusedComponent = $component
+                    $component.IsFocused = $true
+                    $component.OnFocus()
+                    $component.RequestRedraw()
+                    # Write-Log -Level Debug -Message "FocusManager: Focused '$($component.Name)'."
+                    if ($this.EventManager) {
+                        $this.EventManager.Publish("Focus.Changed", @{ Component = $component.Name })
+                    }
+                } else {
+                    # Write-Log -Level Debug -Message "FocusManager: Attempted to focus non-focusable or null component."
+                }
+            }
+
+            [void] MoveFocus([bool]$reverse = $false) {
+                if (-not $global:TuiState.CurrentScreen) { return }
+
+                $focusableComponents = [System.Collections.Generic.List[UIElement]]::new()
+                
+                # Helper to recursively find all focusable components within the current screen
+                function Find-Focusable([UIElement]$comp, [System.Collections.Generic.List[UIElement]]$list) {
+                    if ($comp.IsFocusable -and $comp.Visible -and $comp.Enabled) {
+                        $list.Add($comp)
+                    }
+                    foreach ($child in $comp.Children) { Find-Focusable $child $list }
+                }
+                
+                Find-Focusable $global:TuiState.CurrentScreen $focusableComponents
+                
+                if ($focusableComponents.Count -eq 0) {
+                    $this.SetFocus($null) # Clear focus if no focusable components
+                    return
+                }
+                
+                # Sort components by TabIndex, then Y, then X for consistent order
+                $sorted = $focusableComponents | Sort-Object { $_.TabIndex * 10000 + $_.Y * 100 + $_.X }
+
+                $currentIndex = -1
+                if ($this.FocusedComponent) {
+                    for ($i = 0; $i -lt $sorted.Count; $i++) {
+                        if ($sorted[$i] -eq $this.FocusedComponent) {
+                            $currentIndex = $i
+                            break
+                        }
+                    }
+                }
+                
+                $nextIndex = -1
+                if ($reverse) {
+                    $nextIndex = ($currentIndex - 1 + $sorted.Count) % $sorted.Count
+                } else {
+                    $nextIndex = ($currentIndex + 1) % $sorted.Count
+                }
+
+                # If no component was focused or current one not found, default to first/last
+                if ($currentIndex -eq -1) {
+                    $nextIndex = if ($reverse) { $sorted.Count - 1 } else { 0 }
+                }
+
+                $this.SetFocus($sorted[$nextIndex])
+            }
+
+            [void] ReleaseFocus() {
+                $this.SetFocus($null)
+                # Write-Log -Level Debug -Message "FocusManager: All focus released."
+            }
+
+            [void] Cleanup() {
+                $this.FocusedComponent = $null
+                # Write-Log -Level Debug -Message "FocusManager: Cleanup complete."
+            }
+        }
+        ```
+    *   **Register `FocusManager` in `Initialize-Services`:**
+        ```powershell
+        # In Start.ps1 (or your main app init), within Initialize Services block:
+        # Before other services that might need it (e.g., ActionService depends on it for 'Focus.Changed' events)
+        $container.Register("FocusManager", [FocusManager]::new($eventManager)) 
+        ```
+*   **`AllFunctions.ps1`:**
+    *   **Remove global functions:** Delete `function Set-ComponentFocus` and `function Get-NextFocusableComponent`, `function Move-Focus`. All logic is now in the service.
+*   **`AllComponents.ps1`:**
+    *   **Update `TextBox.Focus()`:**
+        ```powershell
+        # In TextBox class
+        [void] Focus() {
+            if ($global:TuiState.Services.FocusManager) {
+                $global:TuiState.Services.FocusManager.SetFocus($this._textBox) # Pass inner component if it's the one that needs focus
+            } else {
+                # Fallback if focus manager not available (consider removing this if it's a hard dependency)
+                $this._textBox.IsFocused = $true
+                $this._textBox.OnFocus()
+                $this._textBox.RequestRedraw()
+            }
+        }
+        ```
+        *Self-correction:* `TextBox` is a wrapper, so `Focus()` should call `SetFocus` on its internal `_textBox` component.
+*   **`AllRuntime.ps1`:**
+    *   **Update `Process-SingleKeyInput`:**
+        ```powershell
+        # In Process-SingleKeyInput function:
+        # Old: Move-Focus -Reverse ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift)
+        # New:
+        if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                $focusManager.MoveFocus(-Reverse ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift))
+                $global:TuiState.IsDirty = $true
+                return
+            }
+        }
+
+        # Handle input for focused component (directly use FocusManager.FocusedComponent)
+        $focusedComponent = $global:TuiState.Services.FocusManager?.FocusedComponent # Get from service
+        if ($focusedComponent -and $focusedComponent.HandleInput($keyInfo)) {
+            $global:TuiState.IsDirty = $true
+            return # Input handled by focused component.
+        }
+        ```
+
+---
+
+## 2. Consistent Logger Usage (Post-`Invoke-WithErrorHandling` Integration)
+
+**Issue:** Many `Write-Verbose`, `Write-Warning`, and direct `Write-Host` calls for logging are still present, bypassing the `Logger` service.
+
+**Upgrade:** Replace all direct logging calls with `Write-Log` for centralized, configurable logging.
+
+**Changes:**
+
+*   **`AllBaseClasses.ps1`, `AllComponents.ps1`, `AllScreens.ps1`, `AllServices.ps1`, `AllRuntime.ps1` (and `Start.ps1`, `debug-start.ps1`, `debug-start-detailed.ps1`):**
+    *   **Systematic Replacement:** Go through every file and replace `Write-Verbose`, `Write-Warning`, and any `Write-Host` calls that are purely for logging/debugging with `Write-Log`.
+    *   **Example (in `TuiBuffer` constructor):**
+        ```powershell
+        # Old: # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
+        # New: Write-Log -Level Debug -Message "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
+        ```
+    *   **Modify `Write-Log` function in `AllFunctions.ps1`:** To automatically use the registered logger.
+        ```powershell
+        # In AllFunctions.ps1, modify Write-Log:
+        function Write-Log {
+            [CmdletBinding()]
+            param(
+                [Parameter(Mandatory)][string]$Message,
+                [ValidateSet('Trace', 'Debug', 'Info', 'Warning', 'Error', 'Fatal')] # Add Trace/Fatal levels
+                [string]$Level = 'Info',
+                [object]$Data = $null # Optional data to log (e.g., specific objects, hashtables)
+            )
+            
+            # Use the Logger service if it's available in global state
+            if ($global:TuiState -and $global:TuiState.Services.Logger) {
+                $global:TuiState.Services.Logger.Log($Message, $Level, $Data)
+            } else {
+                # Fallback to standard PowerShell write cmdlets if logger isn't initialized
+                # This ensures early messages or errors during logger initialization are still seen
+                switch ($Level) {
+                    'Error' { Write-Error "$Message" }
+                    'Warning' { Write-Warning "$Message" }
+                    'Debug' { Write-Debug "$Message" }
+                    'Trace' { Write-Host "$Message" -ForegroundColor DarkGray }
+                    default { Write-Host "$Message" } # Info/Fatal/etc.
+                }
+            }
+        }
+        ```
+    *   **Initial Logger Setup in `Start.ps1`:** In `Start.ps1`, for the initial phase before the `ServiceContainer` is fully built, you might still need `Write-Host` or `Write-Output` for messages like "Loading framework files..." but once the logger is registered, switch to `Write-Log`.
+
+---
+
+## 3. Improved Dialog Overlay Management & Positioning
+
+**Issue:** Dialogs (AlertDialog, ConfirmDialog, InputDialog) directly inherit from `UIElement`, manually calculate their position (`X`, `Y`), and are then handled by the `OverlayStack` in `global:TuiState`. This makes managing multiple overlays or precise positioning difficult.
+
+**Upgrade:** Implement a `DialogManager` service responsible for showing, hiding, and positioning dialogs. Dialogs themselves become simpler UI elements.
+
+**Changes:**
+
+*   **`AllServices.ps1`:**
+    *   **New Class: `DialogManager`**
+        ```powershell
+        # ===== CLASS: DialogManager =====
+        # Module: dialog-manager-service (new)
+        # Dependencies: UIElement, EventManager (optional), FocusManager (optional)
+        # Purpose: Manages modal dialogs and their display/positioning
+        class DialogManager {
+            [System.Collections.Generic.List[UIElement]] $_activeDialogs = [System.Collections.Generic.List[UIElement]]::new()
+            [EventManager]$EventManager = $null
+            [FocusManager]$FocusManager = $null
+
+            DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
+                $this.EventManager = $eventManager
+                $this.FocusManager = $focusManager
+                # Write-Log -Level Debug -Message "DialogManager: Initialized."
+            }
+
+            [void] ShowDialog([UIElement]$dialog) {
+                if (-not $dialog -or -not ($dialog -is [Dialog])) {
+                    throw [System.ArgumentException]::new("Provided element is not a Dialog.", "dialog")
+                }
+                
+                # Calculate center position
+                $consoleWidth = $global:TuiState.BufferWidth
+                $consoleHeight = $global:TuiState.BufferHeight
+
+                $dialog.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $dialog.Width) / 2))
+                $dialog.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $dialog.Height) / 2))
+
+                # If there's a currently focused component, save it
+                if ($this.FocusManager) {
+                    $dialog.Metadata.PreviousFocus = $this.FocusManager.FocusedComponent
+                    $this.FocusManager.ReleaseFocus() # Release current focus
+                }
+
+                $this.{_activeDialogs}.Add($dialog)
+                $dialog.Visible = $true
+                $dialog.IsOverlay = $true # Ensure it's treated as an overlay
+                
+                # Explicitly manage overlay stack in global state
+                $global:TuiState.OverlayStack.Add($dialog)
+                
+                # Initialize and enter the dialog if it implements these methods
+                if ($dialog.PSObject.Methods['Initialize'] -and -not $dialog._isInitialized) {
+                    $dialog.Initialize()
+                    $dialog._isInitialized = $true
+                }
+                if ($dialog.PSObject.Methods['OnEnter']) {
+                    $dialog.OnEnter()
+                }
+
+                $dialog.RequestRedraw()
+                # Write-Log -Level Info -Message "DialogManager: Showing dialog '$($dialog.Name)' at X=$($dialog.X), Y=$($dialog.Y)."
+                
+                # Set focus to the dialog itself or its first focusable child
+                if ($this.FocusManager) {
+                    $this.FocusManager.SetFocus($dialog) # Set focus to the dialog container first
+                    $dialog.SetInitialFocus() # This would be a method on Dialog to find its first focusable child
+                }
+            }
+
+            [void] HideDialog([UIElement]$dialog) {
+                if (-not $dialog) { return }
+
+                if ($this.{_activeDialogs}.Remove($dialog)) {
+                    $dialog.Visible = $false
+                    $dialog.IsOverlay = $false
+
+                    # Remove from global overlay stack
+                    if ($global:TuiState.OverlayStack.Contains($dialog)) {
+                        $global:TuiState.OverlayStack.Remove($dialog)
+                    }
+
+                    # Cleanup the dialog
+                    $dialog.Cleanup()
+
+                    # Restore previous focus
+                    if ($this.FocusManager -and $dialog.Metadata.PreviousFocus -is [UIElement]) {
+                        $this.FocusManager.SetFocus($dialog.Metadata.PreviousFocus)
+                    } else {
+                        $this.FocusManager.ReleaseFocus() # Clear focus if no previous component
+                    }
+
+                    $dialog.RequestRedraw() # Force redraw to remove dialog from screen
+                    # Write-Log -Level Info -Message "DialogManager: Hiding dialog '$($dialog.Name)'."
+                } else {
+                    # Write-Log -Level Warning -Message "DialogManager: Attempted to hide a dialog '$($dialog.Name)' that was not active."
+                }
+            }
+
+            [void] Cleanup() {
+                foreach ($dialog in $this.{_activeDialogs}.ToArray()) { # Use ToArray to avoid collection modification during iteration
+                    $this.HideDialog($dialog) # This will also cleanup and remove from overlay stack
+                }
+                $this.{_activeDialogs}.Clear()
+                # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
+            }
+        }
+        ```
+    *   **Register `DialogManager` in `Initialize-Services`:**
+        ```powershell
+        # In Start.ps1 (or your main app init), within Initialize Services block:
+        $eventManager = $container.GetService("EventManager") # Ensure these are retrieved first
+        $focusManager = $container.GetService("FocusManager")
+        $container.Register("DialogManager", [DialogManager]::new($eventManager, $focusManager))
+        ```
+*   **`AllBaseClasses.ps1` (Dialog Class):**
+    *   **Modify `Dialog` class:**
+        *   Remove `Show`, `Close`, `ShowDialog` methods from `Dialog` base class. These will be handled by `DialogManager`.
+        *   Add a new method `SetInitialFocus()` to `Dialog` to find its first focusable child.
+        *   Dialogs now become purely structural UI elements that can be `Show`n/`Hide`n by the `DialogManager`.
+        ```powershell
+        # In Dialog class (inside AllBaseClasses.ps1, or where Dialog is defined):
+        class Dialog : UIElement {
+            [string]$Title = ""
+            [string]$Message = "" # Kept for convenience for simple message dialogs
+            hidden [Panel]$_panel
+            hidden [object]$Result = $null # Dialogs still set their own result
+            hidden [bool]$_isComplete = $false # Indicates dialog has finished
+            [scriptblock]$OnClose # Callback for when dialog is closed
+
+            # ... constructors ...
+
+            # Remove original Show, Close, ShowDialog methods from here.
+            # Add this new method:
+            [void] SetInitialFocus() {
+                if ($this.Children.Count -gt 0) {
+                    $firstFocusable = $this.Children | Where-Object { $_.IsFocusable -and $_.Visible -and $_.Enabled } | Sort-Object TabIndex, Y, X | Select-Object -First 1
+                    if ($firstFocusable -and $global:TuiState.Services.FocusManager) {
+                        $global:TuiState.Services.FocusManager.SetFocus($firstFocusable)
+                        # Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
+                    }
+                }
+            }
+
+            # Optional: Add a public Close method for internal use by dialog components
+            [void] Close([object]$result) {
+                $this.Result = $result
+                $this._isComplete = $true # Mark as complete for external handlers
+                
+                # The actual hiding will be done by DialogManager
+                # Write-Log -Level Debug -Message "Dialog '$($this.Name)': Requested close with result: '$result'."
+                if ($this.OnClose) {
+                    & $this.OnClose $result
+                }
+                # Publish a general dialog close event for DialogManager to pick up
+                if ($global:TuiState.Services.EventManager) {
+                    $global:TuiState.Services.EventManager.Publish("Dialog.Closed", @{ Dialog = $this; Result = $result })
+                }
+            }
+        }
+        ```
+*   **`AllComponents.ps1` (Dialog implementations):**
+    *   **Modify `AlertDialog`, `ConfirmDialog`, `InputDialog`:**
+        *   Remove their `Show` methods (they are now generic `Dialog` elements managed by `DialogManager`).
+        *   Update their internal components' `OnClick` handlers to call `$this.Close($result)` (the `Dialog` base method).
+        *   Ensure `HandleInput` methods call `$this.Close()` appropriately.
+    *   **Example (in `AlertDialog` constructor):**
+        ```powershell
+        # In AlertDialog, InitializeAlert method:
+        $this._okButton.OnClick = {
+            $this.Close($true) # Calls the Dialog base Close method
+        }.GetNewClosure()
+        ```
+*   **`AllRuntime.ps1`:**
+    *   **Update `Process-SingleKeyInput`:** Overlays now only include dialogs and command palette.
+        ```powershell
+        # In Process-SingleKeyInput:
+        # If there's an active overlay (like a dialog), give it priority.
+        if ($global:TuiState.OverlayStack.Count -gt 0) {
+            $topOverlay = $global:TuiState.OverlayStack[-1] # Peek at the top overlay
+            # Give focus to the top overlay, then let it handle input
+            if ($global:TuiState.Services.FocusManager) {
+                $global:TuiState.Services.FocusManager.SetFocus($topOverlay)
+            }
+            if ($topOverlay.HandleInput($keyInfo)) {
+                $global:TuiState.IsDirty = $true
+                return # Input handled by overlay.
+            }
+        }
+        # ... rest of Process-SingleKeyInput ...
+        ```
+    *   **Update `Invoke-TuiRender`:** Remove manual positioning for `CommandPalette` and `OverlayStack` elements. They should set their own `X`/`Y` properties or be positioned by `DialogManager`.
+        ```powershell
+        # In Invoke-TuiRender:
+        # Command palette render:
+        if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
+            $global:TuiState.CommandPalette.Render()
+            $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
+            if ($paletteBuffer) {
+                # CommandPalette should set its own X/Y (e.g. in Show() or OnResize())
+                $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
+                    $global:TuiState.CommandPalette.X, # Use CommandPalette's own X
+                    $global:TuiState.CommandPalette.Y  # Use CommandPalette's own Y
+                )
+            }
+        }
+        
+        # Overlays render:
+        if ($global:TuiState.ContainsKey('OverlayStack') -and $global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
+            foreach ($overlay in $global:TuiState.OverlayStack) {
+                if ($overlay -and $overlay.Visible) {
+                    $overlay.Render()
+                    $overlayBuffer = $overlay.GetBuffer()
+                    if ($overlayBuffer) {
+                        # Overlays should set their own X/Y (e.g. via DialogManager)
+                        $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
+                    }
+                }
+            }
+        }
+        ```
+    *   **Update `CommandPalette.Show()` in `AllComponents.ps1`:**
+        ```powershell
+        # In CommandPalette class, Show method:
+        [void] Show() {
+            $this.RefreshActions()
+            $this._searchBox.Clear()
+            $this.FilterActions("")
+            $this.Visible = $true
+            $this.IsOverlay = $true # Explicitly set this
+            
+            # Center the command palette
+            $consoleWidth = $global:TuiState.BufferWidth
+            $consoleHeight = $global:TuiState.BufferHeight
+            $this.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $this.Width) / 2))
+            $this.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $this.Height) / 2))
+
+            if ($global:TuiState.Services.FocusManager) {
+                $global:TuiState.Services.FocusManager.SetFocus($this._searchBox._textBox) # Focus the inner textbox
+            }
+            $this.RequestRedraw()
+        }
+        ```
+*   **Update `Show-TuiOverlay` and `Close-TopTuiOverlay` in `AllRuntime.ps1`:** These functions will now primarily interact with the `DialogManager` for `Dialog` types.
+    ```powershell
+    # In AllRuntime.ps1, modify Show-TuiOverlay:
+    function Show-TuiOverlay {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [UIElement]$Element
+        )
+        try {
+            if ($Element -is [Dialog]) {
+                if ($global:TuiState.Services.DialogManager) {
+                    $global:TuiState.Services.DialogManager.ShowDialog($Element)
+                    return
+                } else {
+                    Write-Log -Level Error -Message "DialogManager not available to show dialog '$($Element.Name)'."
+                    throw "DialogManager service is not available."
+                }
+            }
+            
+            # Keep existing logic for non-Dialog overlays if you need them outside DialogManager
+            Write-Log -Level Debug -Message "Showing generic overlay: $($Element.Name)"
+            if (-not $global:TuiState.ContainsKey('OverlayStack')) {
+                $global:TuiState.OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
+            }
+            $global:TuiState.OverlayStack.Add($Element)
+            $Element.Visible = $true
+            $Element.IsOverlay = $true
+            # ... Initialize/OnEnter logic ...
+            $global:TuiState.IsDirty = $true
+        } catch {
+            Write-Log -Level Error -Message "Failed to show overlay: $($_.Exception.Message)" -Data $_
+            throw
+        }
+    }
+
+    # In AllRuntime.ps1, modify Close-TopTuiOverlay:
+    function Close-TopTuiOverlay {
+        [CmdletBinding()]
+        param()
+        try {
+            if (-not $global:TuiState.ContainsKey('OverlayStack') -or $global:TuiState.OverlayStack.Count -eq 0) {
+                Write-Log -Level Warning -Message "No overlays to close."
+                return
+            }
+            
+            $topOverlay = $global:TuiState.OverlayStack[-1]
+            
+            if ($topOverlay -is [Dialog]) {
+                if ($global:TuiState.Services.DialogManager) {
+                    $global:TuiState.Services.DialogManager.HideDialog($topOverlay)
+                    return
+                } else {
+                    Write-Log -Level Error -Message "DialogManager not available to close dialog '$($topOverlay.Name)'."
+                    throw "DialogManager service is not available."
+                }
+            }
+
+            # Existing logic for non-Dialog overlays:
+            Write-Log -Level Debug -Message "Closing generic top overlay: $($topOverlay.Name)"
+            $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
+            $topOverlay.Visible = $false
+            $topOverlay.IsOverlay = $false
+            # ... OnExit/Cleanup logic ...
+            $global:TuiState.IsDirty = $true
+        } catch {
+            Write-Log -Level Error -Message "Failed to close top overlay: $($_.Exception.Message)" -Data $_
+            throw
+        }
+    }
+    ```
+
+---
+
+## 4. Enhanced Theming Integration
+
+**Issue:** Many components still use hardcoded `ConsoleColor` values or direct `[ConsoleColor]::Cyan` assignments instead of consistently leveraging `Get-ThemeColor`.
+
+**Upgrade:** Fully integrate `ThemeManager.GetColor` (and potentially a new `GetStyle` method) to allow for complete theme customization without modifying component code.
+
+**Changes:**
+
+*   **`AllServices.ps1` (ThemeManager):**
+    *   **Review `ThemeManager.GetColor`:** Ensure it correctly handles hex colors and provides sensible fallbacks. (Already covered in previous upgrade, but re-emphasize the need for all color lookups to go through it).
+    *   **Optional: Add `GetStyle` method:**
+        ```powershell
+        # In ThemeManager class, add a GetStyle method to retrieve complex component styles
+        [hashtable] GetStyle([string]$componentPath) {
+            # Example: "button.normal", "textbox.focus"
+            $segments = $componentPath.Split('.')
+            $currentStyle = $this.CurrentTheme
+            foreach ($segment in $segments) {
+                if ($currentStyle -is [hashtable] -and $currentStyle.ContainsKey($segment)) {
+                    $currentStyle = $currentStyle[$segment]
+                } else {
+                    return @{} # Path not found, return empty hashtable
+                }
+            }
+            
+            # Create a new hashtable to ensure it's mutable and can be expanded/modified
+            $resolvedStyle = [hashtable]::new($currentStyle) # Use a copy
+
+            # Example of how you might resolve nested references or palette values
+            # (Requires your theme definition to have a 'Palette' key)
+            # if ($resolvedStyle.ContainsKey('FG') -and $resolvedStyle.FG -is [string] -and $resolvedStyle.FG.StartsWith('$')) {
+            #     # Assuming '$' indicates a palette reference, e.g., $Accent, $Foreground
+            #     $paletteKey = $resolvedStyle.FG.Substring(1)
+            #     $resolvedStyle.FG = $this.GetColor($paletteKey)
+            # }
+            # ... similar for BG, BorderFG, etc. ...
+
+            return $resolvedStyle
+        }
+        ```
+*   **`AllComponents.ps1` (All UI Components):**
+    *   **Refactor `OnRender` methods:**
+        *   Replace direct `"#HEXCODE"` or `[ConsoleColor]::COLOR` assignments with `Get-ThemeColor("color.name")`.
+        *   For complex elements like `ButtonComponent` or `Panel`, consider retrieving a full style hashtable from `ThemeManager.GetStyle` and using that for all `Write-TuiBox`/`Write-TuiText` calls.
+    *   **Example (`ButtonComponent` - Simplified approach):**
+        ```powershell
+        # In ButtonComponent.OnRender
+        $buttonBaseFg = Get-ThemeColor("button.normal.foreground")
+        $buttonBaseBg = Get-ThemeColor("button.normal.background")
+        $buttonBaseBorder = Get-ThemeColor("button.normal.border")
+
+        $buttonFocusFg = Get-ThemeColor("button.focus.foreground")
+        $buttonFocusBg = Get-ThemeColor("button.focus.background")
+        $buttonFocusBorder = Get-ThemeColor("button.focus.border")
+
+        $buttonPressedFg = Get-ThemeColor("button.pressed.foreground")
+        $buttonPressedBg = Get-ThemeColor("button.pressed.background")
+        $buttonPressedBorder = Get-ThemeColor("button.pressed.border")
+
+        # Determine current colors based on state
+        $currentBg = $buttonBaseBg
+        $currentFg = $buttonBaseFg
+        $currentBorder = $buttonBaseBorder
+
+        if ($this.IsFocused) {
+            $currentFg = $buttonFocusFg
+            $currentBg = $buttonFocusBg
+            $currentBorder = $buttonFocusBorder
+        }
+        if ($this.IsPressed) {
+            $currentFg = $buttonPressedFg
+            $currentBg = $buttonPressedBg
+            $currentBorder = $buttonPressedBorder
+        }
+
+        $boxStyle = @{ BorderStyle = "Single"; BorderFG = $currentBorder; BG = $currentBg }
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style $boxStyle
+        
+        $textStyle = @{ FG = $currentFg; BG = $currentBg }
+        $textX = [Math]::Floor(($this.Width - $this.Text.Length) / 2)
+        $textY = [Math]::Floor(($this.Height - 1) / 2)
+        Write-TuiText -Buffer $this._private_buffer -X $textX -Y $textY -Text $this.Text -Style $textStyle
+        ```
+    *   **Example (`Panel` - Using `GetStyle`):**
+        ```powershell
+        # In Panel.OnRender
+        # Get base panel style
+        $panelStyle = $global:TuiState.Services.ThemeManager.GetStyle("panel")
+        $panelBg = $panelStyle.BG ?? "#000000"
+        $panelFg = $panelStyle.FG ?? "#FFFFFF"
+        $panelBorder = $panelStyle.Border ?? "#808080"
+        $panelTitle = $panelStyle.Title ?? "#00FFFF"
+
+        $bgCell = [TuiCell]::new(' ', $panelFg, $panelBg)
+        $this._private_buffer.Clear($bgCell)
+
+        if ($this.HasBorder) {
+            $borderColorToUse = if ($this.IsFocused) { Get-ThemeColor("Accent") } else { $panelBorder }
+            $titleColorToUse = if ($this.IsFocused) { Get-ThemeColor("Highlight") } else { $panelTitle } # Focused title can be different
+            
+            $boxStyle = @{ 
+                BorderStyle = $this.BorderStyle; 
+                BorderFG = $borderColorToUse; 
+                BG = $panelBg; 
+                TitleFG = $titleColorToUse 
+                TitleStyle = @{ Bold = $true } # Make title bold by default
+            }
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
+                -Width $this.Width -Height $this.Height `
+                -Title $this.Title -Style $boxStyle
+        }
+        # ... rest of OnRender ...
+        ```
+
+---
+
+## 5. UIElement `_private_buffer` Initialization Consistency
+
+**Issue:** The `_private_buffer` in `UIElement` (and subclasses) is sometimes initialized in constructors, sometimes in `Resize`, and sometimes conditionally in `_RenderContent`. This can lead to null-reference issues or incorrect buffer sizing.
+
+**Upgrade:** Ensure `_private_buffer` is always initialized and correctly sized in the constructor, and then consistently managed by the `Resize` method, which is called early in the lifecycle.
+
+**Changes:**
+
+*   **`AllBaseClasses.ps1` (UIElement):**
+    ```powershell
+    # In UIElement class:
+    UIElement() {
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        # Initialize buffer immediately with default dimensions
+        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        Write-Log -Level Debug -Message "UIElement 'Unnamed' created with default size ($($this.Width)x$($this.Height))."
+    }
+
+    UIElement([string]$name) {
+        $this.Name = $name
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        # Initialize buffer immediately with default dimensions
+        $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        Write-Log -Level Debug -Message "UIElement '$($this.Name)' created with default size ($($this.Width)x$($this.Height))."
+    }
+
+    UIElement([int]$x, [int]$y, [int]$width, [int]$height) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.X = $x
+        $this.Y = $y
+        $this.Width = $width
+        $this.Height = $height
+        $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        # Initialize buffer immediately with provided dimensions
+        $this._private_buffer = [TuiBuffer]::new($width, $height, "Unnamed.Buffer")
+        Write-Log -Level Debug -Message "UIElement 'Unnamed' created at ($x, $y) with dimensions $($width)x$($height)."
+    }
+
+    # In Resize method: Remove the conditional re-initialization
+    [void] Resize([int]$newWidth, [int]$newHeight) {
+        if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
+        if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
+        try {
+            if ($this.Width -eq $newWidth -and $this.Height -eq $newHeight) {
+                Write-Log -Level Debug -Message "Resize: Component '$($this.Name)' already has target dimensions ($($newWidth)x$($newHeight)). No change."
+                return
+            }
+            $this.Width = $newWidth
+            $this.Height = $newHeight
+            
+            # Always resize the existing buffer, it should never be null here.
+            $this._private_buffer.Resize($newWidth, $newHeight)
+            
+            $this.RequestRedraw()
+            $this.OnResize($newWidth, $newHeight)
+            Write-Log -Level Debug -Message "Component '$($this.Name)' resized to $($newWidth)x$($newHeight)."
+        }
+        catch {
+            Write-Log -Level Error -Message "Failed to resize component '$($this.Name)' to $($newWidth)x$($newHeight): $($_.Exception.Message)" -Data $_
+            throw
+        }
+    }
+
+    # In _RenderContent: Remove redundant buffer checks/re-initialization
+    hidden [void] _RenderContent() {
+        if (-not $this.Visible) { return }
+        
+        # This check is largely redundant if constructors and Resize are robust
+        # but can remain as a final safeguard.
+        if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
+            $bufferWidth = [Math]::Max(1, $this.Width)
+            $bufferHeight = [Math]::Max(1, $this.Height)
+            $this._private_buffer = [TuiBuffer]::new($bufferWidth, $bufferHeight, "$($this.Name).Buffer")
+            Write-Log -Level Warning -Message "UIElement '$($this.Name)': Buffer was null or mismatched during _RenderContent. Re-initialized. This should ideally not happen."
+        }
+        
+        if ($this._needs_redraw) {
+            $this._private_buffer.Clear() # Clear buffer before OnRender
+            $this.OnRender()
+            $this._needs_redraw = $false
+            Write-Log -Level Debug -Message "Rendered own content for '$($this.Name)'."
+        }
+        # ... rest of _RenderContent ...
+    }
+    ```
+
+---
+
+## 6. Robust Date and Enum Deserialization in DataManager
+
+**Issue:** The `DataManager.LoadData` method uses direct casting for `DateTime` and `Enum` properties (`[datetime]::Parse($data.CreatedAt)` and `[TaskStatus]::$($taskData.Status)`). This is prone to errors if the JSON data is missing or malformed for these fields.
+
+**Upgrade:** Add more robust parsing with `try/catch` or `TryParse` for `DateTime` and graceful fallback for `Enum` values.
+
+**Changes:**
+
+*   **`AllServices.ps1` (DataManager):**
+    ```powershell
+    # In DataManager.LoadData, within Task loading loop:
+    # ... existing code ...
+    foreach ($taskData in $data.Tasks) {
+        try {
+            # ... existing checks ...
+
+            # Robust DateTime parsing
+            $task.CreatedAt = try { [datetime]::Parse($taskData.CreatedAt) } catch { [datetime]::Now }
+            $task.UpdatedAt = try { [datetime]::Parse($taskData.UpdatedAt) } catch { [datetime]::Now }
+            $task.DueDate = $null # Initialize to null
+            if ($taskData.ContainsKey('DueDate') -and $taskData.DueDate -is [string] -and -not [string]::IsNullOrEmpty($taskData.DueDate) -and $taskData.DueDate -ne "N/A") {
+                $parsedDate = $null
+                if ([DateTime]::TryParse($taskData.DueDate, [ref]$parsedDate)) {
+                    $task.DueDate = $parsedDate
+                } else {
+                    Write-Log -Level Warning -Message "DataManager: Invalid DueDate format for task '$($taskData.Id)': '$($taskData.DueDate)'. Setting to null."
+                }
+            }
+
+            # Robust Enum parsing
+            $task.Status = [TaskStatus]::Pending # Default
+            if ($taskData.ContainsKey('Status') -and $taskData.Status -is [string]) {
+                $parsedStatus = $null
+                if ([Enum]::TryParse([TaskStatus], $taskData.Status, [ref]$parsedStatus)) {
+                    $task.Status = $parsedStatus
+                } else {
+                    Write-Log -Level Warning -Message "DataManager: Invalid TaskStatus for task '$($taskData.Id)': '$($taskData.Status)'. Defaulting to Pending."
+                }
+            }
+            
+            $task.Priority = [TaskPriority]::Medium # Default
+            if ($taskData.ContainsKey('Priority') -and $taskData.Priority -is [string]) {
+                $parsedPriority = $null
+                if ([Enum]::TryParse([TaskPriority], $taskData.Priority, [ref]$parsedPriority)) {
+                    $task.Priority = $parsedPriority
+                } else {
+                    Write-Log -Level Warning -Message "DataManager: Invalid TaskPriority for task '$($taskData.Id)': '$($taskData.Priority)'. Defaulting to Medium."
+                }
+            }
+
+            # ... rest of task property mapping ...
+
+        } catch {
+            Write-Log -Level Warning -Message "DataManager: Skipping corrupted or invalid task record: $($_.Exception.Message)" -Data @{ TaskId = $taskData.Id; Data = $taskData }
+        }
+    }
+
+    # Similar logic for PmcProject properties if they have Dates/Enums
+    # Example (PmcProject):
+    foreach ($projectData in $data.Projects) {
+        try {
+            # ... existing checks ...
+            $project.CreatedAt = try { [datetime]::Parse($projectData.CreatedAt) } catch { [datetime]::Now }
+            $project.UpdatedAt = try { [datetime]::Parse($projectData.UpdatedAt) } catch { [datetime]::Now }
+            # ... rest of project property mapping ...
+        } catch {
+            Write-Log -Level Warning -Message "DataManager: Skipping corrupted or invalid project record: $($_.Exception.Message)" -Data @{ ProjectKey = $projectData.Key; Data = $projectData }
+        }
+    }
+    ```
+
+---
+
+These additional upgrades will significantly improve the internal architecture and resilience of your Axiom-Phoenix framework. Remember to apply these changes incrementally and test thoroughly after each major section. Good luck!, let's focus exclusively on *upgrading `mono`* by incorporating the beneficial changes from `acta`, ignoring any lingering issues in `acta` itself. The goal is to make `mono` more robust, efficient, and feature-ready.
 
 This document will outline the upgrades for your `mono` framework, focusing on addressing the issues we identified previously and incorporating `acta`'s improved architectural patterns and implementations.
 
