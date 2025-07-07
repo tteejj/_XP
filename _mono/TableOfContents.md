@@ -76,6 +76,7 @@ Example: Search for `PAGE: ABC.001` to find the TuiAnsiHelper class.
 | ACO.019 | ConfirmDialog Class | Yes/No confirmation dialog |
 | ACO.020 | InputDialog Class | Text input dialog |
 | ACO.021 | NavigationMenu Class | Local menu component |
+| ACO.022 | VerticalStackPanel Class | Declarative panel that arranges children vertically |
 
 ---
 
