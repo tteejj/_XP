@@ -12,23 +12,13 @@ function Write-TuiText {
         [Parameter(Mandatory)][int]$X,
         [Parameter(Mandatory)][int]$Y,
         [Parameter(Mandatory)][string]$Text,
-        [hashtable]$Style = @{} # Accepts a hashtable for all style properties
+        [hashtable]$Style = @{}
     )
-    
-    try {
-        if ($null -eq $Buffer -or [string]::IsNullOrEmpty($Text)) { 
-            # Write-Log -Level Debug -Message "Write-TuiText: Skipped for buffer '$($Buffer.Name)' due to empty text."
-            return 
-        }
-        
-        # Now simply pass the style hashtable to TuiBuffer.WriteString
+
+    # No try/catch needed. If $Buffer.WriteString throws an error,
+    # it will propagate up the call stack naturally.
+    if ($null -ne $Buffer) {
         $Buffer.WriteString($X, $Y, $Text, $Style)
-        
-        # Write-Log -Level Debug -Message "Write-TuiText: Wrote '$Text' to buffer '$($Buffer.Name)' at ($X, $Y)."
-    }
-    catch {
-        Write-Error "Failed to write text to buffer '$($Buffer.Name)' at ($X, $Y): $($_.Exception.Message)"
-        throw
     }
 }
 
@@ -41,133 +31,85 @@ function Write-TuiBox {
         [Parameter(Mandatory)][int]$Width,
         [Parameter(Mandatory)][int]$Height,
         [string]$Title = "",
-        [hashtable]$Style = @{} # All visual aspects now passed via Style hashtable
+        [hashtable]$Style = @{}
     )
-    
-    try {
-        if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) {
-            # Write-Log -Level Warning -Message "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
-            return
-        }
 
-        # Extract properties from the style object with safe fallbacks.
-        $borderStyleName = $Style.BorderStyle ?? "Single"
-        $borderColor = $Style.BorderFG ?? "#808080" # Default border color (gray hex)
-        $bgColor = $Style.BG ?? "#000000"           # Default background color (black hex)
-        $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color
-        $fillChar = [char]($Style.FillChar ?? ' ')   # Optional fill character
+    if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) { return }
 
-        $borders = Get-TuiBorderChars -Style $borderStyleName
-        
-        # Define style objects for child calls to Write-TuiText.
-        $generalStyle = @{ FG = $borderColor; BG = $bgColor } # For borders
-        $fillStyle = @{ FG = $borderColor; BG = $bgColor }    # For fill area (fill char uses border fg)
-        
-        $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
-        # Merge any additional title style overrides (e.g., Bold = $true for title)
-        if ($Style.TitleStyle) {
-            foreach ($key in $Style.TitleStyle.Keys) { $titleTextStyle[$key] = $Style.TitleStyle[$key] }
-        }
+    # Extract style properties with safe, hex-based defaults
+    $borderStyleName = $Style.BorderStyle ?? "Single"
+    $borderColor = $Style.BorderFG ?? "#808080"
+    $bgColor = $Style.BG ?? "#000000"
+    $titleColor = $Style.TitleFG ?? $borderColor
+    $fillChar = [char]($Style.FillChar ?? ' ')
 
-        # Fill background of the entire box area first
-        $Buffer.FillRect($X, $Y, $Width, $Height, $fillChar, $fillStyle)
-        
-        # Top border
-        if ($Width -gt 1 -and $Height -gt 0) {
-            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$($borders.Horizontal * ($Width - 2))$($borders.TopRight)" -Style $generalStyle
-        } elseif ($Width -eq 1 -and $Height -gt 0) {
-            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
-        }
+    $borders = Get-TuiBorderChars -Style $borderStyleName
 
-        # Side borders
-        for ($i = 1; $i -lt ($Height - 1); $i++) {
-            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
-            if ($Width -gt 1) {
-                Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
+    # Define style objects for drawing functions
+    $borderStyle = @{ FG = $borderColor; BG = $bgColor }
+    $fillStyle = @{ FG = $borderColor; BG = $bgColor } # Fill char uses border FG
+    $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
+
+    # 1. Fill the entire background of the box area first.
+    $Buffer.FillRect($X, $Y, $Width, $Height, $fillChar, $fillStyle)
+
+    # 2. Draw borders on top of the fill, handling edge cases.
+    # Top and Bottom Borders
+    if ($Height -gt 0) {
+        if ($Width -gt 1) {
+            $hBar = $borders.Horizontal * [Math]::Max(0, $Width - 2)
+            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$hBar$($borders.TopRight)" -Style $borderStyle
+            if ($Height -gt 1) {
+                Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$hBar$($borders.BottomRight)" -Style $borderStyle
+            }
+        } elseif ($Width -eq 1) { # 1-wide box is a vertical line
+            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text $borders.TopLeft -Style $borderStyle
+            if ($Height -gt 1) {
+                Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text $borders.BottomLeft -Style $borderStyle
             }
         }
-        
-        # Bottom border
-        if ($Height -gt 1) {
-            if ($Width -gt 1) {
-                Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$($borders.Horizontal * ($Width - 2))$($borders.BottomRight)" -Style $generalStyle
-            } elseif ($Width -eq 1) {
-                $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
-            }
-        }
-
-        # Draw title if specified
-        if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
-            $titleText = " $Title "
-            if ($titleText.Length -le ($Width - 2)) { 
-                $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
-                Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -Style $titleTextStyle
-            }
-        }
-        
-        $Buffer.IsDirty = $true
-        # Write-Log -Level Debug -Message "Write-TuiBox: Drew '$borderStyleName' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
     }
-    catch {
-        Write-Error "Failed to draw TUI box on buffer '$($Buffer.Name)' at ($X, $Y), $($Width)x$($Height): $($_.Exception.Message)"
-        throw
+
+    # Left and Right Side Borders
+    if ($Width -gt 0 -and $Height -gt 2) {
+        for ($i = 1; $i -lt ($Height - 1); $i++) {
+            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $i) -Text $borders.Vertical -Style $borderStyle
+            if ($Width -gt 1) {
+                Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y ($Y + $i) -Text $borders.Vertical -Style $borderStyle
+            }
+        }
+    }
+
+    # 3. Draw title if specified.
+    if (-not [string]::IsNullOrEmpty($Title) -and $Width -gt 2) {
+        $titleText = " $Title "
+        if ($titleText.Length -lt $Width) {
+            $titleX = $X + 1 + [Math]::Floor(($Width - 2 - $titleText.Length) / 2)
+            Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -Style $titleTextStyle
+        }
     }
 }
+
 
 function Get-TuiBorderChars {
     [CmdletBinding()]
     param(
-        [ValidateSet("Single", "Double", "Rounded", "Thick")][string]$Style = "Single"
+        [ValidateSet("Single", "Double", "Rounded", "Thick")]
+        [string]$Style = "Single"
     )
-    
-    try {
-        $styles = @{
-            Single = @{ 
-                TopLeft = '┌'; TopRight = '┐'; BottomLeft = '└'; BottomRight = '┘'; 
-                Horizontal = '─'; Vertical = '│' 
-            }
-            Double = @{ 
-                TopLeft = '╔'; TopRight = '╗'; BottomLeft = '╚'; BottomRight = '╝'; 
-                Horizontal = '═'; Vertical = '║' 
-            }
-            Rounded = @{ 
-                TopLeft = '╭'; TopRight = '╮'; BottomLeft = '╰'; BottomRight = '╯'; 
-                Horizontal = '─'; Vertical = '│' 
-            }
-            Thick = @{ 
-                TopLeft = '┏'; TopRight = '┓'; BottomLeft = '┗'; BottomRight = '┛'; 
-                Horizontal = '━'; Vertical = '┃' 
-            }
-        }
-        
-        $selectedStyle = $styles[$Style]
-        if ($null -eq $selectedStyle) {
-            Write-Warning "Get-TuiBorderChars: Border style '$Style' not found. Returning 'Single' style."
-            return $styles.Single
-        }
-        
-        Write-Verbose "Get-TuiBorderChars: Retrieved TUI border characters for style: $Style."
-        return $selectedStyle
-    }
-    catch {
-        Write-Error "Failed to get TUI border characters for style '$Style': $($_.Exception.Message)"
-        throw
-    }
-}
 
+    # No try/catch needed, direct return is cleaner.
+    $styles = @{
+        Single  = @{ TopLeft = '┌'; TopRight = '┐'; BottomLeft = '└'; BottomRight = '┘'; Horizontal = '─'; Vertical = '│' }
+        Double  = @{ TopLeft = '╔'; TopRight = '╗'; BottomLeft = '╚'; BottomRight = '╝'; Horizontal = '═'; Vertical = '║' }
+        Rounded = @{ TopLeft = '╭'; TopRight = '╮'; BottomLeft = '╰'; BottomRight = '╯'; Horizontal = '─'; Vertical = '│' }
+        Thick   = @{ TopLeft = '┏'; TopRight = '┓'; BottomLeft = '┗'; BottomRight = '┛'; Horizontal = '━'; Vertical = '┃' }
+    }
+    return $styles[$Style]
+}
 #endregion
 
 #region Factory Functions
-
-function New-TuiBuffer {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$Width,
-        [Parameter(Mandatory)][int]$Height,
-        [string]$Name = "Unnamed"
-    )
-    return [TuiBuffer]::new($Width, $Height, $Name)
-}
 
 function New-TuiLabel {
     param(
@@ -175,16 +117,15 @@ function New-TuiLabel {
         [string]$Text = "",
         [int]$X = 0,
         [int]$Y = 0,
-        [string]$ForegroundColor = $null
+        [string]$ForegroundColor = $null,
+        [string]$BackgroundColor = $null
     )
-    
     $label = [LabelComponent]::new($Name)
     $label.Text = $Text
     $label.X = $X
     $label.Y = $Y
-    if ($ForegroundColor) {
-        $label.ForegroundColor = $ForegroundColor
-    }
+    if ($ForegroundColor) { $label.ForegroundColor = $ForegroundColor }
+    if ($BackgroundColor) { $label.BackgroundColor = $BackgroundColor }
     return $label
 }
 
@@ -198,88 +139,15 @@ function New-TuiButton {
         [int]$Height = 3,
         [scriptblock]$OnClick = $null
     )
-    
     $button = [ButtonComponent]::new($Name)
     $button.Text = $Text
     $button.X = $X
     $button.Y = $Y
     $button.Width = $Width
     $button.Height = $Height
-    if ($OnClick) {
-        $button.OnClick = $OnClick
-    }
+    if ($OnClick) { $button.OnClick = $OnClick }
     return $button
 }
-
-function New-TuiTextBox {
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [string]$Placeholder = "",
-        [int]$X = 0,
-        [int]$Y = 0,
-        [int]$Width = 20,
-        [int]$Height = 3,
-        [int]$MaxLength = 100,
-        [scriptblock]$OnChange = $null
-    )
-    
-    $textBox = [TextBoxComponent]::new($Name)
-    $textBox.Placeholder = $Placeholder
-    $textBox.X = $X
-    $textBox.Y = $Y
-    $textBox.Width = $Width
-    $textBox.Height = $Height
-    $textBox.MaxLength = $MaxLength
-    if ($OnChange) {
-        $textBox.OnChange = $OnChange
-    }
-    return $textBox
-}
-
-function New-TuiCheckBox {
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [string]$Text = "Checkbox",
-        [int]$X = 0,
-        [int]$Y = 0,
-        [bool]$Checked = $false,
-        [scriptblock]$OnChange = $null
-    )
-    
-    $checkBox = [CheckBoxComponent]::new($Name)
-    $checkBox.Text = $Text
-    $checkBox.X = $X
-    $checkBox.Y = $Y
-    $checkBox.Checked = $Checked
-    if ($OnChange) {
-        $checkBox.OnChange = $OnChange
-    }
-    return $checkBox
-}
-
-function New-TuiRadioButton {
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [string]$Text = "Radio",
-        [string]$GroupName = "default",
-        [int]$X = 0,
-        [int]$Y = 0,
-        [bool]$Selected = $false,
-        [scriptblock]$OnChange = $null
-    )
-    
-    $radioButton = [RadioButtonComponent]::new($Name)
-    $radioButton.Text = $Text
-    $radioButton.GroupName = $GroupName
-    $radioButton.X = $X
-    $radioButton.Y = $Y
-    $radioButton.Selected = $Selected
-    if ($OnChange) {
-        $radioButton.OnChange = $OnChange
-    }
-    return $radioButton
-}
-
 #endregion
 
 #region Theme Functions
@@ -287,47 +155,22 @@ function New-TuiRadioButton {
 function Get-ThemeColor {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
-        [string]$ColorName,
-        
-        [string]$DefaultColor = "#808080"
+        [Parameter(Mandatory)][string]$ColorName,
+        [string]$DefaultColor = "#808080" # A safe gray
     )
-    
+
+    # This function is now a simple, robust wrapper.
+    # The ThemeManager service is responsible for handling all logic and fallbacks.
     $themeManager = $global:TuiState.Services.ThemeManager
     if ($themeManager) {
+        # The manager is guaranteed to return a hex string or $null.
         $color = $themeManager.GetColor($ColorName)
         if ($color) {
-            # Ensure we return hex format
-            if ($color -is [ConsoleColor]) {
-                # Convert ConsoleColor to hex
-                $hexMap = @{
-                    [ConsoleColor]::Black = "#000000"
-                    [ConsoleColor]::DarkBlue = "#000080"
-                    [ConsoleColor]::DarkGreen = "#008000"
-                    [ConsoleColor]::DarkCyan = "#008080"
-                    [ConsoleColor]::DarkRed = "#800000"
-                    [ConsoleColor]::DarkMagenta = "#800080"
-                    [ConsoleColor]::DarkYellow = "#808000"
-                    [ConsoleColor]::Gray = "#C0C0C0"
-                    [ConsoleColor]::DarkGray = "#808080"
-                    [ConsoleColor]::Blue = "#0000FF"
-                    [ConsoleColor]::Green = "#00FF00"
-                    [ConsoleColor]::Cyan = "#00FFFF"
-                    [ConsoleColor]::Red = "#FF0000"
-                    [ConsoleColor]::Magenta = "#FF00FF"
-                    [ConsoleColor]::Yellow = "#FFFF00"
-                    [ConsoleColor]::White = "#FFFFFF"
-                }
-                return $hexMap[$color] ?? $DefaultColor
-            }
             return $color
         }
     }
-    
-    # Write-Log -Level Debug -Message "Get-ThemeColor: Color '$ColorName' not found, using default '$DefaultColor'"
     return $DefaultColor
 }
-
 #endregion
 
 #region Utility Functions
@@ -335,54 +178,22 @@ function Get-ThemeColor {
 function Write-Log {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
-        [ValidateSet('Trace', 'Debug', 'Info', 'Warning', 'Error', 'Fatal')]
-        [string]$Level,
-        
-        [Parameter(Mandatory)]
-        [string]$Message,
-        
+        [Parameter(Mandatory)][ValidateSet('Trace', 'Debug', 'Info', 'Warning', 'Error', 'Fatal')][string]$Level,
+        [Parameter(Mandatory)][string]$Message,
         [object]$Data = $null
     )
-    
+
     $logger = $global:TuiState.Services.Logger
     if ($logger) {
-        # Logger.Log method signature is: Log([string]$message, [string]$level = "Info")
-        $logger.Log($Message, $Level)
+        $finalMessage = $Message
         if ($Data) {
-            $logger.Log("Additional data: $($Data | ConvertTo-Json -Compress)", 'Debug')
+            # Append data to the message for better log correlation.
+            $dataJson = $Data | ConvertTo-Json -Compress -Depth 4
+            $finalMessage = "$Message | Data: $dataJson"
         }
-    }
-    else {
-        # Fallback to console if logger not available
-        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        $prefix = "[$timestamp] [$Level]"
-        
-        switch ($Level) {
-            'Error' { Write-Host "$prefix $Message" -ForegroundColor Red }
-            'Warning' { Write-Host "$prefix $Message" -ForegroundColor Yellow }
-            'Info' { Write-Host "$prefix $Message" -ForegroundColor Cyan }
-            'Debug' { Write-Host "$prefix $Message" -ForegroundColor Gray }
-            default { Write-Host "$prefix $Message" }
-        }
+        $logger.Log($finalMessage, $Level)
     }
 }
-
-function Set-ComponentFocus {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][UIElement]$Component
-    )
-    
-    # This function is now obsolete - use FocusManager service instead
-    $focusManager = $global:TuiState.Services.FocusManager
-    if ($focusManager) {
-        $focusManager.SetFocus($Component)
-    } else {
-        Write-Warning "Set-ComponentFocus is deprecated. FocusManager service not available."
-    }
-}
-
 #endregion
 
 #region Event System
@@ -391,18 +202,11 @@ function Subscribe-Event {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$EventName,
-        [Parameter(Mandatory)][scriptblock]$Handler,
-        [string]$Source = ""
+        [Parameter(Mandatory)][scriptblock]$Handler
     )
-    
     if ($global:TuiState.Services.EventManager) {
         return $global:TuiState.Services.EventManager.Subscribe($EventName, $Handler)
     }
-    
-    # Fallback
-    $subscriptionId = [Guid]::NewGuid().ToString()
-    Write-Verbose "Subscribed to event '$EventName' with handler ID: $subscriptionId"
-    return $subscriptionId
 }
 
 function Unsubscribe-Event {
@@ -411,11 +215,9 @@ function Unsubscribe-Event {
         [Parameter(Mandatory)][string]$EventName,
         [Parameter(Mandatory)][string]$HandlerId
     )
-    
     if ($global:TuiState.Services.EventManager) {
         $global:TuiState.Services.EventManager.Unsubscribe($EventName, $HandlerId)
     }
-    Write-Verbose "Unsubscribed from event '$EventName' (Handler ID: $HandlerId)"
 }
 
 function Publish-Event {
@@ -424,121 +226,8 @@ function Publish-Event {
         [Parameter(Mandatory)][string]$EventName,
         [hashtable]$EventData = @{}
     )
-    
     if ($global:TuiState.Services.EventManager) {
         $global:TuiState.Services.EventManager.Publish($EventName, $EventData)
     }
-    Write-Verbose "Published event '$EventName' with data: $($EventData | ConvertTo-Json -Compress)"
 }
-
-#endregion
-
-#region Initialize Functions
-
-function Initialize-Logger {
-    [CmdletBinding()]
-    param()
-    
-    $logger = [Logger]::new()
-    Write-Verbose "Logger initialized at: $($logger.LogPath)"
-    return $logger
-}
-
-function Initialize-EventManager {
-    [CmdletBinding()]
-    param()
-    
-    $eventManager = [EventManager]::new()
-    Write-Verbose "EventManager initialized"
-    return $eventManager
-}
-
-function Initialize-ThemeManager {
-    [CmdletBinding()]
-    param()
-    
-    $themeManager = [ThemeManager]::new()
-    Write-Verbose "ThemeManager initialized with theme: $($themeManager.ThemeName)"
-    return $themeManager
-}
-
-function Initialize-ActionService {
-    [CmdletBinding()]
-    param(
-        [EventManager]$EventManager = $null
-    )
-    
-    $actionService = if ($EventManager) {
-        [ActionService]::new($EventManager)
-    } else {
-        [ActionService]::new()
-    }
-    Write-Verbose "ActionService initialized"
-    return $actionService
-}
-
-function Initialize-DataManager {
-    [CmdletBinding()]
-    param(
-        [string]$DataPath = (Join-Path $env:APPDATA "AxiomPhoenix\data.json"),
-        [EventManager]$EventManager = $null
-    )
-    
-    $dataManager = if ($EventManager) {
-        [DataManager]::new($DataPath, $EventManager)
-    } else {
-        [DataManager]::new($DataPath)
-    }
-    Write-Verbose "DataManager initialized with path: $($dataManager.DataPath)"
-    return $dataManager
-}
-
-function Initialize-ServiceContainer {
-    [CmdletBinding()]
-    param()
-    
-    $container = [ServiceContainer]::new()
-    Write-Verbose "ServiceContainer initialized"
-    return $container
-}
-
-function Initialize-NavigationService {
-    [CmdletBinding()]
-    param(
-        [EventManager]$EventManager = $null
-    )
-    
-    $navService = if ($EventManager) {
-        [NavigationService]::new($EventManager)
-    } else {
-        [NavigationService]::new()
-    }
-    Write-Verbose "NavigationService initialized"
-    return $navService
-}
-
-function Initialize-KeybindingService {
-    [CmdletBinding()]
-    param(
-        [ActionService]$ActionService = $null
-    )
-    
-    $kbService = if ($ActionService) {
-        [KeybindingService]::new($ActionService)
-    } else {
-        [KeybindingService]::new()
-    }
-    Write-Verbose "KeybindingService initialized"
-    return $kbService
-}
-
-function Initialize-TuiFrameworkService {
-    [CmdletBinding()]
-    param()
-    
-    $framework = [TuiFrameworkService]::new()
-    Write-Verbose "TuiFrameworkService initialized"
-    return $framework
-}
-
 #endregion
