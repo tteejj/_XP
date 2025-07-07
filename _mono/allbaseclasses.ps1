@@ -76,7 +76,6 @@ class TuiCell {
     [bool] $Underline = $false
     [bool] $Italic = $false
     [bool] $Strikethrough = $false # NEW Property for additional style
-    [string] $StyleFlags = "" # Can keep this, but individual bools are preferred.
     [int] $ZIndex = 0        
     [object] $Metadata = $null 
 
@@ -103,7 +102,6 @@ class TuiCell {
         $this.Underline = $other.Underline
         $this.Italic = $other.Italic
         $this.Strikethrough = $other.Strikethrough # Make sure this is copied
-        $this.StyleFlags = $other.StyleFlags
         $this.ZIndex = $other.ZIndex
         $this.Metadata = $other.Metadata
     }
@@ -124,20 +122,14 @@ class TuiCell {
     [TuiCell] BlendWith([object]$other) {
         if ($null -eq $other) { return $this }
         
-        if ($other.ZIndex -gt $this.ZIndex) { 
-            return [TuiCell]::new($other)
-        }
-        
-        if ($other.ZIndex -eq $this.ZIndex) {
-            if ($other.Char -ne ' ' -or $other.Bold -or $other.Underline -or $other.Italic) {
-                return [TuiCell]::new($other)
-            }
-            if ($other.BackgroundColor -ne $this.BackgroundColor) {
-                return [TuiCell]::new($other)
-            }
-        }
-        
-        return $this
+        # If Z-Indexes are different, the higher one wins.
+        if ($other.ZIndex > $this.ZIndex) { return [TuiCell]::new($other) }
+        if ($other.ZIndex < $this.ZIndex) { return $this }
+
+        # If Z-Indexes are the same, the 'other' (top) cell wins by default.
+        # This is the most common and intuitive blending mode.
+        # A more advanced system could check for a special transparent color.
+        return [TuiCell]::new($other)
     }
 
     [bool] DiffersFrom([object]$other) {
@@ -418,6 +410,17 @@ class UIElement {
             }
             $child.Parent = $this
             $this.Children.Add($child)
+            
+            # Call the lifecycle hook if the child has it defined
+            if ($child.PSObject.Methods['AddedToParent']) {
+                try {
+                    $child.AddedToParent()
+                }
+                catch {
+                    Write-Warning "Error calling AddedToParent on child '$($child.Name)': $($_.Exception.Message)"
+                }
+            }
+            
             $this.RequestRedraw()
             # Write-Verbose "Added child '$($child.Name)' to parent '$($this.Name)'."
         }
@@ -431,6 +434,17 @@ class UIElement {
         try {
             if ($this.Children.Remove($child)) {
                 $child.Parent = $null
+                
+                # Call the lifecycle hook if the child has it defined
+                if ($child.PSObject.Methods['RemovedFromParent']) {
+                    try {
+                        $child.RemovedFromParent()
+                    }
+                    catch {
+                        Write-Warning "Error calling RemovedFromParent on child '$($child.Name)': $($_.Exception.Message)"
+                    }
+                }
+                
                 $this.RequestRedraw()
                 # Write-Verbose "Removed child '$($child.Name)' from parent '$($this.Name)'."
             } else {
@@ -535,6 +549,28 @@ class UIElement {
     {
         # Write-Verbose "HandleInput called for '$($this.Name)': Key: $($keyInfo.Key)."
         return $false
+    }
+
+    [void] Cleanup()
+    {
+        # Cleanup all children recursively
+        foreach ($child in $this.Children) {
+            if ($child.PSObject.Methods['Cleanup']) {
+                try { 
+                    $child.Cleanup() 
+                } 
+                catch { 
+                    Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" 
+                }
+            }
+        }
+        
+        # Clear references
+        $this.Children.Clear()
+        $this.Parent = $null
+        $this._private_buffer = $null
+        
+        # Write-Verbose "Cleanup completed for UIElement '$($this.Name)'."
     }
 
     [void] Render() 
@@ -676,6 +712,8 @@ class Screen : UIElement {
     [void] Cleanup() {
         try {
             # Write-Verbose "Cleanup called for Screen '$($this.Name)'."
+            
+            # Screen-specific cleanup: Unsubscribe from events
             foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
                 try {
                     if (Get-Command 'Unsubscribe-Event' -ErrorAction SilentlyContinue) {
@@ -688,13 +726,14 @@ class Screen : UIElement {
                 }
             }
             $this.EventSubscriptions.Clear()
-            foreach ($child in $this.Children) {
-                if ($child.PSObject.Methods['Cleanup']) {
-                    try { $child.Cleanup() } catch { Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" }
-                }
-            }
+            
+            # Clear screen-specific collections
             $this.Panels.Clear()
-            $this.Children.Clear()
+            $this.State.Clear()
+            
+            # Call base UIElement cleanup (handles children recursively)
+            ([UIElement]$this).Cleanup()
+            
             Write-Verbose "Cleaned up resources for screen: $($this.Name)."
         }
         catch {

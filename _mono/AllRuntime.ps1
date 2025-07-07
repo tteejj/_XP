@@ -442,15 +442,6 @@ function Process-TuiInput {
         if ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # Check for global command palette keybind (Ctrl+P) at the highest priority
-            if ($keyInfo.Key -eq [ConsoleKey]::P -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
-                if ($global:TuiState.CommandPalette) {
-                    $global:TuiState.CommandPalette.Show()
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
-
             # If there's an active overlay (like a dialog), give it priority
             if ($global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
@@ -470,18 +461,7 @@ function Process-TuiInput {
                 }
             }
 
-            # Handle Tab for focus navigation (globally managed by FocusManager)
-            if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
-                $focusManager = $global:TuiState.Services.FocusManager
-                if ($focusManager) {
-                    $reverse = ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) -ne 0
-                    $focusManager.MoveFocus($reverse)
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
-
-            # Give the currently focused component a chance to handle the input
+            # Give the currently focused component a chance to handle the input first
             $focusManager = $global:TuiState.Services.FocusManager
             if ($focusManager -and $focusManager.FocusedComponent) {
                 if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
@@ -490,19 +470,37 @@ function Process-TuiInput {
                 }
             }
 
-            # Check global hotkeys via KeybindingService
+            # Check global hotkeys via KeybindingService (including Ctrl+P and Tab)
             if ($global:TuiState.Services.KeybindingService) {
                 $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
                 if ($action) {
-                    # Execute action via ActionService
-                    if ($global:TuiState.Services.ActionService) {
-                        try {
-                            $global:TuiState.Services.ActionService.ExecuteAction($action)
+                    # Handle framework-level actions that need special processing
+                    if ($action -eq "app.commandPalette") {
+                        if ($global:TuiState.CommandPalette) {
+                            $global:TuiState.CommandPalette.Show()
                             $global:TuiState.IsDirty = $true
                             return
                         }
-                        catch {
-                            Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
+                    }
+                    elseif ($action -eq "navigation.nextComponent" -or $action -eq "navigation.previousComponent") {
+                        if ($focusManager) {
+                            $reverse = ($action -eq "navigation.previousComponent")
+                            $focusManager.MoveFocus($reverse)
+                            $global:TuiState.IsDirty = $true
+                            return
+                        }
+                    }
+                    else {
+                        # Execute other actions via ActionService
+                        if ($global:TuiState.Services.ActionService) {
+                            try {
+                                $global:TuiState.Services.ActionService.ExecuteAction($action)
+                                $global:TuiState.IsDirty = $true
+                                return
+                            }
+                            catch {
+                                Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
+                            }
                         }
                     }
                 }
@@ -532,8 +530,10 @@ function Show-TuiOverlay {
         [UIElement]$Overlay
     )
     
+    Write-Warning "Show-TuiOverlay is deprecated. Use DialogManager.ShowDialog() for dialogs or manage overlays directly."
+    
     # Use DialogManager if the overlay is a Dialog
-    if ($Overlay -is [Dialog]) {
+    if ($Overlay.GetType().Name -match "Dialog") {
         $dialogManager = $global:TuiState.Services.DialogManager
         if ($dialogManager) {
             $dialogManager.ShowDialog($Overlay)
@@ -541,7 +541,7 @@ function Show-TuiOverlay {
         }
     }
     
-    # For non-dialog overlays, handle manually
+    # For non-dialog overlays, handle manually (deprecated path)
     if (-not $global:TuiState.OverlayStack) {
         $global:TuiState.OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
     }
@@ -564,6 +564,8 @@ function Close-TopTuiOverlay {
     [CmdletBinding()]
     param()
     
+    Write-Warning "Close-TopTuiOverlay is deprecated. Use DialogManager.HideDialog() for dialogs or manage overlays directly."
+    
     if ($global:TuiState.OverlayStack.Count -eq 0) {
         # Write-Log -Level Warning -Message "Close-TopTuiOverlay: No overlays to close"
         return
@@ -572,7 +574,7 @@ function Close-TopTuiOverlay {
     $topOverlay = $global:TuiState.OverlayStack[-1]
     
     # Use DialogManager if it's a Dialog
-    if ($topOverlay -is [Dialog]) {
+    if ($topOverlay.GetType().Name -match "Dialog") {
         $dialogManager = $global:TuiState.Services.DialogManager
         if ($dialogManager) {
             $dialogManager.HideDialog($topOverlay)
@@ -580,7 +582,7 @@ function Close-TopTuiOverlay {
         }
     }
     
-    # Manual removal for non-dialog overlays
+    # Manual removal for non-dialog overlays (deprecated path)
     $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
     $topOverlay.Visible = $false
     $topOverlay.IsOverlay = $false

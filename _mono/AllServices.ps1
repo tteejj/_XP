@@ -152,6 +152,18 @@ class ActionService {
             Hotkey = "F1"
         })
         
+        $this.RegisterAction("app.commandPalette", {
+            Write-Verbose "Executing app.commandPalette action"
+            if ($global:TuiState.CommandPalette) {
+                $global:TuiState.CommandPalette.Show()
+                $global:TuiState.IsDirty = $true
+            }
+        }, @{
+            Category = "Application"
+            Description = "Show command palette"
+            Hotkey = "Ctrl+P"
+        })
+        
         Write-Verbose "ActionService: Registered default actions"
     }
 }
