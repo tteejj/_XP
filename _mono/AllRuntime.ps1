@@ -207,23 +207,45 @@ function Invoke-TuiRender {
         # Clear compositor buffer
         $global:TuiState.CompositorBuffer.Clear()
         
+        Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
+        
         # Render current screen
         if ($global:TuiState.CurrentScreen) {
-            $global:TuiState.CurrentScreen.Render()
-            $screenBuffer = $global:TuiState.CurrentScreen.GetBuffer()
-            if ($screenBuffer) {
-                $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
+            try {
+                # Render the screen which will update its internal buffer
+                $global:TuiState.CurrentScreen.Render()
+                
+                # Get the screen's buffer
+                $screenBuffer = $global:TuiState.CurrentScreen.GetBuffer()
+                
+                if ($screenBuffer) {
+                    # Blend screen buffer into compositor
+                    $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
+                }
+                else {
+                    Write-Warning "Screen buffer is null for $($global:TuiState.CurrentScreen.Name)"
+                }
+            }
+            catch {
+                Write-Error "Error rendering screen: $_"
+                throw
             }
             
             # Render command palette if visible
             if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                $global:TuiState.CommandPalette.Render()
-                $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
-                if ($paletteBuffer) {
-                    $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
-                        [Math]::Floor(($global:TuiState.BufferWidth - $global:TuiState.CommandPalette.Width) / 2),
-                        [Math]::Floor(($global:TuiState.BufferHeight - $global:TuiState.CommandPalette.Height) / 2)
-                    )
+                try {
+                    $global:TuiState.CommandPalette.Render()
+                    $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
+                    if ($paletteBuffer) {
+                        # Command palette position was set during initialization
+                        $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
+                            $global:TuiState.CommandPalette.X,
+                            $global:TuiState.CommandPalette.Y
+                        )
+                    }
+                }
+                catch {
+                    Write-Warning "Error rendering command palette: $_"
                 }
             }
             
@@ -241,10 +263,28 @@ function Invoke-TuiRender {
             }
         }
         
-        # Differential rendering
+        # Debug: Add a test message to see if rendering is working
+        if ($global:TuiState.FrameCount -eq 0) {
+            $testMsg = "RENDERING IS WORKING - Frame: $($global:TuiState.FrameCount)"
+            $global:TuiState.CompositorBuffer.WriteString(2, 2, $testMsg, [ConsoleColor]::Yellow, [ConsoleColor]::Black)
+        }
+        
+        # Force full redraw on first frame by making previous buffer different
+        if ($global:TuiState.FrameCount -eq 0) {
+            Write-Host "First frame - initializing previous buffer for differential rendering" -ForegroundColor Green
+            # Fill previous buffer with different content to force full redraw
+            for ($y = 0; $y -lt $global:TuiState.PreviousCompositorBuffer.Height; $y++) {
+                for ($x = 0; $x -lt $global:TuiState.PreviousCompositorBuffer.Width; $x++) {
+                    $global:TuiState.PreviousCompositorBuffer.SetCell($x, $y, 
+                        [TuiCell]::new('?', [ConsoleColor]::DarkGray, [ConsoleColor]::DarkGray))
+                }
+            }
+        }
+        
+        # Differential rendering - compare current compositor to previous
         Render-DifferentialBuffer
         
-        # Swap buffers
+        # Swap buffers for next frame
         $temp = $global:TuiState.PreviousCompositorBuffer
         $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
         $global:TuiState.CompositorBuffer = $temp
@@ -276,6 +316,7 @@ function Render-DifferentialBuffer {
         $lastUnderline = $false
         $currentX = -1
         $currentY = -1
+        $changeCount = 0
         
         for ($y = 0; $y -lt $current.Height; $y++) {
             for ($x = 0; $x -lt $current.Width; $x++) {
@@ -283,6 +324,8 @@ function Render-DifferentialBuffer {
                 $previousCell = $previous.GetCell($x, $y)
                 
                 if ($currentCell.DiffersFrom($previousCell)) {
+                    $changeCount++
+                    
                     # Move cursor if needed
                     if ($currentX -ne $x -or $currentY -ne $y) {
                         [void]$ansiBuilder.Append("`e[$($y + 1);$($x + 1)H")
@@ -321,6 +364,11 @@ function Render-DifferentialBuffer {
             }
         }
         
+        # Log changes on first few frames
+        if ($global:TuiState.FrameCount -lt 5) {
+            Write-Host "Frame $($global:TuiState.FrameCount): $changeCount cells changed" -ForegroundColor Cyan
+        }
+        
         # Reset styling at end
         if ($ansiBuilder.Length -gt 0) {
             [void]$ansiBuilder.Append("`e[0m")
@@ -356,36 +404,43 @@ function Process-TuiInput {
             
             # Check global hotkeys
             if ($global:TuiState.Services.KeybindingService) {
-                $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
-                
-                if ($action) {
-                    Write-Verbose "Processing global action: $action"
+                try {
+                    $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
                     
-                    switch ($action) {
-                        "app.exit" {
-                            $global:TuiState.Running = $false
-                            return
-                        }
-                        "app.commandPalette" {
-                            if ($global:TuiState.CommandPalette) {
-                                $global:TuiState.CommandPalette.Show()
-                                $global:TuiState.IsDirty = $true
+                    if ($action) {
+                        Write-Host "Processing global action: $action" -ForegroundColor Yellow
+                        
+                        switch ($action) {
+                            "app.exit" {
+                                Write-Host "Exiting application..." -ForegroundColor Red
+                                $global:TuiState.Running = $false
+                                return
                             }
-                            return
+                            "app.commandPalette" {
+                                Write-Host "Opening command palette..." -ForegroundColor Cyan
+                                if ($global:TuiState.CommandPalette) {
+                                    $global:TuiState.CommandPalette.Show()
+                                    $global:TuiState.IsDirty = $true
+                                }
+                                return
+                            }
+                        }
+                        
+                        # Try to execute via ActionService
+                        if ($global:TuiState.Services.ActionService) {
+                            try {
+                                $global:TuiState.Services.ActionService.ExecuteAction($action)
+                                $global:TuiState.IsDirty = $true
+                                return
+                            }
+                            catch {
+                                Write-Host "Action execution failed: $_" -ForegroundColor Red
+                            }
                         }
                     }
-                    
-                    # Try to execute via ActionService
-                    if ($global:TuiState.Services.ActionService) {
-                        try {
-                            $global:TuiState.Services.ActionService.ExecuteAction($action)
-                            $global:TuiState.IsDirty = $true
-                            return
-                        }
-                        catch {
-                            Write-Verbose "Action execution failed: $_"
-                        }
-                    }
+                }
+                catch {
+                    Write-Host "KeybindingService error: $_" -ForegroundColor Red
                 }
             }
             
@@ -429,10 +484,12 @@ function Push-Screen {
         # Initialize and enter new screen
         $global:TuiState.CurrentScreen = $Screen
         
-        # Resize screen to match console
+        # Resize screen to match console BEFORE initializing
         $Screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
         
+        # Now initialize with correct size
         if (-not $Screen._isInitialized) {
+            Write-Host "Initializing screen $($Screen.Name) with size $($Screen.Width)x$($Screen.Height)" -ForegroundColor Yellow
             $Screen.Initialize()
             $Screen._isInitialized = $true
         }
@@ -708,7 +765,7 @@ function Start-AxiomPhoenix {
     )
     
     try {
-        Write-Verbose "Starting Axiom-Phoenix application..."
+        Write-Host "Starting Axiom-Phoenix application..." -ForegroundColor Cyan
         
         # Store services
         $global:TuiState.Services = @{
@@ -726,6 +783,7 @@ function Start-AxiomPhoenix {
                 $service = $ServiceContainer.GetService($serviceName)
                 if ($service) {
                     $global:TuiState.Services[$serviceName] = $service
+                    Write-Host "  - $serviceName loaded" -ForegroundColor Green
                 }
             }
             catch {
@@ -733,15 +791,19 @@ function Start-AxiomPhoenix {
             }
         }
         
-        # Create command palette if available
+        # Initialize engine FIRST before creating UI components
+        Initialize-TuiEngine
+        
+        # Create command palette after engine is initialized
         $actionService = $ServiceContainer.GetService("ActionService")
         if ($actionService) {
+            Write-Host "Creating Command Palette..." -ForegroundColor Yellow
             $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
-            $global:TuiState.CommandPalette.RefreshActions()
+            # Center the command palette
+            $global:TuiState.CommandPalette.X = [Math]::Floor(($global:TuiState.BufferWidth - $global:TuiState.CommandPalette.Width) / 2)
+            $global:TuiState.CommandPalette.Y = [Math]::Floor(($global:TuiState.BufferHeight - $global:TuiState.CommandPalette.Height) / 2)
+            Write-Host "  - Command Palette created" -ForegroundColor Green
         }
-        
-        # Initialize engine
-        Initialize-TuiEngine
         
         # Verify ScreenStack still exists after engine init
         if ($null -eq $global:TuiState.ScreenStack) {
@@ -750,11 +812,21 @@ function Start-AxiomPhoenix {
         
         # Set initial screen
         if ($InitialScreen) {
+            Write-Host "Loading initial screen: $($InitialScreen.Name)" -ForegroundColor Yellow
             Push-Screen -Screen $InitialScreen
+            Write-Host "  - Screen loaded successfully" -ForegroundColor Green
         }
         else {
             Write-Warning "No initial screen provided"
         }
+        
+        Write-Host "" # Empty line
+        Write-Host "Application started successfully!" -ForegroundColor Green
+        Write-Host "Press Ctrl+P for Command Palette, Ctrl+Q to exit" -ForegroundColor Cyan
+        Write-Host "" # Empty line
+        
+        # Force initial render
+        $global:TuiState.IsDirty = $true
         
         # Start main loop
         Start-TuiEngine

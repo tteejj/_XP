@@ -49,7 +49,7 @@ function Write-TuiBox {
         }
         
         # Fill background
-        $fillCell = [TuiCell]::new(' ', $BorderColor, $BackgroundColor)
+        $fillCell = [TuiCell]::new(' ', $ForegroundColor, $BackgroundColor)
         for ($currentY = $drawStartY; $currentY -lt $drawEndY; $currentY++) {
             for ($currentX = $drawStartX; $currentX -lt $drawEndX; $currentX++) {
                 $Buffer.SetCell($currentX, $currentY, [TuiCell]::new($fillCell))
@@ -58,35 +58,35 @@ function Write-TuiBox {
         
         # Draw corners
         if ($X -ge 0 -and $Y -ge 0) { 
-            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.TopLeft, $BorderColor, $BackgroundColor))
+            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.TopLeft, $ForegroundColor, $BackgroundColor))
         }
         if (($X + $Width - 1) -lt $Buffer.Width -and $Y -ge 0) { 
-            $Buffer.SetCell($X + $Width - 1, $Y, [TuiCell]::new($borders.TopRight, $BorderColor, $BackgroundColor))
+            $Buffer.SetCell($X + $Width - 1, $Y, [TuiCell]::new($borders.TopRight, $ForegroundColor, $BackgroundColor))
         }
         if ($X -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height) { 
-            $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.BottomLeft, $BorderColor, $BackgroundColor))
+            $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.BottomLeft, $ForegroundColor, $BackgroundColor))
         }
         if (($X + $Width - 1) -lt $Buffer.Width -and ($Y + $Height - 1) -lt $Buffer.Height) { 
-            $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, [TuiCell]::new($borders.BottomRight, $BorderColor, $BackgroundColor))
+            $Buffer.SetCell($X + $Width - 1, $Y + $Height - 1, [TuiCell]::new($borders.BottomRight, $ForegroundColor, $BackgroundColor))
         }
         
         # Draw horizontal lines
         for ($i = 1; $i -lt $Width - 1; $i++) {
             if ($Y -ge 0 -and ($X + $i) -ge 0 -and ($X + $i) -lt $Buffer.Width) {
-                $Buffer.SetCell($X + $i, $Y, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
+                $Buffer.SetCell($X + $i, $Y, [TuiCell]::new($borders.Horizontal, $ForegroundColor, $BackgroundColor))
             }
             if (($Y + $Height - 1) -ge 0 -and ($Y + $Height - 1) -lt $Buffer.Height -and ($X + $i) -ge 0 -and ($X + $i) -lt $Buffer.Width) {
-                $Buffer.SetCell($X + $i, $Y + $Height - 1, [TuiCell]::new($borders.Horizontal, $BorderColor, $BackgroundColor))
+                $Buffer.SetCell($X + $i, $Y + $Height - 1, [TuiCell]::new($borders.Horizontal, $ForegroundColor, $BackgroundColor))
             }
         }
         
         # Draw vertical lines
         for ($i = 1; $i -lt $Height - 1; $i++) {
             if ($X -ge 0 -and ($Y + $i) -ge 0 -and ($Y + $i) -lt $Buffer.Height) {
-                $Buffer.SetCell($X, $Y + $i, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
+                $Buffer.SetCell($X, $Y + $i, [TuiCell]::new($borders.Vertical, $ForegroundColor, $BackgroundColor))
             }
             if (($X + $Width - 1) -ge 0 -and ($X + $Width - 1) -lt $Buffer.Width -and ($Y + $i) -ge 0 -and ($Y + $i) -lt $Buffer.Height) {
-                $Buffer.SetCell($X + $Width - 1, $Y + $i, [TuiCell]::new($borders.Vertical, $BorderColor, $BackgroundColor))
+                $Buffer.SetCell($X + $Width - 1, $Y + $i, [TuiCell]::new($borders.Vertical, $ForegroundColor, $BackgroundColor))
             }
         }
         
@@ -98,7 +98,7 @@ function Write-TuiBox {
                 $maxTitleLength = [Math]::Min($titleWithSpace.Length, $Width - 2)
                 if ($maxTitleLength -gt 0) {
                     $displayTitle = $titleWithSpace.Substring(0, $maxTitleLength)
-                    $Buffer.WriteString($titleX, $Y, $displayTitle, $BorderColor, $BackgroundColor)
+                    $Buffer.WriteString($titleX, $Y, $displayTitle, $ForegroundColor, $BackgroundColor)
                 }
             }
         }
