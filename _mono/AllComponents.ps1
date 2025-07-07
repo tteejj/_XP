@@ -147,10 +147,10 @@ class TextBoxComponent : UIElement {
     [int]$CursorPosition = 0
     [scriptblock]$OnChange
     hidden [int]$_scrollOffset = 0
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
-    [ConsoleColor]$PlaceholderColor = [ConsoleColor]::DarkGray
+    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
+    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
+    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
+    [string]$PlaceholderColor = "#808080" # Changed from ConsoleColor to hex string
 
     TextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -593,15 +593,14 @@ class MultilineTextBoxComponent : UIElement {
         try {
             $bgColor = $this.BackgroundColor
             $fgColor = $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
+            $borderColorValue = if ($this.IsFocused) { "#00FFFF" } else { $this.BorderColor }
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
             # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColorValue -BackgroundColor $bgColor `
-                -BorderStyle Single
+                -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Calculate visible area
             $contentWidth = $this.Width - 2
@@ -849,7 +848,7 @@ class NumericInputComponent : UIElement {
                 -BorderStyle Single
             
             # Draw spinners
-            $spinnerColor = if ($this.IsFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::DarkGray }
+            $spinnerColor = if ($this.IsFocused) { "#FFFF00" } else { "#808080" }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('▲', $spinnerColor, $bgColor))
             $this._private_buffer.SetCell($this.Width - 2, $this.Height - 2, [TuiCell]::new('▼', $spinnerColor, $bgColor))
             
@@ -1054,17 +1053,16 @@ class DateInputComponent : UIElement {
     }
     
     hidden [void] DrawCalendar([int]$startX, [int]$startY) {
-        $bgColor = [ConsoleColor]::Black
-        $fgColor = [ConsoleColor]::White
-        $headerColor = [ConsoleColor]::Yellow
-        $selectedColor = [ConsoleColor]::Cyan
-        $todayColor = [ConsoleColor]::Green
+        $bgColor = "#000000"
+        $fgColor = "#FFFFFF"
+        $headerColor = "#FFFF00"
+        $selectedColor = "#00FFFF"
+        $todayColor = "#00FF00"
         
         # Calendar border
         Write-TuiBox -Buffer $this._private_buffer -X $startX -Y $startY `
             -Width $this.Width -Height 7 `
-            -ForegroundColor [ConsoleColor]::Gray -BackgroundColor $bgColor `
-            -BorderStyle Single
+            -Style @{ BorderFG = "#808080"; BG = $bgColor; BorderStyle = "Single" }
         
         # Month/Year header
         $monthYearStr = $this._viewMonth.ToString("MMMM yyyy")
@@ -1079,7 +1077,7 @@ class DateInputComponent : UIElement {
         $dayHeaders = @("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
         $dayX = $startX + 2
         foreach ($day in $dayHeaders) {
-            $this._private_buffer.WriteString($dayX, $startY + 2, $day, [ConsoleColor]::DarkGray, $bgColor)
+            $this._private_buffer.WriteString($dayX, $startY + 2, $day, @{ FG = "#808080"; BG = $bgColor })
             $dayX += 3
         }
         
@@ -2189,11 +2187,11 @@ class GroupPanel : Panel {
 class ListBox : UIElement {
     [List[object]]$Items
     [int]$SelectedIndex = -1
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$SelectedForegroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::Cyan
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
+    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
+    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
+    [string]$SelectedForegroundColor = "#000000" # Changed from ConsoleColor to hex string
+    [string]$SelectedBackgroundColor = "#00FFFF" # Changed from ConsoleColor to hex string
+    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
     hidden [int]$ScrollOffset = 0
 
     ListBox([string]$name) : base($name) {
@@ -2748,7 +2746,7 @@ class AlertDialog : Dialog {
 class ConfirmDialog : Dialog {
     hidden [ButtonComponent]$_yesButton
     hidden [ButtonComponent]$_noButton
-    hidden [bool]$_focusOnYes = $true
+    # Removed manual focus tracking - will use FocusManager instead
 
     ConfirmDialog([string]$name) : base($name) {
         $this.Height = 8
@@ -2761,6 +2759,7 @@ class ConfirmDialog : Dialog {
         $this._yesButton.Text = "Yes"
         $this._yesButton.Width = 10
         $this._yesButton.Height = 3
+        $this._yesButton.TabIndex = 1 # Explicitly set tab order
         $this._yesButton.OnClick = {
             $this.Complete($true)
         }.GetNewClosure()
@@ -2771,6 +2770,7 @@ class ConfirmDialog : Dialog {
         $this._noButton.Text = "No"
         $this._noButton.Width = 10
         $this._noButton.Height = 3
+        $this._noButton.TabIndex = 2 # Explicitly set tab order
         $this._noButton.OnClick = {
             $this.Complete($false)
         }.GetNewClosure()
@@ -2791,14 +2791,11 @@ class ConfirmDialog : Dialog {
         $this._noButton.X = $startX + $this._yesButton.Width + 4
         $this._noButton.Y = $buttonY
         
-        # Set initial focus
-        $this._focusOnYes = $true
-        $this.UpdateButtonFocus()
     }
 
-    hidden [void] UpdateButtonFocus() {
-        $this._yesButton.IsFocused = $this._focusOnYes
-        $this._noButton.IsFocused = -not $this._focusOnYes
+    [void] OnEnter() {
+        # When the dialog is shown, tell the FocusManager to focus the first element (Yes button)
+        $global:TuiState.Services.FocusManager?.SetFocus($this._yesButton)
     }
 
     [void] OnRender() {
@@ -2834,25 +2831,32 @@ class ConfirmDialog : Dialog {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+
+        # Handle Escape to cancel
         if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.Close($false)
+            $this.Complete($false) # Using new Complete method
             return $true
         }
-        
-        if ($key.Key -eq [ConsoleKey]::Tab -or $key.Key -eq [ConsoleKey]::LeftArrow -or 
-            $key.Key -eq [ConsoleKey]::RightArrow) {
-            $this._focusOnYes = -not $this._focusOnYes
-            $this.UpdateButtonFocus()
-            $this.RequestRedraw()
-            return $true
+
+        # The global input handler will route Tab/Shift+Tab to the FocusManager.
+        # Left/Right arrow keys can be used to switch between Yes/No buttons
+        if ($key.Key -eq [ConsoleKey]::LeftArrow -or $key.Key -eq [ConsoleKey]::RightArrow) {
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                # Toggle focus between the two buttons
+                if ($focusManager.FocusedComponent -eq $this._yesButton) {
+                    $focusManager.SetFocus($this._noButton)
+                } else {
+                    $focusManager.SetFocus($this._yesButton)
+                }
+                return $true
+            }
         }
         
-        if ($this._focusOnYes) {
-            return $this._yesButton.HandleInput($key)
-        }
-        else {
-            return $this._noButton.HandleInput($key)
-        }
+        # Let the focused child handle the input
+        # The FocusManager will have already routed input to the focused button
+        return $false
     }
 }
 

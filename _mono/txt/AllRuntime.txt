@@ -180,12 +180,11 @@ function Stop-TuiEngine {
         
         $global:TuiState.Running = $false
         
-        # Cleanup current screen via NavigationService
-        $navService = $global:TuiState.Services.NavigationService
-        if ($navService -and $navService.CurrentScreen) {
+        # Cleanup current screen
+        if ($global:TuiState.CurrentScreen) {
             try {
-                $navService.CurrentScreen.OnExit()
-                $navService.CurrentScreen.Cleanup()
+                $global:TuiState.CurrentScreen.OnExit()
+                $global:TuiState.CurrentScreen.Cleanup()
             }
             catch {
                 Write-Warning "Error cleaning up current screen: $_"
@@ -235,9 +234,8 @@ function Update-TuiEngineSize {
         $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
         
         # Resize current screen
-        $navService = $global:TuiState.Services.NavigationService
-        if ($navService -and $navService.CurrentScreen) {
-            $navService.CurrentScreen.Resize($newWidth, $newHeight)
+        if ($global:TuiState.CurrentScreen) {
+            $global:TuiState.CurrentScreen.Resize($newWidth, $newHeight)
         }
         
         # Force full redraw
@@ -265,25 +263,21 @@ function Invoke-TuiRender {
         
         Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
-        # Get the current screen from NavigationService
-        $navService = $global:TuiState.Services.NavigationService
-        $currentScreenToRender = if ($navService) { $navService.CurrentScreen } else { $null }
-        
         # Render current screen
-        if ($currentScreenToRender) {
+        if ($global:TuiState.CurrentScreen) {
             try {
                 # Render the screen which will update its internal buffer
-                $currentScreenToRender.Render()
+                $global:TuiState.CurrentScreen.Render()
                 
                 # Get the screen's buffer
-                $screenBuffer = $currentScreenToRender.GetBuffer()
+                $screenBuffer = $global:TuiState.CurrentScreen.GetBuffer()
                 
                 if ($screenBuffer) {
                     # Blend screen buffer into compositor
                     $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
                 }
                 else {
-                    Write-Warning "Screen buffer is null for $($currentScreenToRender.Name)"
+                    Write-Warning "Screen buffer is null for $($global:TuiState.CurrentScreen.Name)"
                 }
             }
             catch {
@@ -344,24 +338,10 @@ function Invoke-TuiRender {
         # Differential rendering - compare current compositor to previous
         Render-DifferentialBuffer
         
-        # Swap buffers for next frame - MUST happen AFTER rendering
-        # Create proper copies to avoid reference issues
-        $tempBuffer = [TuiBuffer]::new($global:TuiState.CompositorBuffer.Width, $global:TuiState.CompositorBuffer.Height, "TempBuffer")
-        
-        # Copy current compositor to temp
-        for ($y = 0; $y -lt $global:TuiState.CompositorBuffer.Height; $y++) {
-            for ($x = 0; $x -lt $global:TuiState.CompositorBuffer.Width; $x++) {
-                $cell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
-                $tempBuffer.SetCell($x, $y, [TuiCell]::new($cell))
-            }
-        }
-        
-        # Clear compositor for next frame
-        $bgColor = Get-ThemeColor("Background")
-        $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-        
-        # Update previous buffer with what was just rendered
-        $global:TuiState.PreviousCompositorBuffer = $tempBuffer
+        # Swap buffers for next frame
+        $temp = $global:TuiState.PreviousCompositorBuffer
+        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
+        $global:TuiState.CompositorBuffer = $temp
         
         $renderTimer.Stop()
         
@@ -509,11 +489,16 @@ function Process-TuiInput {
             }
             
             # Finally, give the current screen a chance to handle the input
-            $navService = $global:TuiState.Services.NavigationService
-            if ($navService -and $navService.CurrentScreen -and $navService.CurrentScreen.HandleInput($keyInfo)) {
+            if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                 $global:TuiState.IsDirty = $true
                 return
             }
+        }
+    }
+    catch {
+        Write-Error "Input processing error: $_"
+    }
+}
         }
     }
     catch {
@@ -594,7 +579,85 @@ function Close-TopTuiOverlay {
 
 #region Error Handling
 
-# Error handling functions have been consolidated - see Panic Handler region below
+function Invoke-PanicHandler {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Error
+    )
+    
+    try {
+        Write-Host "`n`n=== AXIOM-PHOENIX PANIC HANDLER ===" -ForegroundColor Red
+        Write-Host "A critical error has occurred!" -ForegroundColor Red
+        Write-Host ""
+        
+        # Error details
+        Write-Host "Error Message:" -ForegroundColor Yellow
+        Write-Host "  $($Error.Exception.Message)" -ForegroundColor White
+        Write-Host ""
+        
+        Write-Host "Error Type:" -ForegroundColor Yellow
+        Write-Host "  $($Error.Exception.GetType().FullName)" -ForegroundColor White
+        Write-Host ""
+        
+        Write-Host "Stack Trace:" -ForegroundColor Yellow
+        $Error.ScriptStackTrace -split "`n" | ForEach-Object {
+            Write-Host "  $_" -ForegroundColor Gray
+        }
+        Write-Host ""
+        
+        # System info
+        Write-Host "System Information:" -ForegroundColor Yellow
+        Write-Host "  PowerShell: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
+        Write-Host "  OS: $([System.Environment]::OSVersion.VersionString)" -ForegroundColor Gray
+        Write-Host "  Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+        Write-Host ""
+        
+        # Crash report location
+        $crashReportPath = Join-Path $env:TEMP "axiom-phoenix-crash-$(Get-Date -Format 'yyyyMMdd-HHmmss').txt"
+        
+        $crashReport = @"
+AXIOM-PHOENIX CRASH REPORT
+Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+
+ERROR DETAILS:
+$($Error | Out-String)
+
+SYSTEM INFORMATION:
+PowerShell Version: $($PSVersionTable.PSVersion)
+OS Version: $([System.Environment]::OSVersion.VersionString)
+CLR Version: $($PSVersionTable.CLRVersion)
+Host: $($Host.Name)
+
+GLOBAL STATE:
+$($global:TuiState | ConvertTo-Json -Depth 3)
+"@
+        
+        $crashReport | Out-File -FilePath $crashReportPath -Force
+        
+        Write-Host "Crash report saved to:" -ForegroundColor Yellow
+        Write-Host "  $crashReportPath" -ForegroundColor Cyan
+        Write-Host ""
+        
+        Write-Host "Press any key to exit..." -ForegroundColor White
+        [Console]::ReadKey($true) | Out-Null
+    }
+    catch {
+        Write-Host "FATAL: Panic handler failed!" -ForegroundColor Magenta
+        Write-Host $_.Exception.Message -ForegroundColor Red
+    }
+    finally {
+        # Try to restore console
+        try {
+            [Console]::CursorVisible = $true
+            [Console]::Clear()
+        }
+        catch {}
+        
+        # Exit
+        exit 1
+    }
+}
 
 #endregion
 

@@ -357,14 +357,26 @@ class DataManager {
                 
                 if ($data.ContainsKey('Tasks')) {
                     foreach ($taskData in $data.Tasks) {
+                        # Re-hydrating an object from a PSObject is the most robust way
                         $task = [PmcTask]::new()
-                        # Map properties
-                        $taskData.GetEnumerator() | ForEach-Object {
-                            if ($task.PSObject.Properties.Match($_.Name)) {
-                                $task.($_.Name) = $_.Value
+                        foreach($prop in $taskData.PSObject.Properties) {
+                            if ($task.PSObject.Properties[$prop.Name]) {
+                                try {
+                                    # Handle enums correctly during assignment
+                                    $targetType = $task.PSObject.Properties[$prop.Name].TypeNameOfValue
+                                    if ($targetType -match "TaskStatus" -or $targetType -match "TaskPriority") {
+                                        # Parse enum value from string
+                                        $enumType = $task.PSObject.Properties[$prop.Name].TypeNameOfValue -replace '.*\[|\].*', ''
+                                        $task.($prop.Name) = [Enum]::Parse($enumType, $prop.Value)
+                                    } else {
+                                        $task.($prop.Name) = $prop.Value
+                                    }
+                                } catch {
+                                    # Log error if a property can't be set
+                                    Write-Verbose "DataManager: Could not set property '$($prop.Name)' on task: $_"
+                                }
                             }
                         }
-                        
                         $this.Tasks[$task.Id] = $task
                         
                         # Update project index
@@ -380,13 +392,16 @@ class DataManager {
                 if ($data.ContainsKey('Projects')) {
                     foreach ($projectData in $data.Projects) {
                         $project = [PmcProject]::new()
-                        # Map properties
-                        $projectData.GetEnumerator() | ForEach-Object {
-                            if ($project.PSObject.Properties.Match($_.Name)) {
-                                $project.($_.Name) = $_.Value
+                        foreach($prop in $projectData.PSObject.Properties) {
+                            if ($project.PSObject.Properties[$prop.Name]) {
+                                try {
+                                    $project.($prop.Name) = $prop.Value
+                                } catch {
+                                    # Log error if a property can't be set
+                                    Write-Verbose "DataManager: Could not set property '$($prop.Name)' on project: $_"
+                                }
                             }
                         }
-                        
                         $this.Projects[$project.Key] = $project
                     }
                 }
@@ -429,36 +444,10 @@ class DataManager {
             }
             
             $data = @{
-                Tasks = $this.Tasks.Values | ForEach-Object {
-                    @{
-                        Id = $_.Id
-                        Title = $_.Title
-                        Description = $_.Description
-                        Status = $_.Status.ToString()
-                        Priority = $_.Priority.ToString()
-                        ProjectKey = $_.ProjectKey
-                        Category = $_.Category
-                        CreatedAt = $_.CreatedAt
-                        UpdatedAt = $_.UpdatedAt
-                        DueDate = $_.DueDate
-                        Tags = $_.Tags
-                        Progress = $_.Progress
-                        Completed = $_.Completed
-                    }
-                }
-                Projects = $this.Projects.Values | ForEach-Object {
-                    @{
-                        Key = $_.Key
-                        Name = $_.Name
-                        Description = $_.Description
-                        CreatedAt = $_.CreatedAt
-                        UpdatedAt = $_.UpdatedAt
-                        Owner = $_.Owner
-                        Tags = $_.Tags
-                        Metadata = $_.Metadata
-                        IsActive = $_.IsActive
-                    }
-                }
+                # Let PowerShell and JSON serializer do the work.
+                # This automatically includes any new properties added to the class.
+                Tasks = @($this.Tasks.Values)
+                Projects = @($this.Projects.Values)
                 Metadata = $this.Metadata
                 SavedAt = [datetime]::Now
             }
@@ -753,10 +742,15 @@ class NavigationService {
                 })
             }
             
-            # Update global TUI state directly (CRUCIAL FIX)
-            $global:TuiState.CurrentScreen = $screen
-            $global:TuiState.IsDirty = $true # Force redraw
-            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnEnter should set new focus
+            # Publish navigation complete event
+            # The main loop should query NavigationService for the current screen
+            # NavigationService should NOT modify global state directly
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Navigation.NavigationComplete", @{
+                    Screen = $screen
+                    ScreenName = $screen.Name
+                })
+            }
 
         }
         catch {
@@ -812,10 +806,14 @@ class NavigationService {
                 })
             }
             
-            # Update global TUI state directly (CRUCIAL FIX)
-            $global:TuiState.CurrentScreen = $previousScreen
-            $global:TuiState.IsDirty = $true # Force redraw
-            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnResume should set new focus
+            # Publish navigation complete event
+            # The main loop should query NavigationService for the current screen
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Navigation.NavigationComplete", @{
+                    Screen = $previousScreen
+                    ScreenName = $previousScreen.Name
+                })
+            }
 
         }
         catch {
@@ -944,8 +942,8 @@ class ThemeManager {
             }
         }
         
-        Write-Warning "ThemeManager: Color '$colorName' not found in theme, using White"
-        return [ConsoleColor]::White
+        # Write-Log -Level Debug -Message "ThemeManager: Color '$colorName' not found in theme, using default hex #FFFFFF"
+        return "#FFFFFF" # Return hex string instead of ConsoleColor enum
     }
     
     [void] SetColor([string]$colorName, [object]$color) {
@@ -968,9 +966,19 @@ class ThemeManager {
             foreach ($key in $themeData.Keys) {
                 $value = $themeData[$key]
                 
-                # Handle ConsoleColor enum values
+                # Handle ConsoleColor enum values - convert to hex
                 if ($value -is [string] -and [Enum]::TryParse([ConsoleColor], $value, [ref]$null)) {
-                    $this.CurrentTheme[$key] = [Enum]::Parse([ConsoleColor], $value)
+                    $consoleColor = [Enum]::Parse([ConsoleColor], $value)
+                    # Convert ConsoleColor to hex
+                    $hexMap = @{
+                        'Black' = '#000000'; 'DarkBlue' = '#000080'; 'DarkGreen' = '#008000';
+                        'DarkCyan' = '#008080'; 'DarkRed' = '#800000'; 'DarkMagenta' = '#800080';
+                        'DarkYellow' = '#808000'; 'Gray' = '#C0C0C0'; 'DarkGray' = '#808080';
+                        'Blue' = '#0000FF'; 'Green' = '#00FF00'; 'Cyan' = '#00FFFF';
+                        'Red' = '#FF0000'; 'Magenta' = '#FF00FF'; 'Yellow' = '#FFFF00';
+                        'White' = '#FFFFFF'
+                    }
+                    $this.CurrentTheme[$key] = $hexMap[$consoleColor.ToString()] ?? '#FFFFFF'
                 }
                 # Handle hex colors
                 elseif ($value -is [string] -and $value -match '^#[0-9A-Fa-f]{6}$') {
@@ -999,7 +1007,16 @@ class ThemeManager {
             foreach ($key in $this.CurrentTheme.Keys) {
                 $value = $this.CurrentTheme[$key]
                 if ($value -is [ConsoleColor]) {
-                    $themeData[$key] = $value.ToString()
+                    # Convert ConsoleColor to hex string for saving
+                    $hexMap = @{
+                        'Black' = '#000000'; 'DarkBlue' = '#000080'; 'DarkGreen' = '#008000';
+                        'DarkCyan' = '#008080'; 'DarkRed' = '#800000'; 'DarkMagenta' = '#800080';
+                        'DarkYellow' = '#808000'; 'Gray' = '#C0C0C0'; 'DarkGray' = '#808080';
+                        'Blue' = '#0000FF'; 'Green' = '#00FF00'; 'Cyan' = '#00FFFF';
+                        'Red' = '#FF0000'; 'Magenta' = '#FF00FF'; 'Yellow' = '#FFFF00';
+                        'White' = '#FFFFFF'
+                    }
+                    $themeData[$key] = $hexMap[$value.ToString()] ?? '#FFFFFF'
                 }
                 else {
                     $themeData[$key] = $value
