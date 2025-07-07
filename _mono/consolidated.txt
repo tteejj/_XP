@@ -1,0 +1,1547 @@
+This is an excellent and challenging task! Migrating features and architectural improvements from one version of a framework to another, especially with fundamental changes like color handling and error management, requires precision.
+
+Here's a comprehensive upgrade guide for your `mono` framework, incorporating the best practices and fixes from `acta`.
+
+**Important Considerations Before You Begin:**
+
+1.  **Backup `mono`:** Seriously, create a full backup of your `mono` project folder before making any changes.
+2.  **Incremental Steps:** While I'm providing a large set of changes, consider applying them in logical sections (e.g., all TuiCell/TuiBuffer/AnsiHelper changes first, then all drawing functions, then screen stack, etc.) and testing after each major section.
+3.  **Hex Colors are Everywhere:** The `acta` framework embraces truecolor (hexadecimal) colors (`#RRGGBB`) rather than `[ConsoleColor]`. This is a more powerful and flexible approach but requires changes throughout the codebase, especially in `TuiCell`, `TuiBuffer`, `TuiAnsiHelper`, `ThemeManager`, `Get-ThemeColor`, and *every* `OnRender` method where colors are explicitly set. I will guide you on this.
+4.  **`Write-Log` Consistency:** Your `mono` already has a `Logger` class and `Write-Log` function. The goal is to make all internal logging go through the `Logger` service for centralized control, replacing `Write-Verbose`, `Write-Warning`, and `Write-Host` (for logging purposes).
+5.  **Private Field Access:** PowerShell classes support private fields (e.g., `hidden [object] $_private_buffer`). When accessing them from within the class, `acta` often uses `$this.{_private_buffer}` syntax. While `$_private_buffer` also works, the curly braces ensure it's treated as a property access, which can be slightly more robust in some edge cases with reflection or dynamic properties. I will use this consistently where appropriate.
+
+---
+
+# Axiom-Phoenix v4.0 (`mono`) Upgrade Guide
+
+## High-Priority Upgrades (Addressing Critical/Major Issues)
+
+These changes resolve significant bugs and architectural flaws identified previously.
+
+### 1. **Unified and Enhanced TUI Drawing Functions (`AllFunctions.ps1`, `AllBaseClasses.ps1`)**
+
+This addresses:
+*   **Critical Issue 1:** Duplicate `Write-TuiBox` function definition.
+*   **Critical Issue 2:** `Write-TuiText` style parameters not propagated.
+*   **Minor Issue 8:** `TuiBuffer.WriteString` lacks full `TuiCell` parameters.
+
+**Step 1.1: Update `TuiAnsiHelper` for Hex Colors & Richer ANSI Generation (`AllBaseClasses.ps1`)**
+
+*   **Location:** `class TuiAnsiHelper` (around line 14).
+*   **Action:** Replace the existing content of the `TuiAnsiHelper` class entirely with the provided `acta`-style version. This fundamentally changes how ANSI escape codes are generated, moving to hex colors and supporting all `TuiCell` attributes.
+
+```powershell
+# In AllBaseClasses.ps1, replace the entire 'class TuiAnsiHelper { ... }' with:
+# ===================== START REPLACEMENT FOR TuiAnsiHelper =====================
+class TuiAnsiHelper {
+    # No caches needed, sequences are generated dynamically now.
+
+    static [hashtable] HexToRgb([string]$hexColor) {
+        if ([string]::IsNullOrEmpty($hexColor) -or -not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
+            # Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor'" # Use Write-Log
+            return $null
+        }
+        try {
+            return @{
+                R = [System.Convert]::ToInt32($hexColor.Substring(1, 2), 16)
+                G = [System.Convert]::ToInt32($hexColor.Substring(3, 2), 16)
+                B = [System.Convert]::ToInt32($hexColor.Substring(5, 2), 16)
+            }
+        } catch {
+            # Write-Log -Level Warning -Message "Error parsing hex color '$hexColor': $($_.Exception.Message)" -Data $_
+            return $null
+        }
+    }
+
+    static [string] GetAnsiSequence([string]$fgHex, [string]$bgHex, [hashtable]$attributes) {
+        $sequences = [System.Collections.Generic.List[string]]::new()
+
+        # Foreground color (Truecolor - SGR 38;2)
+        if (-not [string]::IsNullOrEmpty($fgHex)) {
+            $rgb = [TuiAnsiHelper]::HexToRgb($fgHex)
+            if ($rgb) {
+                $sequences.Add("38;2;$($rgb.R);$($rgb.G);$($rgb.B)")
+            }
+        }
+
+        # Background color (Truecolor - SGR 48;2)
+        if (-not [string]::IsNullOrEmpty($bgHex)) {
+            $rgb = [TuiAnsiHelper]::HexToRgb($bgHex)
+            if ($rgb) {
+                $sequences.Add("48;2;$($rgb.R);$($rgb.G);$($rgb.B)")
+            }
+        }
+
+        # Style attributes
+        if ($attributes) {
+            if ([bool]($attributes.Bold ?? $false)) { $sequences.Add("1") }
+            if ([bool]($attributes.Italic ?? $false)) { $sequences.Add("3") }
+            if ([bool]($attributes.Underline ?? $false)) { $sequences.Add("4") }
+            if ([bool]($attributes.Strikethrough ?? $false)) { $sequences.Add("9") }
+        }
+
+        if ($sequences.Count -eq 0) { return "" }
+        return "`e[$($sequences -join ';')m"
+    }
+
+    static [string] Reset() { return "`e[0m" }
+}
+# ====================== END REPLACEMENT FOR TuiAnsiHelper ======================
+```
+
+**Step 1.2: Update `TuiCell` for Hex Colors and All Style Attributes (`AllBaseClasses.ps1`)**
+
+*   **Location:** `class TuiCell` (around line 63).
+*   **Action:** Modify properties and constructors to accept hex color strings and the new `Strikethrough` boolean. Update `DiffersFrom` and `ToAnsiString`.
+
+```powershell
+# In AllBaseClasses.ps1, modify the 'class TuiCell { ... }' as follows:
+class TuiCell {
+    [char] $Char = ' '
+    [string] $ForegroundColor = "#FFFFFF" # Changed to string for hex color
+    [string] $BackgroundColor = "#000000" # Changed to string for hex color
+    [bool] $Bold = $false
+    [bool] $Underline = $false
+    [bool] $Italic = $false
+    [bool] $Strikethrough = $false # NEW Property for additional style
+    [string] $StyleFlags = "" # Can keep this, but individual bools are preferred.
+    [int] $ZIndex = 0        
+    [object] $Metadata = $null 
+
+    TuiCell() { }
+    TuiCell([char]$char) { $this.Char = $char }
+    
+    # Updated Constructor: Consolidate previous fg/bg and fg/bg/bold/underline constructors
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold=$false, [bool]$italic=$false, [bool]$underline=$false, [bool]$strikethrough=$false) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+        $this.Italic = $italic
+        $this.Underline = $underline
+        $this.Strikethrough = $strikethrough # Assign new property
+    }
+    
+    # Copy Constructor: Ensure it copies all new properties
+    TuiCell([object]$other) {
+        $this.Char = $other.Char
+        $this.ForegroundColor = $other.ForegroundColor
+        $this.BackgroundColor = $other.BackgroundColor
+        $this.Bold = $other.Bold
+        $this.Underline = $other.Underline
+        $this.Italic = $other.Italic
+        $this.Strikethrough = $other.Strikethrough # Make sure this is copied
+        $this.StyleFlags = $other.StyleFlags
+        $this.ZIndex = $other.ZIndex
+        $this.Metadata = $other.Metadata
+    }
+
+    [TuiCell] WithStyle([string]$fg, [string]$bg) { # Parameter types changed
+        $copy = [TuiCell]::new($this)
+        $copy.ForegroundColor = $fg
+        $copy.BackgroundColor = $bg
+        return $copy
+    }
+
+    [bool] DiffersFrom([object]$other) {
+        if ($null -eq $other) { return $true }
+        
+        return ($this.Char -ne $other.Char -or 
+                $this.ForegroundColor -ne $other.ForegroundColor -or 
+                $this.BackgroundColor -ne $other.BackgroundColor -or
+                $this.Bold -ne $other.Bold -or
+                $this.Underline -ne $other.Underline -or
+                $this.Italic -ne $other.Italic -or
+                $this.Strikethrough -ne $other.Strikethrough -or # NEW: Compare Strikethrough
+                $this.ZIndex -ne $other.ZIndex)
+    }
+
+    [string] ToAnsiString() {
+        # This is the crucial update to use the new TuiAnsiHelper.GetAnsiSequence
+        $attributes = @{ 
+            Bold=$this.Bold; Italic=$this.Italic; Underline=$this.Underline; Strikethrough=$this.Strikethrough 
+        }
+        $sequence = [TuiAnsiHelper]::GetAnsiSequence($this.ForegroundColor, $this.BackgroundColor, $attributes)
+        return "$sequence$($this.Char)" # Append character directly
+    }
+
+    [string] ToString() {
+        return "TuiCell(Char='$($this.Char)', FG='$($this.ForegroundColor)', BG='$($this.BackgroundColor)', Bold=$($this.Bold), Underline=$($this.Underline), Italic=$($this.Italic), Strikethrough=$($this.Strikethrough), ZIndex=$($this.ZIndex))"
+    }
+}
+```
+
+**Step 1.3: Update `TuiBuffer` Drawing Methods for Style Hashtables (`AllBaseClasses.ps1`)**
+
+*   **Location:** `class TuiBuffer` (around line 170).
+*   **Action:** Modify `WriteString`, `DrawText`, and `FillRect` to accept a `[hashtable]$Style` parameter. `DrawBox` will be removed/refactored as it is handled by `Write-TuiBox`.
+
+```powershell
+# In AllBaseClasses.ps1, modify the 'class TuiBuffer { ... }' as follows:
+
+# Replace the existing 'WriteString' method (around line 177) with:
+    [void] WriteString([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
+        if ([string]::IsNullOrEmpty($text) -or $y -lt 0 -or $y -ge $this.Height) {
+            # Write-Log -Level Debug -Message "WriteString: Skipped for buffer '$($this.Name)' due to empty text or out-of-bounds Y."
+            return
+        }
+        
+        # Extract properties from the style object, providing safe defaults (now expecting hex colors)
+        $fg = $style.FG ?? "#FFFFFF" # Default Foreground hex
+        $bg = $style.BG ?? "#000000" # Default Background hex
+        $bold = [bool]($style.Bold ?? $false)
+        $italic = [bool]($style.Italic ?? $false)
+        $underline = [bool]($style.Underline ?? $false)
+        $strikethrough = [bool]($style.Strikethrough ?? $false) # NEW
+        $zIndex = [int]($style.ZIndex ?? 0)
+
+        $currentX = $x
+        foreach ($char in $text.ToCharArray()) {
+            if ($currentX -ge $this.Width) { break } 
+            if ($currentX -ge 0) {
+                # Pass all style parameters to TuiCell constructor
+                $cell = [TuiCell]::new($char, $fg, $bg, $bold, $italic, $underline, $strikethrough)
+                $cell.ZIndex = $zIndex # Assign ZIndex
+                $this.SetCell($currentX, $y, $cell)
+            }
+            $currentX++
+        }
+        $this.IsDirty = $true
+        # Write-Log -Level Debug -Message "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
+    }
+
+# Replace the existing 'DrawBox' method (around line 223) with:
+    [void] DrawBox([int]$x, [int]$y, [int]$width, [int]$height, [hashtable]$style = @{}) {
+        # This will now internally call the new Write-TuiBox function in AllFunctions.ps1
+        # It's better to delegate complex drawing like boxes to the global functions.
+        Write-TuiBox -Buffer $this -X $x -Y $y -Width $width -Height $height -Style $style
+    }
+
+# Replace the existing 'FillRect' method (around line 258) with:
+    [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$char, [hashtable]$style = @{}) {
+        # Create a single character string and use WriteString to fill the rectangle
+        # This simplifies the logic by leveraging WriteString's styling capabilities.
+        $charString = "$char" # Convert char to string
+        for ($py = $y; $py -lt $y + $height; $py++) {
+            # Write a line of characters
+            $this.WriteString($x, $py, $charString * $width, $style)
+        }
+    }
+
+# The 'DrawText' method (alias of WriteString) now implicitly works with the new signature:
+# [void] DrawText([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
+#    $this.WriteString($x, $y, $text, $style)
+# }
+```
+
+**Step 1.4: Refactor `Write-TuiText` (`AllFunctions.ps1`)**
+
+*   **Location:** `function Write-TuiText` (around line 89).
+*   **Action:** Update its signature and logic to accept a single `[hashtable]$Style` parameter, and use the new `TuiBuffer.WriteString`.
+
+```powershell
+# In AllFunctions.ps1, replace existing 'function Write-TuiText { ... }' with:
+# ===================== START REPLACEMENT FOR Write-TuiText =====================
+function Write-TuiText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][TuiBuffer]$Buffer,
+        [Parameter(Mandatory)][int]$X,
+        [Parameter(Mandatory)][int]$Y,
+        [Parameter(Mandatory)][string]$Text,
+        [hashtable]$Style = @{} # Accepts a hashtable for all style properties
+    )
+    
+    try {
+        if ($null -eq $Buffer -or [string]::IsNullOrEmpty($Text)) { 
+            # Write-Log -Level Debug -Message "Write-TuiText: Skipped for buffer '$($Buffer.Name)' due to empty text."
+            return 
+        }
+        
+        # Now simply pass the style hashtable to TuiBuffer.WriteString
+        $Buffer.WriteString($X, $Y, $Text, $Style)
+        
+        # Write-Log -Level Debug -Message "Write-TuiText: Wrote '$Text' to buffer '$($Buffer.Name)' at ($X, $Y)."
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "Function.WriteTuiText" -Context "Drawing text" -ScriptBlock { throw } `
+            -AdditionalData @{ BufferName = $Buffer.Name; X = $X; Y = $Y; Text = $Text; Style = $Style }
+    }
+}
+# ====================== END REPLACEMENT FOR Write-TuiText ======================
+```
+
+**Step 1.5: Unify `Write-TuiBox` (`AllFunctions.ps1`)**
+
+*   **Location:** The two existing `function Write-TuiBox` definitions (around lines 14 and 90).
+*   **Action:** **Delete *both*** existing definitions. Replace them with `acta`'s single, more robust, and style-driven `Write-TuiBox`. This function uses the `[hashtable]$Style` parameter for all visual aspects.
+
+```powershell
+# In AllFunctions.ps1, replace BOTH existing 'function Write-TuiBox { ... }' functions with this:
+# ===================== START REPLACEMENT FOR Write-TuiBox =====================
+function Write-TuiBox {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][TuiBuffer]$Buffer,
+        [Parameter(Mandatory)][int]$X,
+        [Parameter(Mandatory)][int]$Y,
+        [Parameter(Mandatory)][int]$Width,
+        [Parameter(Mandatory)][int]$Height,
+        [string]$Title = "",
+        [hashtable]$Style = @{} # All visual aspects now passed via Style hashtable
+    )
+    
+    try {
+        if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) {
+            # Write-Log -Level Warning -Message "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
+            return
+        }
+
+        # Extract properties from the style object with safe fallbacks.
+        $borderStyleName = $Style.BorderStyle ?? "Single"
+        $borderColor = $Style.BorderFG ?? "#808080" # Default border color (gray hex)
+        $bgColor = $Style.BG ?? "#000000"           # Default background color (black hex)
+        $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color
+        $fillChar = [char]($Style.FillChar ?? ' ')   # Optional fill character
+
+        $borders = Get-TuiBorderChars -Style $borderStyleName
+        
+        # Define style objects for child calls to Write-TuiText.
+        $generalStyle = @{ FG = $borderColor; BG = $bgColor } # For borders
+        $fillStyle = @{ FG = $borderColor; BG = $bgColor }    # For fill area (fill char uses border fg)
+        
+        $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
+        # Merge any additional title style overrides (e.g., Bold = $true for title)
+        if ($Style.TitleStyle) {
+            foreach ($key in $Style.TitleStyle.Keys) { $titleTextStyle[$key] = $Style.TitleStyle[$key] }
+        }
+
+        # Fill background of the entire box area first
+        $Buffer.FillRect($X, $Y, $Width, $Height, $fillChar, $fillStyle)
+        
+        # Top border
+        if ($Width -gt 1 -and $Height -gt 0) {
+            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$($borders.Horizontal * ($Width - 2))$($borders.TopRight)" -Style $generalStyle
+        } elseif ($Width -eq 1 -and $Height -gt 0) {
+            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
+        }
+
+        # Side borders
+        for ($i = 1; $i -lt ($Height - 1); $i++) {
+            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
+            if ($Width -gt 1) {
+                Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
+            }
+        }
+        
+        # Bottom border
+        if ($Height -gt 1) {
+            if ($Width -gt 1) {
+                Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$($borders.Horizontal * ($Width - 2))$($borders.BottomRight)" -Style $generalStyle
+            } elseif ($Width -eq 1) {
+                $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
+            }
+        }
+
+        # Draw title if specified
+        if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
+            $titleText = " $Title "
+            if ($titleText.Length -le ($Width - 2)) { 
+                $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
+                Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -Style $titleTextStyle
+            }
+        }
+        
+        $Buffer.IsDirty = $true
+        # Write-Log -Level Debug -Message "Write-TuiBox: Drew '$borderStyleName' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
+    }
+    catch {
+        Invoke-WithErrorHandling -Component "Function.WriteTuiBox" -Context "Drawing box" -ScriptBlock { throw } `
+            -AdditionalData @{ BufferName = $Buffer.Name; X = $X; Y = $Y; Width = $Width; Height = $Height; Title = $Title; Style = $Style }
+    }
+}
+# ====================== END REPLACEMENT FOR Write-TuiBox ======================
+```
+
+**Step 1.6: Update `Get-TuiBorderChars` (`AllFunctions.ps1`)**
+
+*   **Location:** `function Get-TuiBorderChars` (around line 168).
+*   **Action:** This function is fine as is, it returns characters. No changes needed.
+
+### 2. **Correct `ScrollablePanel` Virtual Scrolling (`AllBaseClasses.ps1`, `AllComponents.ps1`, `AllScreens.ps1`)**
+
+This addresses:
+*   **Critical Issue 3:** `ScrollablePanel` virtual scrolling incomplete.
+
+**Step 2.1: Update `ScrollablePanel` (`AllComponents.ps1`)**
+
+*   **Location:** `class ScrollablePanel` (around line 1022).
+*   **Action:** Add `_virtual_buffer` and override `_RenderContent` to manage actual scrolling. Also, enhance `UpdateMaxScroll`.
+
+```powershell
+# In AllComponents.ps1, modify the 'class ScrollablePanel { ... }' as follows:
+
+class ScrollablePanel : Panel {
+    [int]$ScrollOffsetY = 0
+    [int]$MaxScrollY = 0
+    [bool]$ShowScrollbar = $true
+    hidden [int]$_contentHeight = 0 # This will be the virtual content height
+    hidden [TuiBuffer]$_virtual_buffer = $null # NEW: To hold the entire scrollable content
+
+    ScrollablePanel([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
+        # Start with max possible height or a reasonable large value, will grow as children are added
+        $this.{_virtual_buffer} = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
+    }
+
+    # Override OnResize to ensure virtual buffer matches actual content area needs
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        # Call base Panel resize, which updates Width, Height, and _private_buffer
+        ([Panel]$this).Resize($newWidth, $newHeight) 
+
+        # Ensure the virtual buffer is wide enough for the content area
+        # Its height will be dynamically adjusted by _RenderContent as children are placed
+        $targetVirtualWidth = $this.ContentWidth 
+        if ($this.{_virtual_buffer}.Width -ne $targetVirtualWidth) {
+            $this.{_virtual_buffer}.Resize($targetVirtualWidth, $this.{_virtual_buffer}.Height) # Only resize width for now
+        }
+        $this.UpdateMaxScroll() # Recalculate max scroll on resize
+        $this.RequestRedraw()
+    }
+
+    # Override _RenderContent to implement virtual scrolling logic
+    hidden [void] _RenderContent() {
+        # 1. First, render the base Panel. This clears its own _private_buffer and draws borders/title.
+        # This implicitly calls ([Panel]$this).OnRender()
+        ([Panel]$this)._RenderContent()
+
+        # 2. Render all children onto the _virtual_buffer
+        $this.{_virtual_buffer}.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
+        
+        $actualContentBottom = 0
+        foreach ($child in $this.Children | Sort-Object ZIndex) {
+            if ($child.Visible) {
+                # Render each child to its own private buffer
+                $child.Render() 
+                if ($null -ne $child._private_buffer) {
+                    # Blend child's buffer onto our _virtual_buffer at its original coordinates
+                    # (relative to the panel's content area)
+                    $this.{_virtual_buffer}.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
+                }
+                # Track the maximum vertical extent of children to determine virtual height
+                $childExtent = ($child.Y - $this.ContentY) + $child.Height
+                if ($childExtent -gt $actualContentBottom) {
+                    $actualContentBottom = $childExtent
+                }
+            }
+        }
+        $this._contentHeight = $actualContentBottom # Update actual content height
+
+        # 3. Update MaxScrollY and clamp ScrollOffsetY
+        $this.UpdateMaxScroll()
+
+        # 4. Extract the visible portion from _virtual_buffer and blend it onto _private_buffer
+        #    This accounts for the scroll offset when drawing to screen.
+        $viewportWidth = $this.ContentWidth
+        $viewportHeight = $this.ContentHeight
+        
+        # Ensure target size for sub-buffer is positive
+        $viewportWidth = [Math]::Max(1, $viewportWidth)
+        $viewportHeight = [Math]::Max(1, $viewportHeight)
+
+        $sourceX = 0 # No horizontal scrolling for now, but easily extendable
+        $sourceY = $this.ScrollOffsetY
+        
+        # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
+        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this.{_virtual_buffer}.Height - $sourceY)
+        if ($effectiveSourceHeight -le 0) {
+            # No content to display in viewport
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
+            return
+        }
+
+        $visiblePortion = $this.{_virtual_buffer}.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
+        
+        # Blend the visible portion onto our own _private_buffer, at the content area
+        $this.{_private_buffer}.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
+
+        # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
+        if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
+            $this.DrawScrollbar()
+        }
+
+        $this._needs_redraw = $false
+    }
+
+    # Helper method to calculate MaxScrollY and clamp ScrollOffsetY
+    [void] UpdateMaxScroll() {
+        $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
+        
+        # Ensure virtual buffer height is at least content height
+        $currentVirtualHeight = $this.{_virtual_buffer}.Height
+        $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
+        if ($newVirtualHeight -ne $currentVirtualHeight) {
+            $this.{_virtual_buffer}.Resize($this.{_virtual_buffer}.Width, $newVirtualHeight)
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
+        }
+
+        $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
+        $this.ScrollOffsetY = [Math]::Max(0, [Math]::Min($this.ScrollOffsetY, $this.MaxScrollY))
+        # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': ContentHeight=$($this._contentHeight), ViewportHeight=$($viewportHeight), MaxScrollY=$($this.MaxScrollY), ScrollOffsetY=$($this.ScrollOffsetY)."
+    }
+
+    # Keep DrawScrollbar, HandleInput, ScrollUp/Down/PageUp/Down/ToTop/Bottom methods.
+    # Ensure DrawScrollbar uses the correct ScrollOffsetY, MaxScrollY, and _contentHeight for calculations.
+    # Update SetCell calls in DrawScrollbar to use hex colors.
+    [void] DrawScrollbar() {
+        $scrollbarX = $this.Width - 1
+        $scrollbarY = if ($this.HasBorder) { 1 } else { 0 }
+        $scrollbarTrackHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+
+        if ($this._contentHeight -le $scrollbarTrackHeight) { 
+            # If content fits, clear any previous scrollbar
+            for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
+                $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', Get-ThemeColor("Background"), Get-ThemeColor("Background")))
+            }
+            return 
+        } 
+
+        $scrollFg = Get-ThemeColor("list.scrollbar")
+        $scrollBg = Get-ThemeColor("Background")
+
+        # Calculate thumb size and position
+        $thumbSize = [Math]::Max(1, [int]($scrollbarTrackHeight * $scrollbarTrackHeight / $this._contentHeight))
+        $thumbPos = [int](($scrollbarTrackHeight - $thumbSize) * $this.ScrollOffsetY / $this.MaxScrollY)
+        
+        for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
+            $y = $scrollbarY + $i
+            $char = '│' # Default track character
+            
+            if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
+                $char = '█' # Thumb character
+            }
+            $this.{_private_buffer}.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
+        }
+    }
+
+    # Ensure other scrolling methods call RequestRedraw and UpdateMaxScroll
+    [void] ScrollUp([int]$lines = 1) {
+        $oldScroll = $this.ScrollOffsetY
+        $this.ScrollOffsetY = [Math]::Max(0, $this.ScrollOffsetY - $lines)
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled up to $($this.ScrollOffsetY)."
+        }
+    }
+
+    [void] ScrollDown([int]$lines = 1) {
+        $oldScroll = $this.ScrollOffsetY
+        $this.ScrollOffsetY = [Math]::Min($this.MaxScrollY, $this.ScrollOffsetY + $lines)
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled down to $($this.ScrollOffsetY)."
+        }
+    }
+
+    [void] ScrollPageUp() {
+        $pageSize = $this.ContentHeight
+        $this.ScrollUp($pageSize)
+    }
+
+    [void] ScrollPageDown() {
+        $pageSize = $this.ContentHeight
+        $this.ScrollDown($pageSize)
+    }
+
+    [void] ScrollToTop() {
+        $oldScroll = $this.ScrollOffsetY
+        $this.ScrollOffsetY = 0
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to top."
+        }
+    }
+
+    [void] ScrollToBottom() {
+        $oldScroll = $this.ScrollOffsetY
+        $this.ScrollOffsetY = $this.MaxScrollY
+        if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this.RequestRedraw()
+            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to bottom."
+        }
+    }
+}
+```
+
+**Step 2.2: Update `TaskListScreen` to use `UpdateMaxScroll` (`AllScreens.ps1`)**
+
+*   **Location:** `TaskListScreen`, `_UpdateTaskList` method (around line 282).
+*   **Action:** Ensure that after all children are added/rendered to the `_taskListPanel`, `UpdateMaxScroll()` is called on `_taskListPanel`.
+
+```powershell
+# In AllScreens.ps1, inside TaskListScreen, _UpdateTaskList method:
+
+    hidden [void] _UpdateTaskList() {
+        $panel = $this._taskListPanel
+        if (-not $panel) { return }
+        
+        # Clear children (This panel's render logic probably isn't adding children directly.
+        # It's drawing text to its own buffer. So this clear is for visual cleanup.)
+        # This also means Panel's children collection is primarily for structural hierarchy.
+        # The task drawing is done on the panel's buffer directly.
+
+        # The key is that the ScrollablePanel's _RenderContent will collect the max Y for children
+        # so we need to ensure some children are effectively 'added' or that a way to communicate
+        # the total content height is exposed. Since this panel directly writes to its buffer,
+        # it needs to inform the ScrollablePanel about the total height it would take if unlimited.
+
+        $buffer = $panel.GetBuffer()
+        $contentX = $panel.ContentX
+        $contentY = $panel.ContentY # This is relative to panel's content area (e.g., 1,1)
+        $contentWidth = $panel.ContentWidth
+        $contentHeight = $panel.ContentHeight
+        
+        # Clear the panel's internal buffer
+        $buffer.Clear([TuiCell]::new(' ', Get-ThemeColor("Background"), Get-ThemeColor("Background"))) # Use hex colors
+
+        if ($this._tasks.Count -eq 0) {
+            Write-TuiText -Buffer $buffer -X ($contentX + 2) -Y ($contentY + 2) -Text "No tasks found." -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+            $panel._contentHeight = ($contentY + 2) + 1 # At least enough height for this message
+            $panel.UpdateMaxScroll() # Ensure scroll is updated even for empty list
+            return
+        }
+        
+        # Determine how many lines to draw based on panel's virtual content height
+        # The ScrollablePanel will use ScrollOffsetY to determine what part of _virtual_buffer to show.
+        $maxVirtualContentHeight = 0 # Track the max y position *if all tasks were drawn*
+        
+        for ($i = 0; $i -lt $this._tasks.Count; $i++) {
+            $task = $this._tasks[$i]
+            $y = $contentY + $i # The 'virtual' Y position if all tasks were shown without scrolling
+            
+            # Highlight selected task
+            $fgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
+            $bgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+            
+            # Status indicator (update to use consistent hex colors if needed, otherwise string chars are fine)
+            $statusChar = switch ($task.Status) {
+                ([TaskStatus]::Pending) { "○" }
+                ([TaskStatus]::InProgress) { "◐" }
+                ([TaskStatus]::Completed) { "●" }
+                ([TaskStatus]::Cancelled) { "✕" }
+                default { "?" }
+            }
+            
+            # Priority indicator
+            $priorityChar = switch ($task.Priority) {
+                ([TaskPriority]::Low) { "↓" }
+                ([TaskPriority]::Medium) { "→" }
+                ([TaskPriority]::High) { "↑" }
+                default { "-" }
+            }
+            
+            # Truncate title if needed
+            $maxTitleLength = $panel.ContentWidth - 6 # Adjusted for status/priority chars and padding
+            $title = if ($task.Title.Length -gt $maxTitleLength) {
+                $task.Title.Substring(0, $maxTitleLength - 3) + "..."
+            } else {
+                $task.Title
+            }
+            
+            $taskLine = "$statusChar $priorityChar $title"
+            
+            # Draw on panel's _virtual_buffer
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $y -Text $taskLine -Style @{ FG = $fgColor; BG = $bgColor }
+            
+            # Update the max content height based on the maximum Y coordinate that would be drawn
+            if (($y + 1) -gt $maxVirtualContentHeight) {
+                $maxVirtualContentHeight = $y + 1
+            }
+        }
+        
+        # Crucial: Inform the ScrollablePanel about the total virtual content height
+        $panel._contentHeight = $maxVirtualContentHeight
+        
+        # Update scrollbar (this method should be called by ScrollablePanel's _RenderContent, not here)
+        # $panel.UpdateMaxScroll() # This call is now redundant here if _RenderContent handles it.
+    }
+```
+
+### 3. **Streamlined Screen Stack Management & Global State (`AllRuntime.ps1`, `AllServices.ps1`)**
+
+This addresses:
+*   **Critical Issue 4:** Inconsistent Screen Stack Management & Redundancy.
+*   **Minor Issue 11:** `$global:TuiState.ScreenStack` and `OverlayStack` as Plain Arrays.
+
+**Step 3.1: Centralize Navigation in `NavigationService` (`AllServices.ps1`)**
+
+*   **Location:** `class NavigationService` (around line 2146).
+*   **Action:** Update `NavigationStack` to be a generic `Stack`, and ensure `NavigateTo`/`GoBack` directly manipulate `$global:TuiState.CurrentScreen` without relying on the now-removed global functions.
+
+```powershell
+# In AllServices.ps1, modify the 'class NavigationService { ... }' as follows:
+
+class NavigationService {
+    [System.Collections.Generic.Stack[Screen]]$NavigationStack = [System.Collections.Generic.Stack[Screen]]::new() # Explicitly initialize
+    [Screen]$CurrentScreen
+    [EventManager]$EventManager
+    [hashtable]$ScreenRegistry = @{}
+    [int]$MaxStackSize = 10
+    [hashtable]$Services # Added to store access to all services (for creating screens)
+
+    # Add constructor that takes ServiceContainer (or hashtable of services)
+    NavigationService([hashtable]$services) {
+        $this.Services = $services
+        $this.EventManager = $services.EventManager # Get EventManager if present
+    }
+
+    # IMPORTANT: Update NavigateTo method
+    [void] NavigateTo([Screen]$screen) {
+        if ($null -eq $screen) { throw [System.ArgumentNullException]::new("screen", "Cannot navigate to a null screen.") }
+        
+        try {
+            # Exit current screen if one exists
+            if ($this.CurrentScreen) {
+                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)'"
+                $this.CurrentScreen.OnExit()
+                $this.NavigationStack.Push($this.CurrentScreen)
+                
+                # Limit stack size (optional, complex to trim from bottom of Stack)
+                # If MaxStackSize is critical, consider switching NavigationStack to List<Screen> and managing explicitly.
+            }
+            
+            # Enter new screen
+            $this.CurrentScreen = $screen
+            # Write-Log -Level Debug -Message "NavigationService: Entering screen '$($screen.Name)'"
+            
+            # Initialize if not already (screens passed via registry should be initialized via factory)
+            if (-not $screen._isInitialized) {
+                # Write-Log -Level Debug -Message "NavigationService: Initializing screen '$($screen.Name)'"
+                $screen.Initialize()
+                $screen._isInitialized = $true
+            }
+            
+            # Resize screen to match current console dimensions
+            $screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+            
+            $screen.OnEnter() # Call lifecycle method
+            
+            # Publish navigation event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Navigation.ScreenChanged", @{
+                    Screen = $screen
+                    ScreenName = $screen.Name
+                    StackDepth = $this.NavigationStack.Count
+                })
+            }
+            
+            # Update global TUI state directly (CRUCIAL FIX)
+            $global:TuiState.CurrentScreen = $screen
+            $global:TuiState.IsDirty = $true # Force redraw
+            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnEnter should set new focus
+
+        }
+        catch {
+            Invoke-WithErrorHandling -Component "NavigationService" -Context "NavigateTo screen '$($screen.Name)'" -ScriptBlock { throw } `
+                -AdditionalData @{ ScreenName = $screen.Name }
+        }
+    }
+
+    [void] NavigateToByName([string]$screenName) {
+        if (-not $this.ScreenRegistry.ContainsKey($screenName)) {
+            throw [System.ArgumentException]::new("Screen '$screenName' not found in registry. Registered: $($this.ScreenRegistry.Keys -join ', ').", "screenName")
+        }
+        
+        $this.NavigateTo($this.ScreenRegistry[$screenName])
+    }
+    
+    [bool] CanGoBack() {
+        return $this.NavigationStack.Count -gt 0
+    }
+    
+    # IMPORTANT: Update GoBack method
+    [void] GoBack() {
+        if (-not $this.CanGoBack()) {
+            # Write-Log -Level Warning -Message "NavigationService: Cannot go back - navigation stack is empty"
+            return
+        }
+        
+        try {
+            # Exit current screen
+            if ($this.CurrentScreen) {
+                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)' (going back)"
+                $this.CurrentScreen.OnExit()
+                $this.CurrentScreen.Cleanup() # Clean up the screen being exited/popped
+            }
+            
+            # Pop and resume previous screen
+            $previousScreen = $this.NavigationStack.Pop()
+            $this.CurrentScreen = $previousScreen
+            
+            # Write-Log -Level Debug -Message "NavigationService: Resuming screen '$($previousScreen.Name)'"
+            
+            # Resize screen to match current console dimensions
+            $previousScreen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+
+            $previousScreen.OnResume() # Call lifecycle method
+            
+            # Publish navigation event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Navigation.BackNavigation", @{
+                    Screen = $previousScreen
+                    ScreenName = $previousScreen.Name
+                    StackDepth = $this.NavigationStack.Count
+                })
+            }
+            
+            # Update global TUI state directly (CRUCIAL FIX)
+            $global:TuiState.CurrentScreen = $previousScreen
+            $global:TuiState.IsDirty = $true # Force redraw
+            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnResume should set new focus
+
+        }
+        catch {
+            Invoke-WithErrorHandling -Component "NavigationService" -Context "GoBack from screen '$($this.CurrentScreen.Name)'" -ScriptBlock { throw } `
+                -AdditionalData @{ CurrentScreen = $this.CurrentScreen.Name }
+        }
+    }
+    
+    [void] Reset() {
+        # Cleanup all screens in stack and current screen
+        while ($this.NavigationStack.Count -gt 0) {
+            $screen = $this.NavigationStack.Pop()
+            try { $screen.Cleanup() } catch { # Write-Log -Level Warning -Message "NavigationService: Error cleaning up stacked screen '$($screen.Name)': $($_.Exception.Message)" }
+            }
+        }
+        
+        if ($this.CurrentScreen) {
+            try { 
+                $this.CurrentScreen.OnExit()
+                $this.CurrentScreen.Cleanup() 
+            } catch { # Write-Log -Level Warning -Message "NavigationService: Error cleaning up current screen '$($this.CurrentScreen.Name)': $($_.Exception.Message)" }
+            }
+            $this.CurrentScreen = $null
+        }
+        # Write-Log -Level Debug -Message "NavigationService: Reset complete, all screens cleaned up."
+    }
+}
+```
+
+**Step 3.2: Remove Redundant Screen Functions (`AllRuntime.ps1`)**
+
+*   **Location:** `function Push-Screen`, `function Pop-Screen`, `function Switch-Screen` (around lines 525, 560, 600).
+*   **Action:** **Delete these functions entirely.** All screen navigation should now explicitly go through the `NavigationService` instance (e.g., `$global:TuiState.Services.NavigationService.NavigateTo($screen)`).
+
+**Step 3.3: Update `$global:TuiState` for Correct Collection Types (`AllRuntime.ps1`)**
+
+*   **Location:** `$global:TuiState = @{...}` (around line 14).
+*   **Action:** Ensure `ScreenStack` and `OverlayStack` are initialized with `System.Collections.Generic.Stack` and `System.Collections.Generic.List` respectively.
+
+```powershell
+# In AllRuntime.ps1, at the top, update global:TuiState initialization:
+$global:TuiState = @{
+    Running = $false
+    BufferWidth = 0
+    BufferHeight = 0
+    CompositorBuffer = $null
+    PreviousCompositorBuffer = $null
+    ScreenStack = [System.Collections.Generic.Stack[Screen]]::new() # CHANGED TO GENERIC STACK
+    CurrentScreen = $null
+    IsDirty = $true
+    FocusedComponent = $null
+    CommandPalette = $null
+    Services = @{}
+    LastRenderTime = [datetime]::Now
+    FrameCount = 0
+    InputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]'
+    OverlayStack = [System.Collections.Generic.List[UIElement]]::new() # CHANGED TO GENERIC LIST
+    # Added for input thread management
+    CancellationTokenSource = $null
+    InputRunspace = $null
+    InputPowerShell = $null
+    InputAsyncResult = $null
+}
+```
+
+**Step 3.4: Update `Start-AxiomPhoenix` to use `NavigationService` (`AllRuntime.ps1`)**
+
+*   **Location:** `function Start-AxiomPhoenix` (around line 700).
+*   **Action:** Modify the initial screen setting to use the `NavigationService` directly.
+
+```powershell
+# In AllRuntime.ps1, inside Start-AxiomPhoenix (around line 700):
+
+function Start-AxiomPhoenix {
+    [CmdletBinding()]
+    param(
+        [ServiceContainer]$ServiceContainer,
+        [Screen]$InitialScreen
+    )
+    
+    try {
+        # Write-Log -Level Info -Message "Starting Axiom-Phoenix application..."
+        
+        # Store services
+        $global:TuiState.Services = @{
+            ServiceContainer = $ServiceContainer
+        }
+        
+        # Extract key services for quick access
+        $serviceNames = @(
+            'ActionService', 'KeybindingService', 'NavigationService', 
+            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager' # Add new services
+        )
+        
+        foreach ($serviceName in $serviceNames) {
+            try {
+                $service = $ServiceContainer.GetService($serviceName)
+                if ($service) {
+                    $global:TuiState.Services[$serviceName] = $service
+                }
+            }
+            catch {
+                # Write-Log -Level Warning -Message "Failed to get service '$serviceName': $($_.Exception.Message)" -Data $_
+            }
+        }
+        
+        # Create command palette if available
+        $actionService = $global:TuiState.Services.ActionService
+        if ($actionService) {
+            $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
+            $global:TuiState.CommandPalette.RefreshActions()
+        }
+        
+        # Initialize engine
+        Initialize-TuiEngine
+        
+        # Get the NavigationService instance directly from global state
+        $navService = $global:TuiState.Services.NavigationService
+
+        # Set initial screen using NavigationService (CRUCIAL FIX)
+        if ($InitialScreen) {
+            $navService.NavigateTo($InitialScreen) # Use the service directly
+        }
+        else {
+            # Write-Log -Level Warning -Message "No initial screen provided. Application might not display anything."
+        }
+        
+        # Start main loop
+        Start-TuiEngine
+    }
+    catch {
+        # Use Invoke-PanicHandler for critical startup errors
+        Invoke-PanicHandler $_
+    }
+    finally {
+        Stop-TuiEngine # Ensure cleanup even if startup fails
+    }
+}
+```
+
+### 4. **Centralized Focus Management Service (`AllServices.ps1`, `AllComponents.ps1`, `AllRuntime.ps1`, `AllFunctions.ps1`)**
+
+This addresses:
+*   **Major Issue 5:** `TextBox.Focus()` uses undeclared `_focusManager`.
+
+**Step 4.1: New `FocusManager` Class (`AllServices.ps1`)**
+
+*   **Location:** Add this class within the `AllServices.ps1` file.
+*   **Action:** Implement a dedicated `FocusManager` service to control UI focus.
+
+```powershell
+# In AllServices.ps1, add this new class:
+# ===================== START NEW CLASS: FocusManager =====================
+class FocusManager {
+    [UIElement]$FocusedComponent = $null
+    [EventManager]$EventManager = $null
+
+    FocusManager([EventManager]$eventManager) {
+        $this.EventManager = $eventManager
+        # Write-Log -Level Debug -Message "FocusManager: Initialized."
+    }
+
+    [void] SetFocus([UIElement]$component) {
+        if ($this.FocusedComponent -eq $component) {
+            # Write-Log -Level Debug -Message "FocusManager: Component '$($component.Name)' already has focus."
+            return
+        }
+        
+        if ($null -ne $this.FocusedComponent) {
+            $this.FocusedComponent.IsFocused = $false
+            $this.FocusedComponent.OnBlur()
+            $this.FocusedComponent.RequestRedraw()
+            # Write-Log -Level Debug -Message "FocusManager: Blurred '$($this.FocusedComponent.Name)'."
+        }
+
+        $this.FocusedComponent = $null # Clear current focus temporarily
+        if ($null -ne $component -and $component.IsFocusable -and $component.Enabled -and $component.Visible) {
+            $this.FocusedComponent = $component
+            $component.IsFocused = $true
+            $component.OnFocus()
+            $component.RequestRedraw()
+            # Write-Log -Level Debug -Message "FocusManager: Focused '$($component.Name)'."
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Focus.Changed", @{ ComponentName = $component.Name; Component = $component })
+            }
+        } else {
+            # Write-Log -Level Debug -Message "FocusManager: Attempted to focus non-focusable, disabled, invisible, or null component."
+        }
+        $global:TuiState.IsDirty = $true # Request global redraw to ensure focus state is reflected.
+    }
+
+    [void] MoveFocus([bool]$reverse = $false) {
+        if (-not $global:TuiState.CurrentScreen) { return }
+
+        $focusableComponents = [System.Collections.Generic.List[UIElement]]::new()
+        
+        # Helper to recursively find all focusable components within the current screen
+        function Find-Focusable([UIElement]$comp, [System.Collections.Generic.List[UIElement]]$list) {
+            if ($comp -and $comp.IsFocusable -and $comp.Visible -and $comp.Enabled) {
+                $list.Add($comp)
+            }
+            foreach ($child in $comp.Children) { Find-Focusable $child $list }
+        }
+        
+        Find-Focusable $global:TuiState.CurrentScreen $focusableComponents
+        
+        if ($focusableComponents.Count -eq 0) {
+            $this.SetFocus($null) # Clear focus if no focusable components
+            return
+        }
+        
+        # Sort components by TabIndex, then Y, then X for consistent order
+        $sorted = $focusableComponents | Sort-Object { $_.TabIndex * 10000 + $_.Y * 100 + $_.X }
+
+        $currentIndex = -1
+        if ($this.FocusedComponent) {
+            for ($i = 0; $i -lt $sorted.Count; $i++) {
+                if ($sorted[$i] -eq $this.FocusedComponent) {
+                    $currentIndex = $i
+                    break
+                }
+            }
+        }
+        
+        $nextIndex = -1
+        if ($reverse) {
+            $nextIndex = ($currentIndex - 1 + $sorted.Count) % $sorted.Count
+        } else {
+            $nextIndex = ($currentIndex + 1) % $sorted.Count
+        }
+
+        # If no component was focused or current one not found, default to first/last
+        if ($currentIndex -eq -1) {
+            $nextIndex = if ($reverse) { $sorted.Count - 1 } else { 0 }
+        }
+
+        $this.SetFocus($sorted[$nextIndex])
+    }
+
+    [void] ReleaseFocus() {
+        $this.SetFocus($null)
+        # Write-Log -Level Debug -Message "FocusManager: All focus released."
+    }
+
+    [void] Cleanup() {
+        $this.FocusedComponent = $null
+        # Write-Log -Level Debug -Message "FocusManager: Cleanup complete."
+    }
+}
+# ====================== END NEW CLASS: FocusManager ======================
+```
+
+**Step 4.2: Update `TextBox.Focus()` and `CommandPalette` to use `FocusManager` (`AllComponents.ps1`)**
+
+*   **Location:** `class TextBox` (`Focus` method, around line 1221).
+*   **Action:** Change `TextBox.Focus()` to use the new service.
+
+```powershell
+# In AllComponents.ps1, inside TextBox class:
+
+    [void] Focus() {
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            # TextBox is a wrapper, so we need to focus its internal component which is the actual UIElement
+            $focusManager.SetFocus($this.{_textBox}) 
+        } else {
+            # Fallback if focus manager not available (consider removing this if it's a hard dependency)
+            $this.{_textBox}.IsFocused = $true
+            $this.{_textBox}.OnFocus()
+            $this.{_textBox}.RequestRedraw()
+            # Write-Log -Level Warning -Message "TextBox '$($this.Name)': FocusManager service not available, falling back to direct focus."
+        }
+    }
+```
+*   **Location:** `class CommandPalette` (`Show` method, around line 1774).
+*   **Action:** Update to use `FocusManager`.
+
+```powershell
+# In AllComponents.ps1, inside CommandPalette class, Show method:
+
+    [void] Show() {
+        $this.RefreshActions()
+        $this.{_searchBox}.Clear()
+        $this.FilterActions("")
+        $this.Visible = $true
+        $this.IsOverlay = $true # Explicitly set this
+        
+        # Center the command palette dynamically
+        $consoleWidth = $global:TuiState.BufferWidth
+        $consoleHeight = $global:TuiState.BufferHeight
+        $this.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $this.Width) / 2))
+        $this.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $this.Height) / 2))
+
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this.{_searchBox}.{_textBox}) # Focus the inner textbox
+        }
+        $this.RequestRedraw()
+    }
+```
+
+**Step 4.3: Register `FocusManager` in `Start.ps1` (`Start.ps1`)**
+
+*   **Location:** `region Initialize Services` (around line 96 in `Start.ps1`).
+*   **Action:** Register the new `FocusManager` service.
+
+```powershell
+# In Start.ps1, inside 'region Initialize Services' block:
+
+try {
+    Write-Host "Initializing services..." -ForegroundColor Cyan
+    
+    $container = [ServiceContainer]::new()
+    
+    # Register core services
+    $container.Register("Logger", [Logger]::new())
+    $container.Register("EventManager", [EventManager]::new())
+    $container.Register("ThemeManager", [ThemeManager]::new())
+    
+    # Register services that depend on EventManager
+    $eventManager = $container.GetService("EventManager")
+    $container.Register("ActionService", [ActionService]::new($eventManager))
+    $container.Register("DataManager", [DataManager]::new((Join-Path $env:APPDATA "AxiomPhoenix\data.json"), $eventManager))
+    $container.Register("NavigationService", [NavigationService]::new(@{ EventManager = $eventManager })) # Pass services hashtable
+    $container.Register("FocusManager", [FocusManager]::new($eventManager)) # NEW: Register FocusManager
+
+    # Register services that depend on ActionService
+    $actionService = $container.GetService("ActionService")
+    $container.Register("KeybindingService", [KeybindingService]::new($actionService))
+    
+    # NEW: Register DialogManager (will be defined later in Step 5)
+    $focusManager = $container.GetService("FocusManager") # Get focus manager for dialog manager
+    $container.Register("DialogManager", [DialogManager]::new($eventManager, $focusManager))
+
+    # Register framework service
+    $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
+    
+    # Initialize default actions
+    $actionService.RegisterDefaultActions()
+    
+    # ... rest of service initialization ...
+```
+
+**Step 4.4: Update Input Processing to Use `FocusManager` (`AllRuntime.ps1`)**
+
+*   **Location:** `function Process-SingleKeyInput` (around line 430).
+*   **Action:** Modify this function to use `FocusManager` for focus control.
+
+```powershell
+# In AllRuntime.ps1, inside 'function Process-SingleKeyInput':
+
+function Process-SingleKeyInput {
+    param($keyInfo)
+    
+    # NEW: Check for global command palette keybind (Ctrl+P) at the highest priority.
+    if ($keyInfo.Key -eq [ConsoleKey]::P -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+        if ($global:TuiState.CommandPalette) {
+            $global:TuiState.CommandPalette.Show()
+            $global:TuiState.IsDirty = $true
+            return # Input is handled.
+        }
+    }
+
+    # If there's an active overlay (like a dialog), give it priority.
+    # The top-most overlay (dialog or command palette) should receive input first.
+    # Command palette is handled above.
+    if ($global:TuiState.OverlayStack.Count -gt 0) {
+        $topOverlay = $global:TuiState.OverlayStack[-1] # Peek at the top overlay
+        if ($topOverlay -and $topOverlay.Visible) {
+            # Let the overlay handle input directly.
+            if ($topOverlay.HandleInput($keyInfo)) {
+                $global:TuiState.IsDirty = $true
+                return # Input handled by overlay.
+            }
+        }
+    }
+
+    # Handle Tab for focus navigation (now globally managed by FocusManager)
+    if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.MoveFocus(-Reverse ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift))
+            $global:TuiState.IsDirty = $true
+            return
+        }
+    }
+
+    # Give the currently focused component a chance to handle the input.
+    # Get focused component from FocusManager
+    $focusedComponent = $global:TuiState.Services.FocusManager?.FocusedComponent
+    if ($focusedComponent -and $focusedComponent.HandleInput($keyInfo)) {
+        $global:TuiState.IsDirty = $true
+        return
+    }
+
+    # Finally, give the current screen a chance to handle the input (if not handled by focused component or overlay).
+    if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
+        $global:TuiState.IsDirty = $true
+        return
+    }
+    
+    # If not handled, try to resolve via KeybindingService (global hotkeys that aren't specific UI actions)
+    if ($global:TuiState.Services.KeybindingService) {
+        $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
+        if ($action) {
+            # Execute action via ActionService
+            if ($global:TuiState.Services.ActionService) {
+                try {
+                    $global:TuiState.Services.ActionService.ExecuteAction($action)
+                    $global:TuiState.IsDirty = $true
+                    return
+                } catch {
+                    # Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
+                }
+            }
+        }
+    }
+}
+```
+
+**Step 4.5: Remove Obsolete Global Focus Functions (`AllFunctions.ps1`)**
+
+*   **Location:** `function Set-ComponentFocus`, `function Get-NextFocusableComponent`, `function Move-Focus` (around lines 187-240).
+*   **Action:** **Delete these functions entirely.** Their logic is now encapsulated within the `FocusManager` service.
+
+### 5. **Improved Dialog Overlay Management & Positioning (`AllServices.ps1`, `AllComponents.ps1`, `AllRuntime.ps1`)**
+
+This addresses:
+*   **Major Issue 7:** `ComboBoxComponent` Dropdown Not a True Overlay (and generally, dialogs are better managed by a service).
+*   **Minor Issue 11 (related):** `OverlayStack` as Plain Array.
+
+**Step 5.1: New `DialogManager` Class (`AllServices.ps1`)**
+
+*   **Location:** Add this class to `AllServices.ps1`.
+*   **Action:** Implement a `DialogManager` to centralize showing/hiding/positioning of dialogs.
+
+```powershell
+# In AllServices.ps1, add this new class:
+# ===================== START NEW CLASS: DialogManager =====================
+class DialogManager {
+    [System.Collections.Generic.List[UIElement]] $_activeDialogs = [System.Collections.Generic.List[UIElement]]::new()
+    [EventManager]$EventManager = $null
+    [FocusManager]$FocusManager = $null
+
+    DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
+        $this.EventManager = $eventManager
+        $this.FocusManager = $focusManager
+        # Write-Log -Level Debug -Message "DialogManager: Initialized."
+    }
+
+    [void] ShowDialog([UIElement]$dialog) {
+        if ($null -eq $dialog -or -not ($dialog -is [Dialog])) {
+            throw [System.ArgumentException]::new("Provided element is not a Dialog type.", "dialog")
+        }
+        
+        # Calculate center position based on console size
+        $consoleWidth = $global:TuiState.BufferWidth
+        $consoleHeight = $global:TuiState.BufferHeight
+
+        $dialog.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $dialog.Width) / 2))
+        $dialog.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $dialog.Height) / 2))
+
+        # If there's a currently focused component, save it
+        if ($this.FocusManager) {
+            # Use metadata to store previous focus for restoration
+            $dialog.Metadata.PreviousFocus = $this.FocusManager.FocusedComponent
+            $this.FocusManager.ReleaseFocus() # Release current focus
+        }
+
+        # Add to local tracking list and global overlay stack
+        $this.{_activeDialogs}.Add($dialog)
+        $dialog.Visible = $true
+        $dialog.IsOverlay = $true # Mark as an overlay for rendering
+
+        # Explicitly add to global overlay stack
+        $global:TuiState.OverlayStack.Add($dialog)
+        
+        # Initialize and enter the dialog if it implements these methods
+        if ($dialog.PSObject.Methods['Initialize'] -and -not $dialog._isInitialized) {
+            $dialog.Initialize()
+            $dialog._isInitialized = $true
+        }
+        if ($dialog.PSObject.Methods['OnEnter']) {
+            $dialog.OnEnter()
+        }
+
+        $dialog.RequestRedraw()
+        # Write-Log -Level Info -Message "DialogManager: Showing dialog '$($dialog.Name)' at X=$($dialog.X), Y=$($dialog.Y)."
+        
+        # Set focus to the dialog itself or its first focusable child
+        if ($this.FocusManager) {
+            # Let the dialog class handle finding its first internal focusable
+            if ($dialog.PSObject.Methods['SetInitialFocus']) {
+                $dialog.SetInitialFocus()
+            } else {
+                $this.FocusManager.SetFocus($dialog) # Fallback to focusing the dialog container
+            }
+        }
+    }
+
+    [void] HideDialog([UIElement]$dialog) {
+        if ($null -eq $dialog) { return }
+
+        if ($this.{_activeDialogs}.Remove($dialog)) {
+            $dialog.Visible = $false
+            $dialog.IsOverlay = $false
+
+            # Remove from global overlay stack
+            if ($global:TuiState.OverlayStack.Contains($dialog)) {
+                $global:TuiState.OverlayStack.Remove($dialog)
+            }
+
+            # Call Cleanup on the dialog to release its resources
+            $dialog.Cleanup()
+
+            # Restore previous focus
+            if ($this.FocusManager -and $dialog.Metadata.PreviousFocus -is [UIElement]) {
+                $this.FocusManager.SetFocus($dialog.Metadata.PreviousFocus)
+            } else {
+                $this.FocusManager.ReleaseFocus() # Clear focus if no previous component
+            }
+
+            $dialog.RequestRedraw() # Force redraw to remove dialog from screen
+            # Write-Log -Level Info -Message "DialogManager: Hiding dialog '$($dialog.Name)'."
+        } else {
+            # Write-Log -Level Warning -Message "DialogManager: Attempted to hide a dialog '$($dialog.Name)' that was not active."
+        }
+    }
+
+    [void] Cleanup() {
+        foreach ($dialog in $this.{_activeDialogs}.ToArray()) { # Use ToArray to avoid collection modification during iteration
+            $this.HideDialog($dialog) # This will also cleanup and remove from overlay stack
+        }
+        $this.{_activeDialogs}.Clear()
+        # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
+    }
+}
+# ====================== END NEW CLASS: DialogManager ======================
+```
+
+**Step 5.2: Update `Dialog` Base Class (`AllComponents.ps1`)**
+
+*   **Location:** `class Dialog` (around line 1856).
+*   **Action:** Remove the `Show`, `Close`, `ShowDialog` methods from the base `Dialog` class, as `DialogManager` will handle these. Add `SetInitialFocus` for `DialogManager`.
+
+```powershell
+# In AllComponents.ps1, modify the 'class Dialog { ... }' as follows:
+class Dialog : UIElement {
+    [string]$Title = ""
+    [string]$Message = ""
+    hidden [Panel]$_panel
+    hidden [object]$Result = $null
+    hidden [bool]$_isComplete = $false # Indicates dialog has completed its action
+    [scriptblock]$OnClose # Callback for when dialog is closed (before it's hidden)
+
+    Dialog([string]$name) : base($name) {
+        $this.IsFocusable = $true # Dialog itself can receive focus (if no children do)
+        $this.Visible = $false # Start invisible, DialogManager shows it
+        $this.IsOverlay = $true # Always treat dialogs as overlays
+        $this.Width = 50
+        $this.Height = 10
+        
+        $this.InitializeDialogBase()
+    }
+
+    hidden [void] InitializeDialogBase() {
+        $this.{_panel} = [Panel]::new($this.Name + "_Panel")
+        $this.{_panel}.HasBorder = $true
+        $this.{_panel}.BorderStyle = "Double"
+        $this.{_panel}.BorderColor = Get-ThemeColor("dialog.border") # Use ThemeManager
+        $this.{_panel}.BackgroundColor = Get-ThemeColor("dialog.background") # Use ThemeManager
+        $this.{_panel}.Width = $this.Width
+        $this.{_panel}.Height = $this.Height
+        $this.AddChild($this.{_panel})
+    }
+
+    # Removed Show, Close, ShowDialog methods from here. They are now managed by DialogManager.
+    # Add a public 'Complete' method that internal dialog components will call
+    [void] Complete([object]$result) {
+        $this.Result = $result
+        $this._isComplete = $true
+        
+        # Call the OnClose scriptblock if provided
+        if ($this.OnClose) {
+            try { & $this.OnClose $result } catch { # Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" }
+        }
+        
+        # Publish a general dialog close event for DialogManager to pick up
+        if ($global:TuiState.Services.EventManager) {
+            $global:TuiState.Services.EventManager.Publish("Dialog.Completed", @{ Dialog = $this; Result = $result })
+        }
+        # The DialogManager will then call HideDialog for actual UI removal and focus restoration.
+    }
+
+    # New method for DialogManager to call to set initial focus within the dialog
+    [void] SetInitialFocus() {
+        $firstFocusable = $this.Children | Where-Object { $_.IsFocusable -and $_.Visible -and $_.Enabled } | Sort-Object TabIndex, Y, X | Select-Object -First 1
+        if ($firstFocusable -and $global:TuiState.Services.FocusManager) {
+            $global:TuiState.Services.FocusManager.SetFocus($firstFocusable)
+            # Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
+        }
+    }
+
+    # Dialogs will override OnRender to draw their specific content
+    [void] OnRender() {
+        # Base Panel's OnRender already draws border and title using ThemeManager colors
+        $this.{_panel}.Title = " $this.Title " # Ensure title is updated on panel
+        $this.{_panel}.OnRender() # Render the internal panel
+    }
+}
+```
+
+**Step 5.3: Update Concrete Dialogs (`AlertDialog`, `ConfirmDialog`, `InputDialog`) (`AllComponents.ps1`)**
+
+*   **Location:** `AlertDialog`, `ConfirmDialog`, `InputDialog` classes.
+*   **Action:** Modify these to inherit from the new `Dialog` base, and update their button `OnClick` handlers to call `$this.Complete($result)` instead of `$this.Close($result)`. Remove their custom `Show` methods.
+
+```powershell
+# In AllComponents.ps1, for AlertDialog (around line 1928):
+class AlertDialog : Dialog {
+    hidden [ButtonComponent]$_okButton
+
+    AlertDialog([string]$name) : base($name) {
+        $this.Height = 8 # Default size
+        $this.Width = 50
+        $this.InitializeAlertComponents()
+    }
+
+    hidden [void] InitializeAlertComponents() { # Renamed to avoid conflicts
+        $this.{_okButton} = [ButtonComponent]::new($this.Name + "_OK")
+        $this.{_okButton}.Text = "OK"
+        $this.{_okButton}.Width = 10
+        $this.{_okButton}.Height = 3
+        $this.{_okButton}.OnClick = { # IMPORTANT: Call base dialog's Complete method
+            $this.Complete($true) # Passes 'true' as result
+        }.GetNewClosure()
+        $this.{_panel}.AddChild($this.{_okButton})
+    }
+
+    # Removed custom Show method. DialogManager will handle centering and initial message.
+    # We still need to position buttons and draw custom message content.
+
+    [void] OnRender() {
+        ([Dialog]$this).OnRender() # Call base dialog's render
+        
+        # Update button position on render (or on resize)
+        $this.{_okButton}.X = [Math]::Floor(($this.Width - $this.{_okButton}.Width) / 2)
+        $this.{_okButton}.Y = $this.Height - 4 # Position it within the dialog panel's bounds
+
+        if ($this.Visible -and -not [string]::IsNullOrEmpty($this.Message)) {
+            # Draw message within the dialog's panel content area
+            $panelContentX = $this.{_panel}.ContentX
+            $panelContentY = $this.{_panel}.ContentY
+            $maxWidth = $this.Width - 4 # Panel width - 2*border - 2*padding
+
+            # Simple word wrap (use Write-TuiText)
+            $words = $this.Message -split ' '
+            $currentLine = ""
+            $currentY = $panelContentY + 1 # Start drawing message below title
+
+            foreach ($word in $words) {
+                if (($currentLine + " " + $word).Length -gt $maxWidth) {
+                    if ($currentLine) {
+                        Write-TuiText -Buffer $this.{_panel}.{_private_buffer} -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
+                        $currentY++
+                    }
+                    $currentLine = $word
+                }
+                else {
+                    $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
+                }
+            }
+            if ($currentLine) {
+                Write-TuiText -Buffer $this.{_panel}.{_private_buffer} -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
+            }
+        }
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+
+        # Let OK button handle input first
+        if ($this.{_okButton}.HandleInput($key)) { return $true }
+        
+        if ($key.Key -eq [ConsoleKey]::Escape -or $key.Key -eq [ConsoleKey]::Enter) {
+            $this.Complete($true) # Complete dialog
+            return $true
+        }
+        return $false
+    }
+
+    [void] OnEnter() {
+        # Set focus to the OK button when dialog appears
+        $global:TuiState.Services.FocusManager?.SetFocus($this.{_okButton})
+    }
+}
+
+# Apply similar changes to ConfirmDialog and InputDialog:
+# - Remove custom Show methods.
+# - In their Initialize methods, ensure buttons call $this.Complete($result).
+# - Update OnRender methods to use Write-TuiText/Write-TuiBox with style hashtables.
+# - Update HandleInput to pass input to the relevant focused component or call $this.Complete().
+# - Update OnEnter to set initial focus via FocusManager.
+```
+*   **Example for `ConfirmDialog` `HandleInput`**:
+    ```powershell
+    # In ConfirmDialog HandleInput method:
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            # Let the currently focused button handle the input
+            if ($focusManager.FocusedComponent -eq $this.{_yesButton} -and $this.{_yesButton}.HandleInput($key)) { return $true }
+            if ($focusManager.FocusedComponent -eq $this.{_noButton} -and $this.{_noButton}.HandleInput($key)) { return $true }
+        }
+        
+        if ($key.Key -eq [ConsoleKey]::Escape) {
+            $this.Complete($false) # Esc typically cancels (No)
+            return $true
+        }
+        
+        if ($key.Key -eq [ConsoleKey]::Tab -or $key.Key -eq [ConsoleKey]::LeftArrow -or 
+            $key.Key -eq [ConsoleKey]::RightArrow) {
+            if ($focusManager) {
+                if ($focusManager.FocusedComponent -eq $this.{_yesButton}) {
+                    $focusManager.SetFocus($this.{_noButton})
+                } else {
+                    $focusManager.SetFocus($this.{_yesButton})
+                }
+            }
+            return $true
+        }
+        
+        return $false
+    }
+
+    [void] OnEnter() {
+        # Set initial focus to the Yes button
+        $global:TuiState.Services.FocusManager?.SetFocus($this.{_yesButton})
+    }
+    ```
+
+**Step 5.4: Update `Show-TuiOverlay` and `Close-TopTuiOverlay` (`AllRuntime.ps1`)**
+
+*   **Location:** `function Show-TuiOverlay` (around line 606) and `function Close-TopTuiOverlay` (around line 64
