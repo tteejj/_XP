@@ -77,7 +77,6 @@ class TuiCell {
     [bool] $Underline = $false
     [bool] $Italic = $false
     [bool] $Strikethrough = $false # NEW Property for additional style
-    [string] $StyleFlags = "" # Can keep this, but individual bools are preferred.
     [int] $ZIndex = 0        
     [object] $Metadata = $null 
 
@@ -104,7 +103,6 @@ class TuiCell {
         $this.Underline = $other.Underline
         $this.Italic = $other.Italic
         $this.Strikethrough = $other.Strikethrough # Make sure this is copied
-        $this.StyleFlags = $other.StyleFlags
         $this.ZIndex = $other.ZIndex
         $this.Metadata = $other.Metadata
     }
@@ -125,20 +123,14 @@ class TuiCell {
     [TuiCell] BlendWith([object]$other) {
         if ($null -eq $other) { return $this }
         
-        if ($other.ZIndex -gt $this.ZIndex) { 
-            return [TuiCell]::new($other)
-        }
-        
-        if ($other.ZIndex -eq $this.ZIndex) {
-            if ($other.Char -ne ' ' -or $other.Bold -or $other.Underline -or $other.Italic) {
-                return [TuiCell]::new($other)
-            }
-            if ($other.BackgroundColor -ne $this.BackgroundColor) {
-                return [TuiCell]::new($other)
-            }
-        }
-        
-        return $this
+        # If Z-Indexes are different, the higher one wins.
+        if ($other.ZIndex -gt $this.ZIndex) { return [TuiCell]::new($other) }
+        if ($other.ZIndex -lt $this.ZIndex) { return $this }
+
+        # If Z-Indexes are the same, the 'other' (top) cell wins by default.
+        # This is the most common and intuitive blending mode.
+        # A more advanced system could check for a special transparent color.
+        return [TuiCell]::new($other)
     }
 
     [bool] DiffersFrom([object]$other) {
@@ -419,6 +411,17 @@ class UIElement {
             }
             $child.Parent = $this
             $this.Children.Add($child)
+            
+            # Call the lifecycle hook if the child has it defined
+            if ($child.PSObject.Methods['AddedToParent']) {
+                try {
+                    $child.AddedToParent()
+                }
+                catch {
+                    Write-Warning "Error calling AddedToParent on child '$($child.Name)': $($_.Exception.Message)"
+                }
+            }
+            
             $this.RequestRedraw()
             # Write-Verbose "Added child '$($child.Name)' to parent '$($this.Name)'."
         }
@@ -432,6 +435,17 @@ class UIElement {
         try {
             if ($this.Children.Remove($child)) {
                 $child.Parent = $null
+                
+                # Call the lifecycle hook if the child has it defined
+                if ($child.PSObject.Methods['RemovedFromParent']) {
+                    try {
+                        $child.RemovedFromParent()
+                    }
+                    catch {
+                        Write-Warning "Error calling RemovedFromParent on child '$($child.Name)': $($_.Exception.Message)"
+                    }
+                }
+                
                 $this.RequestRedraw()
                 # Write-Verbose "Removed child '$($child.Name)' from parent '$($this.Name)'."
             } else {
@@ -536,6 +550,28 @@ class UIElement {
     {
         # Write-Verbose "HandleInput called for '$($this.Name)': Key: $($keyInfo.Key)."
         return $false
+    }
+
+    [void] Cleanup()
+    {
+        # Cleanup all children recursively
+        foreach ($child in $this.Children) {
+            if ($child.PSObject.Methods['Cleanup']) {
+                try { 
+                    $child.Cleanup() 
+                } 
+                catch { 
+                    Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" 
+                }
+            }
+        }
+        
+        # Clear references
+        $this.Children.Clear()
+        $this.Parent = $null
+        $this._private_buffer = $null
+        
+        # Write-Verbose "Cleanup completed for UIElement '$($this.Name)'."
     }
 
     [void] Render() 
@@ -677,6 +713,8 @@ class Screen : UIElement {
     [void] Cleanup() {
         try {
             # Write-Verbose "Cleanup called for Screen '$($this.Name)'."
+            
+            # Screen-specific cleanup: Unsubscribe from events
             foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
                 try {
                     if (Get-Command 'Unsubscribe-Event' -ErrorAction SilentlyContinue) {
@@ -689,13 +727,14 @@ class Screen : UIElement {
                 }
             }
             $this.EventSubscriptions.Clear()
-            foreach ($child in $this.Children) {
-                if ($child.PSObject.Methods['Cleanup']) {
-                    try { $child.Cleanup() } catch { Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" }
-                }
-            }
+            
+            # Clear screen-specific collections
             $this.Panels.Clear()
-            $this.Children.Clear()
+            $this.State.Clear()
+            
+            # Call base UIElement cleanup (handles children recursively)
+            ([UIElement]$this).Cleanup()
+            
             Write-Verbose "Cleaned up resources for screen: $($this.Name)."
         }
         catch {
@@ -908,6 +947,7 @@ class ServiceContainer {
 }
 #endregion
 
+
 ####\AllComponents.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Components
@@ -1058,10 +1098,10 @@ class TextBoxComponent : UIElement {
     [int]$CursorPosition = 0
     [scriptblock]$OnChange
     hidden [int]$_scrollOffset = 0
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
-    [ConsoleColor]$PlaceholderColor = [ConsoleColor]::DarkGray
+    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
+    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
+    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
+    [string]$PlaceholderColor = "#808080" # Changed from ConsoleColor to hex string
 
     TextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -1122,17 +1162,20 @@ class TextBoxComponent : UIElement {
                     Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
                 }
                 
-                # Draw cursor if focused
+                # Draw cursor if focused (non-destructive - inverts colors)
                 if ($this.IsFocused) {
                     $cursorScreenPos = $this.CursorPosition - $this._scrollOffset
                     if ($cursorScreenPos -ge 0 -and $cursorScreenPos -lt $contentWidth) {
                         $cursorX = $contentStartX + $cursorScreenPos
-                        $cursorChar = if ($cursorScreenPos -lt $visibleText.Length) { 
-                            $visibleText[$cursorScreenPos] 
-                        } else { ' ' }
                         
-                        $cursorStyle = @{ FG = Get-ThemeColor("input.cursor"); BG = $bgColor; Bold = $true }
-                        $this._private_buffer.SetCell($cursorX, $contentY, [TuiCell]::new($cursorChar, $cursorStyle.FG, $cursorStyle.BG, $cursorStyle.Bold))
+                        # Get the cell that is ALREADY at the cursor's position
+                        $cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
+                        
+                        # Invert its colors to represent the cursor (non-destructive)
+                        $cursorFg = $cellUnderCursor.BackgroundColor
+                        $cursorBg = $cellUnderCursor.ForegroundColor
+                        $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true) # Make it bold
+                        $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
                     }
                 }
             }
@@ -1504,15 +1547,14 @@ class MultilineTextBoxComponent : UIElement {
         try {
             $bgColor = $this.BackgroundColor
             $fgColor = $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { $this.BorderColor }
+            $borderColorValue = if ($this.IsFocused) { "#00FFFF" } else { $this.BorderColor }
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
             # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColorValue -BackgroundColor $bgColor `
-                -BorderStyle Single
+                -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Calculate visible area
             $contentWidth = $this.Width - 2
@@ -1760,7 +1802,7 @@ class NumericInputComponent : UIElement {
                 -BorderStyle Single
             
             # Draw spinners
-            $spinnerColor = if ($this.IsFocused) { [ConsoleColor]::Yellow } else { [ConsoleColor]::DarkGray }
+            $spinnerColor = if ($this.IsFocused) { "#FFFF00" } else { "#808080" }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('▲', $spinnerColor, $bgColor))
             $this._private_buffer.SetCell($this.Width - 2, $this.Height - 2, [TuiCell]::new('▼', $spinnerColor, $bgColor))
             
@@ -1965,17 +2007,16 @@ class DateInputComponent : UIElement {
     }
     
     hidden [void] DrawCalendar([int]$startX, [int]$startY) {
-        $bgColor = [ConsoleColor]::Black
-        $fgColor = [ConsoleColor]::White
-        $headerColor = [ConsoleColor]::Yellow
-        $selectedColor = [ConsoleColor]::Cyan
-        $todayColor = [ConsoleColor]::Green
+        $bgColor = "#000000"
+        $fgColor = "#FFFFFF"
+        $headerColor = "#FFFF00"
+        $selectedColor = "#00FFFF"
+        $todayColor = "#00FF00"
         
         # Calendar border
         Write-TuiBox -Buffer $this._private_buffer -X $startX -Y $startY `
             -Width $this.Width -Height 7 `
-            -ForegroundColor [ConsoleColor]::Gray -BackgroundColor $bgColor `
-            -BorderStyle Single
+            -Style @{ BorderFG = "#808080"; BG = $bgColor; BorderStyle = "Single" }
         
         # Month/Year header
         $monthYearStr = $this._viewMonth.ToString("MMMM yyyy")
@@ -1990,7 +2031,7 @@ class DateInputComponent : UIElement {
         $dayHeaders = @("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
         $dayX = $startX + 2
         foreach ($day in $dayHeaders) {
-            $this._private_buffer.WriteString($dayX, $startY + 2, $day, [ConsoleColor]::DarkGray, $bgColor)
+            $this._private_buffer.WriteString($dayX, $startY + 2, $day, @{ FG = "#808080"; BG = $bgColor })
             $dayX += 3
         }
         
@@ -3100,11 +3141,11 @@ class GroupPanel : Panel {
 class ListBox : UIElement {
     [List[object]]$Items
     [int]$SelectedIndex = -1
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$SelectedForegroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::Cyan
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
+    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
+    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
+    [string]$SelectedForegroundColor = "#000000" # Changed from ConsoleColor to hex string
+    [string]$SelectedBackgroundColor = "#00FFFF" # Changed from ConsoleColor to hex string
+    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
     hidden [int]$ScrollOffset = 0
 
     ListBox([string]$name) : base($name) {
@@ -3659,7 +3700,7 @@ class AlertDialog : Dialog {
 class ConfirmDialog : Dialog {
     hidden [ButtonComponent]$_yesButton
     hidden [ButtonComponent]$_noButton
-    hidden [bool]$_focusOnYes = $true
+    # Removed manual focus tracking - will use FocusManager instead
 
     ConfirmDialog([string]$name) : base($name) {
         $this.Height = 8
@@ -3672,6 +3713,7 @@ class ConfirmDialog : Dialog {
         $this._yesButton.Text = "Yes"
         $this._yesButton.Width = 10
         $this._yesButton.Height = 3
+        $this._yesButton.TabIndex = 1 # Explicitly set tab order
         $this._yesButton.OnClick = {
             $this.Complete($true)
         }.GetNewClosure()
@@ -3682,6 +3724,7 @@ class ConfirmDialog : Dialog {
         $this._noButton.Text = "No"
         $this._noButton.Width = 10
         $this._noButton.Height = 3
+        $this._noButton.TabIndex = 2 # Explicitly set tab order
         $this._noButton.OnClick = {
             $this.Complete($false)
         }.GetNewClosure()
@@ -3702,14 +3745,11 @@ class ConfirmDialog : Dialog {
         $this._noButton.X = $startX + $this._yesButton.Width + 4
         $this._noButton.Y = $buttonY
         
-        # Set initial focus
-        $this._focusOnYes = $true
-        $this.UpdateButtonFocus()
     }
 
-    hidden [void] UpdateButtonFocus() {
-        $this._yesButton.IsFocused = $this._focusOnYes
-        $this._noButton.IsFocused = -not $this._focusOnYes
+    [void] OnEnter() {
+        # When the dialog is shown, tell the FocusManager to focus the first element (Yes button)
+        $global:TuiState.Services.FocusManager?.SetFocus($this._yesButton)
     }
 
     [void] OnRender() {
@@ -3745,25 +3785,32 @@ class ConfirmDialog : Dialog {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+
+        # Handle Escape to cancel
         if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.Close($false)
+            $this.Complete($false) # Using new Complete method
             return $true
         }
-        
-        if ($key.Key -eq [ConsoleKey]::Tab -or $key.Key -eq [ConsoleKey]::LeftArrow -or 
-            $key.Key -eq [ConsoleKey]::RightArrow) {
-            $this._focusOnYes = -not $this._focusOnYes
-            $this.UpdateButtonFocus()
-            $this.RequestRedraw()
-            return $true
+
+        # The global input handler will route Tab/Shift+Tab to the FocusManager.
+        # Left/Right arrow keys can be used to switch between Yes/No buttons
+        if ($key.Key -eq [ConsoleKey]::LeftArrow -or $key.Key -eq [ConsoleKey]::RightArrow) {
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                # Toggle focus between the two buttons
+                if ($focusManager.FocusedComponent -eq $this._yesButton) {
+                    $focusManager.SetFocus($this._noButton)
+                } else {
+                    $focusManager.SetFocus($this._yesButton)
+                }
+                return $true
+            }
         }
         
-        if ($this._focusOnYes) {
-            return $this._yesButton.HandleInput($key)
-        }
-        else {
-            return $this._noButton.HandleInput($key)
-        }
+        # Let the focused child handle the input
+        # The FocusManager will have already routed input to the focused button
+        return $false
     }
 }
 
@@ -4056,6 +4103,7 @@ class NavigationMenu : UIElement {
 #endregion Navigation Components
 
 
+
 ####\AllFunctions.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Functions (Load After Classes)
@@ -4074,21 +4122,15 @@ function Write-TuiText {
         [hashtable]$Style = @{} # Accepts a hashtable for all style properties
     )
     
-    try {
-        if ($null -eq $Buffer -or [string]::IsNullOrEmpty($Text)) { 
-            # Write-Log -Level Debug -Message "Write-TuiText: Skipped for buffer '$($Buffer.Name)' due to empty text."
-            return 
-        }
-        
-        # Now simply pass the style hashtable to TuiBuffer.WriteString
-        $Buffer.WriteString($X, $Y, $Text, $Style)
-        
-        # Write-Log -Level Debug -Message "Write-TuiText: Wrote '$Text' to buffer '$($Buffer.Name)' at ($X, $Y)."
+    if ($null -eq $Buffer -or [string]::IsNullOrEmpty($Text)) { 
+        # Write-Log -Level Debug -Message "Write-TuiText: Skipped for buffer '$($Buffer.Name)' due to empty text."
+        return 
     }
-    catch {
-        Write-Error "Failed to write text to buffer '$($Buffer.Name)' at ($X, $Y): $($_.Exception.Message)"
-        throw
-    }
+    
+    # Now simply pass the style hashtable to TuiBuffer.WriteString
+    $Buffer.WriteString($X, $Y, $Text, $Style)
+    
+    # Write-Log -Level Debug -Message "Write-TuiText: Wrote '$Text' to buffer '$($Buffer.Name)' at ($X, $Y)."
 }
 
 function Write-TuiBox {
@@ -4103,74 +4145,97 @@ function Write-TuiBox {
         [hashtable]$Style = @{} # All visual aspects now passed via Style hashtable
     )
     
-    try {
-        if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) {
-            # Write-Log -Level Warning -Message "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
-            return
-        }
+    if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) {
+        # Write-Log -Level Warning -Message "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
+        return
+    }
 
-        # Extract properties from the style object with safe fallbacks.
-        $borderStyleName = $Style.BorderStyle ?? "Single"
-        $borderColor = $Style.BorderFG ?? "#808080" # Default border color (gray hex)
-        $bgColor = $Style.BG ?? "#000000"           # Default background color (black hex)
-        $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color
-        $fillChar = [char]($Style.FillChar ?? ' ')   # Optional fill character
+    # Extract properties from the style object with safe fallbacks.
+    $borderStyleName = $Style.BorderStyle ?? "Single"
+    $borderColor = $Style.BorderFG ?? "#808080" # Default border color (gray hex)
+    $bgColor = $Style.BG ?? "#000000"           # Default background color (black hex)
+    $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color
+    $fillChar = [char]($Style.FillChar ?? ' ')   # Optional fill character
 
-        $borders = Get-TuiBorderChars -Style $borderStyleName
-        
-        # Define style objects for child calls to Write-TuiText.
-        $generalStyle = @{ FG = $borderColor; BG = $bgColor } # For borders
-        $fillStyle = @{ FG = $borderColor; BG = $bgColor }    # For fill area (fill char uses border fg)
-        
-        $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
-        # Merge any additional title style overrides (e.g., Bold = $true for title)
-        if ($Style.TitleStyle) {
-            foreach ($key in $Style.TitleStyle.Keys) { $titleTextStyle[$key] = $Style.TitleStyle[$key] }
-        }
+    $borders = Get-TuiBorderChars -Style $borderStyleName
+    
+    # Define style objects for child calls to Write-TuiText.
+    $generalStyle = @{ FG = $borderColor; BG = $bgColor } # For borders
+    $fillStyle = @{ FG = $borderColor; BG = $bgColor }    # For fill area (fill char uses border fg)
+    
+    $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
+    # Merge any additional title style overrides (e.g., Bold = $true for title)
+    if ($Style.TitleStyle) {
+        foreach ($key in $Style.TitleStyle.Keys) { $titleTextStyle[$key] = $Style.TitleStyle[$key] }
+    }
 
-        # Fill background of the entire box area first
-        $Buffer.FillRect($X, $Y, $Width, $Height, $fillChar, $fillStyle)
-        
-        # Top border
-        if ($Width -gt 1 -and $Height -gt 0) {
-            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$($borders.Horizontal * ($Width - 2))$($borders.TopRight)" -Style $generalStyle
-        } elseif ($Width -eq 1 -and $Height -gt 0) {
+    # Fill background of the entire box area first
+    $Buffer.FillRect($X, $Y, $Width, $Height, $fillChar, $fillStyle)
+    
+    # Top border - handle edge cases for small dimensions
+    if ($Height -gt 0) {
+        if ($Width > 2) {
+            # Normal case: Width >= 3
+            $middlePart = $borders.Horizontal * ($Width - 2)
+            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$middlePart$($borders.TopRight)" -Style $generalStyle
+        } elseif ($Width -eq 2) {
+            # Special case: Width = 2 (just corners)
+            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$($borders.TopRight)" -Style $generalStyle
+        } elseif ($Width -eq 1) {
+            # Special case: Width = 1 (just a vertical line segment)
             $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
         }
-
-        # Side borders
-        for ($i = 1; $i -lt ($Height - 1); $i++) {
-            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
-            if ($Width -gt 1) {
-                Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
-            }
-        }
-        
-        # Bottom border
-        if ($Height -gt 1) {
-            if ($Width -gt 1) {
-                Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$($borders.Horizontal * ($Width - 2))$($borders.BottomRight)" -Style $generalStyle
-            } elseif ($Width -eq 1) {
-                $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
-            }
-        }
-
-        # Draw title if specified
-        if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
-            $titleText = " $Title "
-            if ($titleText.Length -le ($Width - 2)) { 
-                $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
-                Write-TuiText -Buffer $Buffer -X $titleX -Y $Y -Text $titleText -Style $titleTextStyle
-            }
-        }
-        
-        $Buffer.IsDirty = $true
-        # Write-Log -Level Debug -Message "Write-TuiBox: Drew '$borderStyleName' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
     }
-    catch {
-        Write-Error "Failed to draw TUI box on buffer '$($Buffer.Name)' at ($X, $Y), $($Width)x$($Height): $($_.Exception.Message)"
-        throw
+
+    # Side borders
+    for ($i = 1; $i -lt ($Height - 1); $i++) {
+        Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
+        if ($Width -gt 1) {
+            Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
+        }
     }
+    
+    # Bottom border - handle edge cases for small dimensions
+    if ($Height -gt 1) {
+        if ($Width > 2) {
+            # Normal case: Width >= 3
+            $middlePart = $borders.Horizontal * ($Width - 2)
+            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$middlePart$($borders.BottomRight)" -Style $generalStyle
+        } elseif ($Width -eq 2) {
+            # Special case: Width = 2 (just corners)
+            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$($borders.BottomRight)" -Style $generalStyle
+        } elseif ($Width -eq 1) {
+            # Special case: Width = 1 (just a vertical line segment)
+            $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
+        }
+    }
+
+    # Draw title if specified
+    if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
+        $titleText = " $Title "
+        if ($titleText.Length -le ($Width - 2)) {
+            $titleAlignment = $Style.TitleAlignment ?? "TopBorder" # Default to current behavior
+            $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
+            
+            # Calculate title Y position based on alignment
+            $titleY = $Y # Default to top border
+            switch ($titleAlignment) {
+                "TopBorder" { $titleY = $Y }  # Default - on the top border
+                "Top" { $titleY = $Y + 1 }    # Just inside the top border
+                "Center" { $titleY = $Y + [Math]::Floor($Height / 2) }  # Vertically centered
+                "Bottom" { $titleY = $Y + $Height - 2 }  # Just inside the bottom border
+                default { $titleY = $Y }      # Fallback to top border
+            }
+            
+            # Ensure title Y is within buffer bounds
+            if ($titleY -ge 0 -and $titleY -lt $Buffer.Height) {
+                Write-TuiText -Buffer $Buffer -X $titleX -Y $titleY -Text $titleText -Style $titleTextStyle
+            }
+        }
+    }
+    
+    $Buffer.IsDirty = $true
+    # Write-Log -Level Debug -Message "Write-TuiBox: Drew '$borderStyleName' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
 }
 
 function Get-TuiBorderChars {
@@ -4179,39 +4244,33 @@ function Get-TuiBorderChars {
         [ValidateSet("Single", "Double", "Rounded", "Thick")][string]$Style = "Single"
     )
     
-    try {
-        $styles = @{
-            Single = @{ 
-                TopLeft = '┌'; TopRight = '┐'; BottomLeft = '└'; BottomRight = '┘'; 
-                Horizontal = '─'; Vertical = '│' 
-            }
-            Double = @{ 
-                TopLeft = '╔'; TopRight = '╗'; BottomLeft = '╚'; BottomRight = '╝'; 
-                Horizontal = '═'; Vertical = '║' 
-            }
-            Rounded = @{ 
-                TopLeft = '╭'; TopRight = '╮'; BottomLeft = '╰'; BottomRight = '╯'; 
-                Horizontal = '─'; Vertical = '│' 
-            }
-            Thick = @{ 
-                TopLeft = '┏'; TopRight = '┓'; BottomLeft = '┗'; BottomRight = '┛'; 
-                Horizontal = '━'; Vertical = '┃' 
-            }
+    $styles = @{
+        Single = @{ 
+            TopLeft = '┌'; TopRight = '┐'; BottomLeft = '└'; BottomRight = '┘'; 
+            Horizontal = '─'; Vertical = '│' 
         }
-        
-        $selectedStyle = $styles[$Style]
-        if ($null -eq $selectedStyle) {
-            Write-Warning "Get-TuiBorderChars: Border style '$Style' not found. Returning 'Single' style."
-            return $styles.Single
+        Double = @{ 
+            TopLeft = '╔'; TopRight = '╗'; BottomLeft = '╚'; BottomRight = '╝'; 
+            Horizontal = '═'; Vertical = '║' 
         }
-        
-        Write-Verbose "Get-TuiBorderChars: Retrieved TUI border characters for style: $Style."
-        return $selectedStyle
+        Rounded = @{ 
+            TopLeft = '╭'; TopRight = '╮'; BottomLeft = '╰'; BottomRight = '╯'; 
+            Horizontal = '─'; Vertical = '│' 
+        }
+        Thick = @{ 
+            TopLeft = '┏'; TopRight = '┓'; BottomLeft = '┗'; BottomRight = '┛'; 
+            Horizontal = '━'; Vertical = '┃' 
+        }
     }
-    catch {
-        Write-Error "Failed to get TUI border characters for style '$Style': $($_.Exception.Message)"
-        throw
+    
+    $selectedStyle = $styles[$Style]
+    if ($null -eq $selectedStyle) {
+        Write-Warning "Get-TuiBorderChars: Border style '$Style' not found. Returning 'Single' style."
+        return $styles.Single
     }
+    
+    Write-Verbose "Get-TuiBorderChars: Retrieved TUI border characters for style: $Style."
+    return $selectedStyle
 }
 
 #endregion
@@ -4354,31 +4413,9 @@ function Get-ThemeColor {
     
     $themeManager = $global:TuiState.Services.ThemeManager
     if ($themeManager) {
+        # ThemeManager.GetColor already guarantees hex format
         $color = $themeManager.GetColor($ColorName)
         if ($color) {
-            # Ensure we return hex format
-            if ($color -is [ConsoleColor]) {
-                # Convert ConsoleColor to hex
-                $hexMap = @{
-                    [ConsoleColor]::Black = "#000000"
-                    [ConsoleColor]::DarkBlue = "#000080"
-                    [ConsoleColor]::DarkGreen = "#008000"
-                    [ConsoleColor]::DarkCyan = "#008080"
-                    [ConsoleColor]::DarkRed = "#800000"
-                    [ConsoleColor]::DarkMagenta = "#800080"
-                    [ConsoleColor]::DarkYellow = "#808000"
-                    [ConsoleColor]::Gray = "#C0C0C0"
-                    [ConsoleColor]::DarkGray = "#808080"
-                    [ConsoleColor]::Blue = "#0000FF"
-                    [ConsoleColor]::Green = "#00FF00"
-                    [ConsoleColor]::Cyan = "#00FFFF"
-                    [ConsoleColor]::Red = "#FF0000"
-                    [ConsoleColor]::Magenta = "#FF00FF"
-                    [ConsoleColor]::Yellow = "#FFFF00"
-                    [ConsoleColor]::White = "#FFFFFF"
-                }
-                return $hexMap[$color] ?? $DefaultColor
-            }
             return $color
         }
     }
@@ -4406,11 +4443,14 @@ function Write-Log {
     
     $logger = $global:TuiState.Services.Logger
     if ($logger) {
-        # Logger.Log method signature is: Log([string]$message, [string]$level = "Info")
-        $logger.Log($Message, $Level)
+        # Combine message and data into a single log entry for better correlation
+        $finalMessage = $Message
         if ($Data) {
-            $logger.Log("Additional data: $($Data | ConvertTo-Json -Compress)", 'Debug')
+            $dataJson = $Data | ConvertTo-Json -Compress -Depth 5
+            $finalMessage = "$Message | Data: $dataJson"
         }
+        # Logger.Log method signature is: Log([string]$message, [string]$level = "Info")
+        $logger.Log($finalMessage, $Level)
     }
     else {
         # Fallback to console if logger not available
@@ -4492,120 +4532,13 @@ function Publish-Event {
 
 #endregion
 
-#region Initialize Functions
+# Initialize functions removed - Start.ps1 now uses direct service instantiation
 
-function Initialize-Logger {
-    [CmdletBinding()]
-    param()
-    
-    $logger = [Logger]::new()
-    Write-Verbose "Logger initialized at: $($logger.LogPath)"
-    return $logger
-}
-
-function Initialize-EventManager {
-    [CmdletBinding()]
-    param()
-    
-    $eventManager = [EventManager]::new()
-    Write-Verbose "EventManager initialized"
-    return $eventManager
-}
-
-function Initialize-ThemeManager {
-    [CmdletBinding()]
-    param()
-    
-    $themeManager = [ThemeManager]::new()
-    Write-Verbose "ThemeManager initialized with theme: $($themeManager.ThemeName)"
-    return $themeManager
-}
-
-function Initialize-ActionService {
-    [CmdletBinding()]
-    param(
-        [EventManager]$EventManager = $null
-    )
-    
-    $actionService = if ($EventManager) {
-        [ActionService]::new($EventManager)
-    } else {
-        [ActionService]::new()
-    }
-    Write-Verbose "ActionService initialized"
-    return $actionService
-}
-
-function Initialize-DataManager {
-    [CmdletBinding()]
-    param(
-        [string]$DataPath = (Join-Path $env:APPDATA "AxiomPhoenix\data.json"),
-        [EventManager]$EventManager = $null
-    )
-    
-    $dataManager = if ($EventManager) {
-        [DataManager]::new($DataPath, $EventManager)
-    } else {
-        [DataManager]::new($DataPath)
-    }
-    Write-Verbose "DataManager initialized with path: $($dataManager.DataPath)"
-    return $dataManager
-}
-
-function Initialize-ServiceContainer {
-    [CmdletBinding()]
-    param()
-    
-    $container = [ServiceContainer]::new()
-    Write-Verbose "ServiceContainer initialized"
-    return $container
-}
-
-function Initialize-NavigationService {
-    [CmdletBinding()]
-    param(
-        [EventManager]$EventManager = $null
-    )
-    
-    $navService = if ($EventManager) {
-        [NavigationService]::new($EventManager)
-    } else {
-        [NavigationService]::new()
-    }
-    Write-Verbose "NavigationService initialized"
-    return $navService
-}
-
-function Initialize-KeybindingService {
-    [CmdletBinding()]
-    param(
-        [ActionService]$ActionService = $null
-    )
-    
-    $kbService = if ($ActionService) {
-        [KeybindingService]::new($ActionService)
-    } else {
-        [KeybindingService]::new()
-    }
-    Write-Verbose "KeybindingService initialized"
-    return $kbService
-}
-
-function Initialize-TuiFrameworkService {
-    [CmdletBinding()]
-    param()
-    
-    $framework = [TuiFrameworkService]::new()
-    Write-Verbose "TuiFrameworkService initialized"
-    return $framework
-}
-
-#endregion
 
 
 ####\AllModels.ps1
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Models (No UI Dependencies)
+# Axiom-Phoenix v4.0 - All Models (No UI Dependencies) - UPDATED
 # Data models, enums, and validation classes
 # ==============================================================================
 
@@ -4788,6 +4721,56 @@ class PmcTask : ValidationBase {
         return $clone
     }
     
+    # ToLegacyFormat: Converts task to hashtable for JSON serialization
+    [hashtable] ToLegacyFormat() {
+        return @{
+            Id = $this.Id
+            Title = $this.Title
+            Description = $this.Description
+            Status = $this.Status.ToString()
+            Priority = $this.Priority.ToString()
+            ProjectKey = $this.ProjectKey
+            Category = $this.Category
+            CreatedAt = $this.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            UpdatedAt = $this.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            DueDate = if ($this.DueDate) { $this.DueDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            Tags = $this.Tags
+            Progress = $this.Progress
+            Completed = $this.Completed
+        }
+    }
+    
+    # FromLegacyFormat: Creates task from hashtable (JSON deserialization)
+    static [PmcTask] FromLegacyFormat([hashtable]$data) {
+        $task = [PmcTask]::new()
+        
+        if ($data.ContainsKey('Id')) { $task.Id = $data.Id }
+        if ($data.ContainsKey('Title')) { $task.Title = $data.Title }
+        if ($data.ContainsKey('Description')) { $task.Description = $data.Description }
+        if ($data.ContainsKey('Status')) { 
+            $task.Status = [System.Enum]::Parse([TaskStatus], $data.Status, $true)
+        }
+        if ($data.ContainsKey('Priority')) { 
+            $task.Priority = [System.Enum]::Parse([TaskPriority], $data.Priority, $true)
+        }
+        if ($data.ContainsKey('ProjectKey')) { $task.ProjectKey = $data.ProjectKey }
+        if ($data.ContainsKey('Category')) { $task.Category = $data.Category }
+        if ($data.ContainsKey('CreatedAt')) { 
+            $task.CreatedAt = [DateTime]::Parse($data.CreatedAt)
+        }
+        if ($data.ContainsKey('UpdatedAt')) { 
+            $task.UpdatedAt = [DateTime]::Parse($data.UpdatedAt)
+        }
+        if ($data.ContainsKey('DueDate') -and $data.DueDate) { 
+            $task.DueDate = [DateTime]::Parse($data.DueDate)
+        }
+        if ($data.ContainsKey('Tags')) { $task.Tags = @($data.Tags) }
+        if ($data.ContainsKey('Progress')) { $task.Progress = [int]$data.Progress }
+        if ($data.ContainsKey('Completed')) { $task.Completed = [bool]$data.Completed }
+        
+        return $task
+    }
+    
     # ToString: Returns a string representation of the task.
     [string] ToString() {
         $statusSymbol = switch ($this.Status) {
@@ -4886,6 +4869,42 @@ class PmcProject : ValidationBase {
     # GetMetadata: Gets a metadata value by key
     [object] GetMetadata([string]$key) {
         return $this.Metadata[$key]
+    }
+    
+    # ToLegacyFormat: Converts project to hashtable for JSON serialization
+    [hashtable] ToLegacyFormat() {
+        return @{
+            Key = $this.Key
+            Name = $this.Name
+            Description = $this.Description
+            CreatedAt = $this.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            UpdatedAt = $this.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            Owner = $this.Owner
+            Tags = $this.Tags
+            Metadata = $this.Metadata.Clone()
+            IsActive = $this.IsActive
+        }
+    }
+    
+    # FromLegacyFormat: Creates project from hashtable (JSON deserialization)
+    static [PmcProject] FromLegacyFormat([hashtable]$data) {
+        $project = [PmcProject]::new()
+        
+        if ($data.ContainsKey('Key')) { $project.Key = $data.Key }
+        if ($data.ContainsKey('Name')) { $project.Name = $data.Name }
+        if ($data.ContainsKey('Description')) { $project.Description = $data.Description }
+        if ($data.ContainsKey('CreatedAt')) { 
+            $project.CreatedAt = [DateTime]::Parse($data.CreatedAt)
+        }
+        if ($data.ContainsKey('UpdatedAt')) { 
+            $project.UpdatedAt = [DateTime]::Parse($data.UpdatedAt)
+        }
+        if ($data.ContainsKey('Owner')) { $project.Owner = $data.Owner }
+        if ($data.ContainsKey('Tags')) { $project.Tags = @($data.Tags) }
+        if ($data.ContainsKey('Metadata')) { $project.Metadata = $data.Metadata.Clone() }
+        if ($data.ContainsKey('IsActive')) { $project.IsActive = [bool]$data.IsActive }
+        
+        return $project
     }
 
     # ToString: Returns a string representation of the project
@@ -5108,6 +5127,7 @@ class NavigationItem {
 #endregion
 
 
+
 ####\AllRuntime.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
@@ -5291,11 +5311,12 @@ function Stop-TuiEngine {
         
         $global:TuiState.Running = $false
         
-        # Cleanup current screen
-        if ($global:TuiState.CurrentScreen) {
+        # Cleanup current screen via NavigationService
+        $navService = $global:TuiState.Services.NavigationService
+        if ($navService -and $navService.CurrentScreen) {
             try {
-                $global:TuiState.CurrentScreen.OnExit()
-                $global:TuiState.CurrentScreen.Cleanup()
+                $navService.CurrentScreen.OnExit()
+                $navService.CurrentScreen.Cleanup()
             }
             catch {
                 Write-Warning "Error cleaning up current screen: $_"
@@ -5345,8 +5366,9 @@ function Update-TuiEngineSize {
         $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
         
         # Resize current screen
-        if ($global:TuiState.CurrentScreen) {
-            $global:TuiState.CurrentScreen.Resize($newWidth, $newHeight)
+        $navService = $global:TuiState.Services.NavigationService
+        if ($navService -and $navService.CurrentScreen) {
+            $navService.CurrentScreen.Resize($newWidth, $newHeight)
         }
         
         # Force full redraw
@@ -5374,21 +5396,25 @@ function Invoke-TuiRender {
         
         Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
+        # Get the current screen from NavigationService
+        $navService = $global:TuiState.Services.NavigationService
+        $currentScreenToRender = if ($navService) { $navService.CurrentScreen } else { $null }
+        
         # Render current screen
-        if ($global:TuiState.CurrentScreen) {
+        if ($currentScreenToRender) {
             try {
                 # Render the screen which will update its internal buffer
-                $global:TuiState.CurrentScreen.Render()
+                $currentScreenToRender.Render()
                 
                 # Get the screen's buffer
-                $screenBuffer = $global:TuiState.CurrentScreen.GetBuffer()
+                $screenBuffer = $currentScreenToRender.GetBuffer()
                 
                 if ($screenBuffer) {
                     # Blend screen buffer into compositor
                     $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
                 }
                 else {
-                    Write-Warning "Screen buffer is null for $($global:TuiState.CurrentScreen.Name)"
+                    Write-Warning "Screen buffer is null for $($currentScreenToRender.Name)"
                 }
             }
             catch {
@@ -5449,10 +5475,24 @@ function Invoke-TuiRender {
         # Differential rendering - compare current compositor to previous
         Render-DifferentialBuffer
         
-        # Swap buffers for next frame
-        $temp = $global:TuiState.PreviousCompositorBuffer
-        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
-        $global:TuiState.CompositorBuffer = $temp
+        # Swap buffers for next frame - MUST happen AFTER rendering
+        # Create proper copies to avoid reference issues
+        $tempBuffer = [TuiBuffer]::new($global:TuiState.CompositorBuffer.Width, $global:TuiState.CompositorBuffer.Height, "TempBuffer")
+        
+        # Copy current compositor to temp
+        for ($y = 0; $y -lt $global:TuiState.CompositorBuffer.Height; $y++) {
+            for ($x = 0; $x -lt $global:TuiState.CompositorBuffer.Width; $x++) {
+                $cell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
+                $tempBuffer.SetCell($x, $y, [TuiCell]::new($cell))
+            }
+        }
+        
+        # Clear compositor for next frame
+        $bgColor = Get-ThemeColor("Background")
+        $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Update previous buffer with what was just rendered
+        $global:TuiState.PreviousCompositorBuffer = $tempBuffer
         
         $renderTimer.Stop()
         
@@ -5533,15 +5573,6 @@ function Process-TuiInput {
         if ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # Check for global command palette keybind (Ctrl+P) at the highest priority
-            if ($keyInfo.Key -eq [ConsoleKey]::P -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
-                if ($global:TuiState.CommandPalette) {
-                    $global:TuiState.CommandPalette.Show()
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
-
             # If there's an active overlay (like a dialog), give it priority
             if ($global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
@@ -5561,18 +5592,7 @@ function Process-TuiInput {
                 }
             }
 
-            # Handle Tab for focus navigation (globally managed by FocusManager)
-            if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
-                $focusManager = $global:TuiState.Services.FocusManager
-                if ($focusManager) {
-                    $reverse = ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) -ne 0
-                    $focusManager.MoveFocus($reverse)
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
-
-            # Give the currently focused component a chance to handle the input
+            # Give the currently focused component a chance to handle the input first
             $focusManager = $global:TuiState.Services.FocusManager
             if ($focusManager -and $focusManager.FocusedComponent) {
                 if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
@@ -5581,35 +5601,48 @@ function Process-TuiInput {
                 }
             }
 
-            # Check global hotkeys via KeybindingService
+            # Check global hotkeys via KeybindingService (including Ctrl+P and Tab)
             if ($global:TuiState.Services.KeybindingService) {
                 $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
                 if ($action) {
-                    # Execute action via ActionService
-                    if ($global:TuiState.Services.ActionService) {
-                        try {
-                            $global:TuiState.Services.ActionService.ExecuteAction($action)
+                    # Handle framework-level actions that need special processing
+                    if ($action -eq "app.commandPalette") {
+                        if ($global:TuiState.CommandPalette) {
+                            $global:TuiState.CommandPalette.Show()
                             $global:TuiState.IsDirty = $true
                             return
                         }
-                        catch {
-                            Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
+                    }
+                    elseif ($action -eq "navigation.nextComponent" -or $action -eq "navigation.previousComponent") {
+                        if ($focusManager) {
+                            $reverse = ($action -eq "navigation.previousComponent")
+                            $focusManager.MoveFocus($reverse)
+                            $global:TuiState.IsDirty = $true
+                            return
+                        }
+                    }
+                    else {
+                        # Execute other actions via ActionService
+                        if ($global:TuiState.Services.ActionService) {
+                            try {
+                                $global:TuiState.Services.ActionService.ExecuteAction($action)
+                                $global:TuiState.IsDirty = $true
+                                return
+                            }
+                            catch {
+                                Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
+                            }
                         }
                     }
                 }
             }
             
             # Finally, give the current screen a chance to handle the input
-            if ($global:TuiState.CurrentScreen -and $global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
+            $navService = $global:TuiState.Services.NavigationService
+            if ($navService -and $navService.CurrentScreen -and $navService.CurrentScreen.HandleInput($keyInfo)) {
                 $global:TuiState.IsDirty = $true
                 return
             }
-        }
-    }
-    catch {
-        Write-Error "Input processing error: $_"
-    }
-}
         }
     }
     catch {
@@ -5628,8 +5661,10 @@ function Show-TuiOverlay {
         [UIElement]$Overlay
     )
     
+    Write-Warning "Show-TuiOverlay is deprecated. Use DialogManager.ShowDialog() for dialogs or manage overlays directly."
+    
     # Use DialogManager if the overlay is a Dialog
-    if ($Overlay -is [Dialog]) {
+    if ($Overlay.GetType().Name -match "Dialog") {
         $dialogManager = $global:TuiState.Services.DialogManager
         if ($dialogManager) {
             $dialogManager.ShowDialog($Overlay)
@@ -5637,7 +5672,7 @@ function Show-TuiOverlay {
         }
     }
     
-    # For non-dialog overlays, handle manually
+    # For non-dialog overlays, handle manually (deprecated path)
     if (-not $global:TuiState.OverlayStack) {
         $global:TuiState.OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
     }
@@ -5660,6 +5695,8 @@ function Close-TopTuiOverlay {
     [CmdletBinding()]
     param()
     
+    Write-Warning "Close-TopTuiOverlay is deprecated. Use DialogManager.HideDialog() for dialogs or manage overlays directly."
+    
     if ($global:TuiState.OverlayStack.Count -eq 0) {
         # Write-Log -Level Warning -Message "Close-TopTuiOverlay: No overlays to close"
         return
@@ -5668,7 +5705,7 @@ function Close-TopTuiOverlay {
     $topOverlay = $global:TuiState.OverlayStack[-1]
     
     # Use DialogManager if it's a Dialog
-    if ($topOverlay -is [Dialog]) {
+    if ($topOverlay.GetType().Name -match "Dialog") {
         $dialogManager = $global:TuiState.Services.DialogManager
         if ($dialogManager) {
             $dialogManager.HideDialog($topOverlay)
@@ -5676,7 +5713,7 @@ function Close-TopTuiOverlay {
         }
     }
     
-    # Manual removal for non-dialog overlays
+    # Manual removal for non-dialog overlays (deprecated path)
     $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
     $topOverlay.Visible = $false
     $topOverlay.IsOverlay = $false
@@ -5690,85 +5727,7 @@ function Close-TopTuiOverlay {
 
 #region Error Handling
 
-function Invoke-PanicHandler {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [object]$Error
-    )
-    
-    try {
-        Write-Host "`n`n=== AXIOM-PHOENIX PANIC HANDLER ===" -ForegroundColor Red
-        Write-Host "A critical error has occurred!" -ForegroundColor Red
-        Write-Host ""
-        
-        # Error details
-        Write-Host "Error Message:" -ForegroundColor Yellow
-        Write-Host "  $($Error.Exception.Message)" -ForegroundColor White
-        Write-Host ""
-        
-        Write-Host "Error Type:" -ForegroundColor Yellow
-        Write-Host "  $($Error.Exception.GetType().FullName)" -ForegroundColor White
-        Write-Host ""
-        
-        Write-Host "Stack Trace:" -ForegroundColor Yellow
-        $Error.ScriptStackTrace -split "`n" | ForEach-Object {
-            Write-Host "  $_" -ForegroundColor Gray
-        }
-        Write-Host ""
-        
-        # System info
-        Write-Host "System Information:" -ForegroundColor Yellow
-        Write-Host "  PowerShell: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
-        Write-Host "  OS: $([System.Environment]::OSVersion.VersionString)" -ForegroundColor Gray
-        Write-Host "  Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-        Write-Host ""
-        
-        # Crash report location
-        $crashReportPath = Join-Path $env:TEMP "axiom-phoenix-crash-$(Get-Date -Format 'yyyyMMdd-HHmmss').txt"
-        
-        $crashReport = @"
-AXIOM-PHOENIX CRASH REPORT
-Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-
-ERROR DETAILS:
-$($Error | Out-String)
-
-SYSTEM INFORMATION:
-PowerShell Version: $($PSVersionTable.PSVersion)
-OS Version: $([System.Environment]::OSVersion.VersionString)
-CLR Version: $($PSVersionTable.CLRVersion)
-Host: $($Host.Name)
-
-GLOBAL STATE:
-$($global:TuiState | ConvertTo-Json -Depth 3)
-"@
-        
-        $crashReport | Out-File -FilePath $crashReportPath -Force
-        
-        Write-Host "Crash report saved to:" -ForegroundColor Yellow
-        Write-Host "  $crashReportPath" -ForegroundColor Cyan
-        Write-Host ""
-        
-        Write-Host "Press any key to exit..." -ForegroundColor White
-        [Console]::ReadKey($true) | Out-Null
-    }
-    catch {
-        Write-Host "FATAL: Panic handler failed!" -ForegroundColor Magenta
-        Write-Host $_.Exception.Message -ForegroundColor Red
-    }
-    finally {
-        # Try to restore console
-        try {
-            [Console]::CursorVisible = $true
-            [Console]::Clear()
-        }
-        catch {}
-        
-        # Exit
-        exit 1
-    }
-}
+# Error handling functions have been consolidated - see Panic Handler region below
 
 #endregion
 
@@ -5939,6 +5898,7 @@ function Start-AxiomPhoenix {
 }
 
 #endregion
+
 
 
 ####\AllScreens.ps1
@@ -6318,31 +6278,40 @@ class TaskListScreen : Screen {
         $panel = $this._taskListPanel
         if (-not $panel) { return }
         
-        # Clear children
+        # CRITICAL: Clear the panel's CHILDREN, not its buffer directly.
         $panel.Children.Clear()
         
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
-        $contentHeight = $panel.ContentHeight
-        
         if ($this._tasks.Count -eq 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 2) -Y ($contentY + 2) -Text "No tasks found." -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
-            $panel._contentHeight = ($contentY + 2) + 1 # At least enough height for this message
-            $panel.UpdateMaxScroll() # Ensure scroll is updated even for empty list
+            # Add a label to show there are no tasks
+            $noTasksLabel = [LabelComponent]::new("NoTasksLabel")
+            $noTasksLabel.X = 2
+            $noTasksLabel.Y = 2
+            $noTasksLabel.Text = "No tasks found."
+            $noTasksLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $panel.AddChild($noTasksLabel)
+            $panel.RequestRedraw()
             return
         }
         
-        # Determine how many lines to draw based on panel's virtual content height
-        $maxVirtualContentHeight = 0 # Track the max y position if all tasks were drawn
-        
         for ($i = 0; $i -lt $this._tasks.Count; $i++) {
             $task = $this._tasks[$i]
-            $y = $contentY + $i # The 'virtual' Y position if all tasks were shown without scrolling
             
-            # Highlight selected task
-            $fgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
-            $bgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+            # Create a Panel for each task item (to support background color)
+            $taskPanel = [Panel]::new("TaskItem_$($task.Id)")
+            $taskPanel.X = 0
+            $taskPanel.Y = $i # Y position is its index in the list
+            $taskPanel.Width = $panel.ContentWidth
+            $taskPanel.Height = 1
+            $taskPanel.HasBorder = $false
+            
+            # Set background based on selection
+            $is_selected = ($i -eq $this._selectedIndex)
+            $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+            
+            # Create a Label component for the task text
+            $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
+            $taskLabel.X = 1 # Indent slightly
+            $taskLabel.Y = 0 # Relative to the task panel
             
             # Status indicator
             $statusChar = switch ($task.Status) {
@@ -6370,21 +6339,20 @@ class TaskListScreen : Screen {
             }
             
             $taskLine = "$statusChar $priorityChar $title"
+            $taskLabel.Text = $taskLine
             
-            # Draw on panel's buffer with proper style
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $y -Text $taskLine -Style @{ FG = $fgColor; BG = $bgColor }
+            # Set text color based on selection
+            $taskLabel.ForegroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
             
-            # Update the max content height based on the maximum Y coordinate that would be drawn
-            if (($y + 1) -gt $maxVirtualContentHeight) {
-                $maxVirtualContentHeight = $y + 1
-            }
+            # Add the label to the task panel
+            $taskPanel.AddChild($taskLabel)
+            
+            # Add the task panel as a CHILD of the scrollable panel
+            $panel.AddChild($taskPanel)
         }
         
-        # Crucial: Inform the ScrollablePanel about the total virtual content height
-        $panel._contentHeight = $maxVirtualContentHeight
-        
-        # Update scrollbar (this method should be called by ScrollablePanel's _RenderContent, not here)
-        # $panel.UpdateMaxScroll() # This call is now redundant here if _RenderContent handles it.
+        # The ScrollablePanel's own Render method will now correctly handle everything else.
+        $panel.RequestRedraw()
     }
 
     hidden [void] _UpdateDetailPanel() {
@@ -6395,30 +6363,68 @@ class TaskListScreen : Screen {
         $panel.Children.Clear()
         
         $task = $this._selectedTask
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
+        $y = 1 # Start position relative to panel
         
-        # Task details
-        $y = $contentY
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Title: $($task.Title)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Status: $($task.Status)" -Style @{ FG = Get-ThemeColor("Info"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Priority: $($task.Priority)" -Style @{ FG = Get-ThemeColor("Warning"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Progress: $($task.Progress)%" -Style @{ FG = Get-ThemeColor("Success"); BG = Get-ThemeColor("Background") }
+        # Title label
+        $titleLabel = [LabelComponent]::new("DetailTitle")
+        $titleLabel.X = 1
+        $titleLabel.Y = $y++
+        $titleLabel.Text = "Title: $($task.Title)"
+        $titleLabel.ForegroundColor = Get-ThemeColor("Foreground")
+        $panel.AddChild($titleLabel)
         
-        $y++
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Description:" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+        # Status label
+        $statusLabel = [LabelComponent]::new("DetailStatus")
+        $statusLabel.X = 1
+        $statusLabel.Y = $y++
+        $statusLabel.Text = "Status: $($task.Status)"
+        $statusLabel.ForegroundColor = Get-ThemeColor("Info")
+        $panel.AddChild($statusLabel)
+        
+        # Priority label
+        $priorityLabel = [LabelComponent]::new("DetailPriority")
+        $priorityLabel.X = 1
+        $priorityLabel.Y = $y++
+        $priorityLabel.Text = "Priority: $($task.Priority)"
+        $priorityLabel.ForegroundColor = Get-ThemeColor("Warning")
+        $panel.AddChild($priorityLabel)
+        
+        # Progress label
+        $progressLabel = [LabelComponent]::new("DetailProgress")
+        $progressLabel.X = 1
+        $progressLabel.Y = $y++
+        $progressLabel.Text = "Progress: $($task.Progress)%"
+        $progressLabel.ForegroundColor = Get-ThemeColor("Success")
+        $panel.AddChild($progressLabel)
+        
+        $y++ # Empty line
+        
+        # Description header
+        $descHeaderLabel = [LabelComponent]::new("DetailDescHeader")
+        $descHeaderLabel.X = 1
+        $descHeaderLabel.Y = $y++
+        $descHeaderLabel.Text = "Description:"
+        $descHeaderLabel.ForegroundColor = Get-ThemeColor("Subtle")
+        $panel.AddChild($descHeaderLabel)
         
         if (-not [string]::IsNullOrEmpty($task.Description)) {
             # Word wrap description
             $words = $task.Description -split '\s+'
             $line = ""
             $maxLineLength = $panel.ContentWidth - 2
+            $lineIndex = 0
             
             foreach ($word in $words) {
                 if (($line + " " + $word).Length -gt $maxLineLength) {
                     if ($line) {
-                        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text $line -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+                        # Create label for this line
+                        $descLineLabel = [LabelComponent]::new("DetailDescLine$lineIndex")
+                        $descLineLabel.X = 1
+                        $descLineLabel.Y = $y++
+                        $descLineLabel.Text = $line
+                        $descLineLabel.ForegroundColor = Get-ThemeColor("Foreground")
+                        $panel.AddChild($descLineLabel)
+                        $lineIndex++
                     }
                     $line = $word
                 } else {
@@ -6427,10 +6433,21 @@ class TaskListScreen : Screen {
             }
             
             if ($line) {
-                Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text $line -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+                # Create label for last line
+                $descLineLabel = [LabelComponent]::new("DetailDescLine$lineIndex")
+                $descLineLabel.X = 1
+                $descLineLabel.Y = $y++
+                $descLineLabel.Text = $line
+                $descLineLabel.ForegroundColor = Get-ThemeColor("Foreground")
+                $panel.AddChild($descLineLabel)
             }
         } else {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "(No description)" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+            $noDescLabel = [LabelComponent]::new("DetailNoDesc")
+            $noDescLabel.X = 1
+            $noDescLabel.Y = $y++
+            $noDescLabel.Text = "(No description)"
+            $noDescLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $panel.AddChild($noDescLabel)
         }
         
         $panel.RequestRedraw()
@@ -6440,20 +6457,35 @@ class TaskListScreen : Screen {
         $panel = $this._statusBar
         if (-not $panel) { return }
         
-        $buffer = $panel.GetBuffer()
+        # Clear children
+        $panel.Children.Clear()
         
+        # Set panel background color
+        $panel.BackgroundColor = Get-ThemeColor("status.bar.bg")
+        
+        # Status text label
         $statusText = "Tasks: $($this._tasks.Count) | Selected: $($this._selectedIndex + 1)"
         if ($this._filterText) {
             $statusText += " | Filter: '$($this._filterText)'"
         }
         
-        Write-TuiText -Buffer $buffer -X 0 -Y 0 -Text $statusText -Style @{ FG = Get-ThemeColor("status.bar.fg"); BG = Get-ThemeColor("status.bar.bg") }
+        $statusLabel = [LabelComponent]::new("StatusText")
+        $statusLabel.X = 0
+        $statusLabel.Y = 0
+        $statusLabel.Text = $statusText
+        $statusLabel.ForegroundColor = Get-ThemeColor("status.bar.fg")
+        $panel.AddChild($statusLabel)
         
-        # Keyboard hints
+        # Keyboard hints label
         $hints = "↑↓: Navigate | Enter: Edit | D: Delete | N: New"
         $hintsX = $this.Width - $hints.Length - 3
         if ($hintsX -gt $statusText.Length + 2) {
-            Write-TuiText -Buffer $buffer -X $hintsX -Y 0 -Text $hints -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("status.bar.bg") }
+            $hintsLabel = [LabelComponent]::new("StatusHints")
+            $hintsLabel.X = $hintsX
+            $hintsLabel.Y = 0
+            $hintsLabel.Text = $hints
+            $hintsLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $panel.AddChild($hintsLabel)
         }
         
         $panel.RequestRedraw()
@@ -6544,6 +6576,7 @@ class TaskListScreen : Screen {
 }
 
 #endregion
+
 
 
 ####\AllServices.ps1
@@ -6701,7 +6734,473 @@ class ActionService {
             Hotkey = "F1"
         })
         
+        $this.RegisterAction("app.commandPalette", {
+            Write-Verbose "Executing app.commandPalette action"
+            if ($global:TuiState.CommandPalette) {
+                $global:TuiState.CommandPalette.Show()
+                $global:TuiState.IsDirty = $true
+            }
+        }, @{
+            Category = "Application"
+            Description = "Show command palette"
+            Hotkey = "Ctrl+P"
+        })
+        
         Write-Verbose "ActionService: Registered default actions"
+    }
+}
+
+# ===== CLASS: DataManager =====
+# Module: data-manager (from axiom)
+# Dependencies: EventManager (optional), PmcTask, PmcProject
+# Purpose: High-performance data management with transactions, backups, and robust serialization
+class DataManager : System.IDisposable {
+    # Private fields for high-performance indexes
+    hidden [System.Collections.Generic.Dictionary[string, PmcTask]]$_taskIndex
+    hidden [System.Collections.Generic.Dictionary[string, PmcProject]]$_projectIndex
+    hidden [string]$_dataFilePath
+    hidden [string]$_backupPath
+    hidden [datetime]$_lastSaveTime
+    hidden [bool]$_dataModified = $false
+    hidden [int]$_updateTransactionCount = 0
+    
+    # Public properties
+    [hashtable]$Metadata = @{}
+    [bool]$AutoSave = $true
+    [int]$BackupCount = 5
+    [EventManager]$EventManager = $null
+    
+    DataManager([string]$dataPath) {
+        $this._dataFilePath = $dataPath
+        $this._Initialize()
+    }
+    
+    DataManager([string]$dataPath, [EventManager]$eventManager) {
+        $this._dataFilePath = $dataPath
+        $this.EventManager = $eventManager
+        $this._Initialize()
+    }
+    
+    hidden [void] _Initialize() {
+        # Initialize indexes
+        $this._taskIndex = [System.Collections.Generic.Dictionary[string, PmcTask]]::new()
+        $this._projectIndex = [System.Collections.Generic.Dictionary[string, PmcProject]]::new()
+        
+        # Set up directories
+        $baseDir = Split-Path -Path $this._dataFilePath -Parent
+        $this._backupPath = Join-Path $baseDir "backups"
+        
+        # Ensure directories exist
+        if (-not (Test-Path $baseDir)) {
+            New-Item -ItemType Directory -Path $baseDir -Force | Out-Null
+        }
+        if (-not (Test-Path $this._backupPath)) {
+            New-Item -ItemType Directory -Path $this._backupPath -Force | Out-Null
+        }
+        
+        Write-Verbose "DataManager: Initialized with path '$($this._dataFilePath)'"
+    }
+    
+    [void] LoadData() {
+        try {
+            if (-not (Test-Path $this._dataFilePath)) {
+                Write-Verbose "DataManager: No existing data file found at '$($this._dataFilePath)'"
+                return
+            }
+            
+            $jsonContent = Get-Content -Path $this._dataFilePath -Raw -Encoding UTF8
+            if ([string]::IsNullOrWhiteSpace($jsonContent)) {
+                Write-Verbose "DataManager: Data file is empty"
+                return
+            }
+            
+            $data = $jsonContent | ConvertFrom-Json -AsHashtable
+            
+            # Clear existing data
+            $this._taskIndex.Clear()
+            $this._projectIndex.Clear()
+            
+            # Load tasks using FromLegacyFormat
+            if ($data.ContainsKey('Tasks')) {
+                foreach ($taskData in $data.Tasks) {
+                    try {
+                        $task = [PmcTask]::FromLegacyFormat($taskData)
+                        $this._taskIndex[$task.Id] = $task
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load task: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # Load projects using FromLegacyFormat
+            if ($data.ContainsKey('Projects')) {
+                foreach ($projectData in $data.Projects) {
+                    try {
+                        $project = [PmcProject]::FromLegacyFormat($projectData)
+                        $this._projectIndex[$project.Key] = $project
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load project: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # Load metadata
+            if ($data.ContainsKey('Metadata')) {
+                $this.Metadata = $data.Metadata.Clone()
+            }
+            
+            $this._lastSaveTime = [datetime]::Now
+            $this._dataModified = $false
+            
+            Write-Verbose "DataManager: Loaded $($this._taskIndex.Count) tasks and $($this._projectIndex.Count) projects"
+            
+            # Publish event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Data.Loaded", @{
+                    TaskCount = $this._taskIndex.Count
+                    ProjectCount = $this._projectIndex.Count
+                    Source = $this._dataFilePath
+                })
+            }
+        }
+        catch {
+            Write-Error "DataManager: Failed to load data from '$($this._dataFilePath)': $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    [void] SaveData() {
+        if ($this._updateTransactionCount -gt 0) {
+            Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this._updateTransactionCount))"
+            return
+        }
+        
+        try {
+            $this.CreateBackup()
+            
+            $saveData = @{
+                Tasks = @()
+                Projects = @()
+                Metadata = $this.Metadata.Clone()
+                SavedAt = [datetime]::Now
+                Version = "4.0"
+            }
+            
+            # Convert tasks to legacy format for serialization
+            foreach ($task in $this._taskIndex.Values) {
+                $saveData.Tasks += $task.ToLegacyFormat()
+            }
+            
+            # Convert projects to legacy format for serialization
+            foreach ($project in $this._projectIndex.Values) {
+                $saveData.Projects += $project.ToLegacyFormat()
+            }
+            
+            $saveData | ConvertTo-Json -Depth 10 | Set-Content -Path $this._dataFilePath -Encoding UTF8 -Force
+            $this._lastSaveTime = [datetime]::Now
+            $this._dataModified = $false
+            
+            Write-Verbose "DataManager: Data saved to '$($this._dataFilePath)'"
+            
+            # Publish event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Data.Saved", @{
+                    TaskCount = $saveData.Tasks.Count
+                    ProjectCount = $saveData.Projects.Count
+                    Destination = $this._dataFilePath
+                })
+            }
+        }
+        catch {
+            Write-Error "DataManager: Failed to save data: $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    hidden [void] CreateBackup() {
+        try {
+            if (Test-Path $this._dataFilePath) {
+                $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
+                $backupFileName = "data-backup-$timestamp.json"
+                $backupFilePath = Join-Path $this._backupPath $backupFileName
+                
+                Copy-Item -Path $this._dataFilePath -Destination $backupFilePath -Force
+                
+                # Manage backup rotation
+                if ($this.BackupCount -gt 0) {
+                    $backups = Get-ChildItem -Path $this._backupPath -Filter "data-backup-*.json" | 
+                               Sort-Object LastWriteTime -Descending
+                    
+                    if ($backups.Count -gt $this.BackupCount) {
+                        $backupsToDelete = $backups | Select-Object -Skip $this.BackupCount
+                        foreach ($backup in $backupsToDelete) {
+                            Remove-Item -Path $backup.FullName -Force
+                            Write-Verbose "DataManager: Removed old backup '$($backup.Name)'"
+                        }
+                    }
+                }
+                
+                Write-Verbose "DataManager: Created backup '$backupFileName'"
+            }
+        }
+        catch {
+            Write-Warning "DataManager: Failed to create backup: $($_.Exception.Message)"
+        }
+    }
+    
+    # Transactional update methods
+    [void] BeginUpdate() {
+        $this._updateTransactionCount++
+        Write-Verbose "DataManager: Began update transaction. Depth: $($this._updateTransactionCount)"
+    }
+    
+    [void] EndUpdate() {
+        $this.EndUpdate($false)
+    }
+    
+    [void] EndUpdate([bool]$forceSave) {
+        if ($this._updateTransactionCount -gt 0) {
+            $this._updateTransactionCount--
+        }
+        
+        Write-Verbose "DataManager: Ended update transaction. Depth: $($this._updateTransactionCount)"
+        
+        if ($this._updateTransactionCount -eq 0 -and ($this._dataModified -or $forceSave)) {
+            if ($this.AutoSave -or $forceSave) {
+                $this.SaveData()
+            }
+        }
+    }
+    
+    # Task management methods
+    [PmcTask[]] GetTasks() {
+        return @($this._taskIndex.Values)
+    }
+    
+    [PmcTask] GetTask([string]$taskId) {
+        if ($this._taskIndex.ContainsKey($taskId)) {
+            return $this._taskIndex[$taskId]
+        }
+        return $null
+    }
+    
+    [PmcTask[]] GetTasksByProject([string]$projectKey) {
+        return @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+    }
+    
+    [PmcTask] AddTask([PmcTask]$task) {
+        if ($null -eq $task) {
+            throw [System.ArgumentNullException]::new("task", "Task cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($task.Id)) {
+            $task.Id = [guid]::NewGuid().ToString()
+        }
+        
+        if ($this._taskIndex.ContainsKey($task.Id)) {
+            throw [System.InvalidOperationException]::new("Task with ID '$($task.Id)' already exists")
+        }
+        
+        $this._taskIndex[$task.Id] = $task
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Created"; Task = $task })
+        }
+        
+        Write-Verbose "DataManager: Added task '$($task.Title)' with ID '$($task.Id)'"
+        return $task
+    }
+    
+    [PmcTask] UpdateTask([PmcTask]$task) {
+        if ($null -eq $task) {
+            throw [System.ArgumentNullException]::new("task", "Task cannot be null")
+        }
+        
+        if (-not $this._taskIndex.ContainsKey($task.Id)) {
+            throw [System.InvalidOperationException]::new("Task with ID '$($task.Id)' not found")
+        }
+        
+        $task.UpdatedAt = [datetime]::Now
+        $this._taskIndex[$task.Id] = $task
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Updated"; Task = $task })
+        }
+        
+        Write-Verbose "DataManager: Updated task '$($task.Title)' with ID '$($task.Id)'"
+        return $task
+    }
+    
+    [bool] DeleteTask([string]$taskId) {
+        if (-not $this._taskIndex.ContainsKey($taskId)) {
+            Write-Verbose "DataManager: Task '$taskId' not found for deletion"
+            return $false
+        }
+        
+        $task = $this._taskIndex[$taskId]
+        $this._taskIndex.Remove($taskId) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Deleted"; TaskId = $taskId })
+        }
+        
+        Write-Verbose "DataManager: Deleted task with ID '$taskId'"
+        return $true
+    }
+    
+    # Project management methods
+    [PmcProject[]] GetProjects() {
+        return @($this._projectIndex.Values)
+    }
+    
+    [PmcProject] GetProject([string]$projectKey) {
+        if ($this._projectIndex.ContainsKey($projectKey)) {
+            return $this._projectIndex[$projectKey]
+        }
+        return $null
+    }
+    
+    [PmcProject] AddProject([PmcProject]$project) {
+        if ($null -eq $project) {
+            throw [System.ArgumentNullException]::new("project", "Project cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($project.Key)) {
+            throw [System.ArgumentException]::new("Project Key is required")
+        }
+        
+        if ($this._projectIndex.ContainsKey($project.Key)) {
+            throw [System.InvalidOperationException]::new("Project with Key '$($project.Key)' already exists")
+        }
+        
+        $this._projectIndex[$project.Key] = $project
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ Action = "Created"; Project = $project })
+        }
+        
+        Write-Verbose "DataManager: Added project '$($project.Name)' with Key '$($project.Key)'"
+        return $project
+    }
+    
+    [PmcProject] UpdateProject([PmcProject]$project) {
+        if ($null -eq $project) {
+            throw [System.ArgumentNullException]::new("project", "Project cannot be null")
+        }
+        
+        if (-not $this._projectIndex.ContainsKey($project.Key)) {
+            throw [System.InvalidOperationException]::new("Project with Key '$($project.Key)' not found")
+        }
+        
+        $project.UpdatedAt = [datetime]::Now
+        $this._projectIndex[$project.Key] = $project
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ Action = "Updated"; Project = $project })
+        }
+        
+        Write-Verbose "DataManager: Updated project '$($project.Name)' with Key '$($project.Key)'"
+        return $project
+    }
+    
+    [bool] DeleteProject([string]$projectKey) {
+        if (-not $this._projectIndex.ContainsKey($projectKey)) {
+            Write-Verbose "DataManager: Project '$projectKey' not found for deletion"
+            return $false
+        }
+        
+        # Delete all tasks associated with this project
+        $tasksToDelete = @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        foreach ($task in $tasksToDelete) {
+            $this.DeleteTask($task.Id) | Out-Null
+        }
+        
+        $project = $this._projectIndex[$projectKey]
+        $this._projectIndex.Remove($projectKey) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ 
+                Action = "Deleted"
+                ProjectKey = $projectKey
+                DeletedTaskCount = $tasksToDelete.Count
+            })
+        }
+        
+        Write-Verbose "DataManager: Deleted project '$projectKey' and $($tasksToDelete.Count) associated tasks"
+        return $true
+    }
+    
+    # Utility methods
+    [datetime] GetLastSaveTime() {
+        return $this._lastSaveTime
+    }
+    
+    [void] ForceSave() {
+        $originalTransactionCount = $this._updateTransactionCount
+        $this._updateTransactionCount = 0
+        try {
+            $this.SaveData()
+        }
+        finally {
+            $this._updateTransactionCount = $originalTransactionCount
+        }
+    }
+    
+    # IDisposable implementation
+    [void] Dispose() {
+        Write-Verbose "DataManager: Disposing - checking for unsaved data"
+        
+        if ($this._dataModified) {
+            $originalTransactionCount = $this._updateTransactionCount
+            $this._updateTransactionCount = 0
+            try {
+                $this.SaveData()
+                Write-Verbose "DataManager: Performed final save during dispose"
+            }
+            catch {
+                Write-Warning "DataManager: Failed to save data during dispose: $($_.Exception.Message)"
+            }
+            finally {
+                $this._updateTransactionCount = $originalTransactionCount
+            }
+        }
+    }
+    
+    # Cleanup method (alias for Dispose)
+    [void] Cleanup() {
+        $this.Dispose()
     }
 }
 
@@ -6852,398 +7351,6 @@ class KeybindingService {
     }
 }
 
-# ===== CLASS: DataManager =====
-# Module: data-manager (from axiom)
-# Dependencies: EventManager (optional), PmcTask, PmcProject
-# Purpose: High-performance data management with transactions
-class DataManager {
-    [hashtable]$Tasks = @{}
-    [hashtable]$Projects = @{}
-    [hashtable]$TasksByProject = @{}
-    [string]$DataPath
-    [EventManager]$EventManager
-    [bool]$IsDirty = $false
-    [bool]$AutoSave = $true
-    [int]$BatchUpdateCount = 0
-    [datetime]$LastSave = [datetime]::Now
-    [hashtable]$Metadata = @{}
-    [int]$MaxBackups = 5
-    
-    DataManager() {
-        $this.DataPath = Join-Path $env:APPDATA "AxiomPhoenix\data.json"
-        $this._Initialize()
-    }
-    
-    DataManager([string]$dataPath) {
-        $this.DataPath = $dataPath
-        $this._Initialize()
-    }
-    
-    DataManager([string]$dataPath, [EventManager]$eventManager) {
-        $this.DataPath = $dataPath
-        $this.EventManager = $eventManager
-        $this._Initialize()
-    }
-    
-    hidden [void] _Initialize() {
-        $dataDir = Split-Path -Parent $this.DataPath
-        if (-not (Test-Path $dataDir)) {
-            New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
-        }
-        
-        Write-Verbose "DataManager: Initialized with data path: $($this.DataPath)"
-    }
-    
-    [void] LoadData() {
-        try {
-            if (Test-Path $this.DataPath) {
-                $jsonContent = Get-Content -Path $this.DataPath -Raw
-                $data = $jsonContent | ConvertFrom-Json -AsHashtable
-                
-                # Load tasks
-                $this.Tasks.Clear()
-                $this.TasksByProject.Clear()
-                
-                if ($data.ContainsKey('Tasks')) {
-                    foreach ($taskData in $data.Tasks) {
-                        $task = [PmcTask]::new()
-                        # Map properties
-                        $taskData.GetEnumerator() | ForEach-Object {
-                            if ($task.PSObject.Properties.Match($_.Name)) {
-                                $task.($_.Name) = $_.Value
-                            }
-                        }
-                        
-                        $this.Tasks[$task.Id] = $task
-                        
-                        # Update project index
-                        if (-not $this.TasksByProject.ContainsKey($task.ProjectKey)) {
-                            $this.TasksByProject[$task.ProjectKey] = @()
-                        }
-                        $this.TasksByProject[$task.ProjectKey] += $task.Id
-                    }
-                }
-                
-                # Load projects
-                $this.Projects.Clear()
-                if ($data.ContainsKey('Projects')) {
-                    foreach ($projectData in $data.Projects) {
-                        $project = [PmcProject]::new()
-                        # Map properties
-                        $projectData.GetEnumerator() | ForEach-Object {
-                            if ($project.PSObject.Properties.Match($_.Name)) {
-                                $project.($_.Name) = $_.Value
-                            }
-                        }
-                        
-                        $this.Projects[$project.Key] = $project
-                    }
-                }
-                
-                # Load metadata
-                if ($data.ContainsKey('Metadata')) {
-                    $this.Metadata = $data.Metadata
-                }
-                
-                $this.IsDirty = $false
-                Write-Verbose "DataManager: Loaded $($this.Tasks.Count) tasks and $($this.Projects.Count) projects"
-                
-                if ($this.EventManager) {
-                    $this.EventManager.Publish("Data.Loaded", @{
-                        TaskCount = $this.Tasks.Count
-                        ProjectCount = $this.Projects.Count
-                    })
-                }
-            }
-            else {
-                Write-Verbose "DataManager: No data file found at $($this.DataPath)"
-            }
-        }
-        catch {
-            Write-Error "Failed to load data: $_"
-            throw [DataLoadException]::new("Failed to load data from $($this.DataPath)", "DataManager", @{}, $_)
-        }
-    }
-    
-    [void] SaveData() {
-        try {
-            if ($this.BatchUpdateCount -gt 0) {
-                Write-Verbose "DataManager: Save deferred - batch update in progress"
-                return
-            }
-            
-            # Create backup if file exists
-            if (Test-Path $this.DataPath) {
-                $this._CreateBackup()
-            }
-            
-            $data = @{
-                Tasks = $this.Tasks.Values | ForEach-Object {
-                    @{
-                        Id = $_.Id
-                        Title = $_.Title
-                        Description = $_.Description
-                        Status = $_.Status.ToString()
-                        Priority = $_.Priority.ToString()
-                        ProjectKey = $_.ProjectKey
-                        Category = $_.Category
-                        CreatedAt = $_.CreatedAt
-                        UpdatedAt = $_.UpdatedAt
-                        DueDate = $_.DueDate
-                        Tags = $_.Tags
-                        Progress = $_.Progress
-                        Completed = $_.Completed
-                    }
-                }
-                Projects = $this.Projects.Values | ForEach-Object {
-                    @{
-                        Key = $_.Key
-                        Name = $_.Name
-                        Description = $_.Description
-                        CreatedAt = $_.CreatedAt
-                        UpdatedAt = $_.UpdatedAt
-                        Owner = $_.Owner
-                        Tags = $_.Tags
-                        Metadata = $_.Metadata
-                        IsActive = $_.IsActive
-                    }
-                }
-                Metadata = $this.Metadata
-                SavedAt = [datetime]::Now
-            }
-            
-            $jsonContent = $data | ConvertTo-Json -Depth 10
-            Set-Content -Path $this.DataPath -Value $jsonContent -Force
-            
-            $this.IsDirty = $false
-            $this.LastSave = [datetime]::Now
-            
-            Write-Verbose "DataManager: Saved $($this.Tasks.Count) tasks and $($this.Projects.Count) projects"
-            
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Data.Saved", @{
-                    TaskCount = $this.Tasks.Count
-                    ProjectCount = $this.Projects.Count
-                })
-            }
-        }
-        catch {
-            Write-Error "Failed to save data: $_"
-            throw
-        }
-    }
-    
-    hidden [void] _CreateBackup() {
-        try {
-            $backupDir = Join-Path (Split-Path -Parent $this.DataPath) "backups"
-            if (-not (Test-Path $backupDir)) {
-                New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
-            }
-            
-            $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-            $backupPath = Join-Path $backupDir "data_$timestamp.json"
-            
-            Copy-Item -Path $this.DataPath -Destination $backupPath -Force
-            
-            # Clean old backups
-            $backups = Get-ChildItem -Path $backupDir -Filter "data_*.json" | 
-                       Sort-Object -Property LastWriteTime -Descending
-            
-            if ($backups.Count -gt $this.MaxBackups) {
-                $backups | Select-Object -Skip $this.MaxBackups | Remove-Item -Force
-            }
-            
-            Write-Verbose "DataManager: Created backup at $backupPath"
-        }
-        catch {
-            Write-Warning "Failed to create backup: $_"
-        }
-    }
-    
-    # Task operations
-    [PmcTask[]] GetTasks() {
-        if ($null -eq $this.Tasks) {
-            Write-Warning "DataManager: Tasks collection is null"
-            return @()
-        }
-        return @($this.Tasks.Values)
-    }
-    
-    [PmcTask] GetTask([string]$id) {
-        return $this.Tasks[$id]
-    }
-    
-    [PmcTask[]] GetTasksByProject([string]$projectKey) {
-        if ($this.TasksByProject.ContainsKey($projectKey)) {
-            return $this.TasksByProject[$projectKey] | ForEach-Object { $this.Tasks[$_] } | Where-Object { $_ }
-        }
-        return @()
-    }
-    
-    [void] AddTask([PmcTask]$task) {
-        if (-not $task) {
-            throw [ArgumentNullException]::new("task")
-        }
-        
-        $this.Tasks[$task.Id] = $task
-        
-        # Update project index
-        if (-not $this.TasksByProject.ContainsKey($task.ProjectKey)) {
-            $this.TasksByProject[$task.ProjectKey] = @()
-        }
-        $this.TasksByProject[$task.ProjectKey] += $task.Id
-        
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.TaskAdded", @{ Task = $task })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Added task '$($task.Title)' with ID: $($task.Id)"
-    }
-    
-    [void] UpdateTask([PmcTask]$task) {
-        if (-not $task) {
-            throw [ArgumentNullException]::new("task")
-        }
-        
-        if (-not $this.Tasks.ContainsKey($task.Id)) {
-            throw "Task with ID '$($task.Id)' not found"
-        }
-        
-        $oldTask = $this.Tasks[$task.Id]
-        
-        # Update project index if project changed
-        if ($oldTask.ProjectKey -ne $task.ProjectKey) {
-            # Remove from old project
-            if ($this.TasksByProject.ContainsKey($oldTask.ProjectKey)) {
-                $this.TasksByProject[$oldTask.ProjectKey] = 
-                    $this.TasksByProject[$oldTask.ProjectKey] | Where-Object { $_ -ne $task.Id }
-            }
-            
-            # Add to new project
-            if (-not $this.TasksByProject.ContainsKey($task.ProjectKey)) {
-                $this.TasksByProject[$task.ProjectKey] = @()
-            }
-            $this.TasksByProject[$task.ProjectKey] += $task.Id
-        }
-        
-        $this.Tasks[$task.Id] = $task
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.TaskUpdated", @{ 
-                Task = $task
-                OldTask = $oldTask
-            })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Updated task '$($task.Title)'"
-    }
-    
-    [void] RemoveTask([string]$id) {
-        if ($this.Tasks.ContainsKey($id)) {
-            $task = $this.Tasks[$id]
-            
-            # Remove from project index
-            if ($this.TasksByProject.ContainsKey($task.ProjectKey)) {
-                $this.TasksByProject[$task.ProjectKey] = 
-                    $this.TasksByProject[$task.ProjectKey] | Where-Object { $_ -ne $id }
-            }
-            
-            $this.Tasks.Remove($id)
-            $this.IsDirty = $true
-            
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Data.TaskRemoved", @{ TaskId = $id })
-            }
-            
-            if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-                $this.SaveData()
-            }
-            
-            Write-Verbose "DataManager: Removed task with ID: $id"
-        }
-    }
-    
-    # Project operations
-    [PmcProject[]] GetProjects() {
-        return @($this.Projects.Values)
-    }
-    
-    [PmcProject] GetProject([string]$key) {
-        return $this.Projects[$key]
-    }
-    
-    [void] AddProject([PmcProject]$project) {
-        if (-not $project) {
-            throw [ArgumentNullException]::new("project")
-        }
-        
-        $this.Projects[$project.Key] = $project
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.ProjectAdded", @{ Project = $project })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Added project '$($project.Name)' with key: $($project.Key)"
-    }
-    
-    [void] UpdateProject([PmcProject]$project) {
-        if (-not $project) {
-            throw [ArgumentNullException]::new("project")
-        }
-        
-        if (-not $this.Projects.ContainsKey($project.Key)) {
-            throw "Project with key '$($project.Key)' not found"
-        }
-        
-        $oldProject = $this.Projects[$project.Key]
-        $this.Projects[$project.Key] = $project
-        $this.IsDirty = $true
-        
-        if ($this.EventManager) {
-            $this.EventManager.Publish("Data.ProjectUpdated", @{ 
-                Project = $project
-                OldProject = $oldProject
-            })
-        }
-        
-        if ($this.AutoSave -and $this.BatchUpdateCount -eq 0) {
-            $this.SaveData()
-        }
-        
-        Write-Verbose "DataManager: Updated project '$($project.Name)'"
-    }
-    
-    # Transaction support
-    [void] BeginUpdate() {
-        $this.BatchUpdateCount++
-        Write-Verbose "DataManager: Began batch update (level: $($this.BatchUpdateCount))"
-    }
-    
-    [void] EndUpdate() {
-        $this.BatchUpdateCount--
-        if ($this.BatchUpdateCount -eq 0 -and $this.IsDirty -and $this.AutoSave) {
-            $this.SaveData()
-        }
-        Write-Verbose "DataManager: Ended batch update (level: $($this.BatchUpdateCount))"
-    }
-}
-
 # ===== CLASS: NavigationService =====
 # Module: navigation-service (from axiom)
 # Dependencies: EventManager (optional)
@@ -7302,10 +7409,15 @@ class NavigationService {
                 })
             }
             
-            # Update global TUI state directly (CRUCIAL FIX)
-            $global:TuiState.CurrentScreen = $screen
-            $global:TuiState.IsDirty = $true # Force redraw
-            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnEnter should set new focus
+            # Publish navigation complete event
+            # The main loop should query NavigationService for the current screen
+            # NavigationService should NOT modify global state directly
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Navigation.NavigationComplete", @{
+                    Screen = $screen
+                    ScreenName = $screen.Name
+                })
+            }
 
         }
         catch {
@@ -7361,10 +7473,14 @@ class NavigationService {
                 })
             }
             
-            # Update global TUI state directly (CRUCIAL FIX)
-            $global:TuiState.CurrentScreen = $previousScreen
-            $global:TuiState.IsDirty = $true # Force redraw
-            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnResume should set new focus
+            # Publish navigation complete event
+            # The main loop should query NavigationService for the current screen
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Navigation.NavigationComplete", @{
+                    Screen = $previousScreen
+                    ScreenName = $previousScreen.Name
+                })
+            }
 
         }
         catch {
@@ -7396,198 +7512,151 @@ class NavigationService {
 # ===== CLASS: ThemeManager =====
 # Module: theme-manager (from axiom)
 # Dependencies: None
-# Purpose: Visual theming system with hot-swapping
+# Purpose: Visual theming system with consistent hex color output
 class ThemeManager {
     [hashtable]$CurrentTheme = @{}
     [string]$ThemeName = "Default"
-    [hashtable]$ThemeRegistry = @{}
-    [string]$ThemePath
     
     ThemeManager() {
-        $this.ThemePath = Join-Path $env:APPDATA "AxiomPhoenix\themes"
-        $this._Initialize()
-    }
-    
-    ThemeManager([string]$themePath) {
-        $this.ThemePath = $themePath
-        $this._Initialize()
-    }
-    
-    hidden [void] _Initialize() {
-        if (-not (Test-Path $this.ThemePath)) {
-            New-Item -ItemType Directory -Path $this.ThemePath -Force | Out-Null
-        }
-        
         $this.LoadDefaultTheme()
-        Write-Verbose "ThemeManager: Initialized with theme path: $($this.ThemePath)"
+        Write-Verbose "ThemeManager: Initialized with theme '$($this.ThemeName)'"
     }
     
     [void] LoadDefaultTheme() {
+        # Default dark theme with all hex colors
         $this.CurrentTheme = @{
-            # Core colors (all hex now)
-            Background = "#000000"
-            Foreground = "#FFFFFF"
-            Primary = "#1E90FF"
-            Accent = "#FFD700"
-            Error = "#FF4444"
-            Warning = "#FFA500"
-            Success = "#32CD32"
-            Info = "#00CED1"
-            Subtle = "#808080"
+            # Base colors
+            "Background" = "#000000"
+            "Foreground" = "#FFFFFF"
+            "Primary" = "#00FFFF"
+            "Secondary" = "#008080"
+            "Accent" = "#FFFF00"
+            "Subtle" = "#808080"
+            "Success" = "#00FF00"
+            "Warning" = "#FFFF00"
+            "Error" = "#FF0000"
+            "Info" = "#00FFFF"
             
             # Component colors
-            "component.border" = "#808080"
-            "component.title" = "#FFFFFF"
             "component.background" = "#000000"
-            "component.foreground" = "#FFFFFF"
+            "component.border" = "#808080"
+            "component.title" = "#00FFFF"
             
-            # Button states
+            # Button colors
             "button.normal.fg" = "#FFFFFF"
             "button.normal.bg" = "#333333"
             "button.focused.fg" = "#000000"
-            "button.focused.bg" = "#1E90FF"
+            "button.focused.bg" = "#00FFFF"
             "button.pressed.fg" = "#FFFFFF"
-            "button.pressed.bg" = "#0066CC"
-            "button.disabled.fg" = "#808080"
-            "button.disabled.bg" = "#1A1A1A"
+            "button.pressed.bg" = "#008080"
+            "button.disabled.fg" = "#666666"
+            "button.disabled.bg" = "#222222"
             
-            # List/Table
-            "list.header.fg" = "#FFD700"
-            "list.header.bg" = "#1A1A1A"
+            # Input colors
+            "input.background" = "#000000"
+            "input.foreground" = "#FFFFFF"
+            "input.border" = "#808080"
+            "input.cursor" = "#00FFFF"
+            "input.placeholder" = "#666666"
+            
+            # List colors
             "list.item.normal" = "#FFFFFF"
             "list.item.selected" = "#000000"
-            "list.item.selected.background" = "#1E90FF"
+            "list.item.selected.background" = "#00FFFF"
+            "list.header.fg" = "#FFFF00"
+            "list.header.bg" = "#333333"
             "list.scrollbar" = "#808080"
             
-            # Dialog
-            "dialog.background" = "#1A1A1A"
+            # Dialog colors
+            "dialog.border" = "#00FFFF"
+            "dialog.background" = "#000000"
             "dialog.foreground" = "#FFFFFF"
-            "dialog.border" = "#1E90FF"
-            "dialog.title" = "#FFD700"
             
-            # Status
-            "status.bar.bg" = "#333333"
-            "status.bar.fg" = "#FFFFFF"
-            
-            # Input
-            "input.background" = "#1A1A1A"
-            "input.foreground" = "#FFFFFF"
-            "input.placeholder" = "#808080"
-            "input.cursor" = "#FFD700"
+            # Status colors
+            "status.background" = "#333333"
+            "status.foreground" = "#FFFFFF"
         }
-        
         $this.ThemeName = "Default"
-        # Write-Log -Level Debug -Message "ThemeManager: Loaded default theme with hex colors"
     }
     
     [object] GetColor([string]$colorName) {
+        if ([string]::IsNullOrWhiteSpace($colorName)) {
+            return "#808080" # Default fallback hex
+        }
+        
         if ($this.CurrentTheme.ContainsKey($colorName)) {
-            return $this.CurrentTheme[$colorName]
-        }
-        
-        # Fallback to base color
-        if ($colorName -match '\.') {
-            $baseColor = $colorName.Split('.')[0]
-            if ($this.CurrentTheme.ContainsKey($baseColor)) {
-                return $this.CurrentTheme[$baseColor]
+            $color = $this.CurrentTheme[$colorName]
+            
+            # Ensure we always return hex format (fixes issue #18)
+            if ($color -is [ConsoleColor]) {
+                # Convert ConsoleColor to hex immediately
+                $hexMap = @{
+                    [ConsoleColor]::Black = "#000000"
+                    [ConsoleColor]::DarkBlue = "#000080"
+                    [ConsoleColor]::DarkGreen = "#008000"
+                    [ConsoleColor]::DarkCyan = "#008080"
+                    [ConsoleColor]::DarkRed = "#800000"
+                    [ConsoleColor]::DarkMagenta = "#800080"
+                    [ConsoleColor]::DarkYellow = "#808000"
+                    [ConsoleColor]::Gray = "#C0C0C0"
+                    [ConsoleColor]::DarkGray = "#808080"
+                    [ConsoleColor]::Blue = "#0000FF"
+                    [ConsoleColor]::Green = "#00FF00"
+                    [ConsoleColor]::Cyan = "#00FFFF"
+                    [ConsoleColor]::Red = "#FF0000"
+                    [ConsoleColor]::Magenta = "#FF00FF"
+                    [ConsoleColor]::Yellow = "#FFFF00"
+                    [ConsoleColor]::White = "#FFFFFF"
+                }
+                return $hexMap[$color] ?? "#808080"
             }
+            
+            # Already a hex string or other format
+            return $color
         }
         
-        Write-Warning "ThemeManager: Color '$colorName' not found in theme, using White"
-        return [ConsoleColor]::White
+        # Write-Log -Level Debug -Message "ThemeManager: Color '$colorName' not found in theme, using default hex #808080"
+        return "#808080" # Always return hex string, never ConsoleColor enum
     }
     
-    [void] SetColor([string]$colorName, [object]$color) {
-        $this.CurrentTheme[$colorName] = $color
-        Write-Verbose "ThemeManager: Set color '$colorName' to '$color'"
+    [void] SetColor([string]$colorName, [string]$hexColor) {
+        if ([string]::IsNullOrWhiteSpace($colorName)) {
+            throw "Color name cannot be null or empty"
+        }
+        
+        # Validate hex color format
+        if (-not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
+            throw "Color must be in hex format (#RRGGBB)"
+        }
+        
+        $this.CurrentTheme[$colorName] = $hexColor
+        Write-Verbose "ThemeManager: Set color '$colorName' to '$hexColor'"
     }
     
     [void] LoadTheme([string]$themeName) {
-        $themeFile = Join-Path $this.ThemePath "$themeName.json"
-        
-        if (-not (Test-Path $themeFile)) {
-            throw "Theme file not found: $themeFile"
-        }
-        
-        try {
-            $themeData = Get-Content -Path $themeFile -Raw | ConvertFrom-Json -AsHashtable
-            
-            # Convert color values
-            $this.CurrentTheme.Clear()
-            foreach ($key in $themeData.Keys) {
-                $value = $themeData[$key]
-                
-                # Handle ConsoleColor enum values
-                if ($value -is [string] -and [Enum]::TryParse([ConsoleColor], $value, [ref]$null)) {
-                    $this.CurrentTheme[$key] = [Enum]::Parse([ConsoleColor], $value)
-                }
-                # Handle hex colors
-                elseif ($value -is [string] -and $value -match '^#[0-9A-Fa-f]{6}$') {
-                    $this.CurrentTheme[$key] = $value
-                }
-                else {
-                    $this.CurrentTheme[$key] = $value
-                }
+        # In a full implementation, this would load from JSON files
+        # For now, just support the default theme
+        switch ($themeName.ToLower()) {
+            "default" {
+                $this.LoadDefaultTheme()
             }
-            
-            $this.ThemeName = $themeName
-            Write-Verbose "ThemeManager: Loaded theme '$themeName' from file"
-        }
-        catch {
-            Write-Error "Failed to load theme '$themeName': $_"
-            throw
-        }
-    }
-    
-    [void] SaveTheme([string]$themeName) {
-        $themeFile = Join-Path $this.ThemePath "$themeName.json"
-        
-        try {
-            # Convert ConsoleColor enums to strings for JSON
-            $themeData = @{}
-            foreach ($key in $this.CurrentTheme.Keys) {
-                $value = $this.CurrentTheme[$key]
-                if ($value -is [ConsoleColor]) {
-                    $themeData[$key] = $value.ToString()
-                }
-                else {
-                    $themeData[$key] = $value
-                }
+            "dark" {
+                $this.LoadDefaultTheme() # Same as default for now
             }
-            
-            $jsonContent = $themeData | ConvertTo-Json -Depth 10
-            Set-Content -Path $themeFile -Value $jsonContent -Force
-            
-            Write-Verbose "ThemeManager: Saved theme '$themeName' to file"
+            default {
+                Write-Warning "ThemeManager: Unknown theme '$themeName', loading default"
+                $this.LoadDefaultTheme()
+            }
         }
-        catch {
-            Write-Error "Failed to save theme '$themeName': $_"
-            throw
-        }
+        Write-Verbose "ThemeManager: Loaded theme '$themeName'"
     }
     
-    [hashtable] CreateTheme([string]$themeName, [hashtable]$baseTheme = @{}) {
-        $newTheme = if ($baseTheme.Count -gt 0) { 
-            $baseTheme.Clone() 
-        } else { 
-            $this.CurrentTheme.Clone() 
-        }
-        
-        $this.ThemeRegistry[$themeName] = $newTheme
-        Write-Verbose "ThemeManager: Created theme '$themeName'"
-        
-        return $newTheme
+    [hashtable] GetAllColors() {
+        return $this.CurrentTheme.Clone()
     }
     
-    [void] ApplyTheme([string]$themeName) {
-        if ($this.ThemeRegistry.ContainsKey($themeName)) {
-            $this.CurrentTheme = $this.ThemeRegistry[$themeName].Clone()
-            $this.ThemeName = $themeName
-            Write-Verbose "ThemeManager: Applied theme '$themeName' from registry"
-        }
-        else {
-            $this.LoadTheme($themeName)
-        }
+    [void] Cleanup() {
+        Write-Verbose "ThemeManager: Cleanup complete"
     }
 }
 
@@ -8187,6 +8256,60 @@ class DialogManager {
 #endregion
 
 
+
+####\check-operators.ps1
+# Simple test to check for operator issues
+$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "Checking for operator issues in mono files..." -ForegroundColor Cyan
+    
+    $files = @(
+        "AllBaseClasses.ps1",
+        "AllModels.ps1", 
+        "AllComponents.ps1",
+        "AllScreens.ps1",
+        "AllFunctions.ps1",
+        "AllServices.ps1",
+        "AllRuntime.ps1",
+        "Start.ps1"
+    )
+    
+    $issuesFound = $false
+    
+    foreach ($file in $files) {
+        $content = Get-Content -Path "C:\Users\jhnhe\Documents\GitHub\_XP\_mono\$file" -Raw
+        $lines = $content -split "`n"
+        $lineNum = 0
+        
+        Write-Host "`nChecking $file..." -ForegroundColor Yellow
+        
+        foreach ($line in $lines) {
+            $lineNum++
+            # Check for C-style operators
+            if ($line -match '(?<![<>!=])([<>]=?|==|!=)(?![<>!=])' -and 
+                $line -notmatch '#|".*[<>!=].*"|''.*[<>!=].*''|Write-|Out-|>\s*\$null') {
+                Write-Host "  Line $lineNum`: $($line.Trim())" -ForegroundColor Red
+                $issuesFound = $true
+            }
+        }
+    }
+    
+    if (-not $issuesFound) {
+        Write-Host "`nNo operator issues found!" -ForegroundColor Green
+    }
+    
+    # Now try to load the first file
+    Write-Host "`nTrying to load AllBaseClasses.ps1..." -ForegroundColor Cyan
+    . "C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AllBaseClasses.ps1"
+    Write-Host "Success!" -ForegroundColor Green
+    
+} catch {
+    Write-Host "`nError: $_" -ForegroundColor Red
+}
+
+
+
 ####\fc2.ps1
 #------------------------------------------------------------------------------------------
 # SCRIPT:      filecopy-and-concatenate.ps1
@@ -8322,6 +8445,7 @@ catch {
     Write-Error "Script execution halted at line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line)"
 }
 
+
 ####\filecopy.ps1
 #------------------------------------------------------------------------------------------
 # SCRIPT:      filecopy-and-concatenate.ps1
@@ -8445,6 +8569,21 @@ catch {
     Write-Error "A critical error occurred: $($_.Exception.Message)"
     Write-Error "Script execution halted at line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line)"
 }
+
+
+####\run-mono.ps1
+# Test running the actual Start.ps1
+Set-Location "C:\Users\jhnhe\Documents\GitHub\_XP\_mono"
+
+try {
+    Write-Host "Running mono Start.ps1..." -ForegroundColor Cyan
+    & .\Start.ps1
+} catch {
+    Write-Host "Error: $_" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+}
+
+
 
 ####\Start.ps1
 # ==============================================================================
@@ -8714,6 +8853,406 @@ finally {
 #endregion
 
 
+
+####\test-framework.ps1
+# Comprehensive mono framework test
+$ErrorActionPreference = 'Stop'
+Clear-Host
+
+Write-Host "=====================================`n" -ForegroundColor Cyan
+Write-Host "  Axiom-Phoenix v4.0 Mono Test`n" -ForegroundColor White
+Write-Host "=====================================`n" -ForegroundColor Cyan
+
+$testResults = @()
+
+# Function to add test result
+function Add-TestResult($TestName, $Success, $Message) {
+    $script:testResults += [PSCustomObject]@{
+        Test = $TestName
+        Success = $Success
+        Message = $Message
+    }
+    
+    if ($Success) {
+        Write-Host "✓ $TestName" -ForegroundColor Green
+        if ($Message) { Write-Host "  $Message" -ForegroundColor DarkGray }
+    } else {
+        Write-Host "✗ $TestName" -ForegroundColor Red
+        Write-Host "  $Message" -ForegroundColor Yellow
+    }
+}
+
+# Test 1: Verify all files exist
+Write-Host "`n[Checking Files]" -ForegroundColor Yellow
+$requiredFiles = @(
+    'allbaseclasses.ps1',
+    'AllModels.ps1',
+    'AllComponents.ps1',
+    'AllScreens.ps1',
+    'AllFunctions.ps1',
+    'AllServices.ps1',
+    'AllRuntime.ps1',
+    'Start.ps1'
+)
+
+$allFilesExist = $true
+foreach ($file in $requiredFiles) {
+    $path = Join-Path "C:\Users\jhnhe\Documents\GitHub\_XP\_mono" $file
+    if (Test-Path $path) {
+        Add-TestResult "File: $file" $true "Found"
+    } else {
+        Add-TestResult "File: $file" $false "Not found at $path"
+        $allFilesExist = $false
+    }
+}
+
+if (-not $allFilesExist) {
+    Write-Host "`nCannot continue - missing required files" -ForegroundColor Red
+    exit 1
+}
+
+# Test 2: Load and test framework
+Write-Host "`n[Loading Framework]" -ForegroundColor Yellow
+Set-Location "C:\Users\jhnhe\Documents\GitHub\_XP\_mono"
+
+try {
+    . .\allbaseclasses.ps1
+    Add-TestResult "AllBaseClasses" $true "Loaded successfully"
+    
+    # Test basic object creation
+    $cell = [TuiCell]::new('X', "#FF0000", "#000000")
+    Add-TestResult "TuiCell Creation" $true "Created cell with char '$($cell.Char)'"
+    
+    # Test the operator fix
+    $cell2 = [TuiCell]::new('Y', "#00FF00", "#000000")
+    $cell2.ZIndex = 5
+    $result = $cell.BlendWith($cell2)
+    Add-TestResult "ZIndex Comparison" $true "BlendWith works correctly"
+    
+} catch {
+    Add-TestResult "AllBaseClasses" $false $_.Exception.Message
+    exit 1
+}
+
+try {
+    . .\AllModels.ps1
+    Add-TestResult "AllModels" $true "Loaded successfully"
+    
+    # Test task creation and serialization
+    $task = [PmcTask]::new("Test Task")
+    $task.Priority = [TaskPriority]::High
+    $task.SetProgress(50)
+    
+    $legacy = $task.ToLegacyFormat()
+    $restored = [PmcTask]::FromLegacyFormat($legacy)
+    
+    if ($restored.Title -eq $task.Title -and $restored.Progress -eq $task.Progress) {
+        Add-TestResult "Task Serialization" $true "ToLegacyFormat/FromLegacyFormat working"
+    } else {
+        Add-TestResult "Task Serialization" $false "Serialization mismatch"
+    }
+    
+} catch {
+    Add-TestResult "AllModels" $false $_.Exception.Message
+    exit 1
+}
+
+try {
+    . .\AllComponents.ps1
+    Add-TestResult "AllComponents" $true "Loaded successfully"
+} catch {
+    Add-TestResult "AllComponents" $false $_.Exception.Message
+    exit 1
+}
+
+try {
+    . .\AllScreens.ps1
+    Add-TestResult "AllScreens" $true "Loaded successfully"
+} catch {
+    Add-TestResult "AllScreens" $false $_.Exception.Message
+    exit 1
+}
+
+try {
+    . .\AllFunctions.ps1
+    Add-TestResult "AllFunctions" $true "Loaded successfully"
+    
+    # Test theme manager function
+    $color = Get-ThemeColor "Background"
+    if ($color -match '^#[0-9A-Fa-f]{6}$') {
+        Add-TestResult "Get-ThemeColor" $true "Returns hex color: $color"
+    } else {
+        Add-TestResult "Get-ThemeColor" $false "Invalid color format: $color"
+    }
+    
+} catch {
+    Add-TestResult "AllFunctions" $false $_.Exception.Message
+    exit 1
+}
+
+try {
+    . .\AllServices.ps1
+    Add-TestResult "AllServices" $true "Loaded successfully"
+    
+    # Test DataManager with new features
+    $tempFile = Join-Path $env:TEMP "test-data-$(Get-Random).json"
+    $em = [EventManager]::new()
+    $dm = [DataManager]::new($tempFile, $em)
+    
+    # Test task operations
+    $testTask = [PmcTask]::new("DataManager Test")
+    $addedTask = $dm.AddTask($testTask)
+    
+    if ($dm.GetTask($addedTask.Id)) {
+        Add-TestResult "DataManager Operations" $true "Add/Get task working"
+    } else {
+        Add-TestResult "DataManager Operations" $false "Failed to retrieve added task"
+    }
+    
+    # Test save/load
+    $dm.SaveData()
+    $dm2 = [DataManager]::new($tempFile, $em)
+    $dm2.LoadData()
+    
+    if ($dm2.GetTask($addedTask.Id)) {
+        Add-TestResult "DataManager Persistence" $true "Save/Load working"
+    } else {
+        Add-TestResult "DataManager Persistence" $false "Task not found after reload"
+    }
+    
+    # Cleanup
+    $dm.Dispose()
+    $dm2.Dispose()
+    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+    
+} catch {
+    Add-TestResult "AllServices" $false $_.Exception.Message
+    Write-Host "  Stack: $($_.ScriptStackTrace)" -ForegroundColor DarkGray
+    exit 1
+}
+
+try {
+    . .\AllRuntime.ps1
+    Add-TestResult "AllRuntime" $true "Loaded successfully"
+    
+    # Check for required functions
+    if (Get-Command Initialize-TuiEngine -ErrorAction SilentlyContinue) {
+        Add-TestResult "Initialize-TuiEngine" $true "Function exists"
+    } else {
+        Add-TestResult "Initialize-TuiEngine" $false "Function not found"
+    }
+    
+    if (Get-Command Start-AxiomPhoenix -ErrorAction SilentlyContinue) {
+        Add-TestResult "Start-AxiomPhoenix" $true "Function exists"
+    } else {
+        Add-TestResult "Start-AxiomPhoenix" $false "Function not found"
+    }
+    
+} catch {
+    Add-TestResult "AllRuntime" $false $_.Exception.Message
+    exit 1
+}
+
+# Summary
+Write-Host "`n[Test Summary]" -ForegroundColor Yellow
+$passed = ($testResults | Where-Object Success).Count
+$failed = ($testResults | Where-Object { -not $_.Success }).Count
+$total = $testResults.Count
+
+Write-Host "Passed: $passed/$total" -ForegroundColor $(if ($failed -eq 0) { "Green" } else { "Yellow" })
+if ($failed -gt 0) {
+    Write-Host "Failed: $failed" -ForegroundColor Red
+    Write-Host "`nFailed tests:" -ForegroundColor Red
+    $testResults | Where-Object { -not $_.Success } | ForEach-Object {
+        Write-Host "  - $($_.Test): $($_.Message)" -ForegroundColor Red
+    }
+}
+
+if ($failed -eq 0) {
+    Write-Host "`n✓ All tests passed! The framework is ready to run." -ForegroundColor Green
+    Write-Host "`nYou can now run: .\Start.ps1" -ForegroundColor Cyan
+} else {
+    Write-Host "`n✗ Some tests failed. Please fix the issues before running Start.ps1" -ForegroundColor Red
+}
+
+
+
+####\test-loading.ps1
+# Step-by-step test of mono loading
+$ErrorActionPreference = 'Stop'
+Set-Location "C:\Users\jhnhe\Documents\GitHub\_XP\_mono"
+
+Write-Host "=== Testing Mono Framework Loading ===" -ForegroundColor Cyan
+
+# Test 1: Load AllBaseClasses.ps1
+try {
+    Write-Host "`n1. Loading AllBaseClasses.ps1..." -ForegroundColor Yellow
+    . .\AllBaseClasses.ps1
+    Write-Host "   ✓ Success" -ForegroundColor Green
+    
+    # Test creating basic objects
+    $cell = [TuiCell]::new('A', "#FFFFFF", "#000000")
+    Write-Host "   ✓ Created TuiCell: $($cell.Char)" -ForegroundColor Green
+    
+    $buffer = [TuiBuffer]::new(10, 10, "Test")
+    Write-Host "   ✓ Created TuiBuffer: $($buffer.Name)" -ForegroundColor Green
+} catch {
+    Write-Host "   ✗ Failed: $_" -ForegroundColor Red
+    exit
+}
+
+# Test 2: Load AllModels.ps1
+try {
+    Write-Host "`n2. Loading AllModels.ps1..." -ForegroundColor Yellow
+    . .\AllModels.ps1
+    Write-Host "   ✓ Success" -ForegroundColor Green
+    
+    # Test creating model objects
+    $task = [PmcTask]::new("Test Task")
+    Write-Host "   ✓ Created PmcTask: $($task.Title)" -ForegroundColor Green
+    
+    # Test ToLegacyFormat
+    $legacy = $task.ToLegacyFormat()
+    Write-Host "   ✓ ToLegacyFormat works" -ForegroundColor Green
+    
+    # Test FromLegacyFormat
+    $restored = [PmcTask]::FromLegacyFormat($legacy)
+    Write-Host "   ✓ FromLegacyFormat works: $($restored.Title)" -ForegroundColor Green
+} catch {
+    Write-Host "   ✗ Failed: $_" -ForegroundColor Red
+    exit
+}
+
+# Test 3: Load AllComponents.ps1
+try {
+    Write-Host "`n3. Loading AllComponents.ps1..." -ForegroundColor Yellow
+    . .\AllComponents.ps1
+    Write-Host "   ✓ Success" -ForegroundColor Green
+    
+    $button = [ButtonComponent]::new("TestButton")
+    $button.Text = "Click Me"
+    Write-Host "   ✓ Created ButtonComponent: $($button.Text)" -ForegroundColor Green
+} catch {
+    Write-Host "   ✗ Failed: $_" -ForegroundColor Red
+    exit
+}
+
+# Test 4: Load AllScreens.ps1
+try {
+    Write-Host "`n4. Loading AllScreens.ps1..." -ForegroundColor Yellow
+    . .\AllScreens.ps1
+    Write-Host "   ✓ Success" -ForegroundColor Green
+} catch {
+    Write-Host "   ✗ Failed: $_" -ForegroundColor Red
+    exit
+}
+
+# Test 5: Load AllFunctions.ps1
+try {
+    Write-Host "`n5. Loading AllFunctions.ps1..." -ForegroundColor Yellow
+    . .\AllFunctions.ps1
+    Write-Host "   ✓ Success" -ForegroundColor Green
+    
+    # Test Get-ThemeColor
+    $color = Get-ThemeColor "Background"
+    Write-Host "   ✓ Get-ThemeColor works: $color" -ForegroundColor Green
+} catch {
+    Write-Host "   ✗ Failed: $_" -ForegroundColor Red
+    exit
+}
+
+# Test 6: Load AllServices.ps1
+try {
+    Write-Host "`n6. Loading AllServices.ps1..." -ForegroundColor Yellow
+    . .\AllServices.ps1
+    Write-Host "   ✓ Success" -ForegroundColor Green
+    
+    # Test creating services
+    $em = [EventManager]::new()
+    Write-Host "   ✓ Created EventManager" -ForegroundColor Green
+    
+    $dm = [DataManager]::new("test.json", $em)
+    Write-Host "   ✓ Created DataManager" -ForegroundColor Green
+} catch {
+    Write-Host "   ✗ Failed: $_" -ForegroundColor Red
+    Write-Host "   Stack trace:" -ForegroundColor DarkGray
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+    exit
+}
+
+# Test 7: Load AllRuntime.ps1
+try {
+    Write-Host "`n7. Loading AllRuntime.ps1..." -ForegroundColor Yellow
+    . .\AllRuntime.ps1
+    Write-Host "   ✓ Success" -ForegroundColor Green
+} catch {
+    Write-Host "   ✗ Failed: $_" -ForegroundColor Red
+    exit
+}
+
+Write-Host "`n=== All Framework Files Loaded Successfully! ===" -ForegroundColor Green
+
+
+
+####\test-mono.ps1
+# Test script to verify the mono application loads correctly
+$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "Testing Axiom-Phoenix v4.0 mono..." -ForegroundColor Cyan
+    
+    # Change to the directory
+    Set-Location "C:\Users\jhnhe\Documents\GitHub\_XP\_mono"
+    
+    # Load all files in order
+    Write-Host "Loading framework files..." -ForegroundColor Yellow
+    
+    . .\AllBaseClasses.ps1
+    Write-Host "✓ AllBaseClasses.ps1 loaded" -ForegroundColor Green
+    
+    . .\AllModels.ps1
+    Write-Host "✓ AllModels.ps1 loaded" -ForegroundColor Green
+    
+    . .\AllComponents.ps1
+    Write-Host "✓ AllComponents.ps1 loaded" -ForegroundColor Green
+    
+    . .\AllScreens.ps1
+    Write-Host "✓ AllScreens.ps1 loaded" -ForegroundColor Green
+    
+    . .\AllFunctions.ps1
+    Write-Host "✓ AllFunctions.ps1 loaded" -ForegroundColor Green
+    
+    . .\AllServices.ps1
+    Write-Host "✓ AllServices.ps1 loaded" -ForegroundColor Green
+    
+    . .\AllRuntime.ps1
+    Write-Host "✓ AllRuntime.ps1 loaded" -ForegroundColor Green
+    
+    Write-Host "`nAll framework files loaded successfully!" -ForegroundColor Green
+    
+    # Test creating some objects
+    Write-Host "`nTesting object creation..." -ForegroundColor Yellow
+    
+    $task = [PmcTask]::new("Test Task")
+    Write-Host "✓ Created PmcTask: $($task.Title)" -ForegroundColor Green
+    
+    $project = [PmcProject]::new("TEST", "Test Project")
+    Write-Host "✓ Created PmcProject: $($project.Name)" -ForegroundColor Green
+    
+    $buffer = [TuiBuffer]::new(80, 25, "TestBuffer")
+    Write-Host "✓ Created TuiBuffer: $($buffer.Name) ($($buffer.Width)x$($buffer.Height))" -ForegroundColor Green
+    
+    Write-Host "`nAll tests passed!" -ForegroundColor Green
+    
+} catch {
+    Write-Host "`nError occurred:" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+    exit 1
+}
+
+
+
 ####\test-run.ps1
 # Test runner to check if the fixes work
 Push-Location "C:\Users\jhnhe\Documents\GitHub\_XP\_mono"
@@ -8728,5 +9267,57 @@ catch {
 finally {
     Pop-Location
 }
+
+
+
+####\test-startup.ps1
+# Quick test to check if the framework can load without errors
+try {
+    Write-Host "Testing framework startup..." -ForegroundColor Cyan
+    
+    $scriptRoot = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
+    
+    # Test loading each file in order
+    $filesToLoad = @(
+        'AllBaseClasses.ps1'
+        'AllModels.ps1'
+        'AllComponents.ps1'
+        'AllScreens.ps1'
+        'AllFunctions.ps1'
+        'AllServices.ps1'
+        'AllRuntime.ps1'
+    )
+    
+    foreach ($file in $filesToLoad) {
+        $filePath = Join-Path $scriptRoot $file
+        Write-Host "Loading: $file" -ForegroundColor Yellow
+        . $filePath
+        Write-Host "✓ Success: $file" -ForegroundColor Green
+    }
+    
+    Write-Host "`nTesting service instantiation..." -ForegroundColor Cyan
+    
+    # Test creating basic services
+    $container = [ServiceContainer]::new()
+    Write-Host "✓ ServiceContainer created" -ForegroundColor Green
+    
+    $eventManager = [EventManager]::new()
+    Write-Host "✓ EventManager created" -ForegroundColor Green
+    
+    $dataManager = [DataManager]::new("test.json", $eventManager)
+    Write-Host "✓ DataManager created" -ForegroundColor Green
+    
+    $focusManager = [FocusManager]::new($eventManager)
+    Write-Host "✓ FocusManager created" -ForegroundColor Green
+    
+    Write-Host "`nFramework test completed successfully!" -ForegroundColor Green
+    
+} catch {
+    Write-Host "`nFramework test FAILED!" -ForegroundColor Red
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Location: $($_.InvocationInfo.ScriptName):$($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Gray
+    throw
+}
+
 
 

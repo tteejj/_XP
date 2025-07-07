@@ -374,31 +374,40 @@ class TaskListScreen : Screen {
         $panel = $this._taskListPanel
         if (-not $panel) { return }
         
-        # Clear children
+        # CRITICAL: Clear the panel's CHILDREN, not its buffer directly.
         $panel.Children.Clear()
         
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
-        $contentHeight = $panel.ContentHeight
-        
         if ($this._tasks.Count -eq 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 2) -Y ($contentY + 2) -Text "No tasks found." -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
-            $panel._contentHeight = ($contentY + 2) + 1 # At least enough height for this message
-            $panel.UpdateMaxScroll() # Ensure scroll is updated even for empty list
+            # Add a label to show there are no tasks
+            $noTasksLabel = [LabelComponent]::new("NoTasksLabel")
+            $noTasksLabel.X = 2
+            $noTasksLabel.Y = 2
+            $noTasksLabel.Text = "No tasks found."
+            $noTasksLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $panel.AddChild($noTasksLabel)
+            $panel.RequestRedraw()
             return
         }
         
-        # Determine how many lines to draw based on panel's virtual content height
-        $maxVirtualContentHeight = 0 # Track the max y position if all tasks were drawn
-        
         for ($i = 0; $i -lt $this._tasks.Count; $i++) {
             $task = $this._tasks[$i]
-            $y = $contentY + $i # The 'virtual' Y position if all tasks were shown without scrolling
             
-            # Highlight selected task
-            $fgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
-            $bgColor = if ($i -eq $this._selectedIndex) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+            # Create a Panel for each task item (to support background color)
+            $taskPanel = [Panel]::new("TaskItem_$($task.Id)")
+            $taskPanel.X = 0
+            $taskPanel.Y = $i # Y position is its index in the list
+            $taskPanel.Width = $panel.ContentWidth
+            $taskPanel.Height = 1
+            $taskPanel.HasBorder = $false
+            
+            # Set background based on selection
+            $is_selected = ($i -eq $this._selectedIndex)
+            $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+            
+            # Create a Label component for the task text
+            $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
+            $taskLabel.X = 1 # Indent slightly
+            $taskLabel.Y = 0 # Relative to the task panel
             
             # Status indicator
             $statusChar = switch ($task.Status) {
@@ -426,21 +435,20 @@ class TaskListScreen : Screen {
             }
             
             $taskLine = "$statusChar $priorityChar $title"
+            $taskLabel.Text = $taskLine
             
-            # Draw on panel's buffer with proper style
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $y -Text $taskLine -Style @{ FG = $fgColor; BG = $bgColor }
+            # Set text color based on selection
+            $taskLabel.ForegroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
             
-            # Update the max content height based on the maximum Y coordinate that would be drawn
-            if (($y + 1) -gt $maxVirtualContentHeight) {
-                $maxVirtualContentHeight = $y + 1
-            }
+            # Add the label to the task panel
+            $taskPanel.AddChild($taskLabel)
+            
+            # Add the task panel as a CHILD of the scrollable panel
+            $panel.AddChild($taskPanel)
         }
         
-        # Crucial: Inform the ScrollablePanel about the total virtual content height
-        $panel._contentHeight = $maxVirtualContentHeight
-        
-        # Update scrollbar (this method should be called by ScrollablePanel's _RenderContent, not here)
-        # $panel.UpdateMaxScroll() # This call is now redundant here if _RenderContent handles it.
+        # The ScrollablePanel's own Render method will now correctly handle everything else.
+        $panel.RequestRedraw()
     }
 
     hidden [void] _UpdateDetailPanel() {
@@ -451,30 +459,68 @@ class TaskListScreen : Screen {
         $panel.Children.Clear()
         
         $task = $this._selectedTask
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
+        $y = 1 # Start position relative to panel
         
-        # Task details
-        $y = $contentY
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Title: $($task.Title)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Status: $($task.Status)" -Style @{ FG = Get-ThemeColor("Info"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Priority: $($task.Priority)" -Style @{ FG = Get-ThemeColor("Warning"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Progress: $($task.Progress)%" -Style @{ FG = Get-ThemeColor("Success"); BG = Get-ThemeColor("Background") }
+        # Title label
+        $titleLabel = [LabelComponent]::new("DetailTitle")
+        $titleLabel.X = 1
+        $titleLabel.Y = $y++
+        $titleLabel.Text = "Title: $($task.Title)"
+        $titleLabel.ForegroundColor = Get-ThemeColor("Foreground")
+        $panel.AddChild($titleLabel)
         
-        $y++
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "Description:" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+        # Status label
+        $statusLabel = [LabelComponent]::new("DetailStatus")
+        $statusLabel.X = 1
+        $statusLabel.Y = $y++
+        $statusLabel.Text = "Status: $($task.Status)"
+        $statusLabel.ForegroundColor = Get-ThemeColor("Info")
+        $panel.AddChild($statusLabel)
+        
+        # Priority label
+        $priorityLabel = [LabelComponent]::new("DetailPriority")
+        $priorityLabel.X = 1
+        $priorityLabel.Y = $y++
+        $priorityLabel.Text = "Priority: $($task.Priority)"
+        $priorityLabel.ForegroundColor = Get-ThemeColor("Warning")
+        $panel.AddChild($priorityLabel)
+        
+        # Progress label
+        $progressLabel = [LabelComponent]::new("DetailProgress")
+        $progressLabel.X = 1
+        $progressLabel.Y = $y++
+        $progressLabel.Text = "Progress: $($task.Progress)%"
+        $progressLabel.ForegroundColor = Get-ThemeColor("Success")
+        $panel.AddChild($progressLabel)
+        
+        $y++ # Empty line
+        
+        # Description header
+        $descHeaderLabel = [LabelComponent]::new("DetailDescHeader")
+        $descHeaderLabel.X = 1
+        $descHeaderLabel.Y = $y++
+        $descHeaderLabel.Text = "Description:"
+        $descHeaderLabel.ForegroundColor = Get-ThemeColor("Subtle")
+        $panel.AddChild($descHeaderLabel)
         
         if (-not [string]::IsNullOrEmpty($task.Description)) {
             # Word wrap description
             $words = $task.Description -split '\s+'
             $line = ""
             $maxLineLength = $panel.ContentWidth - 2
+            $lineIndex = 0
             
             foreach ($word in $words) {
                 if (($line + " " + $word).Length -gt $maxLineLength) {
                     if ($line) {
-                        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text $line -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+                        # Create label for this line
+                        $descLineLabel = [LabelComponent]::new("DetailDescLine$lineIndex")
+                        $descLineLabel.X = 1
+                        $descLineLabel.Y = $y++
+                        $descLineLabel.Text = $line
+                        $descLineLabel.ForegroundColor = Get-ThemeColor("Foreground")
+                        $panel.AddChild($descLineLabel)
+                        $lineIndex++
                     }
                     $line = $word
                 } else {
@@ -483,10 +529,21 @@ class TaskListScreen : Screen {
             }
             
             if ($line) {
-                Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text $line -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+                # Create label for last line
+                $descLineLabel = [LabelComponent]::new("DetailDescLine$lineIndex")
+                $descLineLabel.X = 1
+                $descLineLabel.Y = $y++
+                $descLineLabel.Text = $line
+                $descLineLabel.ForegroundColor = Get-ThemeColor("Foreground")
+                $panel.AddChild($descLineLabel)
             }
         } else {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $($y++) -Text "(No description)" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+            $noDescLabel = [LabelComponent]::new("DetailNoDesc")
+            $noDescLabel.X = 1
+            $noDescLabel.Y = $y++
+            $noDescLabel.Text = "(No description)"
+            $noDescLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $panel.AddChild($noDescLabel)
         }
         
         $panel.RequestRedraw()
@@ -496,20 +553,35 @@ class TaskListScreen : Screen {
         $panel = $this._statusBar
         if (-not $panel) { return }
         
-        $buffer = $panel.GetBuffer()
+        # Clear children
+        $panel.Children.Clear()
         
+        # Set panel background color
+        $panel.BackgroundColor = Get-ThemeColor("status.bar.bg")
+        
+        # Status text label
         $statusText = "Tasks: $($this._tasks.Count) | Selected: $($this._selectedIndex + 1)"
         if ($this._filterText) {
             $statusText += " | Filter: '$($this._filterText)'"
         }
         
-        Write-TuiText -Buffer $buffer -X 0 -Y 0 -Text $statusText -Style @{ FG = Get-ThemeColor("status.bar.fg"); BG = Get-ThemeColor("status.bar.bg") }
+        $statusLabel = [LabelComponent]::new("StatusText")
+        $statusLabel.X = 0
+        $statusLabel.Y = 0
+        $statusLabel.Text = $statusText
+        $statusLabel.ForegroundColor = Get-ThemeColor("status.bar.fg")
+        $panel.AddChild($statusLabel)
         
-        # Keyboard hints
+        # Keyboard hints label
         $hints = "↑↓: Navigate | Enter: Edit | D: Delete | N: New"
         $hintsX = $this.Width - $hints.Length - 3
         if ($hintsX -gt $statusText.Length + 2) {
-            Write-TuiText -Buffer $buffer -X $hintsX -Y 0 -Text $hints -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("status.bar.bg") }
+            $hintsLabel = [LabelComponent]::new("StatusHints")
+            $hintsLabel.X = $hintsX
+            $hintsLabel.Y = 0
+            $hintsLabel.Text = $hints
+            $hintsLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $panel.AddChild($hintsLabel)
         }
         
         $panel.RequestRedraw()
