@@ -2,7 +2,16 @@
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
 # TUI engine, screen management, and main application loop
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ART.###" to find specific sections.
+# Each section ends with "END_PAGE: ART.###"
+# ==============================================================================
 
+#<!-- PAGE: ART.001 - Global State -->
 #region Global State
 
 # Initialize global TUI state
@@ -28,10 +37,6 @@ $global:TuiState = @{
     InputPowerShell = $null
     InputAsyncResult = $null
 }
-
-#endregion
-
-#region Error Handling
 
 function Invoke-WithErrorHandling {
     [CmdletBinding()]
@@ -77,7 +82,9 @@ function Invoke-WithErrorHandling {
 }
 
 #endregion
+#<!-- END_PAGE: ART.001 -->
 
+#<!-- PAGE: ART.002 - Engine Management -->
 #region Engine Management
 
 function Initialize-TuiEngine {
@@ -250,7 +257,9 @@ function Update-TuiEngineSize {
 }
 
 #endregion
+#<!-- END_PAGE: ART.002 -->
 
+#<!-- PAGE: ART.003 - Rendering System -->
 #region Rendering System
 
 function Invoke-TuiRender {
@@ -430,7 +439,9 @@ function Render-DifferentialBuffer {
 }
 
 #endregion
+#<!-- END_PAGE: ART.003 -->
 
+#<!-- PAGE: ART.004 - Input Processing -->
 #region Input Processing
 
 function Process-TuiInput {
@@ -519,7 +530,9 @@ function Process-TuiInput {
 }
 
 #endregion
+#<!-- END_PAGE: ART.004 -->
 
+#<!-- PAGE: ART.005 - Screen Management -->
 #region Overlay Management
 
 function Show-TuiOverlay {
@@ -592,13 +605,9 @@ function Close-TopTuiOverlay {
 }
 
 #endregion
+#<!-- END_PAGE: ART.005 -->
 
-#region Error Handling
-
-# Error handling functions have been consolidated - see Panic Handler region below
-
-#endregion
-
+#<!-- PAGE: ART.006 - Error Handling -->
 #region Panic Handler
 
 function Invoke-PanicHandler {
@@ -695,10 +704,6 @@ function Invoke-PanicHandler {
     exit 1
 }
 
-#endregion
-
-#region Application Entry
-
 function Start-AxiomPhoenix {
     [CmdletBinding()]
     param(
@@ -766,3 +771,4 @@ function Start-AxiomPhoenix {
 }
 
 #endregion
+#<!-- END_PAGE: ART.006 -->

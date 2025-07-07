@@ -2,7 +2,16 @@
 # Axiom-Phoenix v4.0 - All Functions (Load After Classes)
 # Standalone functions for TUI operations and utilities
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: AFU.###" to find specific sections.
+# Each section ends with "END_PAGE: AFU.###"
+# ==============================================================================
 
+#<!-- PAGE: AFU.001 - TUI Drawing Functions -->
 #region TUI Drawing Functions
 
 function Write-TuiText {
@@ -131,6 +140,12 @@ function Write-TuiBox {
     # Write-Log -Level Debug -Message "Write-TuiBox: Drew '$borderStyleName' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
 }
 
+#endregion
+#<!-- END_PAGE: AFU.001 -->
+
+#<!-- PAGE: AFU.002 - Border Functions -->
+#region Border Functions
+
 function Get-TuiBorderChars {
     [CmdletBinding()]
     param(
@@ -167,7 +182,9 @@ function Get-TuiBorderChars {
 }
 
 #endregion
+#<!-- END_PAGE: AFU.002 -->
 
+#<!-- PAGE: AFU.003 - Factory Functions -->
 #region Factory Functions
 
 function New-TuiBuffer {
@@ -292,7 +309,9 @@ function New-TuiRadioButton {
 }
 
 #endregion
+#<!-- END_PAGE: AFU.003 -->
 
+#<!-- PAGE: AFU.004 - Theme Functions -->
 #region Theme Functions
 
 function Get-ThemeColor {
@@ -318,8 +337,31 @@ function Get-ThemeColor {
 }
 
 #endregion
+#<!-- END_PAGE: AFU.004 -->
 
-#region Utility Functions
+#<!-- PAGE: AFU.005 - Focus Management -->
+#region Focus Management Functions
+
+function Set-ComponentFocus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][UIElement]$Component
+    )
+    
+    # This function is now obsolete - use FocusManager service instead
+    $focusManager = $global:TuiState.Services.FocusManager
+    if ($focusManager) {
+        $focusManager.SetFocus($Component)
+    } else {
+        Write-Warning "Set-ComponentFocus is deprecated. FocusManager service not available."
+    }
+}
+
+#endregion
+#<!-- END_PAGE: AFU.005 -->
+
+#<!-- PAGE: AFU.006 - Logging Functions -->
+#region Logging Functions
 
 function Write-Log {
     [CmdletBinding()]
@@ -360,23 +402,10 @@ function Write-Log {
     }
 }
 
-function Set-ComponentFocus {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][UIElement]$Component
-    )
-    
-    # This function is now obsolete - use FocusManager service instead
-    $focusManager = $global:TuiState.Services.FocusManager
-    if ($focusManager) {
-        $focusManager.SetFocus($Component)
-    } else {
-        Write-Warning "Set-ComponentFocus is deprecated. FocusManager service not available."
-    }
-}
-
 #endregion
+#<!-- END_PAGE: AFU.006 -->
 
+#<!-- PAGE: AFU.007 - Event Functions -->
 #region Event System
 
 function Subscribe-Event {
@@ -424,5 +453,30 @@ function Publish-Event {
 }
 
 #endregion
+#<!-- END_PAGE: AFU.007 -->
+
+#<!-- PAGE: AFU.008 - Error Handling -->
+#region Error Handling Functions
+
+# No specific error handling functions currently implemented
+# This section reserved for future error management utilities
+
+#endregion
+#<!-- END_PAGE: AFU.008 -->
+
+#<!-- PAGE: AFU.009 - Input Processing -->
+#region Input Processing Functions
+
+# No specific input processing functions currently implemented
+# This section reserved for future input handling utilities
+
+#endregion
+#<!-- END_PAGE: AFU.009 -->
+
+#<!-- PAGE: AFU.010 - Utility Functions -->
+#region Utility Functions
 
 # Initialize functions removed - Start.ps1 now uses direct service instantiation
+
+#endregion
+#<!-- END_PAGE: AFU.010 -->

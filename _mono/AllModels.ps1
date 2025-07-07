@@ -2,7 +2,16 @@
 # Axiom-Phoenix v4.0 - All Models (No UI Dependencies) - UPDATED
 # Data models, enums, and validation classes
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: AMO.###" to find specific sections.
+# Each section ends with "END_PAGE: AMO.###"
+# ==============================================================================
 
+<!-- PAGE: AMO.001 - Enums -->
 #region Enums
 
 enum TaskStatus {
@@ -24,7 +33,9 @@ enum BillingType {
 }
 
 #endregion
+<!-- END_PAGE: AMO.001 -->
 
+<!-- PAGE: AMO.002 - ValidationBase Class -->
 #region Base Validation Class
 
 # ===== CLASS: ValidationBase =====
@@ -52,7 +63,9 @@ class ValidationBase {
 }
 
 #endregion
+<!-- END_PAGE: AMO.002 -->
 
+<!-- PAGE: AMO.003 - Core Model Classes -->
 #region Core Model Classes
 
 # ===== CLASS: PmcTask =====
@@ -446,7 +459,9 @@ class TimeEntry : ValidationBase {
 }
 
 #endregion
+<!-- END_PAGE: AMO.003 -->
 
+<!-- PAGE: AMO.004 - Exception Classes -->
 #region Exception Classes
 
 # ===== CLASS: HeliosException =====
@@ -536,7 +551,9 @@ class DataLoadException : HeliosException {
 }
 
 #endregion
+<!-- END_PAGE: AMO.004 -->
 
+<!-- PAGE: AMO.005 - Navigation Classes -->
 #region Navigation Classes
 
 # ===== CLASS: NavigationItem =====
@@ -586,3 +603,4 @@ class NavigationItem {
 }
 
 #endregion
+<!-- END_PAGE: AMO.005 -->

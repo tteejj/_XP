@@ -2,10 +2,19 @@
 # Axiom-Phoenix v4.0 - All Components
 # UI components that extend UIElement - full implementations from axiom
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ACO.###" to find specific sections.
+# Each section ends with "END_PAGE: ACO.###"
+# ==============================================================================
 
 using namespace System.Collections.Generic
 using namespace System.Management.Automation
 
+##<!-- PAGE: ACO.001 - LabelComponent Class -->
 #region Core UI Components
 
 # ===== CLASS: LabelComponent =====
@@ -51,7 +60,9 @@ class LabelComponent : UIElement {
         return $false
     }
 }
+#<!-- END_PAGE: ACO.001 -->
 
+#<!-- PAGE: ACO.002 - ButtonComponent Class -->
 # ===== CLASS: ButtonComponent =====
 # Module: tui-components
 # Dependencies: UIElement, TuiCell
@@ -136,6 +147,9 @@ class ButtonComponent : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.002 -->
+
+#<!-- PAGE: ACO.003 - TextBoxComponent Class -->
 # ===== CLASS: TextBoxComponent =====
 # Module: tui-components
 # Dependencies: UIElement, TuiCell
@@ -168,11 +182,11 @@ class TextBoxComponent : UIElement {
         # Determine colors
         $fgColor = if ($this.IsFocused) { Get-ThemeColor("input.foreground") } else { Get-ThemeColor("Subtle") }
         $bgColor = Get-ThemeColor("input.background")
-        $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+        $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
         
         # Draw border
         Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-            -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
+            -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw text or placeholder
             $contentY = 1
@@ -281,7 +295,11 @@ class TextBoxComponent : UIElement {
         
         if ($handled) {
             if ($oldText -ne $this.Text -and $this.OnChange) {
-                try { & $this.OnChange $this $this.Text } catch {}
+                try { 
+                    & $this.OnChange $this $this.Text 
+                } catch {
+                    # Ignore errors in onChange handler
+                }
             }
             $this.RequestRedraw()
         }
@@ -290,6 +308,9 @@ class TextBoxComponent : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.003 -->
+
+#<!-- PAGE: ACO.004 - CheckBoxComponent Class -->
 # ===== CLASS: CheckBoxComponent =====
 # Module: tui-components
 # Dependencies: UIElement, TuiCell
@@ -326,7 +347,11 @@ class CheckBoxComponent : UIElement {
         if ($key.Key -eq [ConsoleKey]::Spacebar) {
             $this.Checked = -not $this.Checked
             if ($this.OnChange) {
-                try { & $this.OnChange $this $this.Checked } catch {}
+                try { 
+                    & $this.OnChange $this $this.Checked 
+                } catch {
+                    # Ignore errors in onChange handler
+                }
             }
             $this.RequestRedraw()
             return $true
@@ -336,6 +361,9 @@ class CheckBoxComponent : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.004 -->
+
+#<!-- PAGE: ACO.005 - RadioButtonComponent Class -->
 # ===== CLASS: RadioButtonComponent =====
 # Module: tui-components
 # Dependencies: UIElement, TuiCell
@@ -387,7 +415,11 @@ class RadioButtonComponent : UIElement {
                     $radio.Selected = $false
                     $radio.RequestRedraw()
                     if ($radio.OnChange) {
-                        try { & $radio.OnChange $radio $false } catch {}
+                        try { 
+                            & $radio.OnChange $radio $false 
+                        } catch {
+                            # Ignore errors in onChange handler
+                        }
                     }
                 }
             }
@@ -396,7 +428,11 @@ class RadioButtonComponent : UIElement {
         $this.Selected = $true
         $this.RequestRedraw()
         if ($this.OnChange) {
-            try { & $this.OnChange $this $true } catch {}
+            try { 
+                & $this.OnChange $this $true 
+            } catch {
+                # Ignore errors in onChange handler
+            }
         }
     }
 
@@ -414,158 +450,13 @@ class RadioButtonComponent : UIElement {
     }
 }
 
-# ===== CLASS: ComboBoxComponent =====
-# Module: advanced-input-components
-# Dependencies: UIElement, ListBox
-# Purpose: Dropdown with search and overlay rendering
-class ComboBoxComponent : UIElement {
-    [string[]]$Items = @()
-    [int]$SelectedIndex = -1
-    [string]$Placeholder = "Select an item..."
-    [bool]$IsExpanded = $false
-    [scriptblock]$OnChange
-    hidden [ListBox]$_dropdown
-    hidden [int]$MaxDropdownHeight = 10
-    
-    ComboBoxComponent([string]$name) : base($name) {
-        $this.IsFocusable = $true
-        $this.Width = 30
-        $this.Height = 3
-        
-        # Create dropdown listbox
-        $this._dropdown = [ListBox]::new($this.Name + "_Dropdown")
-        $this._dropdown.Visible = $false
-        $this._dropdown.IsOverlay = $true
-        $this._dropdown.Width = $this.Width
-        $this._dropdown.Height = [Math]::Min($this.MaxDropdownHeight, $this.Items.Count + 2)
-    }
-    
-    [void] SetItems([string[]]$items) {
-        $this.Items = $items
-        $this._dropdown.ClearItems()
-        foreach ($item in $items) {
-            $this._dropdown.AddItem($item)
-        }
-        $this._dropdown.Height = [Math]::Min($this.MaxDropdownHeight, $items.Count + 2)
-    }
-    
-    [void] OnRender() {
-        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-        
-        $bgColor = Get-ThemeColor("input.background")
-        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-        
-        # Draw main box
-        $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
-        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-            -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
-        
-        # Draw selected text or placeholder
-        $displayText = if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.Items.Count) {
-            $this.Items[$this.SelectedIndex]
-        } else {
-            $this.Placeholder
-        }
-        
-        $textColor = if ($this.SelectedIndex -ge 0) { 
-            Get-ThemeColor("input.foreground") 
-        } else { 
-            Get-ThemeColor("input.placeholder") 
-        }
-        
-        $maxTextLength = $this.Width - 4
-        if ($displayText.Length -gt $maxTextLength) {
-            $displayText = $displayText.Substring(0, $maxTextLength - 3) + "..."
-        }
-        
-        Write-TuiText -Buffer $this._private_buffer -X 2 -Y 1 -Text $displayText `
-            -Style @{ FG = $textColor; BG = $bgColor }
-        
-        # Draw dropdown arrow - fix the line continuation issue
-        $arrowChar = if ($this.IsExpanded) { '▲' } else { '▼' }
-        $borderFgColor = Get-ThemeColor("component.border")
-        $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $borderFgColor, $bgColor))
-        
-        $this._needs_redraw = $false
-    }
-    
-    [void] ShowDropdown() {
-        if (-not $this.IsExpanded) {
-            $this.IsExpanded = $true
-            
-            # Position dropdown below combo box
-            $absolutePos = $this.GetAbsolutePosition()
-            $this._dropdown.X = $absolutePos.X
-            $this._dropdown.Y = $absolutePos.Y + $this.Height - 1
-            $this._dropdown.Visible = $true
-            $this._dropdown.SelectedIndex = $this.SelectedIndex
-            
-            # Add to overlay stack
-            if (-not $global:TuiState.OverlayStack.Contains($this._dropdown)) {
-                $global:TuiState.OverlayStack.Add($this._dropdown)
-            }
-            
-            $this.RequestRedraw()
-        }
-    }
-    
-    [void] HideDropdown() {
-        if ($this.IsExpanded) {
-            $this.IsExpanded = $false
-            $this._dropdown.Visible = $false
-            
-            # Remove from overlay stack
-            if ($global:TuiState.OverlayStack.Contains($this._dropdown)) {
-                $global:TuiState.OverlayStack.Remove($this._dropdown)
-            }
-            
-            $this.RequestRedraw()
-        }
-    }
-    
-    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key) { return $false }
-        
-        # If dropdown is expanded, let it handle input
-        if ($this.IsExpanded) {
-            if ($key.Key -eq [ConsoleKey]::Escape) {
-                $this.HideDropdown()
-                return $true
-            }
-            elseif ($key.Key -eq [ConsoleKey]::Enter) {
-                $this.SelectedIndex = $this._dropdown.SelectedIndex
-                $this.HideDropdown()
-                if ($this.OnChange) {
-                    & $this.OnChange $this.SelectedIndex
-                }
-                return $true
-            }
-            else {
-                return $this._dropdown.HandleInput($key)
-            }
-        }
-        else {
-            # Combo box is collapsed
-            if ($key.Key -eq [ConsoleKey]::Enter -or $key.Key -eq [ConsoleKey]::Spacebar -or 
-                $key.Key -eq [ConsoleKey]::DownArrow) {
-                $this.ShowDropdown()
-                return $true
-            }
-        }
-        
-        return $false
-    }
-    
-    [void] OnBlur() {
-        ([UIElement]$this).OnBlur()
-        $this.HideDropdown()
-    }
-}
-
 #endregion Core UI Components
 
 #region Advanced Components
 
+#<!-- END_PAGE: ACO.005 -->
+
+#<!-- PAGE: ACO.006 - MultilineTextBoxComponent Class -->
 # ===== CLASS: MultilineTextBoxComponent =====
 # Module: advanced-input-components
 # Dependencies: UIElement, TuiCell
@@ -812,6 +703,9 @@ class MultilineTextBoxComponent : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.006 -->
+
+#<!-- PAGE: ACO.007 - NumericInputComponent Class -->
 # ===== CLASS: NumericInputComponent =====
 # Module: advanced-input-components
 # Dependencies: UIElement, TuiCell
@@ -997,6 +891,9 @@ class NumericInputComponent : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.007 -->
+
+#<!-- PAGE: ACO.008 - DateInputComponent Class -->
 # ===== CLASS: DateInputComponent =====
 # Module: advanced-input-components
 # Dependencies: UIElement, TuiCell
@@ -1209,6 +1106,9 @@ class DateInputComponent : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.008 -->
+
+#<!-- PAGE: ACO.009 - ComboBoxComponent Class -->
 # ===== CLASS: ComboBoxComponent =====
 # Module: advanced-input-components
 # Dependencies: UIElement, TuiCell
@@ -1522,6 +1422,9 @@ class ComboBoxComponent : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.009 -->
+
+#<!-- PAGE: ACO.010 - Table Class -->
 # ===== CLASS: Table =====
 # Module: advanced-data-components
 # Dependencies: UIElement, TuiCell
@@ -1807,6 +1710,9 @@ class Table : UIElement {
 
 #region Panel Components
 
+#<!-- END_PAGE: ACO.010 -->
+
+#<!-- PAGE: ACO.011 - Panel Class -->
 # ===== CLASS: Panel =====
 # Module: panels-class
 # Dependencies: UIElement, TuiCell
@@ -1846,11 +1752,11 @@ class Panel : UIElement {
             $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
 
             if ($this.HasBorder) {
-                $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+                $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor("component.title") } `
+                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor("component.title") } `
                     -Title $this.Title
             }
 
@@ -1925,6 +1831,9 @@ class Panel : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.011 -->
+
+#<!-- PAGE: ACO.012 - ScrollablePanel Class -->
 # ===== CLASS: ScrollablePanel =====
 # Module: panels-class
 # Dependencies: Panel, TuiCell
@@ -2048,14 +1957,15 @@ class ScrollablePanel : Panel {
 
         if ($this._contentHeight -le $scrollbarTrackHeight) { 
             # If content fits, clear any previous scrollbar
+            $bgColor = Get-ThemeColor "Background"
             for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
-                $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', Get-ThemeColor("Background"), Get-ThemeColor("Background")))
+                $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', $bgColor, $bgColor))
             }
             return 
         } 
 
-        $scrollFg = Get-ThemeColor("list.scrollbar")
-        $scrollBg = Get-ThemeColor("Background")
+        $scrollFg = Get-ThemeColor "list.scrollbar"
+        $scrollBg = Get-ThemeColor "Background"
 
         # Calculate thumb size and position
         $thumbSize = [Math]::Max(1, [int]($scrollbarTrackHeight * $scrollbarTrackHeight / $this._contentHeight))
@@ -2065,7 +1975,7 @@ class ScrollablePanel : Panel {
             $y = $scrollbarY + $i
             $char = '│' # Default track character
             
-            if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) {
+            if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) {
                 $char = '█' # Thumb character
             }
             $this.{_private_buffer}.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
@@ -2120,6 +2030,9 @@ class ScrollablePanel : Panel {
     }
 }
 
+#<!-- END_PAGE: ACO.012 -->
+
+#<!-- PAGE: ACO.013 - GroupPanel Class -->
 # ===== CLASS: GroupPanel =====
 # Module: panels-class
 # Dependencies: Panel
@@ -2183,6 +2096,9 @@ class GroupPanel : Panel {
 
 #region Composite Components
 
+#<!-- END_PAGE: ACO.013 -->
+
+#<!-- PAGE: ACO.014 - ListBox Class -->
 # ===== CLASS: ListBox =====
 # Module: tui-components (wrapper)
 # Dependencies: UIElement, TuiCell
@@ -2275,10 +2191,11 @@ class ListBox : UIElement {
                 $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this.Items.Count))
                 $thumbPos = [int]($scrollbarHeight * $this.ScrollOffset / $this.Items.Count)
                 
+                $scrollbarColor = Get-ThemeColor "list.scrollbar"
                 for ($i = 0; $i -lt $scrollbarHeight; $i++) {
-                    $char = if ($i -ge $thumbPos -and $i -lt $thumbPos + $thumbSize) { '█' } else { '│' }
+                    $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { '█' } else { '│' }
                     $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                        [TuiCell]::new($char, Get-ThemeColor("list.scrollbar"), $bgColor))
+                        [TuiCell]::new($char, $scrollbarColor, $bgColor))
                 }
             }
     }
@@ -2339,6 +2256,9 @@ class ListBox : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.014 -->
+
+#<!-- PAGE: ACO.015 - TextBox Class -->
 # ===== CLASS: TextBox =====
 # Module: tui-components (wrapper)
 # Dependencies: TextBoxComponent
@@ -2381,6 +2301,9 @@ class TextBox : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.015 -->
+
+#<!-- PAGE: ACO.016 - CommandPalette Class -->
 # ===== CLASS: CommandPalette =====
 # Module: command-palette
 # Dependencies: UIElement, Panel, ListBox, TextBox
@@ -2569,6 +2492,9 @@ class CommandPalette : UIElement {
 
 #region Dialog Components
 
+#<!-- END_PAGE: ACO.016 -->
+
+#<!-- PAGE: ACO.017 - Dialog Class -->
 # ===== CLASS: Dialog =====
 # Module: dialog-system-class
 # Dependencies: UIElement, Panel
@@ -2619,7 +2545,11 @@ class Dialog : UIElement {
         
         # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
-            try { & $this.OnClose $result } catch { # Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" }
+            try { 
+                & $this.OnClose $result 
+            } catch { 
+                # Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
+            }
         }
         
         # Publish a general dialog close event for DialogManager to pick up
@@ -2659,6 +2589,9 @@ class Dialog : UIElement {
     }
 }
 
+#<!-- END_PAGE: ACO.017 -->
+
+#<!-- PAGE: ACO.018 - AlertDialog Class -->
 # ===== CLASS: AlertDialog =====
 # Module: dialog-system-class
 # Dependencies: Dialog, ButtonComponent
@@ -2742,6 +2675,9 @@ class AlertDialog : Dialog {
     }
 }
 
+#<!-- END_PAGE: ACO.018 -->
+
+#<!-- PAGE: ACO.019 - ConfirmDialog Class -->
 # ===== CLASS: ConfirmDialog =====
 # Module: dialog-system-class
 # Dependencies: Dialog, ButtonComponent
@@ -2863,6 +2799,9 @@ class ConfirmDialog : Dialog {
     }
 }
 
+#<!-- END_PAGE: ACO.019 -->
+
+#<!-- PAGE: ACO.020 - InputDialog Class -->
 # ===== CLASS: InputDialog =====
 # Module: dialog-system-class
 # Dependencies: Dialog, TextBoxComponent, ButtonComponent
@@ -2974,6 +2913,9 @@ class InputDialog : Dialog {
 
 #region Navigation Components
 
+#<!-- END_PAGE: ACO.020 -->
+
+#<!-- PAGE: ACO.021 - NavigationMenu Class -->
 # ===== CLASS: NavigationMenu =====
 # Module: navigation-class
 # Dependencies: UIElement, NavigationItem
@@ -3148,5 +3090,7 @@ class NavigationMenu : UIElement {
         }
     }
 }
+
+#<!-- END_PAGE: ACO.021 -->
 
 #endregion Navigation Components

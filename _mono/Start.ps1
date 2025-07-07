@@ -2,7 +2,16 @@
 # Axiom-Phoenix v4.0 - Application Entry Point
 # Loads all framework files and starts the application
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: STA.###" to find specific sections.
+# Each section ends with "END_PAGE: STA.###"
+# ==============================================================================
 
+#<!-- PAGE: STA.001 - Script Configuration -->
 #region Script Configuration
 
 # Clean session by removing any existing types
@@ -40,7 +49,9 @@ $ErrorActionPreference = 'Stop'
 $VerbosePreference = 'SilentlyContinue'  # Change to 'Continue' for debug output
 
 #endregion
+#<!-- END_PAGE: STA.001 -->
 
+#<!-- PAGE: STA.002 - Framework Loading & Service Initialization -->
 #region Load Framework Files
 
 try {
@@ -89,137 +100,239 @@ try {
     # Create service container
     $container = [ServiceContainer]::new()
     
-    # Register core services
-    $container.Register("Logger", [Logger]::new())
-    $container.Register("EventManager", [EventManager]::new())
-    $container.Register("ThemeManager", [ThemeManager]::new())
+    # Register core services with error handling for each
+    try {
+        Write-Host "Creating Logger instance..." -ForegroundColor Gray
+        $logger = [Logger]::new()
+        Write-Host "Registering Logger service..." -ForegroundColor Gray
+        $container.Register("Logger", $logger)
+        Write-Host "✓ Logger service registered" -ForegroundColor Green
+    } catch {
+        Write-Host "✗ Failed with Logger service:" -ForegroundColor Red
+        Write-Host "  Error: $_" -ForegroundColor Red
+        Write-Host "  Type: $($_.Exception.GetType().FullName)" -ForegroundColor Red
+        Write-Host "  At: $($_.InvocationInfo.PositionMessage)" -ForegroundColor Gray
+    }
+    
+    try {
+        $eventManager = [EventManager]::new()
+        $container.Register("EventManager", $eventManager)
+        Write-Verbose "Registered EventManager service"
+    } catch {
+        Write-Warning "Failed to register EventManager: $_"
+    }
+    
+    try {
+        $themeManager = [ThemeManager]::new()
+        $container.Register("ThemeManager", $themeManager)
+        Write-Verbose "Registered ThemeManager service"
+    } catch {
+        Write-Warning "Failed to register ThemeManager: $_"
+    }
     
     # Register services that depend on EventManager
-    $eventManager = $container.GetService("EventManager")
-    $container.Register("ActionService", [ActionService]::new($eventManager))
-    $container.Register("DataManager", [DataManager]::new((Join-Path $env:APPDATA "AxiomPhoenix\data.json"), $eventManager))
-    $container.Register("NavigationService", [NavigationService]::new(@{ EventManager = $eventManager })) # Pass services hashtable
-    $container.Register("FocusManager", [FocusManager]::new($eventManager)) # NEW: Register FocusManager
-
+    $eventManager = try { $container.GetService("EventManager") } catch { $null }
+    
+    if ($eventManager) {
+        try {
+            $actionService = [ActionService]::new($eventManager)
+            $container.Register("ActionService", $actionService)
+            Write-Verbose "Registered ActionService with EventManager"
+        } catch {
+            Write-Warning "Failed to register ActionService with EventManager: $_"
+            # Try without EventManager
+            try {
+                $actionService = [ActionService]::new()
+                $container.Register("ActionService", $actionService)
+                Write-Verbose "Registered ActionService without EventManager"
+            } catch {
+                Write-Warning "Failed to register ActionService: $_"
+            }
+        }
+        
+        try {
+            $dataPath = Join-Path $env:APPDATA "AxiomPhoenix\data.json"
+            $dataManager = [DataManager]::new($dataPath, $eventManager)
+            $container.Register("DataManager", $dataManager)
+            Write-Verbose "Registered DataManager service"
+        } catch {
+            Write-Warning "Failed to register DataManager: $_"
+        }
+        
+        try {
+            $services = @{ EventManager = $eventManager }
+            $navService = [NavigationService]::new($services)
+            $container.Register("NavigationService", $navService)
+            Write-Verbose "Registered NavigationService"
+        } catch {
+            Write-Warning "Failed to register NavigationService: $_"
+        }
+        
+        try {
+            $focusManager = [FocusManager]::new($eventManager)
+            $container.Register("FocusManager", $focusManager)
+            Write-Verbose "Registered FocusManager"
+        } catch {
+            Write-Warning "Failed to register FocusManager: $_"
+        }
+    }
+    
     # Register services that depend on ActionService
-    $actionService = $container.GetService("ActionService")
-    $container.Register("KeybindingService", [KeybindingService]::new($actionService))
+    $actionService = try { $container.GetService("ActionService") } catch { $null }
     
-    # NEW: Register DialogManager (depends on EventManager and FocusManager)
-    $focusManager = $container.GetService("FocusManager")
-    $container.Register("DialogManager", [DialogManager]::new($eventManager, $focusManager))
-
-    # Register framework service (not implemented in v4.0)
-    # $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
+    if ($actionService) {
+        try {
+            $keybindingService = [KeybindingService]::new($actionService)
+            $container.Register("KeybindingService", $keybindingService)
+            Write-Verbose "Registered KeybindingService"
+        } catch {
+            Write-Warning "Failed to register KeybindingService: $_"
+        }
+    }
     
-    # Initialize default actions
-    $actionService.RegisterDefaultActions()
+    # Register DialogManager (depends on EventManager and FocusManager)
+    $focusManager = try { $container.GetService("FocusManager") } catch { $null }
     
-    # Register navigation actions
-    $navService = $container.GetService("NavigationService")
+    if ($eventManager -and $focusManager) {
+        try {
+            $dialogManager = [DialogManager]::new($eventManager, $focusManager)
+            $container.Register("DialogManager", $dialogManager)
+            Write-Verbose "Registered DialogManager"
+        } catch {
+            Write-Warning "Failed to register DialogManager: $_"
+        }
+    }
     
-    $actionService.RegisterAction("navigation.dashboard", {
-        $dashboard = [DashboardScreen]::new($container)
-        $navService.NavigateTo($dashboard)
-    }, @{
-        Category = "Navigation"
-        Description = "Go to Dashboard"
-    })
+    # Initialize default actions if ActionService is available
+    if ($actionService) {
+        try {
+            $actionService.RegisterDefaultActions()
+            Write-Verbose "Registered default actions"
+        } catch {
+            Write-Warning "Failed to register default actions: $_"
+        }
+    }
     
-    $actionService.RegisterAction("navigation.taskList", {
-        $taskList = [TaskListScreen]::new($container)
-        $navService.NavigateTo($taskList)
-    }, @{
-        Category = "Navigation"
-        Description = "Go to Task List"
-    })
+    # Register navigation actions if both services are available
+    $navService = try { $container.GetService("NavigationService") } catch { $null }
+    
+    if ($actionService -and $navService) {
+        try {
+            $actionService.RegisterAction("navigation.dashboard", {
+                $dashboard = [DashboardScreen]::new($container)
+                $navService.NavigateTo($dashboard)
+            }, @{
+                Category = "Navigation"
+                Description = "Go to Dashboard"
+            })
+            
+            $actionService.RegisterAction("navigation.taskList", {
+                $taskList = [TaskListScreen]::new($container)
+                $navService.NavigateTo($taskList)
+            }, @{
+                Category = "Navigation"
+                Description = "Go to Task List"
+            })
+            
+            Write-Verbose "Registered navigation actions"
+        } catch {
+            Write-Warning "Failed to register navigation actions: $_"
+        }
+    }
     
     Write-Host "Services initialized successfully!" -ForegroundColor Green
 }
 catch {
     Write-Host "Failed to initialize services!" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor Red
     exit 1
 }
 
 #endregion
+#<!-- END_PAGE: STA.002 -->
 
+#<!-- PAGE: STA.003 - Data Loading & Application Startup -->
 #region Load Sample Data
 
 try {
     Write-Host "Loading sample data..." -ForegroundColor Cyan
     
-    $dataManager = $container.GetService("DataManager")
+    $dataManager = try { $container.GetService("DataManager") } catch { $null }
     
-    # Try to load existing data first
-    try {
-        $dataManager.LoadData()
-        
-        if ($dataManager.Tasks.Count -eq 0) {
-            throw "No existing data found"
-        }
-        
-        Write-Host "Loaded $($dataManager.Tasks.Count) tasks from storage" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "Creating sample data..." -ForegroundColor Yellow
-        
-        # Create sample project
-        $project = [PmcProject]::new("DEMO", "Demo Project", "Sample project for demonstration", "Admin")
-        $dataManager.AddProject($project)
-        
-        # Create sample tasks
-        $sampleTasks = @(
-            @{
-                Title = "Complete TUI Framework Migration"
-                Description = "Migrate all axiom components to mono structure"
-                Priority = [TaskPriority]::High
-                Status = [TaskStatus]::InProgress
-                Progress = 75
-            },
-            @{
-                Title = "Write Documentation"
-                Description = "Create comprehensive documentation for the framework"
-                Priority = [TaskPriority]::Medium
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            },
-            @{
-                Title = "Add Unit Tests"
-                Description = "Implement unit tests for core components"
-                Priority = [TaskPriority]::Medium
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            },
-            @{
-                Title = "Optimize Rendering Performance"
-                Description = "Profile and optimize the differential rendering system"
-                Priority = [TaskPriority]::Low
-                Status = [TaskStatus]::InProgress
-                Progress = 30
-            },
-            @{
-                Title = "Create Theme Editor"
-                Description = "Build a visual theme editor screen"
-                Priority = [TaskPriority]::Low
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            }
-        )
-        
-        foreach ($taskData in $sampleTasks) {
-            $task = [PmcTask]::new($taskData.Title, $taskData.Description, $taskData.Priority, "DEMO")
-            $task.Status = $taskData.Status
-            $task.Progress = $taskData.Progress
+    if (-not $dataManager) {
+        Write-Warning "DataManager service not available - skipping data loading"
+    } else {
+        # Try to load existing data first
+        try {
+            $dataManager.LoadData()
             
-            if ($taskData.Progress -eq 100) {
-                $task.Complete()
+            if ($dataManager.GetTasks().Count -eq 0) {
+                throw "No existing data found"
             }
             
-            $dataManager.AddTask($task)
+            Write-Host "Loaded $($dataManager.GetTasks().Count) tasks from storage" -ForegroundColor Green
         }
-        
-        Write-Host "Created $($sampleTasks.Count) sample tasks" -ForegroundColor Green
+        catch {
+            Write-Host "Creating sample data..." -ForegroundColor Yellow
+            
+            # Create sample project
+            $project = [PmcProject]::new("DEMO", "Demo Project", "Sample project for demonstration", "Admin")
+            $dataManager.AddProject($project)
+            
+            # Create sample tasks
+            $sampleTasks = @(
+                @{
+                    Title = "Complete TUI Framework Migration"
+                    Description = "Migrate all axiom components to mono structure"
+                    Priority = [TaskPriority]::High
+                    Status = [TaskStatus]::InProgress
+                    Progress = 75
+                },
+                @{
+                    Title = "Write Documentation"
+                    Description = "Create comprehensive documentation for the framework"
+                    Priority = [TaskPriority]::Medium
+                    Status = [TaskStatus]::Pending
+                    Progress = 0
+                },
+                @{
+                    Title = "Add Unit Tests"
+                    Description = "Implement unit tests for core components"
+                    Priority = [TaskPriority]::Medium
+                    Status = [TaskStatus]::Pending
+                    Progress = 0
+                },
+                @{
+                    Title = "Optimize Rendering Performance"
+                    Description = "Profile and optimize the differential rendering system"
+                    Priority = [TaskPriority]::Low
+                    Status = [TaskStatus]::InProgress
+                    Progress = 30
+                },
+                @{
+                    Title = "Create Theme Editor"
+                    Description = "Build a visual theme editor screen"
+                    Priority = [TaskPriority]::Low
+                    Status = [TaskStatus]::Pending
+                    Progress = 0
+                }
+            )
+            
+            foreach ($taskData in $sampleTasks) {
+                $task = [PmcTask]::new($taskData.Title, $taskData.Description, $taskData.Priority, "DEMO")
+                $task.Status = $taskData.Status
+                $task.Progress = $taskData.Progress
+                
+                if ($taskData.Progress -eq 100) {
+                    $task.Complete()
+                }
+                
+                $dataManager.AddTask($task)
+            }
+            
+            Write-Host "Created $($sampleTasks.Count) sample tasks" -ForegroundColor Green
+        }
     }
 }
 catch {
@@ -263,3 +376,4 @@ finally {
 }
 
 #endregion
+#<!-- END_PAGE: STA.003 -->
