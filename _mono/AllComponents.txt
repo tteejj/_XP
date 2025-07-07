@@ -50,6 +50,22 @@ class LabelComponent : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         return $false
     }
+
+    [LabelComponent] SetPosition([int]$x, [int]$y) {
+        $this.X = $x
+        $this.Y = $y
+        return $this
+    }
+
+    [LabelComponent] SetText([string]$text) {
+        $this.Text = $text
+        return $this
+    }
+
+    [LabelComponent] SetStyle([hashtable]$style) {
+        if ($style.ContainsKey('FG')) { $this.ForegroundColor = $style.FG }
+        return $this
+    }
 }
 
 # ===== CLASS: ButtonComponent =====

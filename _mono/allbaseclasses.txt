@@ -311,11 +311,7 @@ class TuiBuffer {
         $this.WriteString($x, $y, $text, $style)
     }
     
-    [void] DrawBox([int]$x, [int]$y, [int]$width, [int]$height, [hashtable]$style = @{}) {
-        # This will now internally call the new Write-TuiBox function in AllFunctions.ps1
-        # It's better to delegate complex drawing like boxes to the global functions.
-        Write-TuiBox -Buffer $this -X $x -Y $y -Width $width -Height $height -Style $style
-    }
+
     
     [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$char, [hashtable]$style = @{}) {
         # Create a single character string and use WriteString to fill the rectangle
@@ -551,18 +547,19 @@ class UIElement {
         return $false
     }
 
+    [void] OnCleanup()
+    {
+        # This method is intended to be overridden by child classes
+    }
+
     [void] Cleanup()
     {
+        # Call the overrideable cleanup hook first
+        $this.OnCleanup()
+
         # Cleanup all children recursively
         foreach ($child in $this.Children) {
-            if ($child.PSObject.Methods['Cleanup']) {
-                try { 
-                    $child.Cleanup() 
-                } 
-                catch { 
-                    Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" 
-                }
-            }
+            $child.Cleanup()
         }
         
         # Clear references

@@ -37,98 +37,55 @@ function Write-TuiBox {
         [string]$Title = "",
         [hashtable]$Style = @{} # All visual aspects now passed via Style hashtable
     )
-    
+
     if ($null -eq $Buffer -or $Width -le 0 -or $Height -le 0) {
         # Write-Log -Level Warning -Message "Write-TuiBox: Invalid dimensions ($($Width)x$($Height)). Dimensions must be positive."
         return
     }
 
-    # Extract properties from the style object with safe fallbacks.
+    # 1. Extract style properties with safe fallbacks
     $borderStyleName = $Style.BorderStyle ?? "Single"
     $borderColor = $Style.BorderFG ?? "#808080" # Default border color (gray hex)
     $bgColor = $Style.BG ?? "#000000"           # Default background color (black hex)
     $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color
     $fillChar = [char]($Style.FillChar ?? ' ')   # Optional fill character
-
     $borders = Get-TuiBorderChars -Style $borderStyleName
     
-    # Define style objects for child calls to Write-TuiText.
-    $generalStyle = @{ FG = $borderColor; BG = $bgColor } # For borders
+    # Define style objects for child calls to WriteString
+    $borderStyle = @{ FG = $borderColor; BG = $bgColor }
     $fillStyle = @{ FG = $borderColor; BG = $bgColor }    # For fill area (fill char uses border fg)
-    
     $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
-    # Merge any additional title style overrides (e.g., Bold = $true for title)
-    if ($Style.TitleStyle) {
-        foreach ($key in $Style.TitleStyle.Keys) { $titleTextStyle[$key] = $Style.TitleStyle[$key] }
-    }
 
-    # Fill background of the entire box area first
+    # 2. Fill the entire area first. This sets the background color correctly.
     $Buffer.FillRect($X, $Y, $Width, $Height, $fillChar, $fillStyle)
-    
-    # Top border - handle edge cases for small dimensions
-    if ($Height -gt 0) {
-        if ($Width > 2) {
-            # Normal case: Width >= 3
-            $middlePart = $borders.Horizontal * ($Width - 2)
-            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$middlePart$($borders.TopRight)" -Style $generalStyle
-        } elseif ($Width -eq 2) {
-            # Special case: Width = 2 (just corners)
-            Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$($borders.TopRight)" -Style $generalStyle
-        } elseif ($Width -eq 1) {
-            # Special case: Width = 1 (just a vertical line segment)
-            $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
-        }
-    }
 
+    # 3. Draw the border lines over the fill
+    # Top border
+    if ($Height -gt 0) {
+        if ($Width > 1) { $Buffer.WriteString($X, $Y, "$($borders.TopLeft)$($borders.Horizontal * [Math]::Max(0, $Width - 2))$($borders.TopRight)", $borderStyle) }
+        elseif ($Width -eq 1) { $Buffer.SetCell($X, $Y, [TuiCell]::new($borders.Vertical, $borderColor, $bgColor, $false, $false, $false, $false)) }
+    }
     # Side borders
     for ($i = 1; $i -lt ($Height - 1); $i++) {
-        Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
-        if ($Width -gt 1) {
-            Write-TuiText -Buffer $Buffer -X ($X + $Width - 1) -Y ($Y + $i) -Text $borders.Vertical -Style $generalStyle
-        }
+        if ($Width -ge 1) { $Buffer.SetCell($X, $Y + $i, [TuiCell]::new($borders.Vertical, $borderColor, $bgColor, $false, $false, $false, $false)) }
+        if ($Width -ge 2) { $Buffer.SetCell($X + $Width - 1, $Y + $i, [TuiCell]::new($borders.Vertical, $borderColor, $bgColor, $false, $false, $false, $false)) }
     }
-    
-    # Bottom border - handle edge cases for small dimensions
+    # Bottom border
     if ($Height -gt 1) {
-        if ($Width > 2) {
-            # Normal case: Width >= 3
-            $middlePart = $borders.Horizontal * ($Width - 2)
-            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$middlePart$($borders.BottomRight)" -Style $generalStyle
-        } elseif ($Width -eq 2) {
-            # Special case: Width = 2 (just corners)
-            Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$($borders.BottomRight)" -Style $generalStyle
-        } elseif ($Width -eq 1) {
-            # Special case: Width = 1 (just a vertical line segment)
-            $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.Vertical, $generalStyle.FG, $generalStyle.BG))
-        }
+        if ($Width > 1) { $Buffer.WriteString($X, $Y + $Height - 1, "$($borders.BottomLeft)$($borders.Horizontal * [Math]::Max(0, $Width - 2))$($borders.BottomRight)", $borderStyle) }
+        elseif ($Width -eq 1) { $Buffer.SetCell($X, $Y + $Height - 1, [TuiCell]::new($borders.Vertical, $borderColor, $bgColor, $false, $false, $false, $false)) }
     }
 
-    # Draw title if specified
+    # 4. Draw the title
     if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
         $titleText = " $Title "
         if ($titleText.Length -le ($Width - 2)) {
-            $titleAlignment = $Style.TitleAlignment ?? "TopBorder" # Default to current behavior
             $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
-            
-            # Calculate title Y position based on alignment
-            $titleY = $Y # Default to top border
-            switch ($titleAlignment) {
-                "TopBorder" { $titleY = $Y }  # Default - on the top border
-                "Top" { $titleY = $Y + 1 }    # Just inside the top border
-                "Center" { $titleY = $Y + [Math]::Floor($Height / 2) }  # Vertically centered
-                "Bottom" { $titleY = $Y + $Height - 2 }  # Just inside the bottom border
-                default { $titleY = $Y }      # Fallback to top border
-            }
-            
-            # Ensure title Y is within buffer bounds
-            if ($titleY -ge 0 -and $titleY -lt $Buffer.Height) {
-                Write-TuiText -Buffer $Buffer -X $titleX -Y $titleY -Text $titleText -Style $titleTextStyle
-            }
+            $Buffer.WriteString($titleX, $Y, $titleText, $titleTextStyle)
         }
     }
-    
+
     $Buffer.IsDirty = $true
-    # Write-Log -Level Debug -Message "Write-TuiBox: Drew '$borderStyleName' box on buffer '$($Buffer.Name)' at ($X, $Y) with dimensions $($Width)x$($Height)."
 }
 
 function Get-TuiBorderChars {

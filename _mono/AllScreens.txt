@@ -13,6 +13,7 @@ class DashboardScreen : Screen {
     hidden [Panel] $_summaryPanel
     hidden [Panel] $_statusPanel
     hidden [Panel] $_helpPanel
+    hidden [string] $_dataChangeSubscriptionId = $null
     #endregion
 
     #region State
@@ -68,6 +69,17 @@ class DashboardScreen : Screen {
     }
 
     [void] OnEnter() {
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            $handler = {
+                param($eventData)
+                Write-Verbose "DashboardScreen received data change event. Refreshing..."
+                $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
+                $global:TuiState.IsDirty = $true
+            }.GetNewClosure()
+            $this._dataChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
+        }
+
         # Force a complete redraw of all panels
         if ($this._summaryPanel) { $this._summaryPanel.RequestRedraw() }
         if ($this._helpPanel) { $this._helpPanel.RequestRedraw() }
@@ -83,6 +95,14 @@ class DashboardScreen : Screen {
         
         # Force another redraw after data refresh
         $this.RequestRedraw()
+    }
+
+    [void] OnCleanup() {
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager -and $this._dataChangeSubscriptionId) {
+            $eventManager.Unsubscribe("Tasks.Changed", $this._dataChangeSubscriptionId)
+            $this._dataChangeSubscriptionId = $null
+        }
     }
 
     hidden [void] _RefreshData([object]$dataManager) {
@@ -117,27 +137,19 @@ class DashboardScreen : Screen {
         $panel = $this._summaryPanel
         if (-not $panel) { return }
         
-        # Clear children
         $panel.Children.Clear()
-
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
-
-        # Simple text rendering using buffer
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Task Overview" -Style @{ FG = Get-ThemeColor("Primary"); BG = Get-ThemeColor("Background") }
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
-        if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
-        }
-        
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -Style @{ FG = Get-ThemeColor("Success"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -Style @{ FG = Get-ThemeColor("Warning"); BG = Get-ThemeColor("Background") }
+        $y = 0
+        $panel.AddChild(([LabelComponent]::new("SummaryHeader").SetText("Task Overview").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Primary" })))
+        $panel.AddChild(([LabelComponent]::new("SummarySeparator").SetText(('─' * [Math]::Max(0, $panel.ContentWidth - 2))).SetPosition(1, $y++)))
+        $y++
+        $panel.AddChild(([LabelComponent]::new("TotalTasksLabel").SetText("Total Tasks:    $($this._totalTasks)").SetPosition(1, $y++)))
+        $panel.AddChild(([LabelComponent]::new("CompletedTasksLabel").SetText("Completed:      $($this._completedTasks)").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Success" })))
+        $panel.AddChild(([LabelComponent]::new("PendingTasksLabel").SetText("Pending:        $($this._pendingTasks)").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Warning" })))
         
         # Draw progress bar
+        $buffer = $panel.GetBuffer()
         $percentage = if ($this._totalTasks -eq 0) { 0 } else { [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) }
-        $this._DrawProgressBar($buffer, $contentX + 1, $contentY + 7, 20, $percentage, "Overall Progress")
+        $this._DrawProgressBar($buffer, $panel.ContentX + 1, $panel.ContentY + 7, 20, $percentage, "Overall Progress")
         
         $panel.RequestRedraw()
     }
@@ -145,29 +157,19 @@ class DashboardScreen : Screen {
     hidden [void] _UpdateHelpPanel() {
         $panel = $this._helpPanel
         if (-not $panel) { return }
-        
-        # Clear children
-        $panel.Children.Clear()
-        
-        $paletteHotkey = "Ctrl+P"
-        
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
-        
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 0) -Text "Welcome to Axiom-Phoenix!" -Style @{ FG = Get-ThemeColor("Primary"); BG = Get-ThemeColor("Background") }
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
-        if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
-        }
-        
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Press " -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 7) -Y ($contentY + 3) -Text $paletteHotkey -Style @{ FG = Get-ThemeColor("Accent"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 7 + $paletteHotkey.Length) -Y ($contentY + 3) -Text " to open the" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Command Palette." -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
 
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 6) -Text "All navigation and actions are" -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "now available from there." -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+        $panel.Children.Clear()
+        $y = 0
+        $panel.AddChild(([LabelComponent]::new("HelpHeader1").SetText("Welcome to Axiom-Phoenix!").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Primary" })))
+        $panel.AddChild(([LabelComponent]::new("HelpSeparator").SetText(('─' * [Math]::Max(0, $panel.ContentWidth - 2))).SetPosition(1, $y++)))
+        $y++
+        $panel.AddChild(([LabelComponent]::new("HelpLine1a").SetText("Press ").SetPosition(1, $y)))
+        $panel.AddChild(([LabelComponent]::new("HelpLine1b").SetText("Ctrl+P").SetPosition(7, $y).SetStyle(@{ FG = Get-ThemeColor "Accent" })))
+        $panel.AddChild(([LabelComponent]::new("HelpLine1c").SetText(" to open the").SetPosition(13, $y++)))
+        $panel.AddChild(([LabelComponent]::new("HelpLine2").SetText("Command Palette.").SetPosition(1, $y)))
+        $y += 2
+        $panel.AddChild(([LabelComponent]::new("HelpLine3").SetText("All navigation and actions are").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Subtle" })))
+        $panel.AddChild(([LabelComponent]::new("HelpLine4").SetText("now available from there.").SetPosition(1, $y).SetStyle(@{ FG = Get-ThemeColor "Subtle" })))
         
         $panel.RequestRedraw()
     }
@@ -175,25 +177,16 @@ class DashboardScreen : Screen {
     hidden [void] _UpdateStatusPanel() {
         $panel = $this._statusPanel
         if (-not $panel) { return }
-        
-        # Clear children
+
         $panel.Children.Clear()
-
+        $y = 0
         $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
-
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
-        
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Environment" -Style @{ FG = Get-ThemeColor("Primary"); BG = Get-ThemeColor("Background") }
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
-        if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
-        }
-        
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "PowerShell Version: $($global:PSVersionTable.PSVersion)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Memory Usage: ${memoryMB} MB" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Host: $($global:Host.Name)" -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        $panel.AddChild(([LabelComponent]::new("StatusHeader").SetText("Environment").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Primary" })))
+        $panel.AddChild(([LabelComponent]::new("StatusSeparator").SetText(('─' * [Math]::Max(0, $panel.ContentWidth - 2))).SetPosition(1, $y++)))
+        $y++
+        $panel.AddChild(([LabelComponent]::new("PSVersionLabel").SetText("PowerShell Version: $($global:PSVersionTable.PSVersion)").SetPosition(1, $y++)))
+        $panel.AddChild(([LabelComponent]::new("MemUsageLabel").SetText("Memory Usage: ${memoryMB} MB").SetPosition(1, $y++)))
+        $panel.AddChild(([LabelComponent]::new("HostLabel").SetText("Host: $($global:Host.Name)").SetPosition(1, $y++)))
         
         $panel.RequestRedraw()
     }
