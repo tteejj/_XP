@@ -1,0 +1,474 @@
+Of course. This is a comprehensive review of the provided PowerShell TUI framework code. The goal is to identify critical issues that would prevent the application from running and to suggest fixes for stabilization.
+
+### Executive Summary
+
+The codebase represents a sophisticated, well-designed, and feature-rich TUI framework. The architecture, with its separation into classes, services, and a runtime engine, is excellent. However, there are several **critical, show-stopper issues** that will prevent the scripts from loading and the application from running at all.
+
+The primary problems are:
+1.  **Incorrect File Load Order:** Functions are used in class definitions before the functions themselves are defined, which will cause a fatal script parsing error.
+2.  **Duplicate Class Definition:** The `ComboBoxComponent` class is defined twice, which is a syntax error.
+3.  **Incorrect Method Calls and Type Mismatches:** Several components use outdated method signatures or pass incorrect data types (e.g., `[ConsoleColor]` where a hex `[string]` is expected).
+4.  **Minor Syntax Errors:** A few simple syntax errors exist, like an invalid property access in `ScrollablePanel`.
+
+Once these critical issues are resolved, the framework appears to be very close to a functional state. The underlying logic for rendering, focus management, and component interaction is mostly sound.
+
+---
+
+### Critical Issues (Will Prevent from Running)
+
+These issues must be fixed before the application can even start.
+
+#### 1. Incorrect File Load Order in `Start.ps1`
+*   **Problem:** `AllComponents.ps1` and `AllScreens.ps1` define classes whose methods call functions like `Get-ThemeColor`, `Write-TuiText`, and `Write-TuiBox`. However, `AllFunctions.ps1` (where these functions are defined) is loaded *after* them. When PowerShell parses the class definitions, it will fail because these commands do not exist yet.
+*   **File:** `Start.ps1`
+*   **Impact:** Fatal script loading error.
+*   **Fix:** Adjust the load order in `Start.ps1` to ensure functions are available before classes that use them.
+
+**Corrected Load Order in `Start.ps1`:**
+```powershell
+# Original (Incorrect) Order in Start.ps1
+# $filesToLoad = @(
+#     'AllBaseClasses.ps1', 'AllModels.ps1', 'AllComponents.ps1', 
+#     'AllScreens.ps1', 'AllFunctions.ps1', 'AllServices.ps1', 'AllRuntime.ps1'
+# )
+
+# CORRECTED Order
+$filesToLoad = @(
+    'AllBaseClasses.ps1',   # Foundation types with zero dependencies
+    'AllModels.ps1',        # Data models, depends on base classes
+    'AllFunctions.ps1',     # << MOVED UP: Helper functions must exist before being used
+    'AllComponents.ps1',    # UI components, depends on base + models + functions
+    'AllScreens.ps1',       # Screens, depends on all above
+    'AllServices.ps1',      # Services, can use everything
+    'AllRuntime.ps1'        # Engine and runtime, orchestrates everything
+)
+```
+
+#### 2. Duplicate `ComboBoxComponent` Class Definition
+*   **Problem:** The class `ComboBoxComponent` is defined twice in `AllComponents.ps1`. PowerShell does not allow redefining a class.
+*   **File:** `AllComponents.ps1`
+*   **Impact:** Fatal script loading error.
+*   **Fix:** Remove one of the definitions. The first definition (in the "Core UI Components" region) appears to be the more complete and integrated one, using the `OverlayStack`. The second definition (in "Advanced Components") seems incomplete and uses different property names. **Remove the second `ComboBoxComponent` definition entirely.**
+
+#### 3. `ConsoleColor` Enum Passed to Methods Expecting Hex Strings
+*   **Problem:** Several "Advanced" components like `MultilineTextBoxComponent`, `NumericInputComponent`, and `DateInputComponent` define properties as `[ConsoleColor]` but then pass them directly to drawing methods (`[TuiCell]::new`, `Write-TuiBox`) that now expect hex color strings (e.g., `#FFFFFF`). This will cause a type mismatch or invalid ANSI sequence at runtime.
+*   **File:** `AllComponents.ps1`
+*   **Impact:** Runtime errors and visual artifacts/crashes when rendering these components.
+*   **Fix:**
+    *   Change the property types in these components from `[ConsoleColor]` to `[string]`.
+    *   In their `OnRender` methods, ensure all colors are retrieved via `Get-ThemeColor` or are already valid hex strings before being passed to drawing functions.
+
+**Example Fix in `MultilineTextBoxComponent`:**
+```powershell
+# In AllComponents.ps1, class MultilineTextBoxComponent
+
+# OLD (Incorrect)
+# [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
+# [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
+# [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
+
+# NEW (Corrected)
+[string]$BackgroundColor = "#000000"
+[string]$ForegroundColor = "#FFFFFF"
+[string]$BorderColor = "#808080"
+
+# In the OnRender method:
+[void] OnRender() {
+    # ...
+    try {
+        # Use Get-ThemeColor for dynamic colors
+        $bgColor = Get-ThemeColor("input.background")
+        $fgColor = Get-ThemeColor("input.foreground")
+        $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+
+        $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+        
+        # Draw border using the new style
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
+            -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
+            
+        # ... rest of the render logic ...
+    } catch {}
+}
+```
+***Apply this same pattern to `NumericInputComponent` and `DateInputComponent`.***
+
+#### 4. Incorrect `WriteString` and `SetCell` Method Calls
+*   **Problem:** Several components call `WriteString` or `SetCell` with an outdated signature (`...$fgColor, $bgColor`). The `TuiBuffer` and `TuiCell` classes have been updated to use a single `[hashtable]$style` parameter or hex string parameters.
+*   **Files:** `AllComponents.ps1`
+*   **Impact:** Runtime error (`MethodNotFound` or parameter binding failure).
+*   **Fix:** Update all calls to match the new class definitions.
+
+**Example Fix in `MultilineTextBoxComponent.OnRender`:**
+```powershell
+# OLD (Incorrect)
+# $this._private_buffer.WriteString(1, $y + 1, $visiblePart, $fgColor, $bgColor)
+# $this._private_buffer.SetCell($cursorScreenX, $cursorScreenY, [TuiCell]::new($cursorChar, $bgColor, $fgColor))
+
+# NEW (Corrected)
+$style = @{ FG = $fgColor; BG = $bgColor }
+Write-TuiText -Buffer $this._private_buffer -X 1 -Y ($y + 1) -Text $visiblePart -Style $style
+
+# ... later in the method ...
+# For the cursor, the TuiCell constructor is correct, just ensure the colors are hex strings
+$this._private_buffer.SetCell($cursorScreenX, $cursorScreenY, [TuiCell]::new($cursorChar, $bgColor, $fgColor))
+```
+***This issue is also present in `NavigationMenu`, `NumericInputComponent`, and `DateInputComponent`.***
+
+#### 5. Syntax Error in `ScrollablePanel`
+*   **Problem:** `ScrollablePanel` uses the syntax `$this.{_virtual_buffer}` to access its private buffer. The curly braces `{}` are invalid for property access in this context.
+*   **File:** `AllComponents.ps1`
+*   **Impact:** Fatal script loading error.
+*   **Fix:** Remove the curly braces.
+
+**Corrected code in `ScrollablePanel`:**
+```powershell
+# Change all instances of:
+$this.{_virtual_buffer}
+
+# To:
+$this._virtual_buffer
+```
+
+---
+
+### Other Issues & Recommendations for Stabilization
+
+These issues might not crash the application immediately but will cause incorrect behavior or hinder debugging.
+
+#### 1. Inconsistent `RadioButtonComponent` Group Management
+*   **Problem:** `RadioButtonComponent` uses a `static [hashtable]$_groups` to manage radio button groups. This means all radio buttons in the entire application with the same `GroupName` will affect each other, regardless of which panel or screen they are on. This can lead to unexpected behavior.
+*   **File:** `AllComponents.ps1`
+*   **Recommendation:** A more robust solution would be for the parent `UIElement` to manage its child radio button groups. However, for a single-screen application, the current implementation might suffice for now. **Leave as-is for initial stabilization, but flag for a future refactor.**
+
+#### 2. Inconsistent Use of `Write-Log`
+*   **Problem:** The codebase contains many commented-out `Write-Log` and `Write-Verbose` calls. A functional `Logger` service and `Write-Log` function are defined.
+*   **Recommendation:** Uncomment the `Write-Log` calls throughout the code, especially in services and the runtime. This will be invaluable for debugging why a screen might not be displaying correctly. Change `$VerbosePreference` in `Start.ps1` to `'Continue'` to see the output from native `Write-Verbose` calls.
+
+#### 3. Task List Screen Rendering
+*   **Problem:** The `TaskListScreen._UpdateTaskList` method is designed to create a list of `UIElement` children inside a `ScrollablePanel`. This is a correct and powerful pattern. The main blocker was the syntax error in `ScrollablePanel` itself.
+*   **File:** `AllScreens.ps1`
+*   **Status:** Once the `ScrollablePanel` syntax error is fixed (Critical Issue #5), this screen has a high chance of working correctly. Its design is sound.
+
+#### 4. Hardcoded Keyboard Shortcuts
+*   **Problem:** `TaskListScreen` has hardcoded keyboard handling (e.g., `[ConsoleKey]::D` for Delete).
+*   **File:** `AllScreens.ps1`
+*   **Recommendation:** For initial stabilization, this is fine. For long-term maintainability, these actions should be registered with the `ActionService` and bound in the `KeybindingService`, allowing the screen to simply handle events or actions like "DeleteSelectedItem".
+
+---
+
+### Action Plan to Get it Running
+
+1.  **Fix Load Order:** In `Start.ps1`, move the line for `AllFunctions.ps1` to be before `AllComponents.ps1`.
+2.  **Fix Duplicate Class:** In `AllComponents.ps1`, delete the second, "Advanced" definition of `ComboBoxComponent`.
+3.  **Fix `ScrollablePanel` Syntax:** In `AllComponents.ps1`, search for all instances of `$this.{_virtual_buffer}` and change them to `$this._virtual_buffer`.
+4.  **Fix Color/Method Call Mismatches:**
+    *   In `AllComponents.ps1`, go through the following classes: `MultilineTextBoxComponent`, `NumericInputComponent`, `DateInputComponent`, and `NavigationMenu`.
+    *   Change their `[ConsoleColor]` properties to `[string]` with hex defaults.
+    *   Update all calls to `WriteString` and `SetCell` to use the correct style hashtable or hex color string parameters. Use `Get-ThemeColor` where appropriate.
+5.  **(Optional but Recommended)** Uncomment the `Write-Log` calls in `AllRuntime.ps1` and `AllServices.ps1` to get diagnostic output.
+6.  **Run the application** using `Start.ps1`.
+
+After these fixes, the framework has a very strong probability of loading, initializing, and displaying the initial `DashboardScreen`. The `TaskListScreen` should also be functional. Debugging can then focus on runtime logic and visual adjustments rather than critical startup failures.
+
+
+
+@@@@@@@@@@@@#@@@@@@@@@@@@@@@@@@
+
+Of course. Moving beyond the critical syntax and loading errors, let's analyze the **runtime logic**. These are issues where the code will run without crashing but will behave incorrectly, produce visual glitches, perform poorly, or lead to an unstable user experience.
+
+Yes, there are several significant runtime logic issues that would prevent the application from "doing its job" correctly.
+
+### High-Impact Runtime Logic Issues
+
+These issues will cause major performance problems or incorrect behavior.
+
+#### 1. Inefficient Rendering in `TaskListScreen`
+*   **Problem:** The `TaskListScreen._UpdateTaskList` method is called on every selection change (Up/Down arrow). Inside this method, it clears all child components from the `ScrollablePanel` (`$panel.Children.Clear()`) and then creates brand new `Panel` and `LabelComponent` objects for every single task in the list.
+*   **File:** `AllScreens.ps1`
+*   **Why it's a problem:** This is extremely inefficient and will cause significant performance degradation and screen flicker, especially with more than a few tasks. For a list of 50 tasks, it would create and destroy 100 UI objects every time the user presses the down arrow. This defeats the purpose of a high-performance TUI.
+*   **Fix:** Refactor the `TaskListScreen` to adopt a more "state-driven" UI update pattern.
+    1.  **Create components once:** In `OnEnter` or `Initialize`, create the child `Panel` and `LabelComponent` for each task and add them to the `ScrollablePanel`. Store these components in an array or list within the screen class.
+    2.  **Update properties on refresh:** In `_UpdateTaskList`, instead of recreating everything, simply iterate through the *existing* components and update their properties (`.Text`, `.ForegroundColor`, `.BackgroundColor`) based on the current data and selection state.
+
+**Example of a more efficient `_UpdateTaskList`:**
+```powershell
+# In TaskListScreen class, add a new property:
+hidden [System.Collections.Generic.List[Panel]] $_taskItemPanels = [List[Panel]]::new()
+
+# Refactor _UpdateTaskList (conceptual)
+hidden [void] _UpdateTaskList() {
+    $panel = $this._taskListPanel
+    if (-not $panel) { return }
+
+    # If the number of UI panels doesn't match the number of tasks, rebuild the UI.
+    # This handles adding/deleting tasks.
+    if ($this._taskItemPanels.Count -ne $this._tasks.Count) {
+        $panel.Children.Clear()
+        $this._taskItemPanels.Clear()
+        for ($i = 0; $i -lt $this._tasks.Count; $i++) {
+            # ... create the Panel and Label for the task item once ...
+            $taskPanel = [Panel]::new(...)
+            $taskLabel = [LabelComponent]::new(...)
+            $taskPanel.AddChild($taskLabel)
+            $panel.AddChild($taskPanel)
+            $this._taskItemPanels.Add($taskPanel) # Store reference
+        }
+    }
+
+    # Now, just update the properties of the existing UI components.
+    for ($i = 0; $i -lt $this._tasks.Count; $i++) {
+        $task = $this._tasks[$i]
+        $taskPanel = $this._taskItemPanels[$i]
+        $taskLabel = $taskPanel.Children[0] # Assuming label is the first child
+        $is_selected = ($i -eq $this._selectedIndex)
+
+        # Update background color
+        $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+
+        # Update label text and color
+        $taskLabel.Text = "$statusChar $priorityChar $($task.Title)" # Rebuild the text string
+        $taskLabel.ForegroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
+
+        # IMPORTANT: Request redraw on the individual item panel
+        $taskPanel.RequestRedraw()
+    }
+
+    # Request redraw on the main scrollable panel to recomposite its children
+    $panel.RequestRedraw()
+}
+```
+
+#### 2. Conflicting Focus Management in `InputDialog`
+*   **Problem:** The `InputDialog` class implements its own focus logic using `_focusIndex` and handling the `Tab` key. However, the framework now has a global `FocusManager` and `KeybindingService` which *also* handle `Tab` to move focus between components.
+*   **File:** `AllComponents.ps1`
+*   **Why it's a problem:** This creates a conflict. When the user presses `Tab`, two different systems will try to manage the focus, leading to unpredictable and buggy behavior. The `FocusManager` is the correct, centralized way to handle this.
+*   **Fix:** Remove the manual focus logic from `InputDialog` and rely entirely on the `FocusManager`.
+    1.  In `InputDialog.InitializeInput`, assign `TabIndex` to the child components.
+    2.  Remove the `_focusIndex` property and the `UpdateFocus` method.
+    3.  Remove the `Tab` key handling from `InputDialog.HandleInput`.
+    4.  Instead of checking `_focusIndex` to delegate input, let the `FocusManager` route the input to the currently focused child automatically. The dialog's `HandleInput` will only be called if none of its children handle the key.
+
+**Corrected `InputDialog` Logic:**
+```powershell
+# In AllComponents.ps1, class InputDialog
+# REMOVE: hidden [int]$_focusIndex = 0
+# REMOVE: hidden [void] UpdateFocus() { ... }
+
+hidden [void] InitializeInput() {
+    # ...
+    $this._inputBox.TabIndex = 0
+    $this._okButton.TabIndex = 1
+    $this._cancelButton.TabIndex = 2
+    # ... Add children to panel ...
+}
+
+# When the dialog is shown, tell the FocusManager to focus the first element
+[void] OnEnter() {
+    $global:TuiState.Services.FocusManager?.SetFocus($this._inputBox)
+}
+
+[bool] HandleInput([System.ConsoleKeyInfo]$key) {
+    if ($key.Key -eq [ConsoleKey]::Escape) {
+        $this.Complete($null) # Use Complete instead of Close
+        return $true
+    }
+    
+    # Let the FocusManager handle Tab.
+    # Input for buttons (Enter) will be handled by the focused button directly.
+    # If focus is on the textbox, it will handle character input.
+    # The dialog itself doesn't need to delegate.
+    
+    return $false # Return false as the dialog container did not handle it
+}
+```
+
+### Medium-Impact Runtime Logic Issues
+
+These issues will lead to incorrect rendering or state, but may not be as performance-critical.
+
+#### 3. Incorrect `ScrollablePanel` Virtual Buffer Management
+*   **Problem:** The `ScrollablePanel` initializes its `_virtual_buffer` with a fixed, large height (`1000`). While its `UpdateMaxScroll` method can resize this buffer if the content grows even larger, it never shrinks it. More importantly, the `_contentHeight` is calculated by iterating through children every single render, which is inefficient.
+*   **File:** `AllComponents.ps1`
+*   **Why it's a problem:** This is a minor performance issue and can lead to wasted memory. A better approach would be to calculate the required virtual height only when the layout changes (children are added/removed or resized).
+*   **Fix:**
+    1.  Add a method to `ScrollablePanel` called `UpdateLayout()` or similar.
+    2.  This method should be called whenever a child is added, removed, or resized.
+    3.  Inside `UpdateLayout()`, calculate the total required height of all children (`_contentHeight`) and resize the `_virtual_buffer` to match that height *exactly*.
+    4.  The `_RenderContent` method can then use this pre-calculated `_contentHeight` without re-calculating it every frame.
+
+#### 4. `NavigationService.GoBack` Cleans Up Screen
+*   **Problem:** The `GoBack()` method calls `$this.CurrentScreen.Cleanup()` on the screen it's navigating away from.
+*   **File:** `AllServices.ps1`
+*   **Why it's a problem:** This is destructive. `Cleanup()` is meant to be final. If you navigate `A -> B -> C` and then go back to `B`, screen `C` is destroyed. If you then go forward to `C` again, you'd need to create a brand new instance. This prevents a simple forward/back history. The screen that is popped from the stack should be cleaned up, but the one being temporarily left should not be.
+*   **Fix:** The current implementation is actually correct for a simple stack. When you go back from `C` to `B`, `C` is the `CurrentScreen`. It is exited and cleaned up. `B` is popped from the stack and becomes the new `CurrentScreen`. This logic is sound for a stack-based navigation model where you don't intend to navigate "forward" again to the same instance. **This is not a bug, but an important clarification of its behavior.** It works as a simple "back" button, not a browser-style history. For stabilization, this is perfectly fine.
+
+#### 5. `DashboardScreen` Direct Buffer Manipulation
+*   **Problem:** The `DashboardScreen` writes text directly to its panels' buffers (`Write-TuiText -Buffer $buffer...`). This is different from the component-based approach in `TaskListScreen`.
+*   **File:** `AllScreens.ps1`
+*   **Why it's a problem:** This isn't a bug, but it's an architectural inconsistency. The component model (`UIElement` with children) is more powerful and flexible. Direct buffer manipulation is faster for static content but harder to manage for interactive elements and complex layouts.
+*   **Recommendation:** For initial stabilization, this is acceptable. The dashboard is mostly static. For long-term consistency, the dashboard should also be built from `LabelComponent`, `Panel`, and other custom components.
+
+In summary, the most pressing runtime issues are the **extreme inefficiency of the `TaskListScreen` rendering loop** and the **conflicting focus logic in `InputDialog`**. Fixing these two problems will have the biggest impact on making the application stable and usable.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+Yes, absolutely. After addressing the show-stoppers and major runtime logic flaws, we enter the "final polish" stage for stabilization. These are the remaining subtle-but-important issues and missing links that would prevent the application from feeling robust, predictable, and complete.
+
+Here is the final list of items needed to fully stabilize the framework.
+
+### Final Verdict on Stabilization
+
+The framework is architecturally sound, but it's missing the "glue" that makes a dynamic UI work: **state management and event handling**. The biggest remaining issue is that screens are static; they render once and don't react to changes in the application's data.
+
+Once the following points are addressed, the application should be considered stable and functional.
+
+---
+
+### Final Stabilization Checklist
+
+| Category | Issue | Impact | Priority |
+| :--- | :--- | :--- | :--- |
+| **State Management** | Screens do not react to data changes (e.g., new tasks). | High | **Critical** |
+| **Rendering** | Inefficient differential rendering due to redundant copy. | Medium | High |
+| **Navigation** | The Screen Registry feature is incomplete. | Low | Low |
+| **Error Handling** | Unhandled exceptions within child components could be silent. | Medium | Medium |
+| **Component Logic**| The `Table` component has rendering logic errors. | High | Medium |
+
+---
+
+### 1. State Management: Making the UI Reactive (Critical)
+
+This is the most significant remaining architectural issue.
+
+*   **Problem:** The `TaskListScreen` only loads data when it first appears (`OnEnter`). If a task is added, deleted, or updated by another service or dialog while the screen is visible, the list will not update. The UI will become out of sync with the application's state.
+*   **Why it's a problem:** This breaks the user's expectation of a dynamic application. A UI that doesn't reflect the current data is fundamentally broken.
+*   **Solution:** Implement a proper publish/subscribe pattern using the existing `EventManager`. The `DataManager` already correctly publishes a `"Tasks.Changed"` event. The screen must subscribe to it.
+
+**Action Plan:**
+1.  **In `TaskListScreen`, subscribe to the event.** The `OnEnter` method is the perfect place to start listening.
+2.  **In `TaskListScreen`, unsubscribe from the event.** To prevent memory leaks and redundant processing, the screen must stop listening when it is no longer active. `OnExit` is the correct place for this.
+3.  **Create a handler.** The handler will be a scriptblock that calls the screen's internal `_RefreshTasks()` method.
+
+**Implementation in `AllScreens.ps1` (`TaskListScreen`):**
+```powershell
+class TaskListScreen : Screen {
+    # ... existing properties ...
+    hidden [string] $_taskChangeSubscriptionId # Store the subscription ID
+
+    [void] OnEnter() {
+        # ... existing OnEnter code ...
+        $eventManager = $this.ServiceContainer.GetService("EventManager")
+        if ($eventManager) {
+            # Define the action to take when tasks change
+            $handler = {
+                Write-Verbose "TaskListScreen received Tasks.Changed event. Refreshing tasks."
+                $this._RefreshTasks()
+            }.GetNewClosure() # Use GetNewClosure() to capture the screen's '$this' context
+
+            # Subscribe and store the ID
+            $this._taskChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
+        }
+        $this._RefreshTasks() # Initial refresh
+        $this.RequestRedraw()
+    }
+
+    [void] OnExit() {
+        # Unsubscribe when leaving the screen
+        $eventManager = $this.ServiceContainer.GetService("EventManager")
+        if ($eventManager -and $this._taskChangeSubscriptionId) {
+            $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
+            $this._taskChangeSubscriptionId = $null
+        }
+    }
+    # ... rest of the class ...
+}
+```
+
+### 2. Rendering: Optimizing the Differential Renderer
+
+*   **Problem:** The `Render-DifferentialBuffer` function copies each changed cell to the `$previous` buffer. However, at the end of `Invoke-TuiRender`, the *entire* current buffer is copied over to become the next frame's "previous" buffer. This makes the per-cell copy redundant.
+*   **File:** `AllRuntime.ps1`
+*   **Why it's a problem:** It's a minor performance hit. The TUI is doing the same work twice for every cell that changes, which can add up on complex screen updates.
+*   **Solution:** Remove the redundant copy. The renderer's only job should be to generate the ANSI sequences for drawing.
+
+**Implementation in `AllRuntime.ps1` (`Render-DifferentialBuffer`):**
+```powershell
+function Render-DifferentialBuffer {
+    # ...
+    for ($y = 0; $y -lt $current.Height; $y++) {
+        for ($x = 0; $x -lt $current.Width; $x++) {
+            # ...
+            if ($currentCell.DiffersFrom($previousCell)) {
+                # ... move cursor and append ANSI string ...
+
+                # REMOVE THE FOLLOWING LINE:
+                # $previous.SetCell($x, $y, [TuiCell]::new($currentCell))
+            }
+        }
+    }
+    # ...
+}
+```
+The logic in `Invoke-TuiRender` that sets `$global:TuiState.PreviousCompositorBuffer = $tempBuffer` is correct and sufficient.
+
+### 3. Navigation: Incomplete Screen Registry
+
+*   **Problem:** The `NavigationService` has a `$ScreenRegistry` property and a `NavigateToByName` method, but there is no code in `Start.ps1` or elsewhere that ever populates this registry.
+*   **File:** `AllServices.ps1`
+*   **Why it's a problem:** This feature is simply incomplete. It doesn't break the current application because the app creates screen instances manually (`[DashboardScreen]::new($container)`). However, if you were to rely on `NavigateToByName`, it would fail.
+*   **Solution:** For now, this is not a blocker. For future expansion, you would create "screen factories" in the service container.
+
+**Example of a future implementation (for context, not required for stabilization):**
+```powershell
+# In Start.ps1
+$container.RegisterFactory("DashboardScreen", {
+    param($c) # $c is the container itself
+    $screen = [DashboardScreen]::new($c)
+    $screen.Initialize() # Pre-initialize
+    return $screen
+})
+
+# Then NavigationService could use this to navigate by name.
+```
+
+### 4. Error Handling: Silent Failures in Components
+
+*   **Problem:** Most `OnRender` methods in the components are wrapped in a `try...catch {}` block that silently swallows any exceptions.
+*   **File:** `AllComponents.ps1`
+*   **Why it's a problem:** If a component fails to render due to a logical error (e.g., a null reference, an index out of bounds), it will simply fail silently. The component won't appear on screen, and there will be no error message, making debugging extremely difficult.
+*   **Solution:** At a minimum, log the error. Ideally, critical rendering errors should be allowed to bubble up to the `Invoke-PanicHandler`.
+
+**Recommended Change in `AllComponents.ps1` (e.g., `Table.OnRender`):**
+```powershell
+# OLD
+# [void] OnRender() {
+#     try { ... }
+#     catch {}
+# }
+
+# NEW
+[void] OnRender() {
+    if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+    try {
+        # ... All rendering logic ...
+    }
+    catch {
+        Write-Log -Level Error -Message "Failed to render component '$($this.Name)': $($_.Exception.Message)" -Data $_
+        # Optionally, draw an error message in the component's buffer
+        $this._private_buffer.Clear([TuiCell]::new('X', '#FF0000', '#000000'))
+        Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text "Render Error" -Style @{ FG='#FFFF00'; BG='#FF0000' }
+        # Do not re-throw here, as one broken component shouldn't crash the whole app.
+        # But logging it is essential.
+    }
+}
+```
+
+### 5. Component Logic: `Table` Component Rendering
+
+*   **Problem:** The `Table` component has several subtle logic errors in its `DrawHeader` and `DrawRow` methods related to calculating visible text for horizontally scrolled content. The string manipulation (`Substring`) and padding logic will likely fail or render incorrectly under various scroll and width conditions.
+*   **File:** `AllComponents.ps1`
+*   **Solution:** This component needs a careful review and likely a rewrite of its text-clipping and rendering logic. Since it's not currently used by any screen, it's not a blocker, but it wouldn't work correctly if you tried to use it. For stabilization, you can either ignore it or add a `Write-Warning` that it's an incomplete feature.
+
+With these final changes, particularly making the UI reactive to data changes, the framework will be truly stable and do its job effectively.
