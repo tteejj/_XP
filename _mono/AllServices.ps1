@@ -827,15 +827,10 @@ class NavigationService {
                 })
             }
             
-            # Publish navigation complete event
-            # The main loop should query NavigationService for the current screen
-            # NavigationService should NOT modify global state directly
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Navigation.NavigationComplete", @{
-                    Screen = $screen
-                    ScreenName = $screen.Name
-                })
-            }
+            # Update global TUI state (CRITICAL FIX)
+            $global:TuiState.CurrentScreen = $screen
+            $global:TuiState.IsDirty = $true # Force redraw
+            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnEnter should set new focus
 
         }
         catch {
@@ -891,14 +886,10 @@ class NavigationService {
                 })
             }
             
-            # Publish navigation complete event
-            # The main loop should query NavigationService for the current screen
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Navigation.NavigationComplete", @{
-                    Screen = $previousScreen
-                    ScreenName = $previousScreen.Name
-                })
-            }
+            # Update global TUI state (CRITICAL FIX)
+            $global:TuiState.CurrentScreen = $previousScreen
+            $global:TuiState.IsDirty = $true # Force redraw
+            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnResume should set new focus
 
         }
         catch {

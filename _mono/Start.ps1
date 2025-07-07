@@ -52,9 +52,9 @@ try {
     $filesToLoad = @(
         'AllBaseClasses.ps1'   # Foundation types with zero dependencies
         'AllModels.ps1'        # Data models, depends on base classes
-        'AllComponents.ps1'    # UI components, depends on base + models
+        'AllFunctions.ps1'     # Helper functions, must be loaded BEFORE components use them
+        'AllComponents.ps1'    # UI components, depends on base + models + functions
         'AllScreens.ps1'       # Screens, depends on all above
-        'AllFunctions.ps1'     # Helper functions, can reference all classes
         'AllServices.ps1'      # Services, can use everything
         'AllRuntime.ps1'       # Engine and runtime, orchestrates everything
     )

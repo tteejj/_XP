@@ -19,6 +19,7 @@ class DashboardScreen : Screen {
     hidden [int] $_totalTasks = 0
     hidden [int] $_completedTasks = 0
     hidden [int] $_pendingTasks = 0
+    hidden [string] $_dataChangeSubscriptionId = $null # Store event subscription ID
     #endregion
 
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
@@ -68,6 +69,21 @@ class DashboardScreen : Screen {
     }
 
     [void] OnEnter() {
+        # Subscribe to data change events for reactive updates
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            $handler = {
+                param($eventData)
+                Write-Verbose "DashboardScreen received data change event. Refreshing..."
+                $dataManager = $this.ServiceContainer?.GetService("DataManager")
+                $this._RefreshData($dataManager)
+            }.GetNewClosure()
+            
+            # Subscribe to both task and project changes
+            $this._dataChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
+            Write-Verbose "DashboardScreen subscribed to data change events"
+        }
+        
         # Force a complete redraw of all panels
         if ($this._summaryPanel) { $this._summaryPanel.RequestRedraw() }
         if ($this._helpPanel) { $this._helpPanel.RequestRedraw() }
@@ -83,6 +99,19 @@ class DashboardScreen : Screen {
         
         # Force another redraw after data refresh
         $this.RequestRedraw()
+    }
+    
+    [void] OnExit() {
+        # Unsubscribe from data change events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager -and $this._dataChangeSubscriptionId) {
+            $eventManager.Unsubscribe("Tasks.Changed", $this._dataChangeSubscriptionId)
+            $this._dataChangeSubscriptionId = $null
+            Write-Verbose "DashboardScreen unsubscribed from data change events"
+        }
+        
+        # Call base OnExit
+        ([Screen]$this).OnExit()
     }
 
     hidden [void] _RefreshData([object]$dataManager) {
@@ -249,6 +278,7 @@ class TaskListScreen : Screen {
     hidden [string] $_filterText = ""
     hidden [TaskStatus] $_filterStatus = $null
     hidden [TaskPriority] $_filterPriority = $null
+    hidden [string] $_taskChangeSubscriptionId = $null # Store event subscription ID
     #endregion
 
     TaskListScreen([object]$serviceContainer) : base("TaskListScreen", $serviceContainer) {}
@@ -301,11 +331,41 @@ class TaskListScreen : Screen {
     }
 
     [void] OnEnter() {
+        # Subscribe to data change events for reactive updates
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            # Use a scriptblock that properly captures $this context
+            $handler = {
+                param($eventData)
+                # The $this context is the TaskListScreen instance
+                Write-Verbose "TaskListScreen received Tasks.Changed event. Refreshing tasks."
+                $this._RefreshTasks()
+                $this._UpdateDisplay()
+            }.GetNewClosure()
+            
+            # Store subscription ID for later cleanup
+            $this._taskChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
+            Write-Verbose "TaskListScreen subscribed to Tasks.Changed events"
+        }
+        
         if ($this.ServiceContainer) {
             $this._RefreshTasks()
         }
         
         $this.RequestRedraw()
+    }
+    
+    [void] OnExit() {
+        # Unsubscribe from data change events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager -and $this._taskChangeSubscriptionId) {
+            $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
+            $this._taskChangeSubscriptionId = $null
+            Write-Verbose "TaskListScreen unsubscribed from Tasks.Changed events"
+        }
+        
+        # Call base OnExit if needed
+        ([Screen]$this).OnExit()
     }
 
     hidden [void] _RefreshTasks() {

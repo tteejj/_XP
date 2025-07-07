@@ -265,9 +265,8 @@ function Invoke-TuiRender {
         
         Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
-        # Get the current screen from NavigationService
-        $navService = $global:TuiState.Services.NavigationService
-        $currentScreenToRender = if ($navService) { $navService.CurrentScreen } else { $null }
+        # Get the current screen from global state (NavigationService updates this)
+        $currentScreenToRender = $global:TuiState.CurrentScreen
         
         # Render current screen
         if ($currentScreenToRender) {
