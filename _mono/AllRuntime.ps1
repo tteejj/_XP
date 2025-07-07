@@ -117,7 +117,7 @@ function Initialize-TuiEngine {
         $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($width, $height, "PreviousCompositor")
         
         # Clear with theme background
-        $bgColor = Get-ThemeColor("Background")
+        $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         $global:TuiState.PreviousCompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
@@ -180,7 +180,9 @@ function Start-TuiEngine {
 
 function Stop-TuiEngine {
     [CmdletBinding()]
-    param()
+    param(
+        [switch]$Force
+    )
     
     try {
         Write-Verbose "Stopping TUI Engine..."
@@ -201,7 +203,8 @@ function Stop-TuiEngine {
         
         # Cleanup services
         foreach ($service in $global:TuiState.Services.Values) {
-            if ($service -and $service.PSObject.Methods.Match('Cleanup')) {
+            if ($service -and $service.PSObject -and $service.PSObject.Methods -and 
+                $service.PSObject.Methods.Name -contains 'Cleanup') {
                 try {
                     $service.Cleanup()
                 }
@@ -237,9 +240,13 @@ function Update-TuiEngineSize {
         $global:TuiState.BufferWidth = $newWidth
         $global:TuiState.BufferHeight = $newHeight
         
-        # Resize compositor buffers
-        $global:TuiState.CompositorBuffer.Resize($newWidth, $newHeight)
-        $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
+        # Resize compositor buffers only if they exist
+        if ($null -ne $global:TuiState.CompositorBuffer) {
+            $global:TuiState.CompositorBuffer.Resize($newWidth, $newHeight)
+        }
+        if ($null -ne $global:TuiState.PreviousCompositorBuffer) {
+            $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
+        }
         
         # Resize current screen
         $navService = $global:TuiState.Services.NavigationService
@@ -249,7 +256,9 @@ function Update-TuiEngineSize {
         
         # Force full redraw
         $global:TuiState.IsDirty = $true
-        [Console]::Clear()
+        if ($null -ne $global:TuiState.CompositorBuffer) {
+            [Console]::Clear()
+        }
     }
     catch {
         Write-Error "Failed to update engine size: $_"
@@ -268,6 +277,12 @@ function Invoke-TuiRender {
     
     try {
         $renderTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        
+        # Ensure compositor buffer exists
+        if ($null -eq $global:TuiState.CompositorBuffer) {
+            Write-Warning "Compositor buffer is null, skipping render"
+            return
+        }
         
         # Clear compositor buffer
         $global:TuiState.CompositorBuffer.Clear()
@@ -365,7 +380,7 @@ function Invoke-TuiRender {
         }
         
         # Clear compositor for next frame
-        $bgColor = Get-ThemeColor("Background")
+        $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Update previous buffer with what was just rendered
@@ -390,6 +405,12 @@ function Render-DifferentialBuffer {
     try {
         $current = $global:TuiState.CompositorBuffer
         $previous = $global:TuiState.PreviousCompositorBuffer
+        
+        # Ensure both buffers exist
+        if ($null -eq $current -or $null -eq $previous) {
+            Write-Warning "Compositor buffers not initialized, skipping differential render"
+            return
+        }
         
         $ansiBuilder = [System.Text.StringBuilder]::new()
         $currentX = -1
