@@ -3467,3 +3467,189 @@ class NavigationMenu : UIElement {
 #<!-- END_PAGE: ACO.021 -->
 
 #endregion Navigation Components
+
+#region Dialog Result Enum
+enum DialogResult {
+    None = 0
+    OK = 1
+    Cancel = 2
+    Yes = 3
+    No = 4
+    Retry = 5
+    Abort = 6
+}
+#endregion
+
+#region Task Dialog Classes
+
+# Task Dialog for creating/editing tasks
+class TaskDialog : Dialog {
+    hidden [PmcTask] $_task
+    hidden [TextBoxComponent] $_titleBox
+    hidden [MultilineTextBoxComponent] $_descriptionBox
+    hidden [ComboBoxComponent] $_statusBox
+    hidden [ComboBoxComponent] $_priorityBox
+    hidden [NumericInputComponent] $_progressBox
+    hidden [ButtonComponent] $_okButton
+    hidden [ButtonComponent] $_cancelButton
+    hidden [bool] $_isNew
+    
+    TaskDialog([string]$title, [PmcTask]$task) : base($title) {
+        $this._isNew = ($null -eq $task)
+        $this._task = if ($task) { $task.Clone() } else { [PmcTask]::new() }
+        $this.Width = 60
+        $this.Height = 20
+    }
+    
+    [void] Initialize() {
+        ([Dialog]$this).Initialize()
+        
+        $y = 2
+        
+        # Title input
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = $y
+        $this.AddChild($titleLabel)
+        
+        $this._titleBox = [TextBoxComponent]::new("TitleBox")
+        $this._titleBox.X = 10
+        $this._titleBox.Y = $y
+        $this._titleBox.Width = 45
+        $this._titleBox.Height = 1
+        $this._titleBox.Text = $this._task.Title
+        $this.AddChild($this._titleBox)
+        
+        $y += 2
+        
+        # Description input
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = $y
+        $this.AddChild($descLabel)
+        
+        $this._descriptionBox = [MultilineTextBoxComponent]::new("DescriptionBox")
+        $this._descriptionBox.X = 2
+        $this._descriptionBox.Y = $y + 1
+        $this._descriptionBox.Width = 56
+        $this._descriptionBox.Height = 5
+        $this._descriptionBox.Text = $this._task.Description ?? ""
+        $this.AddChild($this._descriptionBox)
+        
+        $y += 7
+        
+        # Status combo
+        $statusLabel = [LabelComponent]::new("StatusLabel")
+        $statusLabel.Text = "Status:"
+        $statusLabel.X = 2
+        $statusLabel.Y = $y
+        $this.AddChild($statusLabel)
+        
+        $this._statusBox = [ComboBoxComponent]::new("StatusBox")
+        $this._statusBox.X = 10
+        $this._statusBox.Y = $y
+        $this._statusBox.Width = 20
+        $this._statusBox.Height = 1
+        $this._statusBox.Items = @("Pending", "InProgress", "Completed", "Cancelled")
+        $this._statusBox.SelectedIndex = [int]$this._task.Status
+        $this.AddChild($this._statusBox)
+        
+        # Priority combo
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 32
+        $priorityLabel.Y = $y
+        $this.AddChild($priorityLabel)
+        
+        $this._priorityBox = [ComboBoxComponent]::new("PriorityBox")
+        $this._priorityBox.X = 42
+        $this._priorityBox.Y = $y
+        $this._priorityBox.Width = 15
+        $this._priorityBox.Height = 1
+        $this._priorityBox.Items = @("Low", "Medium", "High")
+        $this._priorityBox.SelectedIndex = [int]$this._task.Priority
+        $this.AddChild($this._priorityBox)
+        
+        $y += 2
+        
+        # Progress input
+        $progressLabel = [LabelComponent]::new("ProgressLabel")
+        $progressLabel.Text = "Progress:"
+        $progressLabel.X = 2
+        $progressLabel.Y = $y
+        $this.AddChild($progressLabel)
+        
+        $this._progressBox = [NumericInputComponent]::new("ProgressBox")
+        $this._progressBox.X = 12
+        $this._progressBox.Y = $y
+        $this._progressBox.Width = 10
+        $this._progressBox.Height = 1
+        $this._progressBox.Value = $this._task.Progress
+        $this._progressBox.MinValue = 0
+        $this._progressBox.MaxValue = 100
+        $this.AddChild($this._progressBox)
+        
+        $y += 3
+        
+        # Buttons
+        $this._okButton = [ButtonComponent]::new("OKButton")
+        $this._okButton.Text = "OK"
+        $this._okButton.X = 15
+        $this._okButton.Y = $y
+        $this._okButton.Width = 10
+        $this._okButton.Height = 1
+        $this._okButton.OnClick = {
+            # Validate and save
+            if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
+                return
+            }
+            
+            $this._task.Title = $this._titleBox.Text
+            $this._task.Description = $this._descriptionBox.Text
+            $this._task.Status = [TaskStatus]$this._statusBox.SelectedIndex
+            $this._task.Priority = [TaskPriority]$this._priorityBox.SelectedIndex
+            $this._task.SetProgress($this._progressBox.Value)
+            $this._task.UpdatedAt = [DateTime]::Now
+            
+            $this.DialogResult = [DialogResult]::OK
+            $this.Close()
+        }.GetNewClosure()
+        $this.AddChild($this._okButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel"
+        $this._cancelButton.X = 30
+        $this._cancelButton.Y = $y
+        $this._cancelButton.Width = 10
+        $this._cancelButton.Height = 1
+        $this._cancelButton.OnClick = {
+            $this.DialogResult = [DialogResult]::Cancel
+            $this.Close()
+        }.GetNewClosure()
+        $this.AddChild($this._cancelButton)
+    }
+    
+    [PmcTask] GetTask() {
+        return $this._task
+    }
+    
+    [void] SetInitialFocus() {
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._titleBox)
+        }
+    }
+}
+
+# Task Delete Confirmation Dialog
+class TaskDeleteDialog : ConfirmDialog {
+    hidden [PmcTask] $_task
+    
+    TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete the task '$($task.Title)'?") {
+        $this._task = $task
+    }
+}
+
+#endregion Task Dialog Classes

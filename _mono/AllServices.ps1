@@ -208,6 +208,18 @@ class ActionService {
             Description = "View All Tasks"
         })
         
+        # Add navigation.taskList action for consistency
+        $this.RegisterAction("navigation.taskList", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $taskScreen = [TaskListScreen]::new($container)
+            $taskScreen.Initialize()
+            $navService.NavigateTo($taskScreen)
+        }, @{
+            Category = "Navigation"
+            Description = "Go to Task List"
+        })
+        
         Write-Verbose "ActionService: Registered default actions"
     }
 }

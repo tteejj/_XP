@@ -668,7 +668,12 @@ class TaskListScreen : Screen {
             
             $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
             if ($allTasks) {
-                $this._tasks.AddRange(@($allTasks))
+                # Fix: Explicitly cast each item to PmcTask to avoid type conversion error
+                foreach ($task in $allTasks) {
+                    if ($task -is [PmcTask]) {
+                        $this._tasks.Add($task)
+                    }
+                }
             }
         } else {
             $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
@@ -1026,11 +1031,12 @@ class TaskListScreen : Screen {
 #<!-- END_PAGE: ASC.002 -->
 
 class ThemePickerScreen : Screen {
-    hidden [ListBox] $_themeListBox  # Changed to ListBox like CommandPalette
+    hidden [ScrollablePanel] $_themePanel
     hidden [Panel] $_mainPanel
     hidden [array] $_themes
     hidden [int] $_selectedIndex = 0
     hidden $_themeManager  # Remove type annotation since ThemeManager is defined later
+    hidden [string] $_originalTheme  # Store original theme to restore on cancel
     
     ThemePickerScreen([object]$serviceContainer) : base("ThemePickerScreen", $serviceContainer) {}
     
@@ -1046,6 +1052,9 @@ class ThemePickerScreen : Screen {
         $this._themes = $this._themeManager.GetAvailableThemes()
         Write-Verbose "ThemePickerScreen: Found $($this._themes.Count) themes: $($this._themes -join ', ')"
         
+        # Store original theme
+        $this._originalTheme = $this._themeManager.ThemeName
+        
         # Main panel
         $this._mainPanel = [Panel]::new("Theme Selector")
         $this._mainPanel.X = 0
@@ -1060,77 +1069,134 @@ class ThemePickerScreen : Screen {
         $instructionLabel.Text = "Use ↑↓ to navigate, Enter to select theme, Esc to cancel"
         $instructionLabel.X = 2
         $instructionLabel.Y = 2
-        $instructionLabel.Width = 60
+        $instructionLabel.Width = [Math]::Min(60, $this.Width - 4)
         $instructionLabel.Height = 1
         $instructionLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
         $this._mainPanel.AddChild($instructionLabel)
         
-        # Theme list box - like CommandPalette does it
-        $listBoxWidth = [Math]::Min(80, $this.Width - 10)
-        $listBoxHeight = [Math]::Min(20, $this.Height - 8)
-        $listBoxX = [Math]::Floor(($this.Width - $listBoxWidth) / 2)
+        # Theme scrollable panel
+        $panelWidth = [Math]::Min(60, $this.Width - 10)
+        $panelHeight = [Math]::Min(20, $this.Height - 8)
+        $panelX = [Math]::Floor(($this.Width - $panelWidth) / 2)
         
-        $this._themeListBox = [ListBox]::new("ThemeList")
-        $this._themeListBox.X = $listBoxX
-        $this._themeListBox.Y = 4
-        $this._themeListBox.Width = $listBoxWidth
-        $this._themeListBox.Height = $listBoxHeight
-        $this._mainPanel.AddChild($this._themeListBox)
+        $this._themePanel = [ScrollablePanel]::new("ThemeList")
+        $this._themePanel.X = $panelX
+        $this._themePanel.Y = 4
+        $this._themePanel.Width = $panelWidth
+        $this._themePanel.Height = $panelHeight
+        $this._themePanel.Title = "Available Themes"
+        $this._themePanel.ShowScrollbar = $true
+        $this._mainPanel.AddChild($this._themePanel)
         
-        # Initialize with current theme selected
+        # Find current theme index
         $currentTheme = $this._themeManager.ThemeName
         $selectedIdx = 0
+        for ($i = 0; $i -lt $this._themes.Count; $i++) {
+            if ($this._themes[$i] -eq $currentTheme) {
+                $selectedIdx = $i
+                break
+            }
+        }
+        $this._selectedIndex = $selectedIdx
         
-        # Add themes to listbox
+        # Update display
+        $this._UpdateThemeList()
+    }
+    
+    hidden [void] _UpdateThemeList() {
+        # Clear the panel
+        $this._themePanel.Children.Clear()
+        
+        # Add theme items
         for ($i = 0; $i -lt $this._themes.Count; $i++) {
             $themeName = $this._themes[$i]
+            $isSelected = ($i -eq $this._selectedIndex)
             
-            # Load theme temporarily to get preview colors
-            $this._themeManager.LoadTheme($themeName)
+            # Create panel for each theme item
+            $itemPanel = [Panel]::new("ThemeItem_$i")
+            $itemPanel.X = 0
+            $itemPanel.Y = $i
+            $itemPanel.Width = $this._themePanel.ContentWidth
+            $itemPanel.Height = 1
+            $itemPanel.HasBorder = $false
             
-            # Build display text with theme name and color preview
-            $displayText = $themeName.PadRight(20)
-            $displayText += "Preview: "
-            
-            # Add color blocks as text (can't do actual colors in ListBox items)
-            $colors = @("Primary", "Secondary", "Accent", "Success", "Warning", "Error")
-            foreach ($color in $colors) {
-                $displayText += "██ "  # Block characters
+            # Set background based on selection
+            $itemPanel.BackgroundColor = if ($isSelected) { 
+                Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF" 
+            } else { 
+                Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" 
             }
             
-            $this._themeListBox.AddItem($displayText)
+            # Create label for theme name
+            $themeLabel = [LabelComponent]::new("ThemeLabel_$i")
+            $themeLabel.X = 2
+            $themeLabel.Y = 0
+            $themeLabel.Width = $itemPanel.Width - 4
+            $themeLabel.Height = 1
             
-            if ($themeName -eq $currentTheme) {
-                $selectedIdx = $i
+            # Format display text
+            $indicator = if ($isSelected) { "▶ " } else { "  " }
+            $currentMarker = if ($themeName -eq $this._originalTheme) { " (current)" } else { "" }
+            $themeLabel.Text = "$indicator$themeName$currentMarker"
+            
+            # Set text color based on selection
+            $themeLabel.ForegroundColor = if ($isSelected) { 
+                Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
+            } else { 
+                Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" 
             }
+            
+            $itemPanel.AddChild($themeLabel)
+            $this._themePanel.AddChild($itemPanel)
         }
         
-        # Restore current theme
-        $this._themeManager.LoadTheme($currentTheme)
+        # Ensure selected item is visible
+        if ($this._selectedIndex -lt $this._themePanel.ScrollOffsetY) {
+            $this._themePanel.ScrollOffsetY = $this._selectedIndex
+        } elseif ($this._selectedIndex >= $this._themePanel.ScrollOffsetY + $this._themePanel.ContentHeight) {
+            $this._themePanel.ScrollOffsetY = $this._selectedIndex - $this._themePanel.ContentHeight + 1
+        }
         
-        # Set selected index
-        $this._themeListBox.SelectedIndex = $selectedIdx
-        $this._selectedIndex = $selectedIdx
+        $this._themePanel.RequestRedraw()
     }
-
     
     [void] OnEnter() {
-        # Set focus to the list box
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._themeListBox) {
-            $focusManager.SetFocus($this._themeListBox)
-        }
         $this.RequestRedraw()
     }
     
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         switch ($keyInfo.Key) {
+            ([ConsoleKey]::UpArrow) {
+                if ($this._selectedIndex -gt 0) {
+                    $this._selectedIndex--
+                    if ($this._selectedIndex -lt $this._themePanel.ScrollOffsetY) {
+                        $this._themePanel.ScrollUp()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this._selectedIndex -lt $this._themes.Count - 1) {
+                    $this._selectedIndex++
+                    $visibleEnd = $this._themePanel.ScrollOffsetY + $this._themePanel.ContentHeight - 1
+                    if ($this._selectedIndex -gt $visibleEnd) {
+                        $this._themePanel.ScrollDown()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
             ([ConsoleKey]::Enter) {
                 # Apply selected theme
-                if ($this._themeListBox.SelectedIndex -ge 0 -and $this._themeListBox.SelectedIndex -lt $this._themes.Count) {
-                    $selectedTheme = $this._themes[$this._themeListBox.SelectedIndex]
+                if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
+                    $selectedTheme = $this._themes[$this._selectedIndex]
                     $this._themeManager.LoadTheme($selectedTheme)
                     Write-Verbose "Applied theme: $selectedTheme"
+                    
+                    # Publish theme change event
+                    $eventManager = $this.ServiceContainer?.GetService("EventManager")
+                    if ($eventManager) {
+                        $eventManager.Publish("Theme.Changed", @{ Theme = $selectedTheme })
+                    }
                     
                     # Go back
                     $navService = $this.ServiceContainer?.GetService("NavigationService")
@@ -1140,17 +1206,26 @@ class ThemePickerScreen : Screen {
                 }
             }
             ([ConsoleKey]::Escape) {
-                # Cancel without changing theme
+                # Restore original theme and cancel
+                $this._themeManager.LoadTheme($this._originalTheme)
+                
                 $navService = $this.ServiceContainer?.GetService("NavigationService")
                 if ($navService -and $navService.CanGoBack()) {
                     $navService.GoBack()
                 }
             }
+            ([ConsoleKey]::Home) {
+                $this._selectedIndex = 0
+                $this._themePanel.ScrollToTop()
+                $this._UpdateThemeList()
+            }
+            ([ConsoleKey]::End) {
+                $this._selectedIndex = $this._themes.Count - 1
+                $this._themePanel.ScrollToBottom()
+                $this._UpdateThemeList()
+            }
             default {
-                # Let the ListBox handle navigation keys
-                if ($this._themeListBox) {
-                    $this._themeListBox.HandleInput($keyInfo)
-                }
+                # Unhandled key
             }
         }
     }
