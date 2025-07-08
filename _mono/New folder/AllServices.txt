@@ -1255,10 +1255,10 @@ class ThemeManager {
     }
     
     [void] CycleTheme() {
-        $availableThemes = $this.GetAvailableThemes()
-        $currentIndex = [array]::IndexOf($availableThemes, $this.ThemeName)
-        $nextIndex = ($currentIndex + 1) % $availableThemes.Count
-        $this.LoadTheme($availableThemes[$nextIndex])
+        $themes = $this.GetAvailableThemes()
+        $currentIndex = [array]::IndexOf($themes, $this.ThemeName)
+        $nextIndex = ($currentIndex + 1) % $themes.Count
+        $this.LoadTheme($themes[$nextIndex])
     }
 }
 
@@ -1552,20 +1552,20 @@ class EventManager {
 #endregion
 #<!-- END_PAGE: ASE.007 -->
 
-#<!-- PAGE: ASE.008 - AsyncJobService Class -->
-#region AsyncJobService Class
+#<!-- PAGE: ASE.008 - TuiFrameworkService Class -->
+#region TuiFrameworkService Class
 
-# ===== CLASS: AsyncJobService =====
-# Module: async-jobs (from axiom)
+# ===== CLASS: TuiFrameworkService =====
+# Module: tui-framework (from axiom)
 # Dependencies: None
 # Purpose: Framework utilities and async operations
-class AsyncJobService {
+class TuiFrameworkService {
     [hashtable]$AsyncJobs = @{}
     [int]$NextJobId = 1
     [bool]$IsRunning = $false
     
-    AsyncJobService() {
-        Write-Verbose "AsyncJobService: Initialized"
+    TuiFrameworkService() {
+        Write-Verbose "TuiFrameworkService: Initialized"
     }
     
     [hashtable] StartAsync([scriptblock]$work, [string]$name = "") {
@@ -1586,7 +1586,7 @@ class AsyncJobService {
             
             $this.AsyncJobs[$jobId] = $jobInfo
             
-            Write-Verbose "AsyncJobService: Started async job '$jobName' with ID $jobId"
+            Write-Verbose "TuiFrameworkService: Started async job '$jobName' with ID $jobId"
             return $jobInfo
         }
         catch {
@@ -1604,7 +1604,7 @@ class AsyncJobService {
         $job = $jobInfo.Job
         
         if ($wait) {
-            Write-Verbose "AsyncJobService: Waiting for job $jobId to complete"
+            Write-Verbose "TuiFrameworkService: Waiting for job $jobId to complete"
             Wait-Job -Job $job | Out-Null
         }
         
@@ -1624,7 +1624,7 @@ class AsyncJobService {
     }
     
     [void] StopAllAsyncJobs() {
-        Write-Verbose "AsyncJobService: Stopping all async jobs"
+        Write-Verbose "TuiFrameworkService: Stopping all async jobs"
         
         foreach ($jobInfo in $this.AsyncJobs.Values) {
             try {
@@ -1655,13 +1655,13 @@ class AsyncJobService {
     
     [void] Start() {
         $this.IsRunning = $true
-        Write-Verbose "AsyncJobService: Started"
+        Write-Verbose "TuiFrameworkService: Started"
     }
     
     [void] Stop() {
         $this.StopAllAsyncJobs()
         $this.IsRunning = $false
-        Write-Verbose "AsyncJobService: Stopped"
+        Write-Verbose "TuiFrameworkService: Stopped"
     }
     
     [void] Cleanup() {
@@ -1811,7 +1811,7 @@ class DialogManager {
         }
 
         # Add to local tracking list and global overlay stack
-        $this._activeDialogs.Add($dialog)
+        $this.{_activeDialogs}.Add($dialog)
         $dialog.Visible = $true
         $dialog.IsOverlay = $true # Mark as an overlay for rendering
 
@@ -1844,7 +1844,7 @@ class DialogManager {
     [void] HideDialog([UIElement]$dialog) {
         if ($null -eq $dialog) { return }
 
-        if ($this._activeDialogs.Remove($dialog)) {
+        if ($this.{_activeDialogs}.Remove($dialog)) {
             $dialog.Visible = $false
             $dialog.IsOverlay = $false
 
@@ -1871,125 +1871,13 @@ class DialogManager {
     }
 
     [void] Cleanup() {
-        foreach ($dialog in $this._activeDialogs.ToArray()) { # Use ToArray to avoid collection modification during iteration
+        foreach ($dialog in $this.{_activeDialogs}.ToArray()) { # Use ToArray to avoid collection modification during iteration
             $this.HideDialog($dialog) # This will also cleanup and remove from overlay stack
         }
-        $this._activeDialogs.Clear()
+        $this.{_activeDialogs}.Clear()
         # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
     }
 }
 
 #endregion
 #<!-- END_PAGE: ASE.009 -->
-
-#<!-- PAGE: ASE.010 - TuiFrameworkService Class -->
-#region TuiFrameworkService - Framework State Management
-
-# ==============================================================================
-# CLASS: TuiFrameworkService
-#
-# INHERITS: N/A
-#
-# DEPENDENCIES: None (directly accesses global state)
-#
-# PURPOSE:
-#   Provides a clean service interface for accessing framework state and
-#   dimensions instead of components directly accessing $global:TuiState.
-#   This encapsulates global state access and provides a more maintainable
-#   architecture.
-#
-# KEY LOGIC:
-#   - GetDimensions: Returns current buffer dimensions
-#   - GetCurrentScreen: Returns the currently active screen
-#   - IsRunning: Returns whether the engine is running
-#   - RequestRedraw: Marks the global state as dirty for redraw
-#   - GetFrameCount: Returns current frame count for debugging
-# ==============================================================================
-class TuiFrameworkService {
-    [hashtable]$_globalState = $null
-    
-    TuiFrameworkService() {
-        $this._globalState = $global:TuiState
-        Write-Log -Level Debug -Message "TuiFrameworkService: Initialized with global state access"
-    }
-    
-    [hashtable] GetDimensions() {
-        return @{
-            Width = $this._globalState.BufferWidth
-            Height = $this._globalState.BufferHeight
-        }
-    }
-    
-    [int] GetWidth() {
-        return $this._globalState.BufferWidth
-    }
-    
-    [int] GetHeight() {
-        return $this._globalState.BufferHeight
-    }
-    
-    [object] GetCurrentScreen() {
-        return $this._globalState.CurrentScreen
-    }
-    
-    [bool] IsRunning() {
-        return $this._globalState.Running
-    }
-    
-    [void] RequestRedraw() {
-        $this._globalState.IsDirty = $true
-    }
-    
-    [int] GetFrameCount() {
-        return $this._globalState.FrameCount
-    }
-    
-    [object] GetCompositorBuffer() {
-        return $this._globalState.CompositorBuffer
-    }
-    
-    [object] GetFocusedComponent() {
-        return $this._globalState.FocusedComponent
-    }
-    
-    [void] SetFocusedComponent([object]$component) {
-        $this._globalState.FocusedComponent = $component
-    }
-    
-    [object] GetCommandPalette() {
-        return $this._globalState.CommandPalette
-    }
-    
-    [System.Collections.Generic.List[UIElement]] GetOverlayStack() {
-        return $this._globalState.OverlayStack
-    }
-    
-    [void] AddOverlay([UIElement]$overlay) {
-        $this._globalState.OverlayStack.Add($overlay)
-        $this.RequestRedraw()
-    }
-    
-    [bool] RemoveOverlay([UIElement]$overlay) {
-        $removed = $this._globalState.OverlayStack.Remove($overlay)
-        if ($removed) {
-            $this.RequestRedraw()
-        }
-        return $removed
-    }
-    
-    [hashtable] GetServices() {
-        return $this._globalState.Services
-    }
-    
-    [object] GetService([string]$serviceName) {
-        return $this._globalState.Services[$serviceName]
-    }
-    
-    [void] Cleanup() {
-        Write-Log -Level Debug -Message "TuiFrameworkService: Cleanup completed"
-        # No cleanup needed - just reports completion
-    }
-}
-
-#endregion
-#<!-- END_PAGE: ASE.010 -->

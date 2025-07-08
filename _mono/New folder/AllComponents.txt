@@ -2464,12 +2464,6 @@ class CommandPalette : UIElement {
     }
 
     [void] Show() {
-        # Center the command palette on screen
-        $consoleWidth = $global:TuiState.BufferWidth
-        $consoleHeight = $global:TuiState.BufferHeight
-        $this.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $this.Width) / 2))
-        $this.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $this.Height) / 2))
-        
         $this.RefreshActions()
         $this._searchBox.Clear()
         $this.FilterActions("")
@@ -2480,19 +2474,10 @@ class CommandPalette : UIElement {
 
     [void] Hide() {
         $this.Visible = $false
-        
-        # Force a full redraw of the entire screen to clear any rendering artifacts
-        $global:TuiState.IsDirty = $true
-        
-        # Get current screen through NavigationService
-        $navService = $global:TuiState.Services.NavigationService
-        if ($navService -and $navService.CurrentScreen) {
-            $navService.CurrentScreen.RequestRedraw()
-        }
-        
         if ($this.OnCancel) {
             & $this.OnCancel
         }
+        $this.RequestRedraw()
     }
 
     [void] RefreshActions() {
@@ -2500,9 +2485,6 @@ class CommandPalette : UIElement {
         
         if ($this._actionService) {
             $actions = $this._actionService.GetAllActions()
-            # Use Write-Log instead of Write-Host
-            Write-Log -Level "Debug" -Message "CommandPalette: RefreshActions - got $($actions.Count) actions from service"
-            
             if ($actions -and $actions.Values) {
                 foreach ($action in $actions.Values) {
                     if ($action) {
@@ -2518,8 +2500,6 @@ class CommandPalette : UIElement {
         foreach ($item in $sorted) {
             $this._allActions.Add($item)
         }
-        
-        Write-Log -Level "Debug" -Message "CommandPalette: RefreshActions complete - $($this._allActions.Count) actions loaded"
     }
 
     [void] FilterActions([string]$searchText) {
@@ -2569,10 +2549,6 @@ class CommandPalette : UIElement {
         # Reset selection
         if ($this._filteredActions.Count -gt 0) {
             $this._listBox.SelectedIndex = 0
-            Write-Log -Level "Debug" -Message "CommandPalette: FilterActions set SelectedIndex=0, filtered count=$($this._filteredActions.Count)"
-        }
-        else {
-            Write-Log -Level "Debug" -Message "CommandPalette: FilterActions - no filtered items"
         }
         
         # Ensure list is refreshed
@@ -2591,34 +2567,20 @@ class CommandPalette : UIElement {
         
         # Handle Enter for action selection
         if ($key.Key -eq [ConsoleKey]::Enter) {
-            # Log for debugging
-            Write-Log -Level "Debug" -Message "CommandPalette: Enter pressed. SelectedIndex=$($this._listBox.SelectedIndex), FilteredActions=$($this._filteredActions.Count)"
-            
             # Always execute if we have a selection, regardless of which component has focus
-            if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+            if ($this._listBox.SelectedIndex -ge 0 -and $this._filteredActions.Count -gt 0) {
                 $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                Write-Log -Level "Debug" -Message "CommandPalette: Selected action: $($selectedAction.Name)"
-                
                 if ($selectedAction) {
                     $this.Hide()
                     if ($this.OnSelect) {
                         & $this.OnSelect $selectedAction
                     }
                     else {
-                        # Execute action directly
-                        Write-Log -Level "Debug" -Message "CommandPalette: Executing action $($selectedAction.Name)"
-                        try {
-                            $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                        }
-                        catch {
-                            Write-Log -Level "Error" -Message "CommandPalette: Failed to execute action $($selectedAction.Name): $_"
-                        }
+                        # Execute action directly - FIX: Pass empty hashtable as second parameter
+                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
                     }
                     return $true
                 }
-            }
-            else {
-                Write-Log -Level "Debug" -Message "CommandPalette: Cannot execute - no selection or no filtered actions"
             }
         }
         
