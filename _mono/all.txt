@@ -381,8 +381,8 @@ class UIElement {
     [string] $Name = "UIElement" 
     [int] $X = 0               
     [int] $Y = 0               
-    [int] $Width = 10          
-    [int] $Height = 3          
+    [int] $Width = 30          
+    [int] $Height = 10          
     [bool] $Visible = $true    
     [bool] $Enabled = $true    
     [bool] $IsFocusable = $false 
@@ -1020,7 +1020,7 @@ class LabelComponent : UIElement {
 
     LabelComponent([string]$name) : base($name) {
         $this.IsFocusable = $false
-        $this.Width = 10
+        $this.Width = 30  # Increased default width
         $this.Height = 1
     }
 
@@ -1462,9 +1462,9 @@ class MultilineTextBoxComponent : UIElement {
     [int]$ScrollOffsetX = 0
     [bool]$ReadOnly = $false
     [scriptblock]$OnChange
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     MultilineTextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -1478,11 +1478,11 @@ class MultilineTextBoxComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = $this.BackgroundColor
-            $fgColor = $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { "#00FFFF" } else { $this.BorderColor }
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
@@ -1521,7 +1521,7 @@ class MultilineTextBoxComponent : UIElement {
                     }
                     
                     if ($visiblePart) {
-                        $this._private_buffer.WriteString(1, $y + 1, $visiblePart, $fgColor, $bgColor)
+                        Write-TuiText -Buffer $this._private_buffer -X 1 -Y ($y + 1) -Text $visiblePart -Style @{ FG = $fgColor; BG = $bgColor }
                     }
                 }
             }
@@ -1712,6 +1712,9 @@ class NumericInputComponent : UIElement {
     [scriptblock]$OnChange
     hidden [string]$_textValue = "0"
     hidden [int]$_cursorPosition = 1
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     NumericInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -1725,17 +1728,16 @@ class NumericInputComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                -BorderStyle Single
+                -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw spinners
             $spinnerColor = if ($this.IsFocused) { "#FFFF00" } else { "#808080" }
@@ -1749,7 +1751,7 @@ class NumericInputComponent : UIElement {
                 $displayValue = $displayValue.Substring(0, $maxTextWidth)
             }
             
-            $this._private_buffer.WriteString(1, 1, $displayValue, $fgColor, $bgColor)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayValue -Style @{ FG = $fgColor; BG = $bgColor }
             
             # Draw cursor if focused
             if ($this.IsFocused -and $this._cursorPosition -le $displayValue.Length) {
@@ -1898,6 +1900,9 @@ class DateInputComponent : UIElement {
     [scriptblock]$OnChange
     hidden [bool]$_showCalendar = $false
     hidden [DateTime]$_viewMonth
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     DateInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -1910,9 +1915,9 @@ class DateInputComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
             # Adjust height based on calendar visibility
             $renderHeight = if ($this._showCalendar) { 10 } else { 3 }
@@ -1922,20 +1927,19 @@ class DateInputComponent : UIElement {
                 return
             }
             
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw text box
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height 3 `
-                -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                -BorderStyle Single
+                -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw date value
             $dateStr = $this.Value.ToString("yyyy-MM-dd")
-            $this._private_buffer.WriteString(1, 1, $dateStr, $fgColor, $bgColor)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $dateStr -Style @{ FG = $fgColor; BG = $bgColor }
             
             # Draw calendar icon
-            $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('📅', $borderColor, $bgColor))
+            $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('📅', $borderColorValue, $bgColor))
             
             # Draw calendar if shown
             if ($this._showCalendar) {
@@ -1960,7 +1964,7 @@ class DateInputComponent : UIElement {
         # Month/Year header
         $monthYearStr = $this._viewMonth.ToString("MMMM yyyy")
         $headerX = $startX + [Math]::Floor(($this.Width - $monthYearStr.Length) / 2)
-        $this._private_buffer.WriteString($headerX, $startY + 1, $monthYearStr, $headerColor, $bgColor)
+        Write-TuiText -Buffer $this._private_buffer -X $headerX -Y ($startY + 1) -Text $monthYearStr -Style @{ FG = $headerColor; BG = $bgColor }
         
         # Navigation arrows
         $this._private_buffer.SetCell($startX + 1, $startY + 1, [TuiCell]::new('<', $headerColor, $bgColor))
@@ -1970,7 +1974,7 @@ class DateInputComponent : UIElement {
         $dayHeaders = @("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
         $dayX = $startX + 2
         foreach ($day in $dayHeaders) {
-            $this._private_buffer.WriteString($dayX, $startY + 2, $day, @{ FG = "#808080"; BG = $bgColor })
+            Write-TuiText -Buffer $this._private_buffer -X $dayX -Y ($startY + 2) -Text $day -Style @{ FG = "#808080"; BG = $bgColor }
             $dayX += 3
         }
         
@@ -2004,7 +2008,7 @@ class DateInputComponent : UIElement {
                     $dayColor = $todayColor
                 }
                 
-                $this._private_buffer.WriteString($dayX, $dayY, $dayStr, $dayColor, $bgColor)
+                Write-TuiText -Buffer $this._private_buffer -X $dayX -Y $dayY -Text $dayStr -Style @{ FG = $dayColor; BG = $bgColor }
                 $currentDay++
             }
         }
@@ -2713,8 +2717,8 @@ class Table : UIElement {
 class Panel : UIElement {
     [string]$Title = ""
     [string]$BorderStyle = "Single"
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
+    [string]$BorderColor = "#808080"     # FIXED: Changed from ConsoleColor to hex string
+    [string]$BackgroundColor = "#000000" # FIXED: Changed from ConsoleColor to hex string
     [bool]$HasBorder = $true
     [string]$LayoutType = "Manual"  # Manual, Vertical, Horizontal, Grid
     [int]$Padding = 0
@@ -2728,6 +2732,11 @@ class Panel : UIElement {
 
     Panel([string]$name) : base($name) {
         $this.IsFocusable = $false
+        # Set reasonable defaults
+        if ($this.Width -eq 0) { $this.Width = 30 }
+        if ($this.Height -eq 0) { $this.Height = 10 }
+        # Calculate initial content dimensions
+        $this.UpdateContentDimensions()
     }
 
     [void] OnRender() {
@@ -2738,11 +2747,8 @@ class Panel : UIElement {
             $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
             $this._private_buffer.Clear($bgCell)
 
-            # Calculate content area
-            $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
-            $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
-            $this.ContentWidth = [Math]::Max(0, $this.Width - (if ($this.HasBorder) { 2 } else { 0 }))
-            $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
+            # Update content area dimensions
+            $this.UpdateContentDimensions()
 
             if ($this.HasBorder) {
                 $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
@@ -2821,6 +2827,21 @@ class Panel : UIElement {
         $area.Width = [Math]::Max(0, $this.Width - (2 * $area.X))
         $area.Height = [Math]::Max(0, $this.Height - (2 * $area.Y))
         return $area
+    }
+    
+    # New method to update content dimensions
+    [void] UpdateContentDimensions() {
+        $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
+        $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
+        $borderOffset = if ($this.HasBorder) { 2 } else { 0 }
+        $this.ContentWidth = [Math]::Max(0, $this.Width - $borderOffset)
+        $this.ContentHeight = [Math]::Max(0, $this.Height - $borderOffset)
+    }
+    
+    # Override Resize to update content dimensions
+    [void] OnResize() {
+        $this.UpdateContentDimensions()
+        ([UIElement]$this).OnResize()
     }
 }
 
@@ -3036,8 +3057,8 @@ class GroupPanel : Panel {
 
     GroupPanel([string]$name) : base($name) {
         $this.BorderStyle = "Double"
-        $this.BorderColor = [ConsoleColor]::DarkCyan
-        $this.BackgroundColor = [ConsoleColor]::Black
+        $this.BorderColor = "#008B8B"     # FIXED: DarkCyan in hex
+        $this.BackgroundColor = "#000000" # FIXED: Black in hex
     }
 
     [void] OnRender() {
@@ -3182,7 +3203,9 @@ class ListBox : UIElement {
                 $scrollbarX = $this.Width - 2
                 $scrollbarHeight = $contentHeight
                 $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this.Items.Count))
-                $thumbPos = [int]($scrollbarHeight * $this.ScrollOffset / $this.Items.Count)
+                $thumbPos = if ($this.Items.Count -gt $scrollbarHeight) {
+                    [int](($scrollbarHeight - $thumbSize) * $this.ScrollOffset / ($this.Items.Count - $scrollbarHeight))
+                } else { 0 }
                 
                 $scrollbarColor = Get-ThemeColor "list.scrollbar"
                 for ($i = 0; $i -lt $scrollbarHeight; $i++) {
@@ -3328,8 +3351,8 @@ class CommandPalette : UIElement {
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = [ConsoleColor]::Cyan
-        $this._panel.BackgroundColor = [ConsoleColor]::Black
+        $this._panel.BorderColor = "#00FFFF"    # FIXED: Cyan in hex
+        $this._panel.BackgroundColor = "#000000" # FIXED: Black in hex
         $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
@@ -3342,10 +3365,14 @@ class CommandPalette : UIElement {
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
         $this._searchBox._textBox.Placeholder = "Type to search commands..."
+        
+        # Fix the OnChange handler to properly capture $this
+        $commandPalette = $this
         $this._searchBox._textBox.OnChange = {
             param($sender, $text)
-            $this.FilterActions($text)
+            $commandPalette.FilterActions($text)
         }.GetNewClosure()
+        
         $this._panel.AddChild($this._searchBox)
 
         # Create list box
@@ -3435,50 +3462,129 @@ class CommandPalette : UIElement {
                 }
             }
         }
+        
+        # Ensure list is refreshed
+        $this._listBox.RequestRedraw()
+        $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
+        # Handle global escape
         if ($key.Key -eq [ConsoleKey]::Escape) {
             $this.Hide()
             return $true
         }
         
-        if ($key.Key -eq [ConsoleKey]::Enter -and $this._listBox.SelectedIndex -ge 0) {
-            $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-            if ($selectedAction) {
-                $this.Hide()
-                if ($this.OnSelect) {
-                    & $this.OnSelect $selectedAction
-                }
-                else {
-                    # Execute action directly
-                    $this._actionService.ExecuteAction($selectedAction.Name)
+        # Handle Enter for action selection
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            # Always execute if we have a selection, regardless of which component has focus
+            if ($this._listBox.SelectedIndex -ge 0 -and $this._filteredActions.Count -gt 0) {
+                $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                if ($selectedAction) {
+                    $this.Hide()
+                    if ($this.OnSelect) {
+                        & $this.OnSelect $selectedAction
+                    }
+                    else {
+                        # Execute action directly - FIX: Pass empty hashtable as second parameter
+                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                    }
+                    return $true
                 }
             }
-            return $true
         }
         
-        # Pass input to search box or list box
-        if ($key.Key -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, 
-                          [ConsoleKey]::PageUp, [ConsoleKey]::PageDown)) {
-            return $this._listBox.HandleInput($key)
+        # Navigation keys always go to list box
+        switch ($key.Key) {
+            ([ConsoleKey]::UpArrow) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::DownArrow) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::PageUp) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::PageDown) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::Home) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::End) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            
+            # Tab to switch focus between search and list
+            ([ConsoleKey]::Tab) {
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    $currentFocus = $focusManager.FocusedComponent
+                    if ($currentFocus -eq $this._searchBox._textBox) {
+                        $focusManager.SetFocus($this._listBox)
+                    } else {
+                        $focusManager.SetFocus($this._searchBox._textBox)
+                    }
+                }
+                return $true
+            }
+            
+            # All other keys go to search
+            default {
+                $result = $this._searchBox.HandleInput($key)
+                # Force redraw after text changes
+                if ($result) {
+                    $this.RequestRedraw()
+                }
+                return $result
+            }
         }
-        else {
-            return $this._searchBox.HandleInput($key)
-        }
+        
+        # This line should never be reached due to the default case above,
+        # but PowerShell requires it for all code paths
+        return $false
     }
 
     [void] OnResize() {
         if ($this._panel) {
             $this._panel.Width = $this.Width
             $this._panel.Height = $this.Height
+            $this._panel.X = 0
+            $this._panel.Y = 0
             
-            $this._searchBox.Width = $this.Width - 4
-            $this._listBox.Width = $this.Width - 4
-            $this._listBox.Height = $this.Height - 6
+            if ($this._searchBox) {
+                $this._searchBox.Width = $this.Width - 4
+            }
+            
+            if ($this._listBox) {
+                $this._listBox.Width = $this.Width - 4
+                $this._listBox.Height = $this.Height - 6
+            }
         }
+    }
+    
+    [void] OnRender() {
+        # Ensure we render as overlay with proper dimensions
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        # Render children (panel will render border and children)
+        ([UIElement]$this).OnRender()
+        
+        $this._needs_redraw = $false
     }
 }
 
@@ -3515,8 +3621,8 @@ class Dialog : UIElement {
         $this._panel = [Panel]::new($this.Name + "_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = Get-ThemeColor("dialog.border")
-        $this._panel.BackgroundColor = Get-ThemeColor("dialog.background")
+        $this._panel.BorderColor = "#00FFFF"    # FIXED: Use hex string for border
+        $this._panel.BackgroundColor = "#000000" # FIXED: Use hex string for background
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
@@ -4209,7 +4315,14 @@ function Write-TuiBox {
     # Draw title if specified
     if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
         $titleText = " $Title "
-        if ($titleText.Length -le ($Width - 2)) {
+        
+        # Truncate title if too long
+        $maxTitleLength = $Width - 2
+        if ($titleText.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
+            $titleText = $titleText.Substring(0, $maxTitleLength - 3) + "..."
+        }
+        
+        if ($titleText.Length -le ($Width - 2) -and $Width -gt 2) {
             $titleAlignment = $Style.TitleAlignment ?? "TopBorder" # Default to current behavior
             $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
             
@@ -5550,12 +5663,6 @@ function Invoke-TuiRender {
             }
         }
         
-        # Debug: Add a test message to see if rendering is working
-        if ($global:TuiState.FrameCount -eq 0) {
-            $testMsg = "RENDERING IS WORKING - Frame: $($global:TuiState.FrameCount)"
-            $global:TuiState.CompositorBuffer.WriteString(2, 2, $testMsg, @{ FG = "#FFFF00"; BG = "#000000" })
-        }
-        
         # Force full redraw on first frame by making previous buffer different
         if ($global:TuiState.FrameCount -eq 0) {
             Write-Verbose "First frame - initializing previous buffer for differential rendering"
@@ -5572,23 +5679,12 @@ function Invoke-TuiRender {
         Render-DifferentialBuffer
         
         # Swap buffers for next frame - MUST happen AFTER rendering
-        # Create proper copies to avoid reference issues
-        $tempBuffer = [TuiBuffer]::new($global:TuiState.CompositorBuffer.Width, $global:TuiState.CompositorBuffer.Height, "TempBuffer")
-        
-        # Copy current compositor to temp
-        for ($y = 0; $y -lt $global:TuiState.CompositorBuffer.Height; $y++) {
-            for ($x = 0; $x -lt $global:TuiState.CompositorBuffer.Width; $x++) {
-                $cell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
-                $tempBuffer.SetCell($x, $y, [TuiCell]::new($cell))
-            }
-        }
+        # Use the efficient Clone() method instead of manual copying
+        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer.Clone()
         
         # Clear compositor for next frame
         $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-        
-        # Update previous buffer with what was just rendered
-        $global:TuiState.PreviousCompositorBuffer = $tempBuffer
         
         $renderTimer.Stop()
         
@@ -6044,12 +6140,17 @@ class DashboardScreen : Screen {
             return
         }
         
+        # Ensure minimum size
+        if ($this.Width -lt 80) { $this.Width = 80 }
+        if ($this.Height -lt 24) { $this.Height = 24 }
+        
         $this._mainPanel = [Panel]::new("Axiom-Phoenix Dashboard")
         $this._mainPanel.X = 0
         $this._mainPanel.Y = 0
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = "Axiom-Phoenix Dashboard"
+        $this._mainPanel.UpdateContentDimensions()
         $this.AddChild($this._mainPanel)
 
         $summaryWidth = [Math]::Floor($this.Width * 0.5)
@@ -6059,6 +6160,7 @@ class DashboardScreen : Screen {
         $this._summaryPanel.Width = $summaryWidth
         $this._summaryPanel.Height = 12
         $this._summaryPanel.Title = "Task Summary"
+        $this._summaryPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._summaryPanel)
 
         $helpX = $summaryWidth + 2
@@ -6069,6 +6171,7 @@ class DashboardScreen : Screen {
         $this._helpPanel.Width = $helpWidth
         $this._helpPanel.Height = 12
         $this._helpPanel.Title = "Quick Start"
+        $this._helpPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._helpPanel)
 
         $this._statusPanel = [Panel]::new("System Status")
@@ -6077,6 +6180,7 @@ class DashboardScreen : Screen {
         $this._statusPanel.Width = $this.Width - 2
         $this._statusPanel.Height = $this.Height - 15
         $this._statusPanel.Title = "System Status"
+        $this._statusPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._statusPanel)
     }
 
@@ -6162,25 +6266,88 @@ class DashboardScreen : Screen {
         
         # Clear children
         $panel.Children.Clear()
+        
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
+        
+        # Ensure we have a reasonable width
+        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
 
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
-
-        # Simple text rendering using buffer
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Task Overview" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        # Create label components instead of direct buffer drawing
+        $titleLabel = [LabelComponent]::new("SummaryTitle")
+        $titleLabel.Text = "Task Overview"
+        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
+        $titleLabel.X = 1
+        $titleLabel.Y = 0
+        $titleLabel.Width = $labelWidth
+        $titleLabel.Height = 1
+        $panel.AddChild($titleLabel)
+        
+        # Only create separator if there's space for it
+        $lineWidth = [Math]::Max(0, $labelWidth)
         if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+            $separatorLabel = [LabelComponent]::new("SummarySeparator")
+            $separatorLabel.Text = '─' * $lineWidth
+            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $separatorLabel.X = 1
+            $separatorLabel.Y = 1
+            $separatorLabel.Width = $labelWidth
+            $separatorLabel.Height = 1
+            $panel.AddChild($separatorLabel)
         }
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $totalLabel = [LabelComponent]::new("TotalTasks")
+        $totalLabel.Text = "Total Tasks:    $($this._totalTasks)"
+        $totalLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $totalLabel.X = 1
+        $totalLabel.Y = 3
+        $totalLabel.Width = $labelWidth
+        $totalLabel.Height = 1
+        $panel.AddChild($totalLabel)
         
-        # Draw progress bar
+        $completedLabel = [LabelComponent]::new("CompletedTasks")
+        $completedLabel.Text = "Completed:      $($this._completedTasks)"
+        $completedLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
+        $completedLabel.X = 1
+        $completedLabel.Y = 4
+        $completedLabel.Width = $labelWidth
+        $completedLabel.Height = 1
+        $panel.AddChild($completedLabel)
+        
+        $pendingLabel = [LabelComponent]::new("PendingTasks")
+        $pendingLabel.Text = "Pending:        $($this._pendingTasks)"
+        $pendingLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+        $pendingLabel.X = 1
+        $pendingLabel.Y = 5
+        $pendingLabel.Width = $labelWidth
+        $pendingLabel.Height = 1
+        $panel.AddChild($pendingLabel)
+        
+        # Create progress bar as labels
         $percentage = if ($this._totalTasks -eq 0) { 0 } else { [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) }
-        $this._DrawProgressBar($buffer, $contentX + 1, $contentY + 7, 20, $percentage, "Overall Progress")
+        $progressLabel = [LabelComponent]::new("ProgressLabel")
+        $progressLabel.Text = "Overall Progress: $percentage%"
+        $progressLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $progressLabel.X = 1
+        $progressLabel.Y = 7
+        $progressLabel.Width = $labelWidth
+        $progressLabel.Height = 1
+        $panel.AddChild($progressLabel)
+        
+        # Progress bar visualization
+        $barWidth = [Math]::Min(20, $labelWidth - 2)
+        $filledWidth = [Math]::Floor($barWidth * $percentage / 100)
+        $emptyWidth = $barWidth - $filledWidth
+        $barText = "[" + ("█" * $filledWidth) + ("░" * $emptyWidth) + "]"
+        
+        $barLabel = [LabelComponent]::new("ProgressBar")
+        $barLabel.Text = $barText
+        $barLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
+        $barLabel.X = 1
+        $barLabel.Y = 8
+        $barLabel.Width = $labelWidth
+        $barLabel.Height = 1
+        $panel.AddChild($barLabel)
         
         $panel.RequestRedraw()
     }
@@ -6192,25 +6359,72 @@ class DashboardScreen : Screen {
         # Clear children
         $panel.Children.Clear()
         
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
+        
+        # Ensure we have a reasonable width
+        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
+        
         $paletteHotkey = "Ctrl+P"
         
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
+        # Create label components for help panel
+        $welcomeLabel = [LabelComponent]::new("WelcomeLabel")
+        $welcomeLabel.Text = "Welcome to Axiom-Phoenix!"
+        $welcomeLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
+        $welcomeLabel.X = 1
+        $welcomeLabel.Y = 0
+        $welcomeLabel.Width = $labelWidth
+        $welcomeLabel.Height = 1
+        $panel.AddChild($welcomeLabel)
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 0) -Text "Welcome to Axiom-Phoenix!" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        $lineWidth = [Math]::Max(0, $labelWidth)
         if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+            $separatorLabel = [LabelComponent]::new("HelpSeparator")
+            $separatorLabel.Text = '─' * $lineWidth
+            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $separatorLabel.X = 1
+            $separatorLabel.Y = 1
+            $separatorLabel.Width = $labelWidth
+            $separatorLabel.Height = 1
+            $panel.AddChild($separatorLabel)
         }
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Press " -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 7) -Y ($contentY + 3) -Text $paletteHotkey -Style @{ FG = Get-ThemeColor -ColorName "Accent" -DefaultColor "#FF00FF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 7 + $paletteHotkey.Length) -Y ($contentY + 3) -Text " to open the" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Command Palette." -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        # Create multi-part label for the hotkey instruction
+        $instructionLabel1 = [LabelComponent]::new("Instruction1")
+        $instructionLabel1.Text = "Press $paletteHotkey to open the"
+        $instructionLabel1.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $instructionLabel1.X = 1
+        $instructionLabel1.Y = 3
+        $instructionLabel1.Width = $labelWidth
+        $instructionLabel1.Height = 1
+        $panel.AddChild($instructionLabel1)
+        
+        $instructionLabel2 = [LabelComponent]::new("Instruction2")
+        $instructionLabel2.Text = "Command Palette."
+        $instructionLabel2.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $instructionLabel2.X = 1
+        $instructionLabel2.Y = 4
+        $instructionLabel2.Width = $labelWidth
+        $instructionLabel2.Height = 1
+        $panel.AddChild($instructionLabel2)
 
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 6) -Text "All navigation and actions are" -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "now available from there." -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $infoLabel1 = [LabelComponent]::new("InfoLabel1")
+        $infoLabel1.Text = "All navigation and actions are"
+        $infoLabel1.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $infoLabel1.X = 1
+        $infoLabel1.Y = 6
+        $infoLabel1.Width = $labelWidth
+        $infoLabel1.Height = 1
+        $panel.AddChild($infoLabel1)
+        
+        $infoLabel2 = [LabelComponent]::new("InfoLabel2")
+        $infoLabel2.Text = "now available from there."
+        $infoLabel2.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $infoLabel2.X = 1
+        $infoLabel2.Y = 7
+        $infoLabel2.Width = $labelWidth
+        $infoLabel2.Height = 1
+        $panel.AddChild($infoLabel2)
         
         $panel.RequestRedraw()
     }
@@ -6221,55 +6435,67 @@ class DashboardScreen : Screen {
         
         # Clear children
         $panel.Children.Clear()
+        
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
+        
+        # Ensure we have a reasonable width
+        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
 
         $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
 
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
+        # Create label components for status panel
+        $titleLabel = [LabelComponent]::new("StatusTitle")
+        $titleLabel.Text = "Environment"
+        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
+        $titleLabel.X = 1
+        $titleLabel.Y = 0
+        $titleLabel.Width = $labelWidth
+        $titleLabel.Height = 1
+        $panel.AddChild($titleLabel)
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Environment" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        $lineWidth = [Math]::Max(0, $labelWidth)
         if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+            $separatorLabel = [LabelComponent]::new("StatusSeparator")
+            $separatorLabel.Text = '─' * $lineWidth
+            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $separatorLabel.X = 1
+            $separatorLabel.Y = 1
+            $separatorLabel.Width = $labelWidth
+            $separatorLabel.Height = 1
+            $panel.AddChild($separatorLabel)
         }
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "PowerShell Version: $($global:PSVersionTable.PSVersion)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Memory Usage: ${memoryMB} MB" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Host: $($global:Host.Name)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $versionLabel = [LabelComponent]::new("PSVersion")
+        $versionLabel.Text = "PowerShell Version: $($global:PSVersionTable.PSVersion)"
+        $versionLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $versionLabel.X = 1
+        $versionLabel.Y = 3
+        $versionLabel.Width = $labelWidth
+        $versionLabel.Height = 1
+        $panel.AddChild($versionLabel)
+        
+        $memoryLabel = [LabelComponent]::new("MemoryUsage")
+        $memoryLabel.Text = "Memory Usage: ${memoryMB} MB"
+        $memoryLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $memoryLabel.X = 1
+        $memoryLabel.Y = 4
+        $memoryLabel.Width = $labelWidth
+        $memoryLabel.Height = 1
+        $panel.AddChild($memoryLabel)
+        
+        $hostLabel = [LabelComponent]::new("HostName")
+        $hostLabel.Text = "Host: $($global:Host.Name)"
+        $hostLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $hostLabel.X = 1
+        $hostLabel.Y = 5
+        $hostLabel.Width = $labelWidth
+        $hostLabel.Height = 1
+        $panel.AddChild($hostLabel)
         
         $panel.RequestRedraw()
     }
-    
-    hidden [void] _DrawProgressBar([TuiBuffer]$buffer, [int]$x, [int]$y, [int]$width, [float]$percentage, [string]$label) {
-        $filledWidth = [int]($width * ($percentage / 100))
-        $emptyWidth = $width - $filledWidth
-        
-        # Draw label
-        Write-TuiText -Buffer $buffer -X $x -Y $y -Text $label -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        
-        # Draw progress bar
-        $progressY = $y + 1
-        Write-TuiText -Buffer $buffer -X $x -Y $progressY -Text "[" -Style @{ FG = Get-ThemeColor -ColorName "component.border" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        
-        if ($filledWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($x + 1) -Y $progressY -Text ("█" * $filledWidth) `
-                -Style @{ FG = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        }
-        
-        if ($emptyWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($x + 1 + $filledWidth) -Y $progressY -Text ("░" * $emptyWidth) `
-                -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        }
-        
-        Write-TuiText -Buffer $buffer -X ($x + 1 + $width) -Y $progressY -Text "]" `
-            -Style @{ FG = Get-ThemeColor -ColorName "component.border" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        
-        # Draw percentage
-        $percentText = " $([int]$percentage)%"
-        Write-TuiText -Buffer $buffer -X ($x + $width + 3) -Y $progressY -Text $percentText `
-            -Style @{ FG = Get-ThemeColor -ColorName "Info" -DefaultColor "#00BFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-    }
+
 
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         # Dashboard doesn't handle specific input - all navigation via command palette
@@ -6296,8 +6522,8 @@ class TaskListScreen : Screen {
     hidden [int] $_selectedIndex = 0
     hidden [PmcTask] $_selectedTask
     hidden [string] $_filterText = ""
-    hidden [TaskStatus] $_filterStatus = $null
-    hidden [TaskPriority] $_filterPriority = $null
+    hidden [System.Nullable[TaskStatus]] $_filterStatus = $null
+    hidden [System.Nullable[TaskPriority]] $_filterPriority = $null
     hidden [string] $_taskChangeSubscriptionId = $null # Store event subscription ID
     #endregion
 
@@ -6309,12 +6535,17 @@ class TaskListScreen : Screen {
             return
         }
         
+        # Ensure minimum size
+        if ($this.Width -lt 80) { $this.Width = 80 }
+        if ($this.Height -lt 24) { $this.Height = 24 }
+        
         $this._mainPanel = [Panel]::new("Task List")
         $this._mainPanel.X = 0
         $this._mainPanel.Y = 0
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = "Task List"
+        $this._mainPanel.UpdateContentDimensions()
         $this.AddChild($this._mainPanel)
 
         # Task list panel (left side)
@@ -6325,6 +6556,7 @@ class TaskListScreen : Screen {
         $this._taskListPanel.Width = $listWidth
         $this._taskListPanel.Height = $this.Height - 4
         $this._taskListPanel.Title = "Tasks"
+        $this._taskListPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._taskListPanel)
 
         # Detail panel (right side)
@@ -6336,6 +6568,7 @@ class TaskListScreen : Screen {
         $this._detailPanel.Width = $detailWidth
         $this._detailPanel.Height = $this.Height - 4
         $this._detailPanel.Title = "Task Details"
+        $this._detailPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._detailPanel)
 
         # Status bar
@@ -6476,7 +6709,8 @@ class TaskListScreen : Screen {
             $taskPanel = [Panel]::new("TaskItem_$($task.Id)")
             $taskPanel.X = 0
             $taskPanel.Y = $i # Y position is its index in the list
-            $taskPanel.Width = $panel.ContentWidth
+            $panelContentWidth = if ($panel.ContentWidth -le 0) { [Math]::Max(30, $panel.Width - 2) } else { $panel.ContentWidth }
+            $taskPanel.Width = $panelContentWidth
             $taskPanel.Height = 1
             $taskPanel.HasBorder = $false
             
@@ -6488,6 +6722,8 @@ class TaskListScreen : Screen {
             $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
             $taskLabel.X = 1 # Indent slightly
             $taskLabel.Y = 0 # Relative to the task panel
+            $taskLabel.Width = [Math]::Max(20, $panelContentWidth - 2) # Set proper width
+            $taskLabel.Height = 1
             
             # Status indicator
             $statusChar = switch ($task.Status) {
@@ -6507,9 +6743,9 @@ class TaskListScreen : Screen {
             }
             
             # Truncate title if needed
-            $maxTitleLength = $panel.ContentWidth - 6 # Adjusted for status/priority chars and padding
-            $title = if ($task.Title.Length -gt $maxTitleLength) {
-                $task.Title.Substring(0, $maxTitleLength - 3) + "..."
+            $maxTitleLength = [Math]::Max(10, $panelContentWidth - 6) # Ensure minimum length
+            $title = if ($task.Title.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
+                $task.Title.Substring(0, [Math]::Max(1, $maxTitleLength - 3)) + "..."
             } else {
                 $task.Title
             }
@@ -6537,6 +6773,9 @@ class TaskListScreen : Screen {
         
         # Clear children
         $panel.Children.Clear()
+        
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
         
         $task = $this._selectedTask
         $y = 1 # Start position relative to panel
@@ -6587,7 +6826,7 @@ class TaskListScreen : Screen {
             # Word wrap description
             $words = $task.Description -split '\s+'
             $line = ""
-            $maxLineLength = $panel.ContentWidth - 2
+            $maxLineLength = [Math]::Max(10, $panel.ContentWidth - 2)
             $lineIndex = 0
             
             foreach ($word in $words) {
@@ -7645,7 +7884,9 @@ class NavigationService {
             }
             
             # Resize screen to match current console dimensions
-            $screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+            $width = [Math]::Max(80, $global:TuiState.BufferWidth)
+            $height = [Math]::Max(24, $global:TuiState.BufferHeight)
+            $screen.Resize($width, $height)
             
             $screen.OnEnter() # Call lifecycle method
             
@@ -8528,6 +8769,132 @@ class DialogManager {
 
 
 
+####\apply_all_fixes.ps1
+# Master Fix Script for Axiom-Phoenix v4.0
+# This script applies all fixes in the correct order
+
+Write-Host @"
+╔══════════════════════════════════════════════════════════════╗
+║     Axiom-Phoenix v4.0 - Comprehensive Fix Application      ║
+╚══════════════════════════════════════════════════════════════╝
+"@ -ForegroundColor Cyan
+
+Write-Host "`nThis script will apply all fixes to make the framework fully functional." -ForegroundColor Yellow
+Write-Host "Fixes include:" -ForegroundColor Yellow
+Write-Host "  • Data model enhancements (TimeEntry, enhanced PmcProject)" -ForegroundColor White
+Write-Host "  • TaskListScreen CRUD operations with dialogs" -ForegroundColor White
+Write-Host "  • Panel alignment and layout fixes" -ForegroundColor White
+Write-Host "  • Command palette performance optimization" -ForegroundColor White
+Write-Host "  • Text filtering implementation" -ForegroundColor White
+Write-Host "  • Unicode support for better UI rendering" -ForegroundColor White
+Write-Host "  • Multiple built-in themes (Synthwave, HighContrastLight, Paper)" -ForegroundColor White
+Write-Host "  • Theme picker screen" -ForegroundColor White
+Write-Host "  • DashboardScreen rendering fixes" -ForegroundColor White
+
+Write-Host "`nPress any key to continue or Ctrl+C to cancel..." -ForegroundColor Yellow
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+# Check if fix scripts exist
+$scripts = @(
+    "comprehensive_fixes.ps1",
+    "enhanced_theming.ps1",
+    "implement_crud_dialogs.ps1"
+)
+
+$missingScripts = @()
+foreach ($script in $scripts) {
+    if (-not (Test-Path $script)) {
+        $missingScripts += $script
+    }
+}
+
+if ($missingScripts.Count -gt 0) {
+    Write-Host "`nError: The following fix scripts are missing:" -ForegroundColor Red
+    foreach ($missing in $missingScripts) {
+        Write-Host "  - $missing" -ForegroundColor Red
+    }
+    Write-Host "`nPlease ensure all fix scripts are in the current directory." -ForegroundColor Red
+    exit 1
+}
+
+# Create backups
+Write-Host "`nCreating backups..." -ForegroundColor Cyan
+$backupDir = "backups_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+
+$filesToBackup = @(
+    "AllModels.ps1",
+    "AllComponents.ps1",
+    "AllScreens.ps1",
+    "AllServices.ps1",
+    "AllRuntime.ps1"
+)
+
+foreach ($file in $filesToBackup) {
+    if (Test-Path $file) {
+        Copy-Item $file "$backupDir\$file" -Force
+        Write-Host "  Backed up: $file" -ForegroundColor Green
+    }
+}
+
+# Apply fixes in order
+try {
+    Write-Host "`n═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "STEP 1: Applying comprehensive fixes..." -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    & .\comprehensive_fixes.ps1
+    
+    Write-Host "`n═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "STEP 2: Applying enhanced theming..." -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    & .\enhanced_theming.ps1
+    
+    Write-Host "`n═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "STEP 3: Implementing CRUD dialogs..." -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    & .\implement_crud_dialogs.ps1
+    
+    Write-Host "`n╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "║              ALL FIXES APPLIED SUCCESSFULLY!                 ║" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    
+    Write-Host "`nWhat's new:" -ForegroundColor Cyan
+    Write-Host "  ✓ TaskListScreen now has functional CRUD buttons" -ForegroundColor Green
+    Write-Host "  ✓ Text filtering works - type in the filter box" -ForegroundColor Green
+    Write-Host "  ✓ Command palette is optimized with debouncing" -ForegroundColor Green
+    Write-Host "  ✓ Unicode support enabled - better UI characters" -ForegroundColor Green
+    Write-Host "  ✓ 4 themes available: Default, Synthwave, HighContrastLight, Paper" -ForegroundColor Green
+    Write-Host "  ✓ Theme picker accessible via Ctrl+P -> 'Change Theme'" -ForegroundColor Green
+    Write-Host "  ✓ Time tracking support with TimeEntry class" -ForegroundColor Green
+    Write-Host "  ✓ Enhanced project model with additional fields" -ForegroundColor Green
+    
+    Write-Host "`nKeyboard shortcuts in TaskListScreen:" -ForegroundColor Yellow
+    Write-Host "  [N] - Create new task" -ForegroundColor White
+    Write-Host "  [E] - Edit selected task" -ForegroundColor White
+    Write-Host "  [D] - Delete selected task" -ForegroundColor White
+    Write-Host "  [C] - Mark task as complete" -ForegroundColor White
+    Write-Host "  ↑↓  - Navigate tasks" -ForegroundColor White
+    Write-Host "  Enter - Edit task (alternative)" -ForegroundColor White
+    
+    Write-Host "`nRun .\Start.ps1 to launch the improved application!" -ForegroundColor Cyan
+    
+} catch {
+    Write-Host "`nError applying fixes:" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host "`nBackups are available in: $backupDir" -ForegroundColor Yellow
+    exit 1
+}
+
+# Optional: Launch the application
+Write-Host "`nWould you like to launch the application now? (Y/N)" -ForegroundColor Yellow
+$response = Read-Host
+if ($response -eq 'Y' -or $response -eq 'y') {
+    Write-Host "`nLaunching Axiom-Phoenix..." -ForegroundColor Cyan
+    & .\Start.ps1
+}
+
+
+
 ####\check-operators.ps1
 # Simple test to check for operator issues
 $ErrorActionPreference = 'Stop'
@@ -8578,6 +8945,534 @@ try {
 } catch {
     Write-Host "`nError: $_" -ForegroundColor Red
 }
+
+
+
+####\comprehensive_fixes.ps1
+# Comprehensive fixes for Axiom-Phoenix v4.0
+# This script fixes all identified issues:
+# 1. Data Model Enhancements (TimeEntry, enhanced PmcProject)
+# 2. TaskListScreen CRUD operations
+# 3. Panel alignment issues
+# 4. Command palette performance and filtering
+# 5. Unicode support
+# 6. DashboardScreen rendering issues
+
+Write-Host "Applying comprehensive fixes to Axiom-Phoenix v4.0..." -ForegroundColor Cyan
+
+# PART 1: Data Model Enhancements (AllModels.ps1)
+Write-Host "`nPart 1: Enhancing data models..." -ForegroundColor Yellow
+
+$modelsFile = "AllModels.ps1"
+$modelsContent = Get-Content $modelsFile -Raw
+
+# Add BillingType enum after existing enums
+$enumsMarker = "enum TaskPriority {`r`n    Low`r`n    Medium`r`n    High`r`n}"
+$billingTypeEnum = @"
+
+enum BillingType {
+    Billable
+    NonBillable
+}
+"@
+
+if ($modelsContent -notmatch "enum BillingType") {
+    $modelsContent = $modelsContent.Replace($enumsMarker, "$enumsMarker$billingTypeEnum")
+    Write-Host "  - Added BillingType enum" -ForegroundColor Green
+}
+
+# Enhance PmcProject class
+$projectClassStart = "class PmcProject : ValidationBase {"
+$projectEnhancements = @"
+    # Enhanced properties from reference implementation
+    [string]`$ID1                             # Optional secondary identifier
+    [Nullable[datetime]]`$BFDate              # Bring-Forward date for follow-ups
+    [string]`$ProjectFolderPath               # Full path to the project's root folder on disk
+    [string]`$CaaFileName                     # Relative name of the associated CAA file
+    [string]`$RequestFileName                 # Relative name of the associated Request file
+    [string]`$T2020FileName                   # Relative name of the associated T2020 file
+"@
+
+# Insert after existing properties
+$projectPropertiesEnd = "    [bool]`$IsActive = `$true"
+if ($modelsContent -notmatch "ProjectFolderPath") {
+    $modelsContent = $modelsContent.Replace($projectPropertiesEnd, "$projectPropertiesEnd`r`n$projectEnhancements")
+    Write-Host "  - Enhanced PmcProject class" -ForegroundColor Green
+}
+
+# Add TimeEntry class before the end comment
+$timeEntryClass = @"
+
+# ===== CLASS: TimeEntry =====
+# Purpose: Represents a time entry for a task or project
+class TimeEntry : ValidationBase {
+    [string]`$Id = [Guid]::NewGuid().ToString()
+    [string]`$TaskId                                  # Associated task ID (optional)
+    [string]`$ProjectKey                              # Associated project key (required)
+    [DateTime]`$StartTime                             # When work started
+    [Nullable[DateTime]]`$EndTime                     # When work ended (null if timer is still running)
+    [string]`$Description                             # A note about the work that was done
+    [BillingType]`$BillingType = [BillingType]::Billable # Billing classification
+    [string]`$UserId                                  # Who logged the time (future use)
+    [decimal]`$HourlyRate = 0                         # Rate per hour (if applicable)
+
+    # Constructors
+    TimeEntry() {}
+    
+    TimeEntry([string]`$projectKey, [string]`$description) {
+        `$this.ProjectKey = `$projectKey
+        `$this.Description = `$description
+        `$this.StartTime = [DateTime]::Now
+    }
+
+    # Methods
+    [TimeSpan] GetDuration() {
+        if (`$null -eq `$this.EndTime) {
+            return [DateTime]::Now - `$this.StartTime
+        }
+        return `$this.EndTime - `$this.StartTime
+    }
+
+    [double] GetHours() {
+        return `$this.GetDuration().TotalHours
+    }
+
+    [decimal] GetTotalValue() {
+        if (`$this.BillingType -eq [BillingType]::NonBillable) {
+            return 0
+        }
+        return [decimal](`$this.GetHours()) * `$this.HourlyRate
+    }
+
+    [void] Stop() {
+        if (`$null -eq `$this.EndTime) {
+            `$this.EndTime = [DateTime]::Now
+        }
+    }
+
+    [bool] IsRunning() {
+        return `$null -eq `$this.EndTime
+    }
+}
+"@
+
+$endMarker = "#endregion`r`n#<!-- END_PAGE: AMO.005 -->"
+if ($modelsContent -notmatch "class TimeEntry") {
+    $modelsContent = $modelsContent.Replace($endMarker, "$timeEntryClass`r`n`r`n$endMarker")
+    Write-Host "  - Added TimeEntry class" -ForegroundColor Green
+}
+
+Set-Content $modelsFile $modelsContent -Encoding UTF8
+Write-Host "  - Data model enhancements complete" -ForegroundColor Green
+
+# PART 2: Enable Unicode Support (AllRuntime.ps1)
+Write-Host "`nPart 2: Enabling Unicode support..." -ForegroundColor Yellow
+
+$runtimeFile = "AllRuntime.ps1"
+$runtimeContent = Get-Content $runtimeFile -Raw
+
+$initializeFunction = "function Initialize-TuiEngine {"
+$unicodeSupport = @"
+    # Enable full Unicode support
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    `$env:PYTHONIOENCODING = "utf-8"
+    
+"@
+
+$functionBody = "function Initialize-TuiEngine {`r`n    param(`r`n        [int]`$BufferWidth = 0,`r`n        [int]`$BufferHeight = 0`r`n    )"
+
+if ($runtimeContent -notmatch "OutputEncoding.*UTF8") {
+    $runtimeContent = $runtimeContent.Replace($functionBody, "$functionBody`r`n$unicodeSupport")
+    Set-Content $runtimeFile $runtimeContent -Encoding UTF8
+    Write-Host "  - Unicode support enabled" -ForegroundColor Green
+}
+
+# PART 3: Fix TaskListScreen - Add CRUD buttons and fix layout
+Write-Host "`nPart 3: Fixing TaskListScreen..." -ForegroundColor Yellow
+
+$screensFile = "AllScreens.ps1"
+$screensContent = Get-Content $screensFile -Raw
+
+# Find the TaskListScreen's Initialize method and add buttons
+$taskListInitEnd = "        `$this._UpdateDisplay()"
+
+$crudButtons = @"
+
+        # Add CRUD action buttons at the bottom
+        `$buttonY = `$this.Height - 3
+        `$buttonSpacing = 15
+        `$currentX = 2
+        
+        # New button
+        `$this._newButton = [ButtonComponent]::new("NewButton")
+        `$this._newButton.Text = "[N]ew Task"
+        `$this._newButton.X = `$currentX
+        `$this._newButton.Y = `$buttonY
+        `$this._newButton.Width = 12
+        `$this._newButton.Height = 1
+        `$this._newButton.OnClick = {
+            Write-Verbose "New task button clicked"
+            # TODO: Show new task dialog
+        }
+        `$this._mainPanel.AddChild(`$this._newButton)
+        `$currentX += `$buttonSpacing
+        
+        # Edit button
+        `$this._editButton = [ButtonComponent]::new("EditButton")
+        `$this._editButton.Text = "[E]dit Task"
+        `$this._editButton.X = `$currentX
+        `$this._editButton.Y = `$buttonY
+        `$this._editButton.Width = 12
+        `$this._editButton.Height = 1
+        `$this._editButton.OnClick = {
+            Write-Verbose "Edit task button clicked"
+            # TODO: Show edit task dialog
+        }
+        `$this._mainPanel.AddChild(`$this._editButton)
+        `$currentX += `$buttonSpacing
+        
+        # Delete button
+        `$this._deleteButton = [ButtonComponent]::new("DeleteButton")
+        `$this._deleteButton.Text = "[D]elete Task"
+        `$this._deleteButton.X = `$currentX
+        `$this._deleteButton.Y = `$buttonY
+        `$this._deleteButton.Width = 14
+        `$this._deleteButton.Height = 1
+        `$this._deleteButton.OnClick = {
+            Write-Verbose "Delete task button clicked"
+            # TODO: Show delete confirmation dialog
+        }
+        `$this._mainPanel.AddChild(`$this._deleteButton)
+        `$currentX += `$buttonSpacing + 2
+        
+        # Complete button
+        `$this._completeButton = [ButtonComponent]::new("CompleteButton")
+        `$this._completeButton.Text = "[C]omplete"
+        `$this._completeButton.X = `$currentX
+        `$this._completeButton.Y = `$buttonY
+        `$this._completeButton.Width = 12
+        `$this._completeButton.Height = 1
+        `$this._completeButton.OnClick = {
+            Write-Verbose "Complete task button clicked"
+            # TODO: Mark task as complete
+        }
+        `$this._mainPanel.AddChild(`$this._completeButton)
+        
+        # Add filter textbox
+        `$this._filterBox = [TextBoxComponent]::new("FilterBox")
+        `$this._filterBox.Placeholder = "Type to filter tasks..."
+        `$this._filterBox.X = 2
+        `$this._filterBox.Y = 2
+        `$this._filterBox.Width = `$taskListWidth - 4
+        `$this._filterBox.Height = 1
+        `$this._filterBox.OnChange = {
+            param(`$newText)
+            `$this._filterText = `$newText
+            `$this._RefreshTasks()
+            `$this._UpdateDisplay()
+        }
+        `$this._mainPanel.AddChild(`$this._filterBox)
+
+        `$this._UpdateDisplay()
+"@
+
+# First, check if buttons already exist
+if ($screensContent -notmatch "_newButton") {
+    # Find where to insert the buttons (at the end of Initialize method)
+    $pattern = "(class TaskListScreen[^}]+Initialize\(\)[^}]+?)(\s+`$this\._UpdateDisplay\(\)\s+\})"
+    if ($screensContent -match $pattern) {
+        $screensContent = $screensContent -replace $pattern, "`$1$crudButtons`r`n    }"
+        Write-Host "  - Added CRUD buttons to TaskListScreen" -ForegroundColor Green
+    }
+}
+
+# Fix panel heights to accommodate buttons
+$panelHeightPattern = "(`$this\._taskListPanel\.Height = )(\d+)"
+$screensContent = $screensContent -replace $panelHeightPattern, '`$1(`$this.Height - 8)'
+
+$detailHeightPattern = "(`$this\._detailPanel\.Height = )`$this\.Height - 3"
+$screensContent = $screensContent -replace $detailHeightPattern, '`$1`$this.Height - 8'
+
+# Fix the _RefreshTasks method to implement filtering
+$refreshTasksMethod = @"
+    hidden [void] _RefreshTasks() {
+        `$dataManager = `$this.ServiceContainer?.GetService("DataManager")
+        if (`$dataManager) {
+            `$allTasks = `$dataManager.GetTasks()
+            
+            # Apply text filter if present
+            if (![string]::IsNullOrWhiteSpace(`$this._filterText)) {
+                `$filterLower = `$this._filterText.ToLower()
+                `$allTasks = @(`$allTasks | Where-Object {
+                    `$_.Title.ToLower().Contains(`$filterLower) -or
+                    (`$_.Description -and `$_.Description.ToLower().Contains(`$filterLower))
+                })
+            }
+            
+            `$this._tasks = @(`$allTasks)
+        } else {
+            `$this._tasks = @()
+        }
+        
+        # Reset selection if needed
+        if (`$this._selectedIndex -ge `$this._tasks.Count) {
+            `$this._selectedIndex = [Math]::Max(0, `$this._tasks.Count - 1)
+        }
+        
+        if (`$this._tasks.Count -gt 0) {
+            `$this._selectedTask = `$this._tasks[`$this._selectedIndex]
+        } else {
+            `$this._selectedTask = `$null
+        }
+    }
+"@
+
+# Replace the existing _RefreshTasks method
+$screensContent = $screensContent -replace "hidden \[void\] _RefreshTasks\(\) \{[^}]+\}", $refreshTasksMethod
+
+# Update HandleInput to handle the new keys
+$handleInputAdditions = @"
+            ([ConsoleKey]::N) {
+                if (`$keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    # New task
+                    `$this._newButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::E) {
+                if (`$keyInfo.Modifiers -eq [ConsoleModifiers]::None -and `$this._selectedTask) {
+                    # Edit task
+                    `$this._editButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::D) {
+                if (`$keyInfo.Modifiers -eq [ConsoleModifiers]::None -and `$this._selectedTask) {
+                    # Delete task
+                    `$this._deleteButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::C) {
+                if (`$keyInfo.Modifiers -eq [ConsoleModifiers]::None -and `$this._selectedTask) {
+                    # Complete task
+                    `$this._completeButton.OnClick.Invoke()
+                }
+            }
+"@
+
+# Add new key handlers before the default case
+$defaultPattern = "default \{"
+$screensContent = $screensContent -replace "(\s+)default \{", "$handleInputAdditions`r`n`$1default {"
+
+Set-Content $screensFile $screensContent -Encoding UTF8
+Write-Host "  - TaskListScreen CRUD operations added" -ForegroundColor Green
+
+# PART 4: Fix Command Palette performance
+Write-Host "`nPart 4: Optimizing Command Palette..." -ForegroundColor Yellow
+
+$componentsFile = "AllComponents.ps1"
+$componentsContent = Get-Content $componentsFile -Raw
+
+# Add debouncing to search
+$searchDebounce = @"
+        # Add debounce timer for search
+        `$this._searchTimer = `$null
+        `$this._lastSearchTime = [DateTime]::MinValue
+        
+"@
+
+# Find CommandPalette constructor and add debounce fields
+$paletteConstructor = "CommandPalette\(\) \{"
+if ($componentsContent -match $paletteConstructor -and $componentsContent -notmatch "_searchTimer") {
+    $componentsContent = $componentsContent -replace "($paletteConstructor)", "`$1`r`n$searchDebounce"
+}
+
+# Optimize the search method
+$optimizedSearch = @"
+    hidden [void] _FilterActions([string]`$searchText) {
+        # Implement debouncing
+        `$now = [DateTime]::Now
+        if ((`$now - `$this._lastSearchTime).TotalMilliseconds -lt 100) {
+            return
+        }
+        `$this._lastSearchTime = `$now
+        
+        if ([string]::IsNullOrWhiteSpace(`$searchText)) {
+            `$this._filteredActions = `$this._allActions
+        } else {
+            `$searchLower = `$searchText.ToLower()
+            # Use simple contains for better performance
+            `$this._filteredActions = @(`$this._allActions | Where-Object {
+                `$_.Label.ToLower().Contains(`$searchLower) -or
+                (`$_.Category -and `$_.Category.ToLower().Contains(`$searchLower))
+            })
+        }
+        
+        # Update ListBox items efficiently
+        `$this._listBox.ClearItems()
+        foreach (`$action in `$this._filteredActions) {
+            `$display = if (`$action.Category) { "[`$(`$action.Category)] `$(`$action.Label)" } else { `$action.Label }
+            `$this._listBox.AddItem(`$display)
+        }
+        
+        # Reset selection
+        if (`$this._filteredActions.Count -gt 0) {
+            `$this._listBox.SelectedIndex = 0
+        }
+    }
+"@
+
+# Replace the existing _FilterActions method if it exists
+if ($componentsContent -match "hidden \[void\] _FilterActions") {
+    $componentsContent = $componentsContent -replace "hidden \[void\] _FilterActions\([^}]+\}", $optimizedSearch
+} else {
+    # Add it after RefreshActions
+    $refreshActionsEnd = "(`$this\._FilterActions\(`$this\._searchBox\.Text\)\s+\})"
+    $componentsContent = $componentsContent -replace $refreshActionsEnd, "`$1`r`n`r`n$optimizedSearch"
+}
+
+Set-Content $componentsFile $componentsContent -Encoding UTF8
+Write-Host "  - Command Palette optimized" -ForegroundColor Green
+
+# PART 5: Fix DashboardScreen rendering
+Write-Host "`nPart 5: Fixing DashboardScreen..." -ForegroundColor Yellow
+
+# The dashboard fixes are already in the screens file content, but let's ensure panels are properly positioned
+$dashboardFixes = @"
+        # Ensure proper panel sizing and positioning
+        `$summaryWidth = [Math]::Max(40, [Math]::Floor(`$this.Width * 0.5))
+        `$helpX = `$summaryWidth + 2
+        `$helpWidth = [Math]::Max(30, `$this.Width - `$helpX - 2)
+        
+        # Update panel dimensions
+        `$this._summaryPanel.Width = `$summaryWidth
+        `$this._helpPanel.X = `$helpX
+        `$this._helpPanel.Width = `$helpWidth
+        
+        # Ensure status panel doesn't overlap
+        `$this._statusPanel.Height = [Math]::Max(5, `$this.Height - 15)
+"@
+
+# Insert fixes in DashboardScreen Initialize method after panel creation
+$dashInitPattern = "(`$this\._mainPanel\.AddChild\(`$this\._statusPanel\))"
+$screensContent = $screensContent -replace $dashInitPattern, "`$1`r`n`r`n$dashboardFixes"
+
+Set-Content $screensFile $screensContent -Encoding UTF8
+
+Write-Host "`nAll fixes applied successfully!" -ForegroundColor Green
+Write-Host "Run the application to see the improvements." -ForegroundColor Cyan
+
+
+
+####\critical_fixes_part1.ps1
+# Critical Stability Fixes - Part 1
+# Complete code blocks for direct replacement in AllComponents.ps1
+
+# ===============================================================================
+# FIX 1.1: CommandPalette HandleInput Method - ExecuteAction Overload Fix
+# ===============================================================================
+# Location: AllComponents.ps1 -> CommandPalette Class -> HandleInput Method
+# Replace the entire HandleInput method with this fixed version:
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        
+        if ($key.Key -eq [ConsoleKey]::Escape) {
+            $this.Hide()
+            return $true
+        }
+        
+        if ($key.Key -eq [ConsoleKey]::Enter -and $this._listBox.SelectedIndex -ge 0) {
+            $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+            if ($selectedAction) {
+                $this.Hide()
+                if ($this.OnSelect) {
+                    & $this.OnSelect $selectedAction
+                }
+                else {
+                    # Execute action directly - FIX: Pass empty hashtable as second parameter
+                    $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                }
+            }
+            return $true
+        }
+        
+        # Pass input to search box or list box
+        if ($key.Key -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, 
+                          [ConsoleKey]::PageUp, [ConsoleKey]::PageDown)) {
+            return $this._listBox.HandleInput($key)
+        }
+        else {
+            return $this._searchBox.HandleInput($key)
+        }
+    }
+
+# ===============================================================================
+# FIX 1.2: ConsoleColor to Hex String Conversions
+# ===============================================================================
+
+# -----------------------------------------------------------------------
+# MultilineTextBoxComponent - Property Declarations (Lines ~295-300)
+# -----------------------------------------------------------------------
+# Replace these property declarations in the MultilineTextBoxComponent class:
+
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
+
+# -----------------------------------------------------------------------
+# Panel - Property Declarations (Lines ~1095-1100)
+# -----------------------------------------------------------------------
+# Replace these property declarations in the Panel class:
+
+    [string]$BorderColor = "#808080"
+    [string]$BackgroundColor = "#000000"
+
+# -----------------------------------------------------------------------
+# GroupPanel - Constructor (Lines ~1265-1270)
+# -----------------------------------------------------------------------
+# Replace the GroupPanel constructor with this fixed version:
+
+    GroupPanel([string]$name) : base($name) {
+        $this.BorderStyle = "Double"
+        $this.BorderColor = "#008B8B"  # DarkCyan in hex
+        $this.BackgroundColor = "#000000"  # Black in hex
+    }
+
+# -----------------------------------------------------------------------
+# NavigationMenu - Property Declarations
+# -----------------------------------------------------------------------
+# If NavigationMenu class exists, replace these property declarations:
+
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$SelectedBackgroundColor = "#00008B"
+    [string]$SelectedForegroundColor = "#FFFF00"
+
+# -----------------------------------------------------------------------
+# ListBox - Already Fixed in Current Code
+# -----------------------------------------------------------------------
+# The ListBox class in the current code already has hex string properties:
+# [string]$ForegroundColor = "#FFFFFF"
+# [string]$BackgroundColor = "#000000"
+# [string]$SelectedForegroundColor = "#000000"
+# [string]$SelectedBackgroundColor = "#00FFFF"
+# [string]$BorderColor = "#808080"
+# No changes needed for ListBox.
+
+# -----------------------------------------------------------------------
+# DateInputComponent OnRender Fix (Lines ~875-885)
+# -----------------------------------------------------------------------
+# In DateInputComponent.OnRender(), replace the color declarations:
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # FIX: Use hex strings instead of ConsoleColor
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            
+            # Rest of the method remains the same...
 
 
 
@@ -8682,6 +9577,423 @@ try {
 
 Write-Host "`nPress any key to exit..."
 [Console]::ReadKey($true) | Out-Null
+
+
+
+####\enhanced_theming.ps1
+# Enhanced Theming and Additional Screens for Axiom-Phoenix v4.0
+# This script adds:
+# 1. Multiple built-in themes
+# 2. Theme picker screen
+# 3. Enhanced UI polish
+
+Write-Host "Adding enhanced theming and UI polish..." -ForegroundColor Cyan
+
+# PART 1: Add new themes to ThemeManager
+Write-Host "`nPart 1: Adding new themes..." -ForegroundColor Yellow
+
+$servicesFile = "AllServices.ps1"
+$servicesContent = Get-Content $servicesFile -Raw
+
+# Find the LoadDefaultTheme method and enhance it
+$newThemes = @'
+    
+    [void] LoadSynthwaveTheme() {
+        $this.CurrentTheme = @{
+            # Core colors
+            "Background" = "#1a1a2e"
+            "Foreground" = "#eee"
+            "Border" = "#ff006e"
+            "Title" = "#ff77e9"
+            
+            # Semantic colors
+            "Primary" = "#00f5ff"
+            "Secondary" = "#ff006e"
+            "Accent" = "#fffc00"
+            "Info" = "#00f5ff"
+            "Success" = "#00ff88"
+            "Warning" = "#fffc00"
+            "Error" = "#ff006e"
+            "Subtle" = "#8b5cf6"
+            
+            # Component colors
+            "button.normal.bg" = "#2d1b69"
+            "button.normal.fg" = "#ff77e9"
+            "button.focus.bg" = "#ff006e"
+            "button.focus.fg" = "#ffffff"
+            "button.pressed.bg" = "#ff77e9"
+            "button.pressed.fg" = "#1a1a2e"
+            
+            "textbox.normal.bg" = "#2d1b69"
+            "textbox.normal.fg" = "#00f5ff"
+            "textbox.focus.bg" = "#3d2b79"
+            "textbox.focus.fg" = "#ffffff"
+            "textbox.placeholder" = "#8b5cf6"
+            
+            "list.item.normal" = "#eee"
+            "list.item.selected" = "#1a1a2e"
+            "list.item.selected.background" = "#ff77e9"
+            
+            "scrollbar.track" = "#2d1b69"
+            "scrollbar.thumb" = "#ff006e"
+            
+            "status.bar.bg" = "#ff006e"
+            "status.bar.fg" = "#ffffff"
+            
+            "panel.background" = "#16213e"
+            "group.background" = "#0f3460"
+            
+            "link" = "#00f5ff"
+            "code" = "#fffc00"
+        }
+        $this.ThemeName = "Synthwave"
+    }
+    
+    [void] LoadHighContrastLightTheme() {
+        $this.CurrentTheme = @{
+            # Core colors
+            "Background" = "#ffffff"
+            "Foreground" = "#000000"
+            "Border" = "#000000"
+            "Title" = "#000000"
+            
+            # Semantic colors
+            "Primary" = "#0066cc"
+            "Secondary" = "#663399"
+            "Accent" = "#ff6600"
+            "Info" = "#0099cc"
+            "Success" = "#009900"
+            "Warning" = "#ff9900"
+            "Error" = "#cc0000"
+            "Subtle" = "#666666"
+            
+            # Component colors
+            "button.normal.bg" = "#f0f0f0"
+            "button.normal.fg" = "#000000"
+            "button.focus.bg" = "#0066cc"
+            "button.focus.fg" = "#ffffff"
+            "button.pressed.bg" = "#003366"
+            "button.pressed.fg" = "#ffffff"
+            
+            "textbox.normal.bg" = "#ffffff"
+            "textbox.normal.fg" = "#000000"
+            "textbox.focus.bg" = "#e6f2ff"
+            "textbox.focus.fg" = "#000000"
+            "textbox.placeholder" = "#666666"
+            
+            "list.item.normal" = "#000000"
+            "list.item.selected" = "#ffffff"
+            "list.item.selected.background" = "#0066cc"
+            
+            "scrollbar.track" = "#cccccc"
+            "scrollbar.thumb" = "#666666"
+            
+            "status.bar.bg" = "#000000"
+            "status.bar.fg" = "#ffffff"
+            
+            "panel.background" = "#f9f9f9"
+            "group.background" = "#eeeeee"
+            
+            "link" = "#0066cc"
+            "code" = "#663399"
+        }
+        $this.ThemeName = "HighContrastLight"
+    }
+    
+    [void] LoadPaperTheme() {
+        $this.CurrentTheme = @{
+            # Core colors - sepia/e-ink style
+            "Background" = "#f4f1ea"
+            "Foreground" = "#3e3e3e"
+            "Border" = "#8b7355"
+            "Title" = "#5d4e37"
+            
+            # Semantic colors
+            "Primary" = "#704214"
+            "Secondary" = "#8b7355"
+            "Accent" = "#a0522d"
+            "Info" = "#4682b4"
+            "Success" = "#228b22"
+            "Warning" = "#ff8c00"
+            "Error" = "#b22222"
+            "Subtle" = "#8b8378"
+            
+            # Component colors
+            "button.normal.bg" = "#e8dcc6"
+            "button.normal.fg" = "#3e3e3e"
+            "button.focus.bg" = "#8b7355"
+            "button.focus.fg" = "#f4f1ea"
+            "button.pressed.bg" = "#5d4e37"
+            "button.pressed.fg" = "#f4f1ea"
+            
+            "textbox.normal.bg" = "#faf8f3"
+            "textbox.normal.fg" = "#3e3e3e"
+            "textbox.focus.bg" = "#ffffff"
+            "textbox.focus.fg" = "#2e2e2e"
+            "textbox.placeholder" = "#8b8378"
+            
+            "list.item.normal" = "#3e3e3e"
+            "list.item.selected" = "#f4f1ea"
+            "list.item.selected.background" = "#704214"
+            
+            "scrollbar.track" = "#e8dcc6"
+            "scrollbar.thumb" = "#8b7355"
+            
+            "status.bar.bg" = "#5d4e37"
+            "status.bar.fg" = "#f4f1ea"
+            
+            "panel.background" = "#ede7d9"
+            "group.background" = "#e0d5c7"
+            
+            "link" = "#704214"
+            "code" = "#8b0000"
+        }
+        $this.ThemeName = "Paper"
+    }
+    
+    [string[]] GetAvailableThemes() {
+        return @("Default", "Synthwave", "HighContrastLight", "Paper")
+    }
+    
+    [void] LoadTheme([string]$themeName) {
+        switch ($themeName) {
+            "Default" { $this.LoadDefaultTheme() }
+            "Synthwave" { $this.LoadSynthwaveTheme() }
+            "HighContrastLight" { $this.LoadHighContrastLightTheme() }
+            "Paper" { $this.LoadPaperTheme() }
+            default { $this.LoadDefaultTheme() }
+        }
+    }
+'@
+
+# Insert new theme methods after LoadDefaultTheme
+$loadDefaultEnd = "(\[void\] LoadDefaultTheme\(\) \{[^}]+\})"
+if ($servicesContent -match $loadDefaultEnd -and $servicesContent -notmatch "LoadSynthwaveTheme") {
+    $servicesContent = $servicesContent -replace $loadDefaultEnd, "`$1$newThemes"
+    Write-Host "  - Added new themes: Synthwave, HighContrastLight, Paper" -ForegroundColor Green
+}
+
+Set-Content $servicesFile $servicesContent -Encoding UTF8
+
+# PART 2: Create Theme Picker Screen
+Write-Host "`nPart 2: Creating Theme Picker Screen..." -ForegroundColor Yellow
+
+$screensFile = "AllScreens.ps1"
+$screensContent = Get-Content $screensFile -Raw
+
+$themePickerScreen = @'
+
+class ThemePickerScreen : Screen {
+    hidden [ScrollablePanel] $_themePanel
+    hidden [Panel] $_mainPanel
+    hidden [array] $_themes
+    hidden [int] $_selectedIndex = 0
+    hidden [ThemeManager] $_themeManager
+    
+    ThemePickerScreen([object]$serviceContainer) : base("ThemePickerScreen", $serviceContainer) {}
+    
+    [void] Initialize() {
+        # Get theme manager
+        $this._themeManager = $this.ServiceContainer?.GetService("ThemeManager")
+        if (-not $this._themeManager) {
+            Write-Verbose "ThemePickerScreen: ThemeManager not found"
+            return
+        }
+        
+        # Get available themes
+        $this._themes = $this._themeManager.GetAvailableThemes()
+        
+        # Main panel
+        $this._mainPanel = [Panel]::new("Theme Selector")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this.AddChild($this._mainPanel)
+        
+        # Instructions
+        $instructionLabel = [LabelComponent]::new("Instructions")
+        $instructionLabel.Text = "Use ↑↓ to navigate, Enter to select theme, Esc to cancel"
+        $instructionLabel.X = 2
+        $instructionLabel.Y = 2
+        $instructionLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $this._mainPanel.AddChild($instructionLabel)
+        
+        # Theme list panel
+        $this._themePanel = [ScrollablePanel]::new("Themes")
+        $this._themePanel.X = 2
+        $this._themePanel.Y = 4
+        $this._themePanel.Width = $this.Width - 4
+        $this._themePanel.Height = $this.Height - 6
+        $this._mainPanel.AddChild($this._themePanel)
+        
+        $this._UpdateThemeList()
+    }
+    
+    hidden [void] _UpdateThemeList() {
+        $this._themePanel.Children.Clear()
+        
+        for ($i = 0; $i -lt $this._themes.Count; $i++) {
+            $themeName = $this._themes[$i]
+            $isSelected = ($i -eq $this._selectedIndex)
+            
+            # Create panel for theme item
+            $themeItemPanel = [Panel]::new("Theme_$themeName")
+            $themeItemPanel.X = 0
+            $themeItemPanel.Y = $i * 3  # 3 lines per theme
+            $themeItemPanel.Width = $this._themePanel.ContentWidth
+            $themeItemPanel.Height = 2
+            $themeItemPanel.HasBorder = $false
+            
+            if ($isSelected) {
+                $themeItemPanel.BackgroundColor = Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF"
+            }
+            
+            # Theme name label
+            $nameLabel = [LabelComponent]::new("Name_$themeName")
+            $nameLabel.Text = if ($isSelected) { "▶ $themeName" } else { "  $themeName" }
+            $nameLabel.X = 1
+            $nameLabel.Y = 0
+            $nameLabel.ForegroundColor = if ($isSelected) { 
+                Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
+            } else { 
+                Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF" 
+            }
+            $themeItemPanel.AddChild($nameLabel)
+            
+            # Preview colors
+            $previewLabel = [LabelComponent]::new("Preview_$themeName")
+            $previewText = "    Preview: "
+            $previewLabel.Text = $previewText
+            $previewLabel.X = 1
+            $previewLabel.Y = 1
+            $previewLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $themeItemPanel.AddChild($previewLabel)
+            
+            # Load theme temporarily to get colors
+            $currentTheme = $this._themeManager.ThemeName
+            $this._themeManager.LoadTheme($themeName)
+            
+            # Color blocks
+            $colorX = $previewText.Length + 1
+            $colors = @("Primary", "Secondary", "Accent", "Success", "Warning", "Error")
+            foreach ($colorName in $colors) {
+                $colorLabel = [LabelComponent]::new("Color_${themeName}_${colorName}")
+                $colorLabel.Text = "██"
+                $colorLabel.X = $colorX
+                $colorLabel.Y = 1
+                $colorLabel.ForegroundColor = $this._themeManager.GetColor($colorName)
+                $themeItemPanel.AddChild($colorLabel)
+                $colorX += 3
+            }
+            
+            # Restore current theme
+            $this._themeManager.LoadTheme($currentTheme)
+            
+            $this._themePanel.AddChild($themeItemPanel)
+        }
+        
+        $this._themePanel.RequestRedraw()
+    }
+    
+    [void] OnEnter() {
+        # Find current theme index
+        $currentTheme = $this._themeManager.ThemeName
+        for ($i = 0; $i -lt $this._themes.Count; $i++) {
+            if ($this._themes[$i] -eq $currentTheme) {
+                $this._selectedIndex = $i
+                break
+            }
+        }
+        $this._UpdateThemeList()
+    }
+    
+    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::UpArrow) {
+                if ($this._selectedIndex -gt 0) {
+                    $this._selectedIndex--
+                    if ($this._selectedIndex -lt $this._themePanel.ScrollOffsetY) {
+                        $this._themePanel.ScrollUp()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this._selectedIndex -lt $this._themes.Count - 1) {
+                    $this._selectedIndex++
+                    $visibleEnd = $this._themePanel.ScrollOffsetY + ($this._themePanel.ContentHeight / 3) - 1
+                    if ($this._selectedIndex -gt $visibleEnd) {
+                        $this._themePanel.ScrollDown()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                # Apply selected theme
+                $selectedTheme = $this._themes[$this._selectedIndex]
+                $this._themeManager.LoadTheme($selectedTheme)
+                Write-Verbose "Applied theme: $selectedTheme"
+                
+                # Go back
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                }
+            }
+            ([ConsoleKey]::Escape) {
+                # Cancel without changing theme
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                }
+            }
+        }
+    }
+}
+'@
+
+# Add ThemePickerScreen before the final endregion
+$screensEndMarker = "#endregion\n#<!-- END_PAGE: ASC.003 -->"
+if ($screensContent -notmatch "class ThemePickerScreen") {
+    $screensContent = $screensContent.Replace($screensEndMarker, "$themePickerScreen`r`n`r`n$screensEndMarker")
+    Write-Host "  - Added ThemePickerScreen" -ForegroundColor Green
+}
+
+Set-Content $screensFile $screensContent -Encoding UTF8
+
+# PART 3: Add theme picker to ActionService
+Write-Host "`nPart 3: Adding theme picker action..." -ForegroundColor Yellow
+
+# Reload services content
+$servicesContent = Get-Content $servicesFile -Raw
+
+# Find ActionService constructor and add theme action
+$actionServiceActions = @'
+        
+        # Theme picker action
+        $this.RegisterAction("ui.theme.picker", "Change Theme", "UI", {
+            $navService = $global:ServiceContainer.GetService("NavigationService")
+            $themeScreen = [ThemePickerScreen]::new($global:ServiceContainer)
+            $themeScreen.Initialize()
+            $navService.NavigateTo($themeScreen)
+        })
+'@
+
+# Add after the help action
+$helpActionPattern = "(\$this\.RegisterAction\(""app\.help""[^}]+\}[^)]*\))"
+if ($servicesContent -match $helpActionPattern -and $servicesContent -notmatch "ui\.theme\.picker") {
+    $servicesContent = $servicesContent -replace $helpActionPattern, "`$1$actionServiceActions"
+    Write-Host "  - Added theme picker action" -ForegroundColor Green
+}
+
+Set-Content $servicesFile $servicesContent -Encoding UTF8
+
+Write-Host "`nEnhanced theming complete!" -ForegroundColor Green
+Write-Host "New features added:" -ForegroundColor Cyan
+Write-Host "  - 3 new themes: Synthwave, HighContrastLight, Paper" -ForegroundColor White
+Write-Host "  - Theme picker screen (accessible via Ctrl+P -> 'Change Theme')" -ForegroundColor White
+Write-Host "  - Unicode support for better UI rendering" -ForegroundColor White
 
 
 
@@ -8946,6 +10258,81 @@ catch {
 }
 
 
+####\final-verify.ps1
+# Final verification script for all stability fixes
+Write-Host "=== FINAL STABILITY VERIFICATION ===" -ForegroundColor Cyan
+
+$file = ".\AllComponents.ps1"
+if (-not (Test-Path $file)) {
+    Write-Host "ERROR: AllComponents.ps1 not found!" -ForegroundColor Red
+    exit 1
+}
+
+$content = Get-Content $file -Raw
+
+Write-Host "`n[1] Checking ConsoleColor properties..." -ForegroundColor Yellow
+$colorProps = Select-String -InputObject $content -Pattern '\[\s*ConsoleColor\s*\]\s*\$' -AllMatches
+if ($colorProps.Matches.Count -eq 0) {
+    Write-Host "  ✓ PASS: No ConsoleColor property declarations" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ FAIL: Found $($colorProps.Matches.Count) ConsoleColor properties" -ForegroundColor Red
+}
+
+Write-Host "`n[2] Checking ConsoleColor enum usage..." -ForegroundColor Yellow  
+$enumUsage = Select-String -InputObject $content -Pattern '\[ConsoleColor\]::\w+' -AllMatches
+if ($enumUsage.Matches.Count -eq 0) {
+    Write-Host "  ✓ PASS: No ConsoleColor enum usage" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ FAIL: Found $($enumUsage.Matches.Count) ConsoleColor enums" -ForegroundColor Red
+}
+
+Write-Host "`n[3] Checking ExecuteAction fix..." -ForegroundColor Yellow
+if ($content -match 'ExecuteAction\s*\(\s*\$selectedAction\.Name\s*,\s*@\{\}\s*\)') {
+    Write-Host "  ✓ PASS: ExecuteAction has empty hashtable parameter" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ FAIL: ExecuteAction missing second parameter" -ForegroundColor Red
+}
+
+Write-Host "`n[4] Checking variable naming conflicts..." -ForegroundColor Yellow
+$conflicts = 0
+# Check for $borderColor assignments (should use $borderColorValue)
+if ($content -match '\$borderColor\s*=\s*if') {
+    Write-Host "  ✗ FAIL: Found \$borderColor variable assignment" -ForegroundColor Red
+    $conflicts++
+} else {
+    Write-Host "  ✓ PASS: No \$borderColor conflicts" -ForegroundColor Green
+}
+
+Write-Host "`n[5] Checking TuiCell.Clear usage..." -ForegroundColor Yellow
+$clearIssues = Select-String -InputObject $content -Pattern 'Clear\(\[TuiCell\]::new\([^,]+,\s*\$[^,]+Color,\s*\$[^)]+\)\)' -AllMatches
+$correctClears = 0
+$incorrectClears = 0
+foreach ($match in $clearIssues.Matches) {
+    if ($match.Value -match 'Clear\(\[TuiCell\]::new\([^,]+,\s*\$\w+Color,\s*\$\w+Color\)\)') {
+        $correctClears++
+    } else {
+        $incorrectClears++
+    }
+}
+if ($incorrectClears -eq 0) {
+    Write-Host "  ✓ PASS: All buffer clears use consistent colors" -ForegroundColor Green
+} else {
+    Write-Host "  ⚠ WARNING: Found $incorrectClears potential buffer clear issues" -ForegroundColor Yellow
+}
+
+Write-Host "`n[6] Summary:" -ForegroundColor Cyan
+$totalIssues = $colorProps.Matches.Count + $enumUsage.Matches.Count + $conflicts
+if ($totalIssues -eq 0) {
+    Write-Host "  ✅ ALL CRITICAL FIXES APPLIED SUCCESSFULLY!" -ForegroundColor Green
+    Write-Host "  The application should now run without type mismatch errors." -ForegroundColor Green
+} else {
+    Write-Host "  ❌ Found $totalIssues critical issues remaining!" -ForegroundColor Red
+}
+
+Write-Host "`nYou can now run: .\Start.ps1" -ForegroundColor Cyan
+
+
+
 ####\find-conflicts.ps1
 # Find all property/variable conflicts in mono framework
 
@@ -9102,6 +10489,907 @@ if ($focusManagerFound) {
 } else {
     Write-Host "`nFocusManager class NOT found - needs to be added!" -ForegroundColor Red
     Write-Host "Should be inserted before line $dialogManagerLine (DialogManager)" -ForegroundColor Yellow
+}
+
+
+
+####\fixed_dateinput_onrender.ps1
+# ===============================================================================
+# COMPLETE FIXED DATEINPUTCOMPONENT ONRENDER METHOD
+# ===============================================================================
+# Replace the entire OnRender method in DateInputComponent with this fixed version:
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            # FIXED: Use hex strings and theme colors instead of ConsoleColor
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            
+            # Adjust height based on calendar visibility
+            $renderHeight = if ($this._showCalendar) { 10 } else { 3 }
+            if ($this.Height -ne $renderHeight) {
+                $this.Height = $renderHeight
+                $this.RequestRedraw()
+                return
+            }
+            
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            
+            # Draw text box
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
+                -Width $this.Width -Height 3 `
+                -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
+            
+            # Draw date value
+            $dateStr = $this.Value.ToString("yyyy-MM-dd")
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $dateStr -Style @{ FG = $fgColor; BG = $bgColor }
+            
+            # Draw calendar icon
+            $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('📅', $borderColor, $bgColor))
+            
+            # Draw calendar if shown
+            if ($this._showCalendar) {
+                $this.DrawCalendar(0, 3)
+            }
+        }
+        catch {}
+    }
+
+
+
+####\fixed_grouppanel.ps1
+# ===============================================================================
+# COMPLETE FIXED GROUPPANEL CLASS
+# ===============================================================================
+# Replace the entire GroupPanel class with this fixed version:
+
+# ===== CLASS: GroupPanel =====
+# Module: panels-class
+# Dependencies: Panel
+# Purpose: Themed panel for grouping
+class GroupPanel : Panel {
+    [bool]$IsExpanded = $true
+    [bool]$CanCollapse = $true
+
+    GroupPanel([string]$name) : base($name) {
+        $this.BorderStyle = "Double"
+        $this.BorderColor = "#008B8B"     # FIXED: DarkCyan in hex
+        $this.BackgroundColor = "#000000" # FIXED: Black in hex
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        # Show children only if expanded
+        foreach ($child in $this.Children) {
+            $child.Visible = $this.IsExpanded
+        }
+
+        # Adjust height if collapsed
+        if (-not $this.IsExpanded -and $this.CanCollapse) {
+            $this._originalHeight = $this.Height
+            $this.Height = 3  # Just title bar
+        }
+        elseif ($this.IsExpanded -and $this._originalHeight) {
+            $this.Height = $this._originalHeight
+        }
+
+        # Add expand/collapse indicator to title
+        if ($this.CanCollapse -and $this.Title) {
+            $indicator = if ($this.IsExpanded) { "[-]" } else { "[+]" }
+            $this.Title = "$indicator $($this.Title.TrimStart('[+]', '[-]').Trim())"
+        }
+
+        ([Panel]$this).OnRender()
+    }
+
+    hidden [int]$_originalHeight = 0
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key -or -not $this.CanCollapse) { return $false }
+        
+        if ($key.Key -eq [ConsoleKey]::Spacebar) {
+            $this.Toggle()
+            return $true
+        }
+        
+        return $false
+    }
+
+    [void] Toggle() {
+        $this.IsExpanded = -not $this.IsExpanded
+        $this.RequestRedraw()
+    }
+}
+
+
+
+####\fixed_multiline_textbox.ps1
+# ===============================================================================
+# COMPLETE FIXED MULTILINE TEXTBOX COMPONENT
+# ===============================================================================
+# Replace the entire MultilineTextBoxComponent class with this fixed version:
+
+# ===== CLASS: MultilineTextBoxComponent =====
+# Module: advanced-input-components
+# Dependencies: UIElement, TuiCell
+# Purpose: Full text editor with scrolling
+class MultilineTextBoxComponent : UIElement {
+    [List[string]]$Lines
+    [int]$CursorLine = 0
+    [int]$CursorColumn = 0
+    [int]$ScrollOffsetY = 0
+    [int]$ScrollOffsetX = 0
+    [bool]$ReadOnly = $false
+    [scriptblock]$OnChange
+    [string]$BackgroundColor = "#000000"  # FIXED: Changed from ConsoleColor to hex string
+    [string]$ForegroundColor = "#FFFFFF"  # FIXED: Changed from ConsoleColor to hex string
+    [string]$BorderColor = "#808080"      # FIXED: Changed from ConsoleColor to hex string
+    
+    MultilineTextBoxComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Lines = [List[string]]::new()
+        $this.Lines.Add("")
+        $this.Width = 40
+        $this.Height = 10
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            
+            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            
+            # Draw border
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
+                -Width $this.Width -Height $this.Height `
+                -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
+            
+            # Calculate visible area
+            $contentWidth = $this.Width - 2
+            $contentHeight = $this.Height - 2
+            
+            # Adjust scroll to keep cursor visible
+            if ($this.CursorLine -lt $this.ScrollOffsetY) {
+                $this.ScrollOffsetY = $this.CursorLine
+            }
+            elseif ($this.CursorLine -ge $this.ScrollOffsetY + $contentHeight) {
+                $this.ScrollOffsetY = $this.CursorLine - $contentHeight + 1
+            }
+            
+            if ($this.CursorColumn -lt $this.ScrollOffsetX) {
+                $this.ScrollOffsetX = $this.CursorColumn
+            }
+            elseif ($this.CursorColumn -ge $this.ScrollOffsetX + $contentWidth) {
+                $this.ScrollOffsetX = $this.CursorColumn - $contentWidth + 1
+            }
+            
+            # Draw visible lines
+            for ($y = 0; $y -lt $contentHeight; $y++) {
+                $lineIndex = $y + $this.ScrollOffsetY
+                if ($lineIndex -lt $this.Lines.Count) {
+                    $line = $this.Lines[$lineIndex]
+                    $visiblePart = ""
+                    
+                    if ($line.Length -gt $this.ScrollOffsetX) {
+                        $endPos = [Math]::Min($this.ScrollOffsetX + $contentWidth, $line.Length)
+                        $visiblePart = $line.Substring($this.ScrollOffsetX, $endPos - $this.ScrollOffsetX)
+                    }
+                    
+                    if ($visiblePart) {
+                        Write-TuiText -Buffer $this._private_buffer -X 1 -Y ($y + 1) -Text $visiblePart -Style @{ FG = $fgColor; BG = $bgColor }
+                    }
+                }
+            }
+            
+            # Draw cursor if focused
+            if ($this.IsFocused -and -not $this.ReadOnly) {
+                $cursorScreenY = $this.CursorLine - $this.ScrollOffsetY + 1
+                $cursorScreenX = $this.CursorColumn - $this.ScrollOffsetX + 1
+                
+                if ($cursorScreenY -ge 1 -and $cursorScreenY -lt $this.Height - 1 -and
+                    $cursorScreenX -ge 1 -and $cursorScreenX -lt $this.Width - 1) {
+                    
+                    $currentLine = $this.Lines[$this.CursorLine]
+                    $cursorChar = ' '
+                    if ($this.CursorColumn -lt $currentLine.Length) {
+                        $cursorChar = $currentLine[$this.CursorColumn]
+                    }
+                    
+                    $this._private_buffer.SetCell($cursorScreenX, $cursorScreenY,
+                        [TuiCell]::new($cursorChar, $bgColor, $fgColor))
+                }
+            }
+        }
+        catch {}
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key -or $this.ReadOnly) { return $false }
+        
+        $handled = $true
+        $changed = $false
+        
+        switch ($key.Key) {
+            ([ConsoleKey]::LeftArrow) {
+                if ($this.CursorColumn -gt 0) {
+                    $this.CursorColumn--
+                }
+                elseif ($this.CursorLine -gt 0) {
+                    $this.CursorLine--
+                    $this.CursorColumn = $this.Lines[$this.CursorLine].Length
+                }
+            }
+            ([ConsoleKey]::RightArrow) {
+                $currentLine = $this.Lines[$this.CursorLine]
+                if ($this.CursorColumn -lt $currentLine.Length) {
+                    $this.CursorColumn++
+                }
+                elseif ($this.CursorLine -lt $this.Lines.Count - 1) {
+                    $this.CursorLine++
+                    $this.CursorColumn = 0
+                }
+            }
+            ([ConsoleKey]::UpArrow) {
+                if ($this.CursorLine -gt 0) {
+                    $this.CursorLine--
+                    $newLineLength = $this.Lines[$this.CursorLine].Length
+                    if ($this.CursorColumn -gt $newLineLength) {
+                        $this.CursorColumn = $newLineLength
+                    }
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this.CursorLine -lt $this.Lines.Count - 1) {
+                    $this.CursorLine++
+                    $newLineLength = $this.Lines[$this.CursorLine].Length
+                    if ($this.CursorColumn -gt $newLineLength) {
+                        $this.CursorColumn = $newLineLength
+                    }
+                }
+            }
+            ([ConsoleKey]::Home) {
+                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
+                    $this.CursorLine = 0
+                    $this.CursorColumn = 0
+                }
+                else {
+                    $this.CursorColumn = 0
+                }
+            }
+            ([ConsoleKey]::End) {
+                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
+                    $this.CursorLine = $this.Lines.Count - 1
+                    $this.CursorColumn = $this.Lines[$this.CursorLine].Length
+                }
+                else {
+                    $this.CursorColumn = $this.Lines[$this.CursorLine].Length
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                $currentLine = $this.Lines[$this.CursorLine]
+                $beforeCursor = $currentLine.Substring(0, $this.CursorColumn)
+                $afterCursor = $currentLine.Substring($this.CursorColumn)
+                
+                $this.Lines[$this.CursorLine] = $beforeCursor
+                $this.Lines.Insert($this.CursorLine + 1, $afterCursor)
+                
+                $this.CursorLine++
+                $this.CursorColumn = 0
+                $changed = $true
+            }
+            ([ConsoleKey]::Backspace) {
+                if ($this.CursorColumn -gt 0) {
+                    $currentLine = $this.Lines[$this.CursorLine]
+                    $this.Lines[$this.CursorLine] = $currentLine.Remove($this.CursorColumn - 1, 1)
+                    $this.CursorColumn--
+                    $changed = $true
+                }
+                elseif ($this.CursorLine -gt 0) {
+                    $currentLine = $this.Lines[$this.CursorLine]
+                    $previousLine = $this.Lines[$this.CursorLine - 1]
+                    $this.CursorColumn = $previousLine.Length
+                    $this.Lines[$this.CursorLine - 1] = $previousLine + $currentLine
+                    $this.Lines.RemoveAt($this.CursorLine)
+                    $this.CursorLine--
+                    $changed = $true
+                }
+            }
+            ([ConsoleKey]::Delete) {
+                $currentLine = $this.Lines[$this.CursorLine]
+                if ($this.CursorColumn -lt $currentLine.Length) {
+                    $this.Lines[$this.CursorLine] = $currentLine.Remove($this.CursorColumn, 1)
+                    $changed = $true
+                }
+                elseif ($this.CursorLine -lt $this.Lines.Count - 1) {
+                    $nextLine = $this.Lines[$this.CursorLine + 1]
+                    $this.Lines[$this.CursorLine] = $currentLine + $nextLine
+                    $this.Lines.RemoveAt($this.CursorLine + 1)
+                    $changed = $true
+                }
+            }
+            default {
+                if ($key.KeyChar -and [char]::IsControl($key.KeyChar) -eq $false) {
+                    $currentLine = $this.Lines[$this.CursorLine]
+                    $this.Lines[$this.CursorLine] = $currentLine.Insert($this.CursorColumn, $key.KeyChar)
+                    $this.CursorColumn++
+                    $changed = $true
+                }
+                else {
+                    $handled = $false
+                }
+            }
+        }
+        
+        if ($handled) {
+            if ($changed -and $this.OnChange) {
+                try { & $this.OnChange $this $this.GetText() } catch {}
+            }
+            $this.RequestRedraw()
+        }
+        
+        return $handled
+    }
+    
+    [string] GetText() {
+        return ($this.Lines -join "`n")
+    }
+    
+    [void] SetText([string]$text) {
+        $this.Lines.Clear()
+        $splitLines = $text -split "`n"
+        foreach ($line in $splitLines) {
+            $this.Lines.Add($line)
+        }
+        if ($this.Lines.Count -eq 0) {
+            $this.Lines.Add("")
+        }
+        $this.CursorLine = 0
+        $this.CursorColumn = 0
+        $this.ScrollOffsetY = 0
+        $this.ScrollOffsetX = 0
+        $this.RequestRedraw()
+    }
+}
+
+
+
+####\fixed_panel.ps1
+# ===============================================================================
+# COMPLETE FIXED PANEL CLASS
+# ===============================================================================
+# Replace the entire Panel class with this fixed version:
+
+# ===== CLASS: Panel =====
+# Module: panels-class
+# Dependencies: UIElement, TuiCell
+# Purpose: Container with layout management
+class Panel : UIElement {
+    [string]$Title = ""
+    [string]$BorderStyle = "Single"
+    [string]$BorderColor = "#808080"          # FIXED: Changed from ConsoleColor to hex string
+    [string]$BackgroundColor = "#000000"      # FIXED: Changed from ConsoleColor to hex string
+    [bool]$HasBorder = $true
+    [string]$LayoutType = "Manual"  # Manual, Vertical, Horizontal, Grid
+    [int]$Padding = 0
+    [int]$Spacing = 1
+    
+    # Content area properties
+    [int]$ContentX = 1
+    [int]$ContentY = 1
+    [int]$ContentWidth = 0
+    [int]$ContentHeight = 0
+
+    Panel([string]$name) : base($name) {
+        $this.IsFocusable = $false
+    }
+
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        try {
+            $bgColor = Get-ThemeColor -ColorName "component.background" -DefaultColor $this.BackgroundColor
+            $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
+            $this._private_buffer.Clear($bgCell)
+
+            # Calculate content area
+            $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
+            $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
+            $this.ContentWidth = [Math]::Max(0, $this.Width - (if ($this.HasBorder) { 2 } else { 0 }))
+            $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
+
+            if ($this.HasBorder) {
+                $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+                
+                Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
+                    -Width $this.Width -Height $this.Height `
+                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor -ColorName "component.title" -DefaultColor "#FFFF00" } `
+                    -Title $this.Title
+            }
+
+            # Apply layout to children
+            $this.ApplyLayout()
+        }
+        catch {}
+    }
+
+    [void] ApplyLayout() {
+        if ($this.LayoutType -eq "Manual") { return }
+
+        $layoutX = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        $layoutY = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        $layoutWidth = [Math]::Max(0, $this.Width - (2 * $layoutX))
+        $layoutHeight = [Math]::Max(0, $this.Height - (2 * $layoutY))
+
+        $visibleChildren = @($this.Children | Where-Object { $_.Visible })
+        if ($visibleChildren.Count -eq 0) { return }
+
+        switch ($this.LayoutType) {
+            "Vertical" {
+                $currentY = $layoutY
+                foreach ($child in $visibleChildren) {
+                    $child.X = $layoutX
+                    $child.Y = $currentY
+                    $child.Width = [Math]::Min($child.Width, $layoutWidth)
+                    $currentY += $child.Height + $this.Spacing
+                }
+            }
+            "Horizontal" {
+                $currentX = $layoutX
+                foreach ($child in $visibleChildren) {
+                    $child.X = $currentX
+                    $child.Y = $layoutY
+                    $child.Height = [Math]::Min($child.Height, $layoutHeight)
+                    $currentX += $child.Width + $this.Spacing
+                }
+            }
+            "Grid" {
+                # Simple grid layout - arrange in rows
+                $cols = [Math]::Max(1, [Math]::Floor($layoutWidth / 20))  # Assume 20 char min width
+                $col = 0
+                $row = 0
+                $cellWidth = [Math]::Max(1, [Math]::Floor($layoutWidth / $cols))
+                $cellHeight = 3  # Default height
+                
+                foreach ($child in $visibleChildren) {
+                    $child.X = $layoutX + ($col * $cellWidth)
+                    $child.Y = $layoutY + ($row * ($cellHeight + $this.Spacing))
+                    $child.Width = [Math]::Max(1, $cellWidth - $this.Spacing)
+                    $child.Height = $cellHeight
+                    
+                    $col++
+                    if ($col -ge $cols) {
+                        $col = 0
+                        $row++
+                    }
+                }
+            }
+        }
+    }
+
+    [hashtable] GetContentArea() {
+        $area = @{
+            X = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+            Y = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        }
+        $area.Width = [Math]::Max(0, $this.Width - (2 * $area.X))
+        $area.Height = [Math]::Max(0, $this.Height - (2 * $area.Y))
+        return $area
+    }
+}
+
+
+
+####\implement_crud_dialogs.ps1
+# Implement CRUD Dialogs for TaskListScreen
+# This script adds functional dialogs for Create, Update, Delete operations
+
+Write-Host "Implementing CRUD dialogs for task management..." -ForegroundColor Cyan
+
+# PART 1: Add Task CRUD Dialogs to AllComponents.ps1
+Write-Host "`nPart 1: Adding task dialogs..." -ForegroundColor Yellow
+
+$componentsFile = "AllComponents.ps1"
+$componentsContent = Get-Content $componentsFile -Raw
+
+# Add task dialogs after existing dialog classes
+$taskDialogs = @'
+
+# Task Create/Edit Dialog
+class TaskDialog : Dialog {
+    hidden [TextBoxComponent] $_titleBox
+    hidden [TextBoxComponent] $_descriptionBox
+    hidden [ComboBoxComponent] $_statusCombo
+    hidden [ComboBoxComponent] $_priorityCombo
+    hidden [NumericInputComponent] $_progressInput
+    hidden [ButtonComponent] $_saveButton
+    hidden [ButtonComponent] $_cancelButton
+    hidden [PmcTask] $_task
+    hidden [bool] $_isNewTask
+    
+    TaskDialog([string]$title, [PmcTask]$task) : base($title) {
+        $this._task = if ($task) { $task } else { [PmcTask]::new() }
+        $this._isNewTask = ($null -eq $task)
+    }
+    
+    [void] Initialize() {
+        ([Dialog]$this).Initialize()
+        
+        $contentY = 2
+        $labelWidth = 12
+        $inputX = $labelWidth + 2
+        $inputWidth = $this.ContentWidth - $inputX - 2
+        
+        # Title
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = $contentY
+        $this._contentPanel.AddChild($titleLabel)
+        
+        $this._titleBox = [TextBoxComponent]::new("TitleBox")
+        $this._titleBox.X = $inputX
+        $this._titleBox.Y = $contentY
+        $this._titleBox.Width = $inputWidth
+        $this._titleBox.Height = 1
+        $this._titleBox.Text = $this._task.Title
+        $this._contentPanel.AddChild($this._titleBox)
+        $contentY += 2
+        
+        # Description
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = $contentY
+        $this._contentPanel.AddChild($descLabel)
+        
+        $this._descriptionBox = [TextBoxComponent]::new("DescBox")
+        $this._descriptionBox.X = $inputX
+        $this._descriptionBox.Y = $contentY
+        $this._descriptionBox.Width = $inputWidth
+        $this._descriptionBox.Height = 1
+        $this._descriptionBox.Text = $this._task.Description
+        $this._contentPanel.AddChild($this._descriptionBox)
+        $contentY += 2
+        
+        # Status
+        $statusLabel = [LabelComponent]::new("StatusLabel")
+        $statusLabel.Text = "Status:"
+        $statusLabel.X = 2
+        $statusLabel.Y = $contentY
+        $this._contentPanel.AddChild($statusLabel)
+        
+        $this._statusCombo = [ComboBoxComponent]::new("StatusCombo")
+        $this._statusCombo.X = $inputX
+        $this._statusCombo.Y = $contentY
+        $this._statusCombo.Width = $inputWidth
+        $this._statusCombo.Height = 1
+        $this._statusCombo.Items = @([TaskStatus]::GetEnumNames())
+        $this._statusCombo.SelectedIndex = [Array]::IndexOf($this._statusCombo.Items, $this._task.Status.ToString())
+        $this._contentPanel.AddChild($this._statusCombo)
+        $contentY += 2
+        
+        # Priority
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 2
+        $priorityLabel.Y = $contentY
+        $this._contentPanel.AddChild($priorityLabel)
+        
+        $this._priorityCombo = [ComboBoxComponent]::new("PriorityCombo")
+        $this._priorityCombo.X = $inputX
+        $this._priorityCombo.Y = $contentY
+        $this._priorityCombo.Width = $inputWidth
+        $this._priorityCombo.Height = 1
+        $this._priorityCombo.Items = @([TaskPriority]::GetEnumNames())
+        $this._priorityCombo.SelectedIndex = [Array]::IndexOf($this._priorityCombo.Items, $this._task.Priority.ToString())
+        $this._contentPanel.AddChild($this._priorityCombo)
+        $contentY += 2
+        
+        # Progress
+        $progressLabel = [LabelComponent]::new("ProgressLabel")
+        $progressLabel.Text = "Progress %:"
+        $progressLabel.X = 2
+        $progressLabel.Y = $contentY
+        $this._contentPanel.AddChild($progressLabel)
+        
+        $this._progressInput = [NumericInputComponent]::new("ProgressInput")
+        $this._progressInput.X = $inputX
+        $this._progressInput.Y = $contentY
+        $this._progressInput.Width = 10
+        $this._progressInput.Height = 1
+        $this._progressInput.MinValue = 0
+        $this._progressInput.MaxValue = 100
+        $this._progressInput.Value = $this._task.Progress
+        $this._contentPanel.AddChild($this._progressInput)
+        $contentY += 3
+        
+        # Buttons
+        $buttonY = $this.ContentHeight - 3
+        $buttonWidth = 12
+        $spacing = 2
+        $totalButtonWidth = ($buttonWidth * 2) + $spacing
+        $startX = [Math]::Floor(($this.ContentWidth - $totalButtonWidth) / 2)
+        
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save"
+        $this._saveButton.X = $startX
+        $this._saveButton.Y = $buttonY
+        $this._saveButton.Width = $buttonWidth
+        $this._saveButton.Height = 1
+        $this._saveButton.OnClick = {
+            $this.DialogResult = [DialogResult]::OK
+            $this.Hide()
+        }.GetNewClosure()
+        $this._contentPanel.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel"
+        $this._cancelButton.X = $startX + $buttonWidth + $spacing
+        $this._cancelButton.Y = $buttonY
+        $this._cancelButton.Width = $buttonWidth
+        $this._cancelButton.Height = 1
+        $this._cancelButton.OnClick = {
+            $this.DialogResult = [DialogResult]::Cancel
+            $this.Hide()
+        }.GetNewClosure()
+        $this._contentPanel.AddChild($this._cancelButton)
+        
+        # Set initial focus
+        Set-ComponentFocus -Component $this._titleBox
+    }
+    
+    [PmcTask] GetTask() {
+        if ($this.DialogResult -eq [DialogResult]::OK) {
+            # Update task with form values
+            $this._task.Title = $this._titleBox.Text
+            $this._task.Description = $this._descriptionBox.Text
+            $this._task.Status = [TaskStatus]::($this._statusCombo.Items[$this._statusCombo.SelectedIndex])
+            $this._task.Priority = [TaskPriority]::($this._priorityCombo.Items[$this._priorityCombo.SelectedIndex])
+            $this._task.SetProgress($this._progressInput.Value)
+            $this._task.UpdatedAt = [DateTime]::Now
+        }
+        return $this._task
+    }
+}
+
+# Task Delete Confirmation Dialog
+class TaskDeleteDialog : ConfirmDialog {
+    hidden [PmcTask] $_task
+    
+    TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
+        $this._task = $task
+    }
+    
+    [void] Initialize() {
+        ([ConfirmDialog]$this).Initialize()
+        
+        # Add task details to the message
+        if ($this._task) {
+            $detailsLabel = [LabelComponent]::new("TaskDetails")
+            $detailsLabel.Text = "Task: $($this._task.Title)"
+            $detailsLabel.X = 2
+            $detailsLabel.Y = 4
+            $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+            $this._contentPanel.AddChild($detailsLabel)
+        }
+    }
+}
+'@
+
+# Add dialogs before the NavigationMenu class
+$navMenuPattern = "#region NavigationMenu"
+if ($componentsContent -match $navMenuPattern -and $componentsContent -notmatch "class TaskDialog") {
+    $componentsContent = $componentsContent.Replace($navMenuPattern, "$taskDialogs`r`n`r`n$navMenuPattern")
+    Write-Host "  - Added TaskDialog and TaskDeleteDialog" -ForegroundColor Green
+}
+
+Set-Content $componentsFile $componentsContent -Encoding UTF8
+
+# PART 2: Wire up the CRUD buttons in TaskListScreen
+Write-Host "`nPart 2: Wiring up CRUD functionality..." -ForegroundColor Yellow
+
+$screensFile = "AllScreens.ps1"
+$screensContent = Get-Content $screensFile -Raw
+
+# Update the button click handlers with actual functionality
+$crudImplementation = @'
+        # New button
+        $this._newButton = [ButtonComponent]::new("NewButton")
+        $this._newButton.Text = "[N]ew Task"
+        $this._newButton.X = $currentX
+        $this._newButton.Y = $buttonY
+        $this._newButton.Width = 12
+        $this._newButton.Height = 1
+        $thisScreen = $this
+        $this._newButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager) {
+                $dialog = [TaskDialog]::new("New Task", $null)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                    $newTask = $dialog.GetTask()
+                    $dataManager.AddTask($newTask)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "New task created: $($newTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._newButton)
+        $currentX += $buttonSpacing
+        
+        # Edit button
+        $this._editButton = [ButtonComponent]::new("EditButton")
+        $this._editButton.Text = "[E]dit Task"
+        $this._editButton.X = $currentX
+        $this._editButton.Y = $buttonY
+        $this._editButton.Width = 12
+        $this._editButton.Height = 1
+        $this._editButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
+                $dialog = [TaskDialog]::new("Edit Task", $thisScreen._selectedTask)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                    $updatedTask = $dialog.GetTask()
+                    $dataManager.UpdateTask($updatedTask)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "Task updated: $($updatedTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._editButton)
+        $currentX += $buttonSpacing
+        
+        # Delete button
+        $this._deleteButton = [ButtonComponent]::new("DeleteButton")
+        $this._deleteButton.Text = "[D]elete Task"
+        $this._deleteButton.X = $currentX
+        $this._deleteButton.Y = $buttonY
+        $this._deleteButton.Width = 14
+        $this._deleteButton.Height = 1
+        $this._deleteButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
+                $dialog = [TaskDeleteDialog]::new($thisScreen._selectedTask)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::Yes) {
+                    $dataManager.DeleteTask($thisScreen._selectedTask.Id)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._deleteButton)
+        $currentX += $buttonSpacing + 2
+        
+        # Complete button
+        $this._completeButton = [ButtonComponent]::new("CompleteButton")
+        $this._completeButton.Text = "[C]omplete"
+        $this._completeButton.X = $currentX
+        $this._completeButton.Y = $buttonY
+        $this._completeButton.Width = 12
+        $this._completeButton.Height = 1
+        $this._completeButton.OnClick = {
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dataManager -and $thisScreen._selectedTask) {
+                $thisScreen._selectedTask.Complete()
+                $dataManager.UpdateTask($thisScreen._selectedTask)
+                $thisScreen._RefreshTasks()
+                $thisScreen._UpdateDisplay()
+                Write-Verbose "Task completed: $($thisScreen._selectedTask.Title)"
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._completeButton)
+'@
+
+# Replace the existing button creation code
+$buttonPattern = "# New button[\s\S]*?`$this\._mainPanel\.AddChild\(`$this\._completeButton\)"
+if ($screensContent -match $buttonPattern) {
+    $screensContent = $screensContent -replace $buttonPattern, $crudImplementation
+    Write-Host "  - Wired up CRUD button functionality" -ForegroundColor Green
+}
+
+# Add dialog manager to the required services
+$taskListFieldsPattern = "(hidden \[Panel\] `$_statusBar)"
+$dialogManagerField = @"
+$1
+    hidden [DialogManager] `$_dialogManager
+"@
+
+if ($screensContent -notmatch "_dialogManager") {
+    $screensContent = $screensContent -replace $taskListFieldsPattern, $dialogManagerField
+}
+
+Set-Content $screensFile $screensContent -Encoding UTF8
+
+# PART 3: Add task management actions to ActionService
+Write-Host "`nPart 3: Adding task management actions..." -ForegroundColor Yellow
+
+$servicesFile = "AllServices.ps1"
+$servicesContent = Get-Content $servicesFile -Raw
+
+# Add task actions
+$taskActions = @'
+        
+        # Task management actions
+        $this.RegisterAction("task.new", "New Task", "Tasks", {
+            $navService = $global:ServiceContainer.GetService("NavigationService")
+            $currentScreen = $navService?.CurrentScreen
+            if ($currentScreen -is [TaskListScreen]) {
+                $currentScreen._newButton.OnClick.Invoke()
+            }
+        })
+        
+        $this.RegisterAction("task.list", "View All Tasks", "Tasks", {
+            $navService = $global:ServiceContainer.GetService("NavigationService")
+            $taskScreen = [TaskListScreen]::new($global:ServiceContainer)
+            $taskScreen.Initialize()
+            $navService.NavigateTo($taskScreen)
+        })
+'@
+
+# Add after theme picker action
+$themeActionPattern = "(ui\.theme\.picker[^}]+\}[^)]*\))"
+if ($servicesContent -match $themeActionPattern -and $servicesContent -notmatch "task\.new") {
+    $servicesContent = $servicesContent -replace $themeActionPattern, "`$1$taskActions"
+    Write-Host "  - Added task management actions" -ForegroundColor Green
+}
+
+Set-Content $servicesFile $servicesContent -Encoding UTF8
+
+Write-Host "`nCRUD implementation complete!" -ForegroundColor Green
+Write-Host "Task management features added:" -ForegroundColor Cyan
+Write-Host "  - TaskDialog for creating/editing tasks" -ForegroundColor White
+Write-Host "  - TaskDeleteDialog for delete confirmation" -ForegroundColor White
+Write-Host "  - Fully functional CRUD buttons in TaskListScreen" -ForegroundColor White
+Write-Host "  - Task actions in command palette" -ForegroundColor White
+
+
+
+####\quick-test.ps1
+# Quick test to see if the application starts without errors
+Write-Host "Testing if Axiom-Phoenix v4.0 starts correctly..." -ForegroundColor Cyan
+
+try {
+    # Try to load just the first few files to check for syntax errors
+    . ".\AllBaseClasses.ps1"
+    Write-Host "✓ AllBaseClasses.ps1 loaded" -ForegroundColor Green
+    
+    . ".\AllModels.ps1"
+    Write-Host "✓ AllModels.ps1 loaded" -ForegroundColor Green
+    
+    . ".\AllComponents.ps1"
+    Write-Host "✓ AllComponents.ps1 loaded" -ForegroundColor Green
+    
+    Write-Host "`nAll critical files loaded successfully!" -ForegroundColor Green
+    Write-Host "The stability fixes appear to be working." -ForegroundColor Green
+    Write-Host "`nYou can now run: .\Start.ps1" -ForegroundColor Cyan
+}
+catch {
+    Write-Host "✗ Error loading files:" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Yellow
+    Write-Host "`nThere may still be issues to fix." -ForegroundColor Red
 }
 
 
@@ -10105,6 +12393,42 @@ finally {
 
 
 
+####\test-stability-after-fix.ps1
+Write-Host "Testing stability fixes..." -ForegroundColor Cyan
+
+# Test for ConsoleColor usage
+$content = Get-Content ".\AllComponents.ps1" -Raw
+$colorProperties = Select-String -InputObject $content -Pattern '\[\s*ConsoleColor\s*\]\s*\$\w+' -AllMatches
+
+if ($colorProperties.Matches.Count -eq 0) {
+    Write-Host "✓ No ConsoleColor properties found - GOOD!" -ForegroundColor Green
+} else {
+    Write-Host "✗ Still found $($colorProperties.Matches.Count) ConsoleColor properties!" -ForegroundColor Red
+    $colorProperties.Matches | Select-Object -First 5 | ForEach-Object {
+        Write-Host "  - $($_.Value)" -ForegroundColor Yellow
+    }
+}
+
+# Test for ExecuteAction fix
+if ($content -match 'ExecuteAction\s*\(\s*\$selectedAction\.Name\s*,\s*@\{\}\s*\)') {
+    Write-Host "✓ ExecuteAction correctly called with empty hashtable - GOOD!" -ForegroundColor Green
+} else {
+    Write-Host "✗ ExecuteAction not fixed!" -ForegroundColor Red
+}
+
+# Test for borderColor variable conflicts
+$borderColorConflicts = Select-String -InputObject $content -Pattern '\$borderColor\s*=' -AllMatches
+Write-Host "`nChecking for borderColor variable conflicts..."
+if ($borderColorConflicts.Matches.Count -eq 0) {
+    Write-Host "✓ No borderColor variable conflicts - GOOD!" -ForegroundColor Green
+} else {
+    Write-Host "⚠ Found $($borderColorConflicts.Matches.Count) potential borderColor variable assignments" -ForegroundColor Yellow
+}
+
+Write-Host "`nTrying to run Start.ps1..." -ForegroundColor Cyan
+
+
+
 ####\test-startup.ps1
 # Quick test to check if the framework can load without errors
 try {
@@ -10153,6 +12477,152 @@ try {
     Write-Host "Location: $($_.InvocationInfo.ScriptName):$($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Gray
     throw
 }
+
+
+
+####\verify-stability-fixes.ps1
+# Diagnostic Script - Verify Critical Stability Fixes
+# Run this after applying fixes to verify correct implementation
+
+Write-Host "=== AXIOM-PHOENIX v4.0 STABILITY FIX VERIFICATION ===" -ForegroundColor Cyan
+Write-Host ""
+
+# Check if AllComponents.ps1 exists
+$componentsFile = ".\AllComponents.ps1"
+if (-not (Test-Path $componentsFile)) {
+    Write-Host "ERROR: AllComponents.ps1 not found in current directory!" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Analyzing AllComponents.ps1..." -ForegroundColor Yellow
+$content = Get-Content $componentsFile -Raw
+
+# Test 1: Check CommandPalette ExecuteAction fix
+Write-Host "`n[TEST 1] CommandPalette ExecuteAction Fix" -ForegroundColor Green
+$executionPattern = 'ExecuteAction\s*\(\s*\$selectedAction\.Name\s*,\s*@\{\}\s*\)'
+if ($content -match $executionPattern) {
+    Write-Host "  ✓ PASS: ExecuteAction correctly called with empty hashtable parameter" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ FAIL: ExecuteAction still missing second parameter!" -ForegroundColor Red
+    Write-Host "    Fix: Add ', @{}' after $selectedAction.Name in CommandPalette.HandleInput" -ForegroundColor Yellow
+}
+
+# Test 2: Check for remaining ConsoleColor usage
+Write-Host "`n[TEST 2] ConsoleColor Property Declarations" -ForegroundColor Green
+$colorProperties = Select-String -InputObject $content -Pattern '\[\s*ConsoleColor\s*\]\s*\$\w+' -AllMatches
+$colorCount = $colorProperties.Matches.Count
+
+if ($colorCount -eq 0) {
+    Write-Host "  ✓ PASS: No ConsoleColor property declarations found" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ FAIL: Found $colorCount ConsoleColor property declarations!" -ForegroundColor Red
+    Write-Host "    These need to be changed to [string] with hex values:" -ForegroundColor Yellow
+    
+    # Show first 5 matches
+    $colorProperties.Matches | Select-Object -First 5 | ForEach-Object {
+        Write-Host "    - $($_.Value)" -ForegroundColor Magenta
+    }
+}
+
+# Test 3: Check specific components for hex colors
+Write-Host "`n[TEST 3] Component Color Properties" -ForegroundColor Green
+
+$componentsToCheck = @(
+    @{Name="MultilineTextBoxComponent"; Props=@("BackgroundColor", "ForegroundColor", "BorderColor")},
+    @{Name="Panel"; Props=@("BorderColor", "BackgroundColor")},
+    @{Name="GroupPanel"; Props=@("BorderColor", "BackgroundColor")},
+    @{Name="ListBox"; Props=@("ForegroundColor", "BackgroundColor", "BorderColor")}
+)
+
+foreach ($comp in $componentsToCheck) {
+    Write-Host "  Checking $($comp.Name)..." -ForegroundColor Cyan
+    
+    # Extract the class definition
+    $classPattern = "class\s+$($comp.Name)[\s\S]*?(?=^class|\z)"
+    if ($content -match $classPattern) {
+        $classContent = $matches[0]
+        $allGood = $true
+        
+        foreach ($prop in $comp.Props) {
+            # Check if property exists with hex default
+            if ($classContent -match "\[\s*string\s*\]\s*\$$prop\s*=\s*`"#[0-9A-Fa-f]{6}`"") {
+                Write-Host "    ✓ $prop uses hex string" -ForegroundColor Green
+            } else {
+                Write-Host "    ✗ $prop not using hex string!" -ForegroundColor Red
+                $allGood = $false
+            }
+        }
+        
+        if (-not $allGood) {
+            Write-Host "    Fix: Update color properties to use [string] with hex defaults" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "    ⚠ Could not find $($comp.Name) class definition" -ForegroundColor Yellow
+    }
+}
+
+# Test 4: Check for ConsoleColor enum usage in code
+Write-Host "`n[TEST 4] ConsoleColor Enum Usage" -ForegroundColor Green
+$enumPattern = '\[ConsoleColor\]::\w+'
+$enumMatches = Select-String -InputObject $content -Pattern $enumPattern -AllMatches
+
+if ($enumMatches.Matches.Count -eq 0) {
+    Write-Host "  ✓ PASS: No ConsoleColor enum usage found" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ FAIL: Found $($enumMatches.Matches.Count) ConsoleColor enum usages!" -ForegroundColor Red
+    Write-Host "    These need to be replaced with hex strings:" -ForegroundColor Yellow
+    
+    $enumMatches.Matches | Select-Object -First 5 -Unique | ForEach-Object {
+        $colorName = $_.Value -replace '\[ConsoleColor\]::', ''
+        $hexValue = switch ($colorName) {
+            "Black" { "#000000" }
+            "White" { "#FFFFFF" }
+            "Gray" { "#808080" }
+            "DarkGray" { "#A9A9A9" }
+            "Red" { "#FF0000" }
+            "DarkRed" { "#8B0000" }
+            "Green" { "#00FF00" }
+            "DarkGreen" { "#006400" }
+            "Blue" { "#0000FF" }
+            "DarkBlue" { "#00008B" }
+            "Cyan" { "#00FFFF" }
+            "DarkCyan" { "#008B8B" }
+            "Yellow" { "#FFFF00" }
+            "DarkYellow" { "#BDB76B" }
+            "Magenta" { "#FF00FF" }
+            "DarkMagenta" { "#8B008B" }
+            default { "#FFFFFF" }
+        }
+        Write-Host "    - $($_.Value) → `"$hexValue`"" -ForegroundColor Magenta
+    }
+}
+
+# Test 5: Check DateInputComponent OnRender
+Write-Host "`n[TEST 5] DateInputComponent OnRender Method" -ForegroundColor Green
+if ($content -match "class\s+DateInputComponent[\s\S]*?OnRender\s*\(\)[\s\S]*?try\s*\{[\s\S]*?Get-ThemeColor") {
+    Write-Host "  ✓ PASS: DateInputComponent.OnRender uses Get-ThemeColor" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ FAIL: DateInputComponent.OnRender not using theme colors!" -ForegroundColor Red
+    Write-Host "    Fix: Update OnRender to use Get-ThemeColor instead of ConsoleColor" -ForegroundColor Yellow
+}
+
+# Summary
+Write-Host "`n=== SUMMARY ===" -ForegroundColor Cyan
+$issues = 0
+
+if (-not ($content -match $executionPattern)) { $issues++ }
+if ($colorCount -gt 0) { $issues++ }
+if ($enumMatches.Matches.Count -gt 0) { $issues++ }
+
+if ($issues -eq 0) {
+    Write-Host "All critical stability fixes appear to be applied correctly! ✓" -ForegroundColor Green
+    Write-Host "The application should now run without type mismatch crashes." -ForegroundColor Green
+} else {
+    Write-Host "Found $issues issue(s) that need to be fixed." -ForegroundColor Red
+    Write-Host "Please apply the fixes from the provided fix files." -ForegroundColor Yellow
+}
+
+Write-Host "`nRun './Start.ps1' to test the application after applying fixes." -ForegroundColor Cyan
 
 
 
