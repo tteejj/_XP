@@ -185,7 +185,20 @@ class TuiBuffer {
     [string] $Name            
     [bool] $IsDirty = $true  
 
-    TuiBuffer([int]$width, [int]$height, [string]$name = "Unnamed") {
+    # Constructor with 2 parameters
+    TuiBuffer([int]$width, [int]$height) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.Width = $width
+        $this.Height = $height
+        $this.Name = "Unnamed"
+        # Initialize cells in a simple way
+        $this.InitializeCells()
+        # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
+    }
+
+    # Constructor with 3 parameters
+    TuiBuffer([int]$width, [int]$height, [string]$name) {
         if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
         if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
         $this.Width = $width
