@@ -26,7 +26,7 @@ class TuiAnsiHelper {
 
     static [hashtable] HexToRgb([string]$hexColor) {
         if ([string]::IsNullOrEmpty($hexColor) -or -not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
-            # Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor'" # Use Write-Log
+            Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor'"
             return $null
         }
         try {
@@ -36,7 +36,7 @@ class TuiAnsiHelper {
                 B = [System.Convert]::ToInt32($hexColor.Substring(5, 2), 16)
             }
         } catch {
-            # Write-Log -Level Warning -Message "Error parsing hex color '$hexColor': $($_.Exception.Message)" -Data $_
+            Write-Log -Level Warning -Message "Error parsing hex color '$hexColor': $($_.Exception.Message)"
             return $null
         }
     }
@@ -249,13 +249,13 @@ class TuiBuffer {
             $this.Cells[$y, $x] = $cell
             $this.IsDirty = $true
         } else {
-            # Write-Warning "Attempted to set cell out of bounds in TuiBuffer '$($this.Name)': ($x, $y) is outside 0..$($this.Width-1), 0..$($this.Height-1). Cell: '$($cell.Char)'."
+            Write-Log -Level Warning -Message "Attempted to set cell out of bounds in TuiBuffer '$($this.Name)': ($x, $y) is outside 0..$($this.Width-1), 0..$($this.Height-1). Cell: '$($cell.Char)'."
         }
     }
 
     [void] WriteString([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
         if ([string]::IsNullOrEmpty($text) -or $y -lt 0 -or $y -ge $this.Height) {
-            # Write-Log -Level Debug -Message "WriteString: Skipped for buffer '$($this.Name)' due to empty text or out-of-bounds Y."
+            Write-Log -Level Debug -Message "WriteString: Skipped for buffer '$($this.Name)' due to empty text or out-of-bounds Y."
             return
         }
         
@@ -281,7 +281,7 @@ class TuiBuffer {
             $currentX++
         }
         $this.IsDirty = $true
-        # Write-Log -Level Debug -Message "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
+        Write-Log -Level Debug -Message "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
     }
 
     [void] BlendBuffer([object]$other, [int]$offsetX, [int]$offsetY) {
@@ -376,6 +376,33 @@ class TuiBuffer {
 
 #<!-- PAGE: ABC.004 - UIElement Class -->
 #region UIElement - Base Class for all UI Components
+
+# ==============================================================================
+# CLASS: UIElement
+#
+# INHERITS:
+#   - None (base class)
+#
+# DEPENDENCIES:
+#   Classes:
+#     - TuiBuffer (ABC.003)
+#     - TuiCell (ABC.002)
+#   Services:
+#     - TuiFrameworkService (ASE.010) - for dimension access
+#
+# PURPOSE:
+#   Foundation class for all UI components in the framework. Provides core
+#   functionality for positioning, sizing, visibility, focus management,
+#   hierarchical parent-child relationships, and the rendering lifecycle.
+#
+# KEY LOGIC:
+#   - OnRender: Override to define component-specific rendering
+#   - _RenderContent: Core rendering pipeline with optimization
+#   - HandleInput: Process keyboard/mouse input
+#   - AddChild/RemoveChild: Manage component hierarchy
+#   - RequestRedraw: Mark component as needing redraw
+#   - Lifecycle: Initialize → OnRender → HandleInput → Cleanup
+# ==============================================================================
 class UIElement {
     [string] $Name = "UIElement" 
     [int] $X = 0               
@@ -621,26 +648,83 @@ class UIElement {
     hidden [void] _RenderContent() 
     {
         if (-not $this.Visible) { return }
-        if ($this._needs_redraw -or ($null -eq $this._private_buffer)) {
-            if ($null -eq $this._private_buffer -or $this._private_buffer.Width -ne $this.Width -or $this._private_buffer.Height -ne $this.Height) {
-                $bufferWidth = [Math]::Max(1, $this.Width)
-                $bufferHeight = [Math]::Max(1, $this.Height)
-                $this._private_buffer = [TuiBuffer]::new($bufferWidth, $bufferHeight, "$($this.Name).Buffer")
-                # Write-Verbose "Re-initialized buffer for '$($this.Name)' due to null or dimension mismatch ($($bufferWidth)x$($bufferHeight))."
+        
+        # Phase 1: Render Self (if needed)
+        $parentDidRedraw = $false
+        if ($this._needs_redraw -or ($null -eq $this._private_buffer) -or 
+            ($this._private_buffer.Width -ne $this.Width) -or 
+            ($this._private_buffer.Height -ne $this.Height)) {
+            
+            try {
+                # Ensure buffer exists and is correct size
+                if ($null -eq $this._private_buffer -or 
+                    $this._private_buffer.Width -ne $this.Width -or 
+                    $this._private_buffer.Height -ne $this.Height) {
+                    
+                    $bufferWidth = [Math]::Max(1, $this.Width)
+                    $bufferHeight = [Math]::Max(1, $this.Height)
+                    $this._private_buffer = [TuiBuffer]::new($bufferWidth, $bufferHeight, "$($this.Name).Buffer")
+                    
+                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                        Write-Log -Level Debug -Message "UIElement '$($this.Name)': Buffer resized to ${bufferWidth}x${bufferHeight}"
+                    }
+                }
+                
+                # Render component content
+                $this.OnRender()
+                $parentDidRedraw = $true
+                
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Debug -Message "UIElement '$($this.Name)': Rendered own content"
+                }
             }
-            $this.OnRender()
-            $this._needs_redraw = $false
-            # Write-Verbose "Rendered own content for '$($this.Name)'."
+            catch {
+                if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Error -Message "UIElement '$($this.Name)': OnRender() failed: $($_.Exception.Message)"
+                }
+                throw
+            }
         }
-        foreach ($child in $this.Children | Sort-Object ZIndex) { 
+        
+        # Phase 2: Render and Blend Children (with optimization)
+        foreach ($child in $this.Children | Sort-Object ZIndex) {
             if ($child.Visible) {
-                $child.Render()
-                if ($null -ne $child._private_buffer) {
-                    $this._private_buffer.BlendBuffer($child._private_buffer, $child.X, $child.Y)
-                    # Write-Verbose "Blended child '$($child.Name)' onto '$($this.Name)' at ($($child.X), $($child.Y))."
+                try {
+                    # Always recurse to allow children to render if they need to
+                    $child._RenderContent()
+                    
+                    # OPTIMIZATION: Only blend if parent redrew OR child redrew
+                    $childNeedsBlending = $parentDidRedraw -or $child._needs_redraw
+                    
+                    if ($childNeedsBlending -and $null -ne $child._private_buffer) {
+                        # Bounds checking for child position
+                        if ($child.X -lt $this.Width -and $child.Y -lt $this.Height -and 
+                            $child.X + $child.Width -gt 0 -and $child.Y + $child.Height -gt 0) {
+                            
+                            $this._private_buffer.BlendBuffer($child._private_buffer, $child.X, $child.Y)
+                            
+                            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                                Write-Log -Level Debug -Message "UIElement '$($this.Name)': Blended child '$($child.Name)' at ($($child.X), $($child.Y))"
+                            }
+                        }
+                        else {
+                            if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                                Write-Log -Level Debug -Message "UIElement '$($this.Name)': Child '$($child.Name)' is out of bounds, skipping blend"
+                            }
+                        }
+                    }
+                }
+                catch {
+                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                        Write-Log -Level Error -Message "UIElement '$($this.Name)': Error rendering child '$($child.Name)': $($_.Exception.Message)"
+                    }
+                    # Continue with other children even if one fails
                 }
             }
         }
+        
+        # Phase 3: Reset redraw flag for next frame
+        $this._needs_redraw = $false
     }
 
     [object] GetBuffer() 
@@ -678,6 +762,33 @@ class Component : UIElement {
 
 #<!-- PAGE: ABC.006 - Screen Class -->
 #region Screen - Top-level Container for Application Views
+
+# ==============================================================================
+# CLASS: Screen
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Classes:
+#     - UIElement (ABC.004)
+#     - ServiceContainer (ABC.007)
+#   Services:
+#     - All registered services via ServiceContainer
+#
+# PURPOSE:
+#   Top-level container for application views. Screens represent complete
+#   UI states (like Dashboard, Task List, Settings) and integrate with the
+#   service container for dependency injection.
+#
+# KEY LOGIC:
+#   - Initialize: Set up screen resources and state
+#   - OnEnter: Called when navigating to this screen
+#   - OnExit: Called when leaving this screen
+#   - HandleInput: Process screen-level input
+#   - SubscribeToEvent: Register for application events
+#   - Cleanup: Unsubscribe from events and release resources
+# ==============================================================================
 class Screen : UIElement {
     [hashtable]$Services
     [object]$ServiceContainer 

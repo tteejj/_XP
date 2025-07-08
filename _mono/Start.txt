@@ -200,8 +200,12 @@ try {
         @{ Type = "KeybindingService"; Name = "Neural Keybinds" },
         @{ Type = "NavigationService"; Name = "Dimensional Navigator" },
         @{ Type = "FocusManager"; Name = "Focus Controller" },
-        @{ Type = "DialogManager"; Name = "Dialog Orchestrator" }
+        @{ Type = "DialogManager"; Name = "Dialog Orchestrator" },
+        @{ Type = "TuiFrameworkService"; Name = "Framework State Manager" }
     )
+    
+    # Create a hashtable to store services as we register them
+    $servicesHashtable = @{}
     
     foreach ($service in $services) {
         Write-Host "  • Initializing $($service.Name)... " -NoNewline -ForegroundColor Gray
@@ -213,12 +217,37 @@ try {
             "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
             "ActionService" { [ActionService]::new() }
             "KeybindingService" { [KeybindingService]::new() }
-            "NavigationService" { [NavigationService]::new() }
-            "FocusManager" { [FocusManager]::new() }
-            "DialogManager" { [DialogManager]::new() }
+            "NavigationService" { 
+                # NavigationService requires a hashtable of services
+                [NavigationService]::new($servicesHashtable) 
+            }
+            "FocusManager" { 
+                # FocusManager requires EventManager
+                $eventManager = $servicesHashtable.EventManager
+                if ($eventManager) {
+                    [FocusManager]::new($eventManager)
+                } else {
+                    [FocusManager]::new($null)
+                }
+            }
+            "DialogManager" { 
+                # DialogManager requires EventManager and FocusManager
+                $eventManager = $servicesHashtable.EventManager
+                $focusManager = $servicesHashtable.FocusManager
+                if ($eventManager -and $focusManager) {
+                    [DialogManager]::new($eventManager, $focusManager)
+                } else {
+                    # Create with nulls if dependencies not available
+                    [DialogManager]::new($null, $null)
+                }
+            }
+            "TuiFrameworkService" { [TuiFrameworkService]::new() }
         }
         
-        $container.Register($service.Type, $instance, "Singleton")
+        # Store service in hashtable for dependencies
+        $servicesHashtable[$service.Type] = $instance
+        
+        $container.Register($service.Type, $instance)
         Write-Host "✓" -ForegroundColor Green
     }
     
@@ -228,6 +257,13 @@ try {
         $themeManager.LoadTheme($Theme)
         Write-Host ""
         Write-Host "Theme '$Theme' activated!" -ForegroundColor Magenta
+    }
+    
+    # Register default actions
+    $actionService = $container.GetService("ActionService")
+    if ($actionService) {
+        $actionService.RegisterDefaultActions()
+        Write-Host "Default actions registered!" -ForegroundColor Green
     }
     
     # Create sample data with enhanced items
@@ -290,9 +326,12 @@ try {
     Write-Host "Press any key to enter the matrix..." -ForegroundColor Green
     $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     
+    # Create initial screen
+    $dashboardScreen = [DashboardScreen]::new($container)
+    
     # Launch the application
     Clear-Host
-    Start-AxiomPhoenix -Services $container
+    Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
 }
 catch {
     Write-Host ""

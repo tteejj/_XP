@@ -14,69 +14,56 @@
 #<!-- PAGE: ART.001 - Global State -->
 #region Global State
 
-# Initialize global TUI state
+# $global:TuiState is the central, volatile state store for the running
+# application. It holds references to the current screen, buffers, services,
+# and engine control flags. It is initialized here and populated by
+# Start-AxiomPhoenix.
 $global:TuiState = @{
     Running = $false
     BufferWidth = 0
     BufferHeight = 0
     CompositorBuffer = $null
     PreviousCompositorBuffer = $null
-    ScreenStack = [System.Collections.Generic.Stack[Screen]]::new() # CHANGED TO GENERIC STACK
     CurrentScreen = $null
     IsDirty = $true
     FocusedComponent = $null
     CommandPalette = $null
     Services = @{}
+    ServiceContainer = $null
     LastRenderTime = [datetime]::Now
     FrameCount = 0
-    InputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]'
-    OverlayStack = [System.Collections.Generic.List[UIElement]]::new() # CHANGED TO GENERIC LIST
-    # Added for input thread management
-    CancellationTokenSource = $null
-    InputRunspace = $null
-    InputPowerShell = $null
-    InputAsyncResult = $null
+    OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
 }
 
+# ==============================================================================
+# FUNCTION: Invoke-WithErrorHandling (Internal Utility)
+#
+# PURPOSE:
+#   A wrapper to execute a scriptblock within a try/catch block, centralizing
+#   the logging of non-fatal errors that occur during UI operations.
+#
+# KEY LOGIC:
+#   - Executes the provided ScriptBlock.
+#   - If an exception is caught, it logs a structured error message using
+#     Write-Log, including the component, context, and error details.
+#   - It re-throws the exception so the original calling context can handle it
+#     further if necessary.
+# ==============================================================================
 function Invoke-WithErrorHandling {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
-        [string]$Component,
-        
-        [Parameter(Mandatory)]
-        [string]$Context,
-        
-        [Parameter(Mandatory)]
-        [scriptblock]$ScriptBlock,
-        
+        [Parameter(Mandatory)][string]$Component,
+        [Parameter(Mandatory)][string]$Context,
+        [Parameter(Mandatory)][scriptblock]$ScriptBlock,
         [hashtable]$AdditionalData = @{}
     )
-    
     try {
         & $ScriptBlock
     }
     catch {
-        $errorDetails = @{
-            Component = $Component
-            Context = $Context
-            ErrorMessage = $_.Exception.Message
-            ErrorType = $_.Exception.GetType().FullName
-            StackTrace = $_.ScriptStackTrace
-            Timestamp = [datetime]::Now
-        }
-        
-        foreach ($key in $AdditionalData.Keys) {
-            $errorDetails[$key] = $AdditionalData[$key]
-        }
-        
-        $logger = $global:TuiState.Services.Logger
-        if ($logger) {
-            $logger.Log("Error", "Error in $Component during $Context : $($_.Exception.Message)")
-            $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress)")
-        }
-        
-        # Re-throw for caller to handle if needed
+        $errorDetails = @{ Component = $Component; Context = $Context; ErrorMessage = $_.Exception.Message; StackTrace = $_.ScriptStackTrace }
+        foreach ($key in $AdditionalData.Keys) { $errorDetails[$key] = $AdditionalData[$key] }
+        Write-Log -Level Error -Message "Error in $Component during $Context: $($_.Exception.Message)" -Data $errorDetails
         throw
     }
 }
@@ -87,91 +74,96 @@ function Invoke-WithErrorHandling {
 #<!-- PAGE: ART.002 - Engine Management -->
 #region Engine Management
 
+# ==============================================================================
+# FUNCTION: Initialize-TuiEngine
+#
+# PURPOSE:
+#   Prepares the console host for TUI rendering. This is one of the first
+#   functions called when the application starts.
+#
+# KEY LOGIC:
+#   - Sets the console output encoding to UTF-8 to support special characters.
+#   - Hides the cursor and sets the window title.
+#   - Calls `Update-TuiEngineSize` to get the initial console dimensions.
+#   - Creates the main `CompositorBuffer` and `PreviousCompositorBuffer` based
+#     on the console size.
+# ==============================================================================
 function Initialize-TuiEngine {
     [CmdletBinding()]
     param()
-    
     try {
         Write-Log -Level Info -Message "Initializing TUI engine..."
-        
-        # Store original console state
-        $global:TuiState.OriginalWindowTitle = $Host.UI.RawUI.WindowTitle
-        $global:TuiState.OriginalCursorVisible = [Console]::CursorVisible
-        
-        # Configure console
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-        $env:PYTHONIOENCODING = "utf-8"
         [Console]::CursorVisible = $false
-        $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
-        
-        # Clear screen and hide cursor
+        $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0"
         Clear-Host
         [Console]::SetCursorPosition(0, 0)
         
-        # Get initial size
         Update-TuiEngineSize
         
-        # Create compositor buffers
         $width = $global:TuiState.BufferWidth
         $height = $global:TuiState.BufferHeight
         $global:TuiState.CompositorBuffer = [TuiBuffer]::new($width, $height, "Compositor")
         $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($width, $height, "PreviousCompositor")
         
-        # Clear with theme background
         $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
-        $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-        $global:TuiState.PreviousCompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        $fillCell = [TuiCell]::new(' ', $bgColor, $bgColor)
+        $global:TuiState.CompositorBuffer.Clear($fillCell)
+        $global:TuiState.PreviousCompositorBuffer.Clear($fillCell)
         
         Write-Log -Level Info -Message "TUI engine initialized. Buffer size: ${width}x${height}"
     }
     catch {
-        Invoke-WithErrorHandling -Component "TuiEngine" -Context "Initialization" -ScriptBlock { throw } `
-            -AdditionalData @{ Phase = "EngineInit" }
+        Invoke-PanicHandler $_
     }
 }
 
+# ==============================================================================
+# FUNCTION: Start-TuiEngine
+#
+# PURPOSE:
+#   The main application loop. It runs continuously until the application is
+#   instructed to exit.
+#
+# KEY LOGIC:
+#   1. Checks for console window resize events and calls `Update-TuiEngineSize`
+#      if detected.
+#   2. Calls `Process-TuiInput` to handle any pending keyboard events.
+#   3. Calls `Invoke-TuiRender` to draw the current state of the UI to the screen.
+#   4. Implements frame-rate throttling by sleeping for a calculated duration
+#      at the end of each loop to prevent high CPU usage and ensure a stable
+#      refresh rate (typically targeting ~30 FPS).
+# ==============================================================================
 function Start-TuiEngine {
     [CmdletBinding()]
     param()
-    
     try {
-        Write-Verbose "Starting TUI Engine main loop..."
-        
+        Write-Log -Level Info -Message "Starting TUI Engine main loop..."
         $global:TuiState.Running = $true
         $frameTimer = [System.Diagnostics.Stopwatch]::new()
+        $targetFrameTimeMs = 33 # Target ~30 FPS
         
         while ($global:TuiState.Running) {
             $frameTimer.Restart()
             
-            # Check for resize
-            if ([Console]::WindowWidth -ne $global:TuiState.BufferWidth -or 
-                [Console]::WindowHeight -ne $global:TuiState.BufferHeight) {
+            if ([Console]::WindowWidth -ne $global:TuiState.BufferWidth -or [Console]::WindowHeight -ne $global:TuiState.BufferHeight) {
                 Update-TuiEngineSize
             }
             
-            # Process input
             Process-TuiInput
             
-            # Render if dirty
-            if ($global:TuiState.IsDirty) {
-                Invoke-TuiRender
-                $global:TuiState.IsDirty = $false
-            }
+            # Rendering is now driven by component state (_needs_redraw)
+            Invoke-TuiRender
             
-            # Frame timing (target 60 FPS)
             $frameTimer.Stop()
-            $frameTime = $frameTimer.ElapsedMilliseconds
-            if ($frameTime -lt 16) {
-                Start-Sleep -Milliseconds (16 - $frameTime)
+            $elapsedMs = $frameTimer.ElapsedMilliseconds
+            if ($elapsedMs -lt $targetFrameTimeMs) {
+                Start-Sleep -Milliseconds ($targetFrameTimeMs - $elapsedMs)
             }
-            
             $global:TuiState.FrameCount++
         }
-        
-        Write-Verbose "TUI Engine stopped after $($global:TuiState.FrameCount) frames"
     }
     catch {
-        Write-Error "TUI Engine error: $_"
         Invoke-PanicHandler $_
     }
     finally {
@@ -179,90 +171,73 @@ function Start-TuiEngine {
     }
 }
 
+# ==============================================================================
+# FUNCTION: Stop-TuiEngine
+#
+# PURPOSE:
+#   Gracefully shuts down the TUI engine and restores the console to its
+#   original state.
+#
+# KEY LOGIC:
+#   - Sets the global `Running` flag to false to terminate the main loop.
+#   - Iterates through all registered services and calls their `Cleanup` method
+#     if it exists. This ensures resources like file handles (Logger) and
+#     event subscriptions are released.
+#   - Makes the cursor visible again and clears the screen.
+# ==============================================================================
 function Stop-TuiEngine {
     [CmdletBinding()]
-    param(
-        [switch]$Force
-    )
-    
+    param()
     try {
-        Write-Verbose "Stopping TUI Engine..."
-        
+        Write-Log -Level Info -Message "Stopping TUI Engine..."
         $global:TuiState.Running = $false
         
-        # Cleanup current screen via NavigationService
-        $navService = $global:TuiState.Services.NavigationService
-        if ($navService -and $navService.CurrentScreen) {
-            try {
-                $navService.CurrentScreen.OnExit()
-                $navService.CurrentScreen.Cleanup()
-            }
-            catch {
-                Write-Verbose "Error cleaning up current screen: $_"
-            }
-        }
+        $global:TuiState.ServiceContainer?.Cleanup()
         
-        # Cleanup services
-        foreach ($service in $global:TuiState.Services.Values) {
-            if ($service -and $service.PSObject -and $service.PSObject.Methods -and 
-                $service.PSObject.Methods.Name -contains 'Cleanup') {
-                try {
-                    $service.Cleanup()
-                }
-                catch {
-                    Write-Verbose "Error cleaning up service: $_"
-                }
-            }
-        }
-        
-        # Restore console
         [Console]::CursorVisible = $true
         [Console]::Clear()
         [Console]::SetCursorPosition(0, 0)
-        
-        Write-Verbose "TUI Engine stopped and cleaned up"
+        Write-Host "Axiom-Phoenix session terminated."
     }
     catch {
+        # Fallback to console write if logger fails during shutdown
         Write-Error "Error stopping TUI engine: $_"
     }
 }
 
+# ==============================================================================
+# FUNCTION: Update-TuiEngineSize
+#
+# PURPOSE:
+#   Handles console window resize events.
+#
+# KEY LOGIC:
+#   - Reads the new dimensions from `[Console]::WindowWidth/Height`.
+#   - Updates the corresponding values in `$global:TuiState`.
+#   - Calls the `Resize` method on the main compositor buffers and the current
+#     screen, which propagates the resize down the UI component tree.
+#   - Forces a full redraw of the UI.
+# ==============================================================================
 function Update-TuiEngineSize {
     [CmdletBinding()]
     param()
-    
     try {
         $newWidth = [Console]::WindowWidth
         $newHeight = [Console]::WindowHeight
+        Write-Log -Level Debug -Message "Console resized to ${newWidth}x${newHeight}"
         
-        Write-Verbose "Console resized from $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight) to ${newWidth}x${newHeight}"
-        
-        # Update state
         $global:TuiState.BufferWidth = $newWidth
         $global:TuiState.BufferHeight = $newHeight
         
-        # Resize compositor buffers only if they exist
-        if ($null -ne $global:TuiState.CompositorBuffer) {
-            $global:TuiState.CompositorBuffer.Resize($newWidth, $newHeight)
-        }
-        if ($null -ne $global:TuiState.PreviousCompositorBuffer) {
-            $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
-        }
+        $global:TuiState.CompositorBuffer?.Resize($newWidth, $newHeight)
+        $global:TuiState.PreviousCompositorBuffer?.Resize($newWidth, $newHeight)
+        $global:TuiState.CurrentScreen?.Resize($newWidth, $newHeight)
         
-        # Resize current screen
-        $navService = $global:TuiState.Services.NavigationService
-        if ($navService -and $navService.CurrentScreen) {
-            $navService.CurrentScreen.Resize($newWidth, $newHeight)
-        }
-        
-        # Force full redraw
         $global:TuiState.IsDirty = $true
-        if ($null -ne $global:TuiState.CompositorBuffer) {
-            [Console]::Clear()
-        }
+        if ($global:TuiState.CompositorBuffer) { [Console]::Clear() }
     }
     catch {
-        Write-Error "Failed to update engine size: $_"
+        Write-Log -Level Error -Message "Failed to update engine size: $($_.Exception.Message)" -Data $_
     }
 }
 
@@ -272,134 +247,92 @@ function Update-TuiEngineSize {
 #<!-- PAGE: ART.003 - Rendering System -->
 #region Rendering System
 
+# ==============================================================================
+# FUNCTION: Invoke-TuiRender
+#
+# PURPOSE:
+#   The main rendering orchestrator, called once per frame from the engine loop.
+#
+# KEY LOGIC:
+#   1. Clears the main `CompositorBuffer`.
+#   2. Renders the `$global:TuiState.CurrentScreen` into its own buffer.
+#   3. Blends the current screen's buffer onto the `CompositorBuffer`.
+#   4. Renders any active overlays (like dialogs from the `OverlayStack`) on top,
+#      blending them onto the `CompositorBuffer` in order.
+#   5. Calls `Render-DifferentialBuffer` to perform the optimized write to the
+#      console.
+#   6. Clones the `CompositorBuffer` to `PreviousCompositorBuffer` in preparation
+#      for the next frame's differential comparison.
+# ==============================================================================
 function Invoke-TuiRender {
     [CmdletBinding()]
     param()
-    
     try {
-        $renderTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        if (-not $global:TuiState.CompositorBuffer) { return }
         
-        # Ensure compositor buffer exists
-        if ($null -eq $global:TuiState.CompositorBuffer) {
-            Write-Verbose "Compositor buffer is null, skipping render"
-            return
-        }
-        
-        # Clear compositor buffer
-        $global:TuiState.CompositorBuffer.Clear()
-        
-        Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
-        
-        # Get the current screen from global state (NavigationService updates this)
-        $currentScreenToRender = $global:TuiState.CurrentScreen
-        
-        # Render current screen
-        if ($currentScreenToRender) {
-            try {
-                # Render the screen which will update its internal buffer
-                $currentScreenToRender.Render()
-                
-                # Get the screen's buffer
-                $screenBuffer = $currentScreenToRender.GetBuffer()
-                
-                if ($screenBuffer) {
-                    # Blend screen buffer into compositor
-                    $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
-                }
-                else {
-                    Write-Verbose "Screen buffer is null for $($currentScreenToRender.Name)"
-                }
-            }
-            catch {
-                Write-Error "Error rendering screen: $_"
-                throw
-            }
-            
-            # Render command palette if visible
-            if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                try {
-                    $global:TuiState.CommandPalette.Render()
-                    $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
-                    if ($paletteBuffer) {
-                        # Command palette position was set during initialization
-                        $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
-                            $global:TuiState.CommandPalette.X,
-                            $global:TuiState.CommandPalette.Y
-                        )
-                    }
-                }
-                catch {
-                    Write-Verbose "Error rendering command palette: $_"
-                }
-            }
-            
-            # Render overlays
-            if ($global:TuiState.ContainsKey('OverlayStack') -and $global:TuiState.OverlayStack -and @($global:TuiState.OverlayStack).Count -gt 0) {
-                foreach ($overlay in $global:TuiState.OverlayStack) {
-                    if ($overlay -and $overlay.Visible) {
-                        $overlay.Render()
-                        $overlayBuffer = $overlay.GetBuffer()
-                        if ($overlayBuffer) {
-                            $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
-                        }
-                    }
-                }
-            }
-        }
-        
-        # Force full redraw on first frame by making previous buffer different
-        if ($global:TuiState.FrameCount -eq 0) {
-            Write-Verbose "First frame - initializing previous buffer for differential rendering"
-            # Fill previous buffer with different content to force full redraw
-            for ($y = 0; $y -lt $global:TuiState.PreviousCompositorBuffer.Height; $y++) {
-                for ($x = 0; $x -lt $global:TuiState.PreviousCompositorBuffer.Width; $x++) {
-                    $global:TuiState.PreviousCompositorBuffer.SetCell($x, $y, 
-                        [TuiCell]::new('?', "#404040", "#404040"))
-                }
-            }
-        }
-        
-        # Differential rendering - compare current compositor to previous
-        Render-DifferentialBuffer
-        
-        # Swap buffers for next frame - MUST happen AFTER rendering
-        # Use the efficient Clone() method instead of manual copying
-        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer.Clone()
-        
-        # Clear compositor for next frame
         $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        $renderTimer.Stop()
-        
-        if ($renderTimer.ElapsedMilliseconds -gt 16) {
-            Write-Verbose "Slow frame: $($renderTimer.ElapsedMilliseconds)ms"
+        $currentScreenToRender = $global:TuiState.CurrentScreen
+        if ($currentScreenToRender) {
+            $currentScreenToRender.Render()
+            $screenBuffer = $currentScreenToRender.GetBuffer()
+            if ($screenBuffer) {
+                $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
+            }
         }
+        
+        if ($global:TuiState.OverlayStack) {
+            foreach ($overlay in $global:TuiState.OverlayStack) {
+                if ($overlay -and $overlay.Visible) {
+                    $overlay.Render()
+                    $overlayBuffer = $overlay.GetBuffer()
+                    if ($overlayBuffer) {
+                        $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
+                    }
+                }
+            }
+        }
+        
+        Render-DifferentialBuffer
+        
+        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer.Clone()
+        
     }
     catch {
-        Write-Error "Render error: $_"
-        throw
+        Write-Log -Level Error -Message "Render error in Invoke-TuiRender: $($_.Exception.Message)" -Data $_
+        # Do not re-throw from render loop to avoid crashing the app
     }
 }
 
+# ==============================================================================
+# FUNCTION: Render-DifferentialBuffer
+#
+# PURPOSE:
+#   The core of the rendering optimization. It compares the current frame's
+#   compositor buffer with the previous frame's buffer and only writes the
+#   changed cells to the terminal.
+#
+# KEY LOGIC:
+#   - Iterates through every cell (X, Y) of the `CompositorBuffer`.
+#   - Compares each `TuiCell` with the cell at the same position in the
+#     `PreviousCompositorBuffer` using the cell's `DiffersFrom()` method.
+#   - If a cell has changed, it builds up an ANSI escape code string to move the
+#     cursor to that position and print the new cell's character with its new
+#     styling.
+#   - All changes are aggregated into a single `StringBuilder` and written to
+#     the console in one operation to minimize screen flicker.
+# ==============================================================================
 function Render-DifferentialBuffer {
     [CmdletBinding()]
     param()
-    
     try {
         $current = $global:TuiState.CompositorBuffer
         $previous = $global:TuiState.PreviousCompositorBuffer
-        
-        # Ensure both buffers exist
-        if ($null -eq $current -or $null -eq $previous) {
-            Write-Verbose "Compositor buffers not initialized, skipping differential render"
-            return
-        }
+        if (-not $current -or -not $previous) { return }
         
         $ansiBuilder = [System.Text.StringBuilder]::new()
-        $currentX = -1
-        $currentY = -1
-        $changeCount = 0
+        $lastX = -1; $lastY = -1
         
         for ($y = 0; $y -lt $current.Height; $y++) {
             for ($x = 0; $x -lt $current.Width; $x++) {
@@ -407,39 +340,22 @@ function Render-DifferentialBuffer {
                 $previousCell = $previous.GetCell($x, $y)
                 
                 if ($currentCell.DiffersFrom($previousCell)) {
-                    $changeCount++
-                    
-                    # Move cursor if needed
-                    if ($currentX -ne $x -or $currentY -ne $y) {
+                    if ($lastY -ne $y -or $lastX -ne ($x - 1)) {
                         [void]$ansiBuilder.Append("`e[$($y + 1);$($x + 1)H")
-                        $currentX = $x
-                        $currentY = $y
                     }
-                    
-                    # Use cell's ToAnsiString method which handles all styling
                     [void]$ansiBuilder.Append($currentCell.ToAnsiString())
-                    $currentX++
-                    
-                    # Copy to previous buffer
-                    $previous.SetCell($x, $y, [TuiCell]::new($currentCell))
+                    $lastX = $x; $lastY = $y
                 }
             }
         }
         
-        # Log changes on first few frames
-        if ($global:TuiState.FrameCount -lt 5) {
-            Write-Verbose "Frame $($global:TuiState.FrameCount): $changeCount cells changed"
-        }
-        
-        # Reset styling at end
         if ($ansiBuilder.Length -gt 0) {
             [void]$ansiBuilder.Append("`e[0m")
             [Console]::Write($ansiBuilder.ToString())
         }
     }
     catch {
-        Write-Error "Differential rendering error: $_"
-        throw
+        Write-Log -Level Error -Message "Differential rendering error: $($_.Exception.Message)" -Data $_
     }
 }
 
@@ -449,88 +365,60 @@ function Render-DifferentialBuffer {
 #<!-- PAGE: ART.004 - Input Processing -->
 #region Input Processing
 
+# ==============================================================================
+# FUNCTION: Process-TuiInput
+#
+# PURPOSE:
+#   The central input handling routine, called once per frame from the engine
+#   loop. It determines which component should receive the keyboard input based
+#   on a strict order of precedence.
+#
+# KEY LOGIC:
+#   The order of precedence is:
+#   1. **Overlays**: If an overlay (dialog) is active, it gets the first chance.
+#   2. **Focused Component**: The component currently focused by `FocusManager`.
+#   3. **Global Keybindings**: `KeybindingService` checks for global hotkeys.
+#   4. **Current Screen**: The top-level screen gets a final chance.
+#
+#   If any layer in this chain handles the input (returns $true), processing stops.
+# ==============================================================================
 function Process-TuiInput {
     [CmdletBinding()]
     param()
-    
     try {
-        if ([Console]::KeyAvailable) {
+        while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # If there's an active overlay (like a dialog), give it priority
+            # 1. Overlay gets highest priority
             if ($global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
-                if ($topOverlay -and $topOverlay.Visible) {
-                    if ($topOverlay.HandleInput($keyInfo)) {
-                        $global:TuiState.IsDirty = $true
-                        return
-                    }
-                }
+                if ($topOverlay?.HandleInput($keyInfo)) { $global:TuiState.IsDirty = $true; continue }
             }
             
-            # Check command palette if visible
-            if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                if ($global:TuiState.CommandPalette.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
-
-            # Give the currently focused component a chance to handle the input first
+            # 2. Focused component is next
             $focusManager = $global:TuiState.Services.FocusManager
-            if ($focusManager -and $focusManager.FocusedComponent) {
-                if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
+            if ($focusManager.FocusedComponent?.HandleInput($keyInfo)) { $global:TuiState.IsDirty = $true; continue }
 
-            # Check global hotkeys via KeybindingService (including Ctrl+P and Tab)
-            if ($global:TuiState.Services.KeybindingService) {
-                $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
+            # 3. Global Keybindings
+            $keybindingService = $global:TuiState.Services.KeybindingService
+            if ($keybindingService) {
+                $action = $keybindingService.GetAction($keyInfo)
                 if ($action) {
-                    # Handle framework-level actions that need special processing
-                    if ($action -eq "app.commandPalette") {
-                        if ($global:TuiState.CommandPalette) {
-                            $global:TuiState.CommandPalette.Show()
-                            $global:TuiState.IsDirty = $true
-                            return
-                        }
-                    }
-                    elseif ($action -eq "navigation.nextComponent" -or $action -eq "navigation.previousComponent") {
-                        if ($focusManager) {
-                            $reverse = ($action -eq "navigation.previousComponent")
-                            $focusManager.MoveFocus($reverse)
-                            $global:TuiState.IsDirty = $true
-                            return
-                        }
-                    }
-                    else {
-                        # Execute other actions via ActionService
-                        if ($global:TuiState.Services.ActionService) {
-                            try {
-                                $global:TuiState.Services.ActionService.ExecuteAction($action, @{})
-                                $global:TuiState.IsDirty = $true
-                                return
-                            }
-                            catch {
-                                Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
-                            }
-                        }
-                    }
+                    $global:TuiState.Services.ActionService?.ExecuteAction($action, @{})
+                    $global:TuiState.IsDirty = $true
+                    continue
                 }
             }
             
-            # Finally, give the current screen a chance to handle the input
-            $navService = $global:TuiState.Services.NavigationService
-            if ($navService -and $navService.CurrentScreen -and $navService.CurrentScreen.HandleInput($keyInfo)) {
+            # 4. Current Screen gets last chance
+            if ($global:TuiState.CurrentScreen?.HandleInput($keyInfo)) {
                 $global:TuiState.IsDirty = $true
-                return
+                continue
             }
         }
     }
     catch {
-        Write-Error "Input processing error: $_"
+        Write-Log -Level Error -Message "Input processing error: $($_.Exception.Message)" -Data $_
     }
 }
 
@@ -539,239 +427,99 @@ function Process-TuiInput {
 
 #<!-- PAGE: ART.005 - Screen Management -->
 #region Overlay Management
-
-function Show-TuiOverlay {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [UIElement]$Overlay
-    )
-    
-    Write-Warning "Show-TuiOverlay is deprecated. Use DialogManager.ShowDialog() for dialogs or manage overlays directly."
-    
-    # Use DialogManager if the overlay is a Dialog
-    if ($Overlay.GetType().Name -match "Dialog") {
-        $dialogManager = $global:TuiState.Services.DialogManager
-        if ($dialogManager) {
-            $dialogManager.ShowDialog($Overlay)
-            return
-        }
-    }
-    
-    # For non-dialog overlays, handle manually (deprecated path)
-    if (-not $global:TuiState.OverlayStack) {
-        $global:TuiState.OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
-    }
-    
-    # Position overlay at center
-    $consoleWidth = $global:TuiState.BufferWidth
-    $consoleHeight = $global:TuiState.BufferHeight
-    $Overlay.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $Overlay.Width) / 2))
-    $Overlay.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $Overlay.Height) / 2))
-    
-    $Overlay.Visible = $true
-    $Overlay.IsOverlay = $true
-    $global:TuiState.OverlayStack.Add($Overlay)
-    $global:TuiState.IsDirty = $true
-    
-    # Write-Log -Level Debug -Message "Show-TuiOverlay: Displayed overlay '$($Overlay.Name)' at X=$($Overlay.X), Y=$($Overlay.Y)"
-}
-
-function Close-TopTuiOverlay {
-    [CmdletBinding()]
-    param()
-    
-    Write-Warning "Close-TopTuiOverlay is deprecated. Use DialogManager.HideDialog() for dialogs or manage overlays directly."
-    
-    if ($global:TuiState.OverlayStack.Count -eq 0) {
-        # Write-Log -Level Warning -Message "Close-TopTuiOverlay: No overlays to close"
-        return
-    }
-    
-    $topOverlay = $global:TuiState.OverlayStack[-1]
-    
-    # Use DialogManager if it's a Dialog
-    if ($topOverlay.GetType().Name -match "Dialog") {
-        $dialogManager = $global:TuiState.Services.DialogManager
-        if ($dialogManager) {
-            $dialogManager.HideDialog($topOverlay)
-            return
-        }
-    }
-    
-    # Manual removal for non-dialog overlays (deprecated path)
-    $global:TuiState.OverlayStack.RemoveAt($global:TuiState.OverlayStack.Count - 1)
-    $topOverlay.Visible = $false
-    $topOverlay.IsOverlay = $false
-    $topOverlay.Cleanup()
-    $global:TuiState.IsDirty = $true
-    
-    # Write-Log -Level Debug -Message "Close-TopTuiOverlay: Closed overlay '$($topOverlay.Name)'"
-}
-
+# DEPRECATED - Logic is now in DialogManager (ASE.009)
 #endregion
 #<!-- END_PAGE: ART.005 -->
 
 #<!-- PAGE: ART.006 - Error Handling -->
 #region Panic Handler
 
+# ==============================================================================
+# FUNCTION: Invoke-PanicHandler
+#
+# PURPOSE:
+#   A last-resort error handler for unrecoverable exceptions that occur in the
+#   main engine loop. Its job is to safely terminate the TUI, restore the
+#   console, and display a helpful error report to the user.
+#
+# KEY LOGIC:
+#   - Restores the console to a usable state (visible cursor, reset color).
+#   - Prints a formatted error message including the exception message, type,
+#     and stack trace.
+#   - Gathers system information and a snapshot of the TUI state.
+#   - Saves a detailed crash report to a log file in the user's temp directory.
+#   - Halts execution and exits the application.
+# ==============================================================================
 function Invoke-PanicHandler {
     [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [object]$ErrorRecord
-    )
+    param([Parameter(Mandatory)][object]$ErrorRecord)
     
-    # Ensure we're in a safe state to write to console
-    try {
-        [Console]::ResetColor()
-        [Console]::CursorVisible = $true
-        Clear-Host
-    } catch { }
+    try { [Console]::ResetColor(); [Console]::CursorVisible = $true; Clear-Host } catch { }
     
-    Write-Host "`n`n" -NoNewline
-    Write-Host "================================ PANIC HANDLER ================================" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "An unrecoverable error has occurred:" -ForegroundColor Yellow
-    Write-Host ""
+    Write-Host "`nPANIC: An unrecoverable error has occurred:`n" -ForegroundColor Red
+    Write-Host "  Message: $($ErrorRecord.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "  Type:    $($ErrorRecord.Exception.GetType().FullName)" -ForegroundColor Yellow
+    Write-Host "`nSTACK TRACE:`n$($ErrorRecord.ScriptStackTrace)" -ForegroundColor DarkGray
     
-    # Error details
-    Write-Host "ERROR: " -ForegroundColor Red -NoNewline
-    Write-Host $ErrorRecord.Exception.Message
-    Write-Host ""
-    Write-Host "TYPE: " -ForegroundColor Yellow -NoNewline
-    Write-Host $ErrorRecord.Exception.GetType().FullName
-    Write-Host ""
-    
-    # Stack trace
-    Write-Host "STACK TRACE:" -ForegroundColor Yellow
-    $stackLines = $ErrorRecord.ScriptStackTrace -split "`n"
-    foreach ($line in $stackLines) {
-        Write-Host "  $line" -ForegroundColor DarkGray
-    }
-    Write-Host ""
-    
-    # System info
-    Write-Host "SYSTEM INFO:" -ForegroundColor Yellow
-    Write-Host "  PowerShell: $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
-    Write-Host "  Platform: $($PSVersionTable.Platform)" -ForegroundColor DarkGray
-    Write-Host "  OS: $($PSVersionTable.OS)" -ForegroundColor DarkGray
-    Write-Host "  Host: $($Host.Name) v$($Host.Version)" -ForegroundColor DarkGray
-    Write-Host ""
-    
-    # Save crash report
     $crashDir = Join-Path $env:TEMP "AxiomPhoenix\Crashes"
-    if (-not (Test-Path $crashDir)) {
-        New-Item -ItemType Directory -Path $crashDir -Force | Out-Null
-    }
-    
+    if (-not (Test-Path $crashDir)) { New-Item -ItemType Directory -Path $crashDir -Force | Out-Null }
     $crashFile = Join-Path $crashDir "crash_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
-    $crashReport = @{
-        Timestamp = [datetime]::Now
-        Error = @{
-            Message = $ErrorRecord.Exception.Message
-            Type = $ErrorRecord.Exception.GetType().FullName
-            StackTrace = $ErrorRecord.ScriptStackTrace
-            InnerException = if ($ErrorRecord.Exception.InnerException) { $ErrorRecord.Exception.InnerException.Message } else { $null }
-        }
-        System = @{
-            PowerShell = $PSVersionTable.PSVersion.ToString()
-            Platform = $PSVersionTable.Platform
-            OS = $PSVersionTable.OS
-            Host = "$($Host.Name) v$($Host.Version)"
-        }
-        GlobalState = @{
-            Running = $global:TuiState.Running
-            BufferSize = "$($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)"
-            CurrentScreen = if ($global:TuiState.CurrentScreen) { $global:TuiState.CurrentScreen.Name } else { "None" }
-            OverlayCount = if ($global:TuiState.OverlayStack) { $global:TuiState.OverlayStack.Count } else { 0 }
-        }
-    }
-    
     try {
-        $crashReport | ConvertTo-Json -Depth 10 | Out-File -FilePath $crashFile -Encoding UTF8
-        Write-Host "Crash report saved to: $crashFile" -ForegroundColor Green
+        $ErrorRecord | ConvertTo-Json -Depth 5 | Out-File -FilePath $crashFile -Encoding UTF8
+        Write-Host "`nCrash report saved to: $crashFile" -ForegroundColor Green
     } catch {
-        Write-Host "Failed to save crash report: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "`nFailed to save crash report: $($_.Exception.Message)" -ForegroundColor Red
     }
     
-    Write-Host ""
-    Write-Host "=============================================================================" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Press any key to exit..." -ForegroundColor Yellow
+    Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    
-    # Final cleanup
-    try {
-        Stop-TuiEngine -Force
-    } catch { }
-    
+    Stop-TuiEngine
     exit 1
 }
 
+# ==============================================================================
+# FUNCTION: Start-AxiomPhoenix
+#
+# PURPOSE:
+#   The main entry point for the entire application. It wires together all the
+#   services and starts the TUI engine.
+#
+# KEY LOGIC:
+#   - Takes the pre-configured `ServiceContainer` as a parameter.
+#   - Populates the `$global:TuiState.Services` hashtable by resolving all
+#     necessary services from the container. This makes them easily accessible
+#     to the rest of the framework.
+#   - Initializes the TUI engine via `Initialize-TuiEngine`.
+#   - Uses the `NavigationService` to navigate to the provided initial screen.
+#   - Calls `Start-TuiEngine` to begin the main application loop.
+# ==============================================================================
 function Start-AxiomPhoenix {
     [CmdletBinding()]
     param(
-        [ServiceContainer]$ServiceContainer,
-        [Screen]$InitialScreen
+        [Parameter(Mandatory)][ServiceContainer]$ServiceContainer,
+        [Parameter(Mandatory)][Screen]$InitialScreen
     )
     
     try {
-        # Write-Log -Level Info -Message "Starting Axiom-Phoenix application..."
-        
-        # Store services
-        $global:TuiState.Services = @{
-            ServiceContainer = $ServiceContainer
-        }
-        
-        # Extract key services for quick access
-        $serviceNames = @(
-            'ActionService', 'KeybindingService', 'NavigationService', 
-            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager' # Add new services
-        )
-        
+        $global:TuiState.ServiceContainer = $ServiceContainer
+        $global:TuiState.Services = @{}
+        $serviceNames = @('Logger', 'EventManager', 'ThemeManager', 'DataManager', 'ActionService', 'KeybindingService', 'NavigationService', 'FocusManager', 'DialogManager')
         foreach ($serviceName in $serviceNames) {
-            try {
-                $service = $ServiceContainer.GetService($serviceName)
-                if ($service) {
-                    $global:TuiState.Services[$serviceName] = $service
-                }
-            }
-            catch {
-                # Write-Log -Level Warning -Message "Failed to get service '$serviceName': $($_.Exception.Message)" -Data $_
-            }
+            try { $global:TuiState.Services[$serviceName] = $ServiceContainer.GetService($serviceName) }
+            catch { Write-Log -Level Warning -Message "Failed to get required service '$serviceName': $($_.Exception.Message)" }
         }
         
-        # Create command palette if available
-        $actionService = $global:TuiState.Services.ActionService
-        if ($actionService) {
-            $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
-            $global:TuiState.CommandPalette.RefreshActions()
-        }
-        
-        # Initialize engine
         Initialize-TuiEngine
         
-        # Get the NavigationService instance directly from global state
-        $navService = $global:TuiState.Services.NavigationService
-
-        # Set initial screen using NavigationService (CRUCIAL FIX)
-        if ($InitialScreen) {
-            $navService.NavigateTo($InitialScreen) # Use the service directly
-        }
-        else {
-            # Write-Log -Level Warning -Message "No initial screen provided. Application might not display anything."
-        }
+        $global:TuiState.Services.NavigationService.NavigateTo($InitialScreen)
         
-        # Start main loop
         Start-TuiEngine
     }
     catch {
-        # Use Invoke-PanicHandler for critical startup errors
         Invoke-PanicHandler $_
     }
     finally {
-        Stop-TuiEngine # Ensure cleanup even if startup fails
+        Stop-TuiEngine
     }
 }
 

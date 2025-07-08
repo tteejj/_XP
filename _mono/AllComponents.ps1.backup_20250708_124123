@@ -2352,14 +2352,11 @@ class ListBox : UIElement {
 # Module: tui-components (wrapper)
 # Dependencies: TextBoxComponent
 # Purpose: Enhanced wrapper around TextBoxComponent
-
 class TextBox : UIElement {
     hidden [TextBoxComponent]$_textBox
 
     TextBox([string]$name) : base($name) {
         $this._textBox = [TextBoxComponent]::new($name + "_inner")
-        # CRITICAL FIX: Immediately size the inner component to match the wrapper's current size.
-        $this._textBox.Resize($this.Width, $this.Height)
         $this.AddChild($this._textBox)
         $this.IsFocusable = $true
     }
@@ -2380,32 +2377,12 @@ class TextBox : UIElement {
         }
     }
 
-    [void] OnFocus() {
-        ([UIElement]$this).OnFocus()
-        if ($this._textBox) {
-            $this._textBox.IsFocused = $true
-            $this._textBox.OnFocus()
-            $this._textBox.RequestRedraw()
-        }
-    }
-
-    [void] OnBlur() {
-        ([UIElement]$this).OnBlur()
-        if ($this._textBox) {
-            $this._textBox.IsFocused = $false
-            $this._textBox.OnBlur()
-            $this._textBox.RequestRedraw()
-        }
-    }
-
     [void] OnResize() {
         if ($this._textBox) {
             $this._textBox.Width = $this.Width
             $this._textBox.Height = $this.Height
             $this._textBox.X = 0
             $this._textBox.Y = 0
-            # Ensure the inner component's buffer is also resized.
-            $this._textBox.Resize($this.Width, $this.Height)
         }
     }
 
@@ -2497,37 +2474,21 @@ class CommandPalette : UIElement {
         $this._searchBox.Clear()
         $this.FilterActions("")
         $this.Visible = $true
-        
-        # Add to global overlay stack to receive input and be rendered
-        if (-not $global:TuiState.OverlayStack.Contains($this)) {
-            $global:TuiState.OverlayStack.Add($this) | Out-Null
-        }
-        
-        # Set focus to the search box using the FocusManager
-        $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
-            $focusManager.SetFocus($this._searchBox)
-        }
-        
+        $this._searchBox.Focus()
         $this.RequestRedraw()
     }
 
     [void] Hide() {
         $this.Visible = $false
         
-        # Remove from global overlay stack
-        if ($global:TuiState.OverlayStack.Contains($this)) {
-            $global:TuiState.OverlayStack.Remove($this) | Out-Null
-        }
-        
-        # Release focus back to the system
-        $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
-            $focusManager.ReleaseFocus()
-        }
-
-        # Force a full redraw of the entire screen
+        # Force a full redraw of the entire screen to clear any rendering artifacts
         $global:TuiState.IsDirty = $true
+        
+        # Get current screen through NavigationService
+        $navService = $global:TuiState.Services.NavigationService
+        if ($navService -and $navService.CurrentScreen) {
+            $navService.CurrentScreen.RequestRedraw()
+        }
         
         if ($this.OnCancel) {
             & $this.OnCancel
@@ -2539,6 +2500,7 @@ class CommandPalette : UIElement {
         
         if ($this._actionService) {
             $actions = $this._actionService.GetAllActions()
+            # Use Write-Log instead of Write-Host
             Write-Log -Level "Debug" -Message "CommandPalette: RefreshActions - got $($actions.Count) actions from service"
             
             if ($actions -and $actions.Values) {
@@ -2550,6 +2512,7 @@ class CommandPalette : UIElement {
             }
         }
         
+        # Sort by category and name
         $sorted = $this._allActions | Sort-Object Category, Name
         $this._allActions.Clear()
         foreach ($item in $sorted) {
@@ -2560,6 +2523,7 @@ class CommandPalette : UIElement {
     }
 
     [void] FilterActions([string]$searchText) {
+        # Implement debouncing
         $now = [DateTime]::Now
         if (($now - $this._lastSearchTime).TotalMilliseconds -lt 100) {
             $this._pendingSearchText = $searchText
@@ -2571,75 +2535,153 @@ class CommandPalette : UIElement {
         $this._listBox.ClearItems()
         
         if ([string]::IsNullOrWhiteSpace($searchText)) {
+            # Show all actions
             foreach ($action in $this._allActions) {
                 $this._filteredActions.Add($action)
-                $displayText = if ($action.Category) { "[$($action.Category)] $($action.Name) - $($action.Description)" } else { "$($action.Name) - $($action.Description)" }
+                if ($action.Category) { 
+                    $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                } else { 
+                    $displayText = "$($action.Name) - $($action.Description)" 
+                }
                 $this._listBox.AddItem($displayText)
             }
         }
         else {
+            # Use simple contains for better performance
             $searchLower = $searchText.ToLower()
             foreach ($action in $this._allActions) {
+                # Quick check for name match first (most likely)
                 if ($action.Name.ToLower().Contains($searchLower) -or
                     ($action.Description -and $action.Description.ToLower().Contains($searchLower)) -or
                     ($action.Category -and $action.Category.ToLower().Contains($searchLower))) {
                     
                     $this._filteredActions.Add($action)
-                    $displayText = if ($action.Category) { "[$($action.Category)] $($action.Name) - $($action.Description)" } else { "$($action.Name) - $($action.Description)" }
+                    if ($action.Category) { 
+                        $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                    } else { 
+                        $displayText = "$($action.Name) - $($action.Description)" 
+                    }
                     $this._listBox.AddItem($displayText)
                 }
             }
         }
         
+        # Reset selection
         if ($this._filteredActions.Count -gt 0) {
             $this._listBox.SelectedIndex = 0
+            Write-Log -Level "Debug" -Message "CommandPalette: FilterActions set SelectedIndex=0, filtered count=$($this._filteredActions.Count)"
+        }
+        else {
+            Write-Log -Level "Debug" -Message "CommandPalette: FilterActions - no filtered items"
         }
         
+        # Ensure list is refreshed
         $this._listBox.RequestRedraw()
         $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
-
-        # This method is now only invoked for keys NOT handled by the focused child.
-        # Therefore, we only need to process keys relevant to the container.
-        switch ($key.Key) {
-            ([ConsoleKey]::Escape) {
-                $this.Hide()
-                return $true
-            }
+        
+        # Handle global escape
+        if ($key.Key -eq [ConsoleKey]::Escape) {
+            $this.Hide()
+            return $true
+        }
+        
+        # Handle Enter for action selection
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            # Log for debugging
+            Write-Log -Level "Debug" -Message "CommandPalette: Enter pressed. SelectedIndex=$($this._listBox.SelectedIndex), FilteredActions=$($this._filteredActions.Count)"
             
-            ([ConsoleKey]::Enter) {
-                if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                    if ($selectedAction) {
-                        $this.Hide()
-                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                    }
-                } else {
-                    # If enter is pressed with no selection, just hide.
+            # Always execute if we have a selection, regardless of which component has focus
+            if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                Write-Log -Level "Debug" -Message "CommandPalette: Selected action: $($selectedAction.Name)"
+                
+                if ($selectedAction) {
                     $this.Hide()
+                    if ($this.OnSelect) {
+                        & $this.OnSelect $selectedAction
+                    }
+                    else {
+                        # Execute action directly
+                        Write-Log -Level "Debug" -Message "CommandPalette: Executing action $($selectedAction.Name)"
+                        try {
+                            $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                        }
+                        catch {
+                            Write-Log -Level "Error" -Message "CommandPalette: Failed to execute action $($selectedAction.Name): $_"
+                        }
+                    }
+                    return $true
                 }
-                return $true
             }
-            
-            default {
-                # Check if it's a navigation key
-                if ($key.Key -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, 
-                                   [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, 
-                                   [ConsoleKey]::Home, [ConsoleKey]::End)) {
-                    # Delegate navigation to the listbox and return its result
-                    return $this._listBox.HandleInput($key)
-                }
-                else {
-                    # The container does not handle other keys.
-                    return $false
-                }
+            else {
+                Write-Log -Level "Debug" -Message "CommandPalette: Cannot execute - no selection or no filtered actions"
             }
         }
         
-        # This should never be reached, but satisfies the compiler
+        # Navigation keys always go to list box
+        switch ($key.Key) {
+            ([ConsoleKey]::UpArrow) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::DownArrow) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::PageUp) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::PageDown) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::Home) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::End) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            
+            # Tab to switch focus between search and list
+            ([ConsoleKey]::Tab) {
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    $currentFocus = $focusManager.FocusedComponent
+                    if ($currentFocus -eq $this._searchBox._textBox) {
+                        $focusManager.SetFocus($this._listBox)
+                    } else {
+                        $focusManager.SetFocus($this._searchBox._textBox)
+                    }
+                }
+                return $true
+            }
+            
+            # All other keys go to search
+            default {
+                $result = $this._searchBox.HandleInput($key)
+                # Force redraw after text changes
+                if ($result) {
+                    $this.RequestRedraw()
+                }
+                return $result
+            }
+        }
+        
+        # This line should never be reached due to the default case above,
+        # but PowerShell requires it for all code paths
         return $false
     }
 

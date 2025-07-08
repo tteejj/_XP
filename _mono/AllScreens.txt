@@ -1153,7 +1153,7 @@ class ThemePickerScreen : Screen {
         # Ensure selected item is visible
         if ($this._selectedIndex -lt $this._themePanel.ScrollOffsetY) {
             $this._themePanel.ScrollOffsetY = $this._selectedIndex
-        } elseif ($this._selectedIndex >= $this._themePanel.ScrollOffsetY + $this._themePanel.ContentHeight) {
+        } elseif ($this._selectedIndex -ge ($this._themePanel.ScrollOffsetY + $this._themePanel.ContentHeight)) {
             $this._themePanel.ScrollOffsetY = $this._selectedIndex - $this._themePanel.ContentHeight + 1
         }
         

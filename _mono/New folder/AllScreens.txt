@@ -16,6 +16,34 @@ using namespace System.Collections.Generic
 #<!-- PAGE: ASC.001 - DashboardScreen Class -->
 #region Screen Classes
 
+# ==============================================================================
+# CLASS: DashboardScreen
+#
+# INHERITS:
+#   - Screen (ABC.006)
+#
+# DEPENDENCIES:
+#   Services:
+#     - ServiceContainer (ABC.007)
+#     - EventManager (ASE.007)
+#     - DataManager (ASE.003)
+#   Components:
+#     - Panel (ACO.011)
+#     - LabelComponent (ACO.001)
+#
+# PURPOSE:
+#   Provides a high-level overview of the application's state, including
+#   task summaries and system information. Acts as the initial landing page.
+#
+# KEY LOGIC:
+#   - OnEnter: Subscribes to 'Tasks.Changed' event from EventManager to enable
+#     reactive UI updates. Fetches initial data from DataManager.
+#   - _RefreshData: Core logic to query the DataManager for task statistics.
+#   - _UpdateSummaryPanel, _UpdateHelpPanel, _UpdateStatusPanel: These methods
+#     dynamically create and configure LabelComponent children within their
+#     respective Panel containers to display the latest data. This avoids
+#     direct buffer manipulation in the screen class.
+# ==============================================================================
 class DashboardScreen : Screen {
     #region UI Components
     hidden [Panel] $_mainPanel
@@ -34,10 +62,8 @@ class DashboardScreen : Screen {
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
     [void] Initialize() {
-        Write-Verbose "DashboardScreen.Initialize called. Screen size: $($this.Width)x$($this.Height)"
-        
         if (-not $this.ServiceContainer) {
-            Write-Verbose "DashboardScreen.Initialize: ServiceContainer is null"
+            Write-Log -Level Warning -Message "DashboardScreen.Initialize: ServiceContainer is null"
             return
         }
         
@@ -93,14 +119,14 @@ class DashboardScreen : Screen {
             $thisScreen = $this
             $handler = {
                 param($eventData)
-                Write-Verbose "DashboardScreen received data change event. Refreshing..."
+                Write-Log -Level Debug -Message "DashboardScreen received data change event. Refreshing..."
                 $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
                 $thisScreen._RefreshData($dataManager)
             }.GetNewClosure()
             
             # Subscribe to both task and project changes
             $this._dataChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
-            Write-Verbose "DashboardScreen subscribed to data change events"
+            Write-Log -Level Debug -Message "DashboardScreen subscribed to data change events"
         }
         
         # Force a complete redraw of all panels
@@ -112,7 +138,7 @@ class DashboardScreen : Screen {
         if ($this.ServiceContainer) {
             $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
         } else {
-            Write-Verbose "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
+            Write-Log -Level Warning -Message "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
             $this._RefreshData($null)
         }
         
@@ -126,7 +152,7 @@ class DashboardScreen : Screen {
         if ($eventManager -and $this._dataChangeSubscriptionId) {
             $eventManager.Unsubscribe("Tasks.Changed", $this._dataChangeSubscriptionId)
             $this._dataChangeSubscriptionId = $null
-            Write-Verbose "DashboardScreen unsubscribed from data change events"
+            Write-Log -Level Debug -Message "DashboardScreen unsubscribed from data change events"
         }
         
         # Call base OnExit
@@ -135,7 +161,7 @@ class DashboardScreen : Screen {
 
     hidden [void] _RefreshData([object]$dataManager) {
         if(-not $dataManager) {
-            Write-Verbose "DashboardScreen: DataManager service not found."
+            Write-Log -Level Warning -Message "DashboardScreen: DataManager service not found."
             $this._totalTasks = 0
             $this._completedTasks = 0
             $this._pendingTasks = 0
@@ -414,6 +440,47 @@ class DashboardScreen : Screen {
 #<!-- PAGE: ASC.002 - TaskListScreen Class -->
 #region TaskListScreen Class
 
+# ==============================================================================
+# CLASS: TaskListScreen
+#
+# INHERITS:
+#   - Screen (ABC.006)
+#
+# DEPENDENCIES:
+#   Services:
+#     - ServiceContainer (ABC.007)
+#     - DataManager (ASE.003)
+#     - DialogManager (ASE.009)
+#     - EventManager (ASE.007)
+#   Components:
+#     - Panel (ACO.011)
+#     - ScrollablePanel (ACO.012)
+#     - ButtonComponent (ACO.002)
+#     - TextBoxComponent (ACO.003)
+#     - TaskDialog (ACO.020)
+#     - TaskDeleteDialog (ACO.020)
+#
+# PURPOSE:
+#   Displays a master-detail view of tasks. Provides UI for creating,
+#   viewing, updating, and deleting tasks.
+#
+# KEY LOGIC:
+#   - OnEnter: Subscribes to 'Tasks.Changed' event to automatically refresh the
+#     list when data changes elsewhere in the application.
+#   - _RefreshTasks: Reloads tasks from DataManager and applies the current
+#     filter text.
+#   - _UpdateTaskList: The core rendering logic for the list. It creates a Panel
+#     for each task item and adds it as a child to the ScrollablePanel. This
+#     delegates scrolling and rendering to the ScrollablePanel component, which
+#     is more efficient than direct buffer drawing.
+#   - _UpdateDetailPanel: Shows details for the currently selected task by
+#     creating and updating LabelComponent children.
+#   - HandleInput: Manages up/down selection, page up/down, and delegates
+#     hotkeys (N, E, D, C) to invoke the OnClick scriptblocks of the
+#     corresponding buttons.
+#   - Button OnClick handlers use the DialogManager service to show TaskDialog
+#     or TaskDeleteDialog modals, decoupling the screen from dialog management.
+# ==============================================================================
 class TaskListScreen : Screen {
     #region UI Components
     hidden [Panel] $_mainPanel
@@ -441,7 +508,7 @@ class TaskListScreen : Screen {
 
     [void] Initialize() {
         if (-not $this.ServiceContainer) {
-            Write-Verbose "TaskListScreen.Initialize: ServiceContainer is null"
+            Write-Log -Level Warning -Message "TaskListScreen.Initialize: ServiceContainer is null"
             return
         }
         
@@ -467,7 +534,7 @@ class TaskListScreen : Screen {
         $this._filterBox.Height = 1
         $thisScreen = $this
         $this._filterBox.OnChange = {
-            param($newText)
+            param($sender, $newText) # Corrected signature for TextBox OnChange
             $thisScreen._filterText = $newText
             $thisScreen._RefreshTasks()
             $thisScreen._UpdateDisplay()
@@ -526,12 +593,14 @@ class TaskListScreen : Screen {
                 $dialog = [TaskDialog]::new("New Task", $null)
                 $dialogManager.ShowDialog($dialog)
                 
+                # Note: In a real app, this logic would be handled by a callback or event
+                # after the dialog closes, not synchronously like this.
                 if ($dialog.DialogResult -eq [DialogResult]::OK) {
                     $newTask = $dialog.GetTask()
                     $dataManager.AddTask($newTask)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    Write-Verbose "New task created: $($newTask.Title)"
+                    Write-Log -Level Info -Message "New task created: $($newTask.Title)"
                 }
             }
         }.GetNewClosure()
@@ -558,7 +627,7 @@ class TaskListScreen : Screen {
                     $dataManager.UpdateTask($updatedTask)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    Write-Verbose "Task updated: $($updatedTask.Title)"
+                    Write-Log -Level Info -Message "Task updated: $($updatedTask.Title)"
                 }
             }
         }.GetNewClosure()
@@ -584,7 +653,7 @@ class TaskListScreen : Screen {
                     $dataManager.DeleteTask($thisScreen._selectedTask.Id)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
+                    Write-Log -Level Info -Message "Task deleted: $($thisScreen._selectedTask.Title)"
                 }
             }
         }.GetNewClosure()
@@ -606,7 +675,7 @@ class TaskListScreen : Screen {
                 $dataManager.UpdateTask($thisScreen._selectedTask)
                 $thisScreen._RefreshTasks()
                 $thisScreen._UpdateDisplay()
-                Write-Verbose "Task completed: $($thisScreen._selectedTask.Title)"
+                Write-Log -Level Info -Message "Task completed: $($thisScreen._selectedTask.Title)"
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._completeButton)
@@ -622,14 +691,14 @@ class TaskListScreen : Screen {
             $thisScreen = $this
             $handler = {
                 param($eventData)
-                Write-Verbose "TaskListScreen received Tasks.Changed event. Refreshing tasks."
+                Write-Log -Level Debug -Message "TaskListScreen received Tasks.Changed event. Refreshing tasks."
                 $thisScreen._RefreshTasks()
                 $thisScreen._UpdateDisplay()
             }.GetNewClosure()
             
             # Store subscription ID for later cleanup
             $this._taskChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
-            Write-Verbose "TaskListScreen subscribed to Tasks.Changed events"
+            Write-Log -Level Debug -Message "TaskListScreen subscribed to Tasks.Changed events"
         }
         
         if ($this.ServiceContainer) {
@@ -645,7 +714,7 @@ class TaskListScreen : Screen {
         if ($eventManager -and $this._taskChangeSubscriptionId) {
             $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
             $this._taskChangeSubscriptionId = $null
-            Write-Verbose "TaskListScreen unsubscribed from Tasks.Changed events"
+            Write-Log -Level Debug -Message "TaskListScreen unsubscribed from Tasks.Changed events"
         }
         
         # Call base OnExit if needed
@@ -1030,13 +1099,47 @@ class TaskListScreen : Screen {
 #endregion
 #<!-- END_PAGE: ASC.002 -->
 
+# ==============================================================================
+# CLASS: ThemePickerScreen
+#
+# INHERITS:
+#   - Screen (ABC.006)
+#
+# DEPENDENCIES:
+#   Services:
+#     - ServiceContainer (ABC.007)
+#     - ThemeManager (ASE.005)
+#     - NavigationService (ASE.004)
+#     - EventManager (ASE.007)
+#   Components:
+#     - ScrollablePanel (ACO.012)
+#     - Panel (ACO.011)
+#     - LabelComponent (ACO.001)
+#
+# PURPOSE:
+#   Provides a UI for users to select and apply a new visual theme for the
+#   entire application.
+#
+# KEY LOGIC:
+#   - Initialize: Fetches the list of available themes from ThemeManager and
+#     stores the original theme name for cancellation.
+#   - _UpdateThemeList: Dynamically creates Panel and LabelComponent children to
+#     represent each available theme, highlighting the selected one.
+#   - HandleInput:
+#     - Up/Down Arrows: Changes _selectedIndex and triggers a redraw.
+#     - Enter: Applies the selected theme using ThemeManager.LoadTheme(),
+#       publishes a 'Theme.Changed' event, and uses NavigationService.GoBack()
+#       to close the screen.
+#     - Escape: Restores the original theme and uses NavigationService.GoBack()
+#       to cancel.
+# ==============================================================================
 class ThemePickerScreen : Screen {
     hidden [ScrollablePanel] $_themePanel
     hidden [Panel] $_mainPanel
     hidden [array] $_themes
     hidden [int] $_selectedIndex = 0
-    hidden $_themeManager  # Remove type annotation since ThemeManager is defined later
-    hidden [string] $_originalTheme  # Store original theme to restore on cancel
+    hidden $_themeManager
+    hidden [string] $_originalTheme
     
     ThemePickerScreen([object]$serviceContainer) : base("ThemePickerScreen", $serviceContainer) {}
     
@@ -1044,13 +1147,13 @@ class ThemePickerScreen : Screen {
         # Get theme manager
         $this._themeManager = $this.ServiceContainer?.GetService("ThemeManager")
         if (-not $this._themeManager) {
-            Write-Verbose "ThemePickerScreen: ThemeManager not found"
+            Write-Log -Level Warning -Message "ThemePickerScreen: ThemeManager not found"
             return
         }
         
         # Get available themes
         $this._themes = $this._themeManager.GetAvailableThemes()
-        Write-Verbose "ThemePickerScreen: Found $($this._themes.Count) themes: $($this._themes -join ', ')"
+        Write-Log -Level Debug -Message "ThemePickerScreen: Found $($this._themes.Count) themes: $($this._themes -join ', ')"
         
         # Store original theme
         $this._originalTheme = $this._themeManager.ThemeName
@@ -1190,7 +1293,7 @@ class ThemePickerScreen : Screen {
                 if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
                     $selectedTheme = $this._themes[$this._selectedIndex]
                     $this._themeManager.LoadTheme($selectedTheme)
-                    Write-Verbose "Applied theme: $selectedTheme"
+                    Write-Log -Level Info -Message "Applied theme: $selectedTheme"
                     
                     # Publish theme change event
                     $eventManager = $this.ServiceContainer?.GetService("EventManager")

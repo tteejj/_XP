@@ -1,0 +1,219 @@
+Of course. This document integrates, consolidates, and enriches all the provided ideas and details into a single, definitive architectural guide. It preserves all original details while adding architectural justification, clarifying implementation specifics, and logically structuring the new feature concepts to create a comprehensive roadmap.
+
+***
+
+### **Definitive Architectural Guide: Axiom-Phoenix Evolution**
+
+### Executive Summary
+
+A comprehensive analysis of the legacy "Project Management Console" script and subsequent feature discussions reveals a wealth of sophisticated, data-driven concepts that can significantly mature the Axiom-Phoenix framework. While the legacy code is procedural, its underlying architectural patterns for theming, configuration, and business workflows provide a clear and robust blueprint for enhancement.
+
+This document outlines a strategic plan to integrate these concepts, evolving Axiom-Phoenix from a TUI framework into a complete, feature-rich application platform. The key strategies are:
+
+1.  **Enrich Data Models:** The core `PmcProject` model will be expanded with specific fields from the legacy script to capture crucial business data, such as multiple project identifiers, scheduling dates, and associated file artifacts.
+
+2.  **Adopt an Advanced Theming Engine:** The legacy script's separation of a raw color `Palette` from the `Component Styles` that use it is a superior architectural pattern. Axiom-Phoenix will adopt this model to make themes more powerful, consistent, and easier to maintain.
+
+3.  **Encapsulate Workflows in Services:** Complex business processes, like creating a project from a request file or generating a weekly timesheet, will be extracted from monolithic functions into dedicated orchestration services (e.g., `ProjectOrchestrationService`, `TimeSheetService`). This adheres to the Single Responsibility Principle, improving modularity and testability.
+
+4.  **Abstract External Dependencies:** Logic for interacting with external systems, specifically Excel COM and file system operations, will be abstracted into dedicated services (`ExcelService`, `FileSystemService`, `ClipboardService`) to decouple business logic from implementation details.
+
+5.  **Develop Integrated TUI Sub-Applications:** Standalone features will be implemented as new, dedicated `Screen` classes that function as self-contained "sub-applications" within the TUI. This includes a fully-featured **File Explorer**, a **Text Editor/Notepad**, a **Calendar**, and a **Pomodoro Timer**, transforming the framework into a productive work environment.
+
+By implementing these recommendations, Axiom-Phoenix will become a highly maintainable, extensible, and powerful platform for building sophisticated text-based applications.
+
+***
+
+### I. Data Model Enhancements
+
+**Analysis:** The legacy project data structure contains several business-specific fields that are essential for tracking the full context of a project beyond its title and status. The current `PmcProject` model in Axiom-Phoenix is missing this domain-specific information, limiting its business value.
+
+**Architectural Mapping:** These fields represent core attributes of a project and are independent of any UI representation. Therefore, they belong directly within the `PmcProject` class definition in `AllModels.ps1`.
+
+**Actionable Intelligence:** The `PmcProject` class shall be enhanced with the following fields, with added context for their purpose:
+
+*   `[string]$ID1`: An optional, secondary identifier for a project (e.g., a client code or internal billing code).
+*   `[string]$ID2`: The primary, user-facing unique identifier (e.g., an engagement code). This, along with the name **must** be treated as the main key for user lookups and for naming project-related artifacts like folders.
+*   `[Nullable[datetime]]$BFDate`: A "Bring-Forward" date used for scheduling follow-ups. The `Nullable` type is intentional, as not all projects will require a follow-up.
+*   `[string]$ProjectFolderPath`: The absolute path to the project's root directory on the file system, ensuring unambiguous file access.
+*   `[string]$CaaFileName`: The relative filename (e.g., `CAA_ProjectX.xlsx`) of the associated Computer Assisted Audit (CAA) Excel file, stored relative to `ProjectFolderPath`.
+*   `[string]$RequestFileName`: The relative filename of the original source Request form Excel file, archived for auditing purposes.
+*   `[string]$T2020FileName`: The relative filename of the generated `t2020.txt` summary file.
+
+@@user notes - having this data would allow commands in the palette to open t2020 ____ and the project is chosen from a list of non closed projects. same with the others, open folder, open caa, open request. these should also all be options on the detailed project screen. 
+
+### II. Service Layer Architecture
+
+**Analysis:** The legacy script embeds complex business logic and external system interactions within large, monolithic functions. This approach hinders reusability, testing, and maintenance. To create a robust architecture, this logic must be extracted and encapsulated within dedicated services.
+
+**Proposed Service Enhancements & Additions:**
+
+*   **New: `ProjectOrchestrationService`**
+    *   **Concept:** The `New-ProjectFromRequest` process is not a simple data operation; it's a multi-step workflow involving user interaction, file I/O, and external program control. This service will act as a "conductor" for this entire process.
+    *   **Responsibilities:**
+        1.  Invoke the `DialogManager` to coordinate user selection of source files and destination folders via a reusable `FileExplorerScreen`.
+        2.  Invoke the `ExcelService` to perform data extraction and copying, guided by rules provided by the `ExcelMappingService`.
+        3.  Invoke the `FileSystemService` to create the project directory structure on disk.
+        4.  Construct the final `PmcProject` object with all extracted and generated data.
+        5.  Invoke the `DataManager` to persist the new project record.
+
+*   **New: `ExcelService`**
+    *   **Concept:** All direct COM interop with Microsoft Excel must be isolated into this single service. This abstracts the volatile and complex details of COM away from the stable business logic.
+    *   **Responsibilities:**
+        *   Opening, closing, and saving Excel workbooks.
+        *   Reading values from specific cells or ranges.
+        *   Writing data to specific cells or ranges.
+        *   Crucially, managing the lifecycle of COM objects (e.g., using `[System.Runtime.InteropServices.Marshal]::ReleaseComObject()`) to prevent orphaned Excel processes and memory leaks.
+
+*   **New: `ExcelMappingService`**
+    *   **Concept:** The hardcoded `$global:excelMappings` hashtable is configuration data, not application logic. This service is responsible for managing these externalized rules.
+    *   **Responsibilities:**
+        *   Load mapping configurations from a dedicated file (e.g., `excel_mappings.json`) on application startup.
+        *   Provide methods like `GetExtractionRules()` and `GetCopyingRules()` for other services (like the `ProjectOrchestrationService`) to consume, decoupling the workflow logic from the specific layout of the Excel templates.
+
+*   **New: `TimeSheetService`**
+    *   **Concept:** Generating a weekly timesheet report is a distinct business function involving data transformation. This service will own that transformation logic.
+    *   **Responsibilities:**
+        *   Depend on the `DataManager` to retrieve a raw, flat list of time tracking entries for a given period.
+        *   Contain the core "pivoting" logic to transform the flat list into a structured weekly summary, grouped by project, with columns for each day of the week (Mon, Tue, Wed, etc.).
+        *   Return a structured data object (e.g., `PSCustomObject[]`) that can be directly consumed by a UI `Table` component for on-screen display or an export function to generate a CSV.
+
+*   **New: `ClipboardService`**
+    *   **Concept:** Provides a centralized, internal clipboard for application-wide operations, primarily for file management within the `FileExplorerScreen`.
+    *   **Responsibilities:**
+        *   Maintain a list of item paths (`[string[]]`).
+        *   Maintain the current operation `Mode` ("Copy" or "Cut").
+        *   Provide `Set()`, `Get()`, and `Clear()` methods for other components to interact with the clipboard state.
+
+*   **Enhancement: `Logger` Service**
+    *   **Concept:** The legacy logger includes logic for log file rotation, a critical feature for long-running applications to prevent log files from consuming excessive disk space.
+    *   **Responsibilities:**
+        *   The existing `Logger` service in Axiom-Phoenix will be enhanced with this logic.
+        *   Before writing a new log entry, it will check the current log file's size against a configured threshold (e.g., 5MB).
+        *   If the size exceeds the threshold, it will perform a rotation: rename the current log file (e.g., `app.log` to `app.log.1`, `app.log.1` to `app.log.2`, etc.) before creating a new, empty `app.log` file.
+
+### III. UI & Theming Architecture
+
+**Analysis:** The legacy script's `PSStyle`-based theming, with its explicit separation of a raw color `Palette` from component style definitions, is architecturally superior to a monolithic theme structure. It promotes consistency, simplifies theme creation, and dramatically improves maintainability.
+
+**Architectural Insight:** Adopting this two-tiered model allows a theme to be changed globally by modifying a small number of base colors in the `Palette`. These changes automatically propagate to all UI components that reference those palette colors, eliminating the need to edit dozens of individual component styles.
+
+**Proposed Action:** Refactor the entire Axiom-Phoenix theming system according to this model.
+
+1.  **Restructure Theme Definitions:** Themes within the `ThemeManager` will be redefined as nested hashtables with two primary keys:
+    *   `Palette`: A hashtable defining the theme's raw color values (e.g., `Primary = '#f92aad'`, `Subtle = '#555753'`).
+    *   `Components`: A nested hashtable defining styles for UI elements (`Panel`, `Button`, `Table`, etc.). The values in this section **must reference** the `Palette` using a special syntax (e.g., `BorderFG = '$Palette.Primary'`, `FocusedBG = '$Palette.Accent'`).
+
+2.  **Evolve `Get-ThemeColor` to `Get-ThemeValue`:** The global theme function must be upgraded to be more powerful and flexible:
+    *   It will retrieve any type of value, not just colors (e.g., border characters, padding integers, boolean flags).
+    *   It will implement a resolver for palette references. When it retrieves a value like `'$Palette.Primary'`, it must perform a secondary lookup within the current theme's `Palette` to return the final, resolved value (e.g., `'#f92aad'`).
+
+3.  **Refactor All UI Components:** Every component in `AllComponents.ps1` must be refactored to remove all hardcoded style defaults. All styling information (colors, characters, etc.) will be retrieved exclusively via `Get-ThemeValue` (e.g., `$borderColor = Get-ThemeValue('Panel.BorderFG')`). This makes components completely theme-agnostic.
+
+4.  **Enhance `Table` Component for Multi-Selection:** To support modern file operations, the `Table` component will be upgraded:
+    *   A new `[System.Collections.Generic.HashSet[int]]$SelectedIndices` property will be added to track all selected rows, separate from the single `FocusedIndex` (the cursor position).
+    *   `HandleInput` will be modified to toggle selection for the focused item when the `Spacebar` is pressed.
+    *   `OnRender` will be updated to use distinct theme colors for the focused row (`list.item.focused.background`) versus other selected rows (`list.item.selected.background`), providing clear visual feedback.
+
+### IV. Business Logic and User Workflow Walkthroughs
+
+This section provides a narrative walkthrough of how the re-architected services and UI components will collaborate to deliver key business features.
+
+#### A. The Project Creation Workflow (`ProjectOrchestrationService`)
+
+This is the most complex business process, orchestrating user input, file system manipulation, and data transfer between multiple Excel files to onboard a new project.
+
+**Conceptual Walkthrough:**
+
+1.  **Initiation:** The user triggers the "project.newFromRequest" action. The `ProjectOrchestrationService` is invoked.
+2.  **Source File Selection:** The service uses the `DialogManager` to present a modal `FileExplorerScreen`, filtered to show only Excel files. The user navigates their file system and selects the source "Request" form. If they cancel, the workflow aborts gracefully.
+3.  **Source File Validation:** Upon selection, the service performs silent pre-flight checks: is the file accessible, not locked by another process, and not empty? Failure aborts the workflow with a user-friendly error dialog.
+4.  **Destination Folder Selection:** The service again uses the `DialogManager` to show the `FileExplorerScreen`, this time prompting the user to select a *parent* directory where the new project's folder hierarchy will be created.
+5.  **Data Extraction:** The service invokes `ExcelService.ExtractData()`, passing the source file path and the extraction rules obtained from the `ExcelMappingService`. The `ExcelService` opens the source Request file in the background (using COM), finds each label defined in the rules (e.g., "Project Name:"), and reads the value from the adjacent cell. It returns a hashtable of the extracted key-value pairs.
+6.  **User Confirmation & Enrichment:** The `ProjectOrchestrationService` uses the `DialogManager` to show a confirmation dialog, presenting the extracted data to the user in editable fields. The user can correct any data and provide additional information (like `ID1` or a `BFDate`) in this dialog. If the user cancels, the workflow aborts cleanly.
+7.  **Folder & File Creation:**
+    *   On confirmation, the service invokes the `FileSystemService` to create the new project folder, named after a sanitized version of the project's `ID2`.
+    *   It then creates the standard sub-directory structure (`__DOCS__`, `__CAS_DOCS__`, etc.) within the new folder.
+    *   It copies the master "CAA Template" file into the `__CAS_DOCS__` folder and renames it appropriately for the project.
+    *   It copies the original source Request file into the same folder for archival.
+8.  **Data Transfer:** The service invokes `ExcelService.TransferData()`, providing the source Request file, the new CAA file, and the copying rules from the `ExcelMappingService`. The `ExcelService` orchestrates the cell-to-cell transfer of data between the two workbooks based on these rules.
+9.  **Finalization & Persistence:**
+    *   The service generates a summary `t2020.txt` file and saves it to the project folder.
+    *   It constructs the final `PmcProject` object, populating it with all confirmed and generated data.
+    *   It calls `DataManager.AddProject()` to save the new project record to the central JSON store.
+10. **User Feedback:** The service signals completion to the UI, which displays a non-blocking success notification (e.g., a "toast" message).
+
+#### B. Time Tracking & Reporting Workflows
+
+This logic covers how time is recorded interactively and how it is aggregated for reporting.
+
+*   **Interactive Time Entry (`TimeEntryDialog`)**
+    1.  **Initiation:** A user action (e.g., from a project detail screen) triggers the display of a time entry dialog.
+    2.  **UI:** A `TimeEntryDialog` is presented via the `DialogManager`. This dialog is a specialized `Screen` containing input components for `Date`, `Hours`, and a `Description`.
+    3.  **Data Entry & Validation:** The user fills in the details. The dialog performs inline validation (e.g., hours must be a positive number).
+    4.  **Data Persistence:** Upon confirmation, the dialog constructs a new `TimeEntry` object from its input fields. The calling context (the screen that opened the dialog) receives this object, associates it with the correct project ID, and passes it to the `DataManager.AddTimeEntry()` method for saving.
+
+*   **Weekly Timesheet Generation (`TimeSheetService`)**
+    1.  **Initiation:** The user triggers a "Generate Weekly Report" action from a menu or dashboard.
+    2.  **Date Selection:** A dialog prompts the user for the start date of the week, defaulting to the current week's Monday.
+    3.  **Data Aggregation:** The `TimeSheetService.GenerateWeeklyReport()` method is called with the selected start date.
+        *   It retrieves all relevant time entries and projects from the `DataManager`.
+        *   It filters time entries to the specified Monday-Friday range.
+        *   It **pivots** this data, transforming the flat list into a temporary structure grouped by Project ID.
+        *   For each project, it sums the hours for each day of the week, placing them into corresponding properties (e.g., `MondayHours`, `TuesdayHours`).
+    4.  **Output & Display:** The service returns an array of `PSCustomObject`s, where each object represents a row in the final report. This structured data is passed directly to a `Table` component for on-screen display. An "Export" button on that screen would use the exact same data array to generate a CSV file and copy it to the system clipboard.
+
+#### C. Dashboard Logic (`DashboardScreen`)
+
+The dashboard provides an "at-a-glance" summary of the most important information, requiring several data queries and calculations upon loading.
+
+*   **Conceptual Walkthrough:**
+    1.  **Data Loading:** When the `DashboardScreen` becomes the active view, its `OnEnter` method is called. This method triggers a private `_RefreshData` helper function.
+    2.  **Summary Calculation:** The `_RefreshData` function executes several queries against the `DataManager`:
+        *   It gets all projects to calculate counts for "Active," "Completed," and other statuses.
+        *   It gets all time entries to calculate the grand total of hours logged across all projects.
+        *   It gets all "Pending" tasks, iterating through them to check their `DueDate`. Tasks with past due dates are added to an "Overdue" list, and tasks due within the next 7 days are added to a "Due Soon" list.
+    3.  **Display Rendering:** The `_RefreshData` method updates the `Text` property of various `Label` components on the screen with the calculated stats. Crucially, it also populates a central `Table` component with a list of active projects, which includes a special column displaying the text of the *most recent "Pending" to-do item* for each project, giving the user immediate insight into the next required action.
+
+### V. Integrated TUI Sub-Applications and Workflows
+
+To elevate Axiom-Phoenix beyond a simple data console, it will incorporate several powerful, reusable "sub-applications." The `FileExplorerScreen` is the gateway to many of these workflows.
+
+#### A. File Explorer (`FileExplorerScreen`)
+
+*   **Vision:** A rich, reusable, and modal screen for all file system navigation and manipulation, replacing the need to drop to a standard shell for common tasks.
+*   **Core Features:**
+    *   **UI:** A three-part view consisting of a header showing the current path, a main `Table` listing files and directories, and a status bar showing item counts and hotkeys.
+    *   **Navigation:** Full keyboard navigation (arrows, PageUp/Down, Home, End), including navigating into directories and using ".." to go up.
+    *   **File Operations:** Integrated hotkeys for Copy (`Ctrl+C`), Cut (`Ctrl+X`), and Paste (`Ctrl+V`) that use the central `ClipboardService`. Deleting files (`Del`) will show a `ConfirmDialog`.
+    *   **Sorting & Filtering:** Hotkeys to cycle through sorting by Name, Size, and Date Modified, and to toggle the display of hidden files.
+*   **Workflow Integration:** Any action requiring a file or folder path (like the `ProjectOrchestrationService`) will not use a simple input box, but will instead launch the `FileExplorerScreen` as a modal dialog. When the user selects a file/folder and confirms, the dialog closes and returns the selected path to the calling service.
+
+#### B. Text Editor Workflows
+
+Building on the `MultilineTextBoxComponent`, the framework will support two tiers of text editing.
+
+**1. Simple Notepad (Quick-Note Workflow)**
+
+*   **Vision:** A fast, simple in-app viewer and editor for plain text files (`.txt`, `.log`, `.md`), analogous to `notepad.exe`.
+*   **Workflow:** When the user presses `Enter` on a text file in the `FileExplorerScreen`, a new `NotepadScreen` opens *within the TUI*. The screen is dominated by a `MultilineTextBoxComponent` pre-filled with the file's content. A status bar provides hotkeys for `Ctrl+S` (Save), `Ctrl+Q` (Quit without saving), and `Ctrl+X` (Save and Quit).
+*   **Implementation:** Requires a new, simple `NotepadScreen` class that orchestrates a `MultilineTextBoxComponent` and handles the save/quit hotkeys, using a `FileSystemService` for I/O.
+*   **Difficulty:** **Low.** This is a high-value feature with a low implementation cost, leveraging existing components.
+
+**2. Advanced Code Editor (IDE-Lite Workflow)**
+
+*   **Vision:** An enhanced editing experience for structured text files like `.ps1` or `.json`, making quick edits more productive.
+*   **Workflow:** This is not a new screen, but an enhancement of the `MultilineTextBoxComponent` itself, which would be used by the `NotepadScreen`.
+*   **Key Enhancements:**
+    1.  **Line Numbers:** A non-editable "gutter" panel will be added to the left of the text area, displaying line numbers that scroll in sync with the text.
+    2.  **Syntax Highlighting:** The component's `OnRender` method will be upgraded to perform basic tokenization on the visible lines of text, applying different theme colors to PowerShell keywords (`function`, `if`), variables (`$var`), strings, and comments.
+    3.  **Status Bar Integration:** The component will report its current cursor position (`Line: X, Col: Y`) to be displayed in a shared status bar.
+*   **Difficulty:** **Medium to High.** Line numbers are of medium difficulty. Robust, context-aware syntax highlighting is high difficulty, but a "good enough" regex-based version is an achievable and valuable intermediate step.
+
+#### C. Other Feature Concepts & Potential Workflows
+
+The robust framework enables a suite of other integrated tools, all launchable from the `FileExplorerScreen` or main menu:
+
+*   **Pomodoro Timer (`PomodoroScreen` & `PomodoroService`):** A time management utility combining a background `PomodoroService` and a UI `PomodoroScreen`. The service manages the work/break countdowns in the background, publishing "tick" events via the `EventManager`. The UI screen subscribes to these events to update a visual timer. The user can navigate away and return, and the screen will reflect the current state from the persistent background service.
+
+*   **CSV Editor:** Opening a `.csv` file launches a screen where the data is loaded into a `Table` component. The user can navigate cells like a spreadsheet, and pressing `Enter` on a cell opens an `InputDialog` to edit its value.

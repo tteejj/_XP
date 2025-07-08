@@ -1,3 +1,6 @@
+
+#`path`: `C:\\Users\\jhnhe\\Documents\\GitHub\\_XP\\_mono\\AllComponents.ps1`
+
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Components
 # UI components that extend UIElement - full implementations from axiom
@@ -17,10 +20,24 @@ using namespace System.Management.Automation
 ##<!-- PAGE: ACO.001 - LabelComponent Class -->
 #region Core UI Components
 
-# ===== CLASS: LabelComponent =====
-# Module: tui-components
-# Dependencies: UIElement
-# Purpose: Static text display
+# ==============================================================================
+# CLASS: LabelComponent
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   Renders a single line of static, non-interactive text.
+#
+# KEY LOGIC:
+#   OnRender() clears its buffer and uses Write-TuiText to draw its Text
+#   property using theme-aware colors. It is not focusable.
+# ==============================================================================
 class LabelComponent : UIElement {
     [string]$Text = ""
     [object]$ForegroundColor
@@ -63,10 +80,27 @@ class LabelComponent : UIElement {
 #<!-- END_PAGE: ACO.001 -->
 
 #<!-- PAGE: ACO.002 - ButtonComponent Class -->
-# ===== CLASS: ButtonComponent =====
-# Module: tui-components
-# Dependencies: UIElement, TuiCell
-# Purpose: Interactive button with click events
+# ==============================================================================
+# CLASS: ButtonComponent
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   An interactive, focusable button that executes a scriptblock on click.
+#
+# KEY LOGIC:
+#   - OnRender(): Changes its foreground/background colors based on its
+#     IsFocused, IsPressed, and Enabled states, pulling colors from the
+#     ThemeManager.
+#   - HandleInput(): Listens for Enter or Spacebar keys to invoke the OnClick
+#     scriptblock and briefly set the IsPressed state for visual feedback.
+# ==============================================================================
 class ButtonComponent : UIElement {
     [string]$Text = "Button"
     [bool]$IsPressed = $false
@@ -150,10 +184,31 @@ class ButtonComponent : UIElement {
 #<!-- END_PAGE: ACO.002 -->
 
 #<!-- PAGE: ACO.003 - TextBoxComponent Class -->
-# ===== CLASS: TextBoxComponent =====
-# Module: tui-components
-# Dependencies: UIElement, TuiCell
-# Purpose: Text input with viewport scrolling, non-destructive cursor
+# ==============================================================================
+# CLASS: TextBoxComponent
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiBox (AFU.001)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   A single-line text input field with placeholder text, cursor control, and
+#   horizontal scrolling.
+#
+# KEY LOGIC:
+#   - OnRender(): Draws a border and displays either the Text or Placeholder
+#     property. It calculates a _scrollOffset to ensure the cursor is always
+#     visible within the text area. The cursor is rendered non-destructively
+#     by inverting the colors of the TuiCell beneath it.
+#   - HandleInput(): Manages character insertion/deletion, cursor movement
+#     (arrows, home, end), and invokes the OnChange scriptblock when the text
+#     is modified.
+# ==============================================================================
 class TextBoxComponent : UIElement {
     [string]$Text = ""
     [string]$Placeholder = ""
@@ -161,10 +216,10 @@ class TextBoxComponent : UIElement {
     [int]$CursorPosition = 0
     [scriptblock]$OnChange
     hidden [int]$_scrollOffset = 0
-    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
-    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
-    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
-    [string]$PlaceholderColor = "#808080" # Changed from ConsoleColor to hex string
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
+    [string]$PlaceholderColor = "#808080"
 
     TextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -175,26 +230,20 @@ class TextBoxComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        # Clear buffer with theme background
         $bgColor = Get-ThemeColor("input.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        # Determine colors
         $fgColor = if ($this.IsFocused) { Get-ThemeColor("input.foreground") } else { Get-ThemeColor("Subtle") }
-        $bgColor = Get-ThemeColor("input.background")
         $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
         
-        # Draw border
         Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
             -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
-            # Draw text or placeholder
             $contentY = 1
             $contentStartX = 1
             $contentWidth = $this.Width - 2
             
             if ($this.Text.Length -eq 0 -and $this.Placeholder) {
-                # Draw placeholder
                 $placeholderText = if ($this.Placeholder.Length -gt $contentWidth) {
                     $this.Placeholder.Substring(0, $contentWidth)
                 } else { $this.Placeholder }
@@ -203,7 +252,6 @@ class TextBoxComponent : UIElement {
                 Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $placeholderText -Style $textStyle
             }
             else {
-                # Calculate scroll offset
                 if ($this.CursorPosition -lt $this._scrollOffset) {
                     $this._scrollOffset = $this.CursorPosition
                 }
@@ -211,7 +259,6 @@ class TextBoxComponent : UIElement {
                     $this._scrollOffset = $this.CursorPosition - $contentWidth + 1
                 }
                 
-                # Draw visible portion of text
                 $visibleText = ""
                 if ($this.Text.Length -gt 0) {
                     $endPos = [Math]::Min($this._scrollOffset + $contentWidth, $this.Text.Length)
@@ -225,19 +272,14 @@ class TextBoxComponent : UIElement {
                     Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
                 }
                 
-                # Draw cursor if focused (non-destructive - inverts colors)
                 if ($this.IsFocused) {
                     $cursorScreenPos = $this.CursorPosition - $this._scrollOffset
                     if ($cursorScreenPos -ge 0 -and $cursorScreenPos -lt $contentWidth) {
                         $cursorX = $contentStartX + $cursorScreenPos
-                        
-                        # Get the cell that is ALREADY at the cursor's position
                         $cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
-                        
-                        # Invert its colors to represent the cursor (non-destructive)
                         $cursorFg = $cellUnderCursor.BackgroundColor
                         $cursorBg = $cellUnderCursor.ForegroundColor
-                        $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true) # Make it bold
+                        $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true)
                         $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
                     }
                 }
@@ -253,22 +295,10 @@ class TextBoxComponent : UIElement {
         $oldText = $this.Text
         
         switch ($key.Key) {
-            ([ConsoleKey]::LeftArrow) {
-                if ($this.CursorPosition -gt 0) {
-                    $this.CursorPosition--
-                }
-            }
-            ([ConsoleKey]::RightArrow) {
-                if ($this.CursorPosition -lt $this.Text.Length) {
-                    $this.CursorPosition++
-                }
-            }
-            ([ConsoleKey]::Home) {
-                $this.CursorPosition = 0
-            }
-            ([ConsoleKey]::End) {
-                $this.CursorPosition = $this.Text.Length
-            }
+            ([ConsoleKey]::LeftArrow) { if ($this.CursorPosition -gt 0) { $this.CursorPosition-- } }
+            ([ConsoleKey]::RightArrow) { if ($this.CursorPosition -lt $this.Text.Length) { $this.CursorPosition++ } }
+            ([ConsoleKey]::Home) { $this.CursorPosition = 0 }
+            ([ConsoleKey]::End) { $this.CursorPosition = $this.Text.Length }
             ([ConsoleKey]::Backspace) {
                 if ($this.CursorPosition -gt 0) {
                     $this.Text = $this.Text.Remove($this.CursorPosition - 1, 1)
@@ -287,18 +317,14 @@ class TextBoxComponent : UIElement {
                         $this.CursorPosition++
                     }
                 }
-                else {
-                    $handled = $false
-                }
+                else { $handled = $false }
             }
         }
         
         if ($handled) {
             if ($oldText -ne $this.Text -and $this.OnChange) {
-                try { 
-                    & $this.OnChange $this $this.Text 
-                } catch {
-                    # Ignore errors in onChange handler
+                try { & $this.OnChange $this $this.Text } catch {
+                    Write-Log -Level Warning -Message "Error in TextBoxComponent '$($this.Name)' OnChange handler: $($_.Exception.Message)"
                 }
             }
             $this.RequestRedraw()
@@ -311,10 +337,26 @@ class TextBoxComponent : UIElement {
 #<!-- END_PAGE: ACO.003 -->
 
 #<!-- PAGE: ACO.004 - CheckBoxComponent Class -->
-# ===== CLASS: CheckBoxComponent =====
-# Module: tui-components
-# Dependencies: UIElement, TuiCell
-# Purpose: Boolean checkbox input
+# ==============================================================================
+# CLASS: CheckBoxComponent
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   Represents a boolean state (true/false) that the user can toggle.
+#
+# KEY LOGIC:
+#   - OnRender(): Displays a box with an 'X' or a space depending on the
+#     'Checked' property, alongside its descriptive text.
+#   - HandleInput(): Listens for the Spacebar to toggle the 'Checked' state and
+#     invokes the OnChange scriptblock.
+# ==============================================================================
 class CheckBoxComponent : UIElement {
     [string]$Text = ""
     [bool]$Checked = $false
@@ -332,16 +374,8 @@ class CheckBoxComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        if ($this.IsFocused) { 
-            $fgColor = Get-ThemeColor("Primary") 
-        } else { 
-            $fgColor = Get-ThemeColor("Foreground") 
-        }
-        if ($this.Checked) { 
-            $checkMark = "[X]" 
-        } else { 
-            $checkMark = "[ ]" 
-        }
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
+        $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
         $fullText = "$checkMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -355,10 +389,8 @@ class CheckBoxComponent : UIElement {
         if ($key.Key -eq [ConsoleKey]::Spacebar) {
             $this.Checked = -not $this.Checked
             if ($this.OnChange) {
-                try { 
-                    & $this.OnChange $this $this.Checked 
-                } catch {
-                    # Ignore errors in onChange handler
+                try { & $this.OnChange $this $this.Checked } catch {
+                    Write-Log -Level Warning -Message "Error in CheckBoxComponent '$($this.Name)' OnChange handler: $($_.Exception.Message)"
                 }
             }
             $this.RequestRedraw()
@@ -372,10 +404,30 @@ class CheckBoxComponent : UIElement {
 #<!-- END_PAGE: ACO.004 -->
 
 #<!-- PAGE: ACO.005 - RadioButtonComponent Class -->
-# ===== CLASS: RadioButtonComponent =====
-# Module: tui-components
-# Dependencies: UIElement, TuiCell
-# Purpose: Exclusive selection with group management
+# ==============================================================================
+# CLASS: RadioButtonComponent
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   Provides an exclusive selection within a named group. Only one radio button
+#   in a group can be selected at a time.
+#
+# KEY LOGIC:
+#   - A static hashtable `_groups` tracks all radio button instances by their
+#     `GroupName`.
+#   - `AddedToParent` lifecycle hook registers the instance with its group.
+#   - `Select()` method is the core logic: it sets its own `Selected` state to
+#     true and iterates through all other buttons in the same group, setting
+#     their state to false.
+#   - `HandleInput` calls `Select()` when the Spacebar is pressed.
+# ==============================================================================
 class RadioButtonComponent : UIElement {
     [string]$Text = ""
     [bool]$Selected = $false
@@ -395,16 +447,8 @@ class RadioButtonComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        if ($this.IsFocused) { 
-            $fgColor = Get-ThemeColor("Primary") 
-        } else { 
-            $fgColor = Get-ThemeColor("Foreground") 
-        }
-        if ($this.Selected) { 
-            $radioMark = "(o)" 
-        } else { 
-            $radioMark = "( )" 
-        }
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
+        $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
         $fullText = "$radioMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -424,17 +468,14 @@ class RadioButtonComponent : UIElement {
     }
 
     [void] Select() {
-        # Deselect all others in group
         if ([RadioButtonComponent]::_groups.ContainsKey($this.GroupName)) {
             foreach ($radio in [RadioButtonComponent]::_groups[$this.GroupName]) {
                 if ($radio -ne $this -and $radio.Selected) {
                     $radio.Selected = $false
                     $radio.RequestRedraw()
                     if ($radio.OnChange) {
-                        try { 
-                            & $radio.OnChange $radio $false 
-                        } catch {
-                            # Ignore errors in onChange handler
+                        try { & $radio.OnChange $radio $false } catch {
+                            Write-Log -Level Warning -Message "Error in RadioButtonComponent '$($radio.Name)' OnChange handler: $($_.Exception.Message)"
                         }
                     }
                 }
@@ -444,10 +485,8 @@ class RadioButtonComponent : UIElement {
         $this.Selected = $true
         $this.RequestRedraw()
         if ($this.OnChange) {
-            try { 
-                & $this.OnChange $this $true 
-            } catch {
-                # Ignore errors in onChange handler
+            try { & $this.OnChange $this $true } catch {
+                Write-Log -Level Warning -Message "Error in RadioButtonComponent '$($this.Name)' OnChange handler: $($_.Exception.Message)"
             }
         }
     }
@@ -473,10 +512,31 @@ class RadioButtonComponent : UIElement {
 #<!-- END_PAGE: ACO.005 -->
 
 #<!-- PAGE: ACO.006 - MultilineTextBoxComponent Class -->
-# ===== CLASS: MultilineTextBoxComponent =====
-# Module: advanced-input-components
-# Dependencies: UIElement, TuiCell
-# Purpose: Full text editor with scrolling
+# ==============================================================================
+# CLASS: MultilineTextBoxComponent
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiBox (AFU.001)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   A full-featured multi-line text editor component with both vertical and
+#   horizontal scrolling, word wrapping, and standard text editing controls.
+#
+# KEY LOGIC:
+#   - State is stored in a `[List[string]]$Lines` property.
+#   - `OnRender` calculates both vertical (`ScrollOffsetY`) and horizontal
+#     (`ScrollOffsetX`) scroll offsets to keep the cursor in the viewport. It
+#     then renders the visible subset of lines.
+#   - `HandleInput` implements a comprehensive state machine for text editing,
+#     including character insertion, deletion, line breaks (Enter), merging
+#     lines (Backspace/Delete at edges), and cursor navigation.
+# ==============================================================================
 class MultilineTextBoxComponent : UIElement {
     [List[string]]$Lines
     [int]$CursorLine = 0
@@ -507,31 +567,19 @@ class MultilineTextBoxComponent : UIElement {
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
-            # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height $this.Height `
                 -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
-            # Calculate visible area
             $contentWidth = $this.Width - 2
             $contentHeight = $this.Height - 2
             
-            # Adjust scroll to keep cursor visible
-            if ($this.CursorLine -lt $this.ScrollOffsetY) {
-                $this.ScrollOffsetY = $this.CursorLine
-            }
-            elseif ($this.CursorLine -ge $this.ScrollOffsetY + $contentHeight) {
-                $this.ScrollOffsetY = $this.CursorLine - $contentHeight + 1
-            }
+            if ($this.CursorLine -lt $this.ScrollOffsetY) { $this.ScrollOffsetY = $this.CursorLine }
+            elseif ($this.CursorLine -ge $this.ScrollOffsetY + $contentHeight) { $this.ScrollOffsetY = $this.CursorLine - $contentHeight + 1 }
             
-            if ($this.CursorColumn -lt $this.ScrollOffsetX) {
-                $this.ScrollOffsetX = $this.CursorColumn
-            }
-            elseif ($this.CursorColumn -ge $this.ScrollOffsetX + $contentWidth) {
-                $this.ScrollOffsetX = $this.CursorColumn - $contentWidth + 1
-            }
+            if ($this.CursorColumn -lt $this.ScrollOffsetX) { $this.ScrollOffsetX = $this.CursorColumn }
+            elseif ($this.CursorColumn -ge $this.ScrollOffsetX + $contentWidth) { $this.ScrollOffsetX = $this.CursorColumn - $contentWidth + 1 }
             
-            # Draw visible lines
             for ($y = 0; $y -lt $contentHeight; $y++) {
                 $lineIndex = $y + $this.ScrollOffsetY
                 if ($lineIndex -lt $this.Lines.Count) {
@@ -549,7 +597,6 @@ class MultilineTextBoxComponent : UIElement {
                 }
             }
             
-            # Draw cursor if focused
             if ($this.IsFocused -and -not $this.ReadOnly) {
                 $cursorScreenY = $this.CursorLine - $this.ScrollOffsetY + 1
                 $cursorScreenX = $this.CursorColumn - $this.ScrollOffsetX + 1
@@ -558,10 +605,7 @@ class MultilineTextBoxComponent : UIElement {
                     $cursorScreenX -ge 1 -and $cursorScreenX -lt $this.Width - 1) {
                     
                     $currentLine = $this.Lines[$this.CursorLine]
-                    $cursorChar = ' '
-                    if ($this.CursorColumn -lt $currentLine.Length) {
-                        $cursorChar = $currentLine[$this.CursorColumn]
-                    }
+                    $cursorChar = if ($this.CursorColumn -lt $currentLine.Length) { $currentLine[$this.CursorColumn] } else { ' ' }
                     
                     $this._private_buffer.SetCell($cursorScreenX, $cursorScreenY,
                         [TuiCell]::new($cursorChar, $bgColor, $fgColor))
@@ -579,19 +623,14 @@ class MultilineTextBoxComponent : UIElement {
         
         switch ($key.Key) {
             ([ConsoleKey]::LeftArrow) {
-                if ($this.CursorColumn -gt 0) {
-                    $this.CursorColumn--
-                }
+                if ($this.CursorColumn -gt 0) { $this.CursorColumn-- }
                 elseif ($this.CursorLine -gt 0) {
                     $this.CursorLine--
                     $this.CursorColumn = $this.Lines[$this.CursorLine].Length
                 }
             }
             ([ConsoleKey]::RightArrow) {
-                $currentLine = $this.Lines[$this.CursorLine]
-                if ($this.CursorColumn -lt $currentLine.Length) {
-                    $this.CursorColumn++
-                }
+                if ($this.CursorColumn -lt $this.Lines[$this.CursorLine].Length) { $this.CursorColumn++ }
                 elseif ($this.CursorLine -lt $this.Lines.Count - 1) {
                     $this.CursorLine++
                     $this.CursorColumn = 0
@@ -600,97 +639,72 @@ class MultilineTextBoxComponent : UIElement {
             ([ConsoleKey]::UpArrow) {
                 if ($this.CursorLine -gt 0) {
                     $this.CursorLine--
-                    $newLineLength = $this.Lines[$this.CursorLine].Length
-                    if ($this.CursorColumn -gt $newLineLength) {
-                        $this.CursorColumn = $newLineLength
-                    }
+                    $this.CursorColumn = [Math]::Min($this.CursorColumn, $this.Lines[$this.CursorLine].Length)
                 }
             }
             ([ConsoleKey]::DownArrow) {
                 if ($this.CursorLine -lt $this.Lines.Count - 1) {
                     $this.CursorLine++
-                    $newLineLength = $this.Lines[$this.CursorLine].Length
-                    if ($this.CursorColumn -gt $newLineLength) {
-                        $this.CursorColumn = $newLineLength
-                    }
+                    $this.CursorColumn = [Math]::Min($this.CursorColumn, $this.Lines[$this.CursorLine].Length)
                 }
             }
             ([ConsoleKey]::Home) {
-                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                    $this.CursorLine = 0
-                    $this.CursorColumn = 0
-                }
-                else {
-                    $this.CursorColumn = 0
-                }
+                if ($key.Modifiers -band [ConsoleModifiers]::Control) { $this.CursorLine = 0 }
+                $this.CursorColumn = 0
             }
             ([ConsoleKey]::End) {
-                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                    $this.CursorLine = $this.Lines.Count - 1
-                    $this.CursorColumn = $this.Lines[$this.CursorLine].Length
-                }
-                else {
-                    $this.CursorColumn = $this.Lines[$this.CursorLine].Length
-                }
+                if ($key.Modifiers -band [ConsoleModifiers]::Control) { $this.CursorLine = $this.Lines.Count - 1 }
+                $this.CursorColumn = $this.Lines[$this.CursorLine].Length
             }
             ([ConsoleKey]::Enter) {
                 $currentLine = $this.Lines[$this.CursorLine]
-                $beforeCursor = $currentLine.Substring(0, $this.CursorColumn)
-                $afterCursor = $currentLine.Substring($this.CursorColumn)
-                
-                $this.Lines[$this.CursorLine] = $beforeCursor
-                $this.Lines.Insert($this.CursorLine + 1, $afterCursor)
-                
+                $this.Lines[$this.CursorLine] = $currentLine.Substring(0, $this.CursorColumn)
+                $this.Lines.Insert($this.CursorLine + 1, $currentLine.Substring($this.CursorColumn))
                 $this.CursorLine++
                 $this.CursorColumn = 0
                 $changed = $true
             }
             ([ConsoleKey]::Backspace) {
                 if ($this.CursorColumn -gt 0) {
-                    $currentLine = $this.Lines[$this.CursorLine]
-                    $this.Lines[$this.CursorLine] = $currentLine.Remove($this.CursorColumn - 1, 1)
+                    $this.Lines[$this.CursorLine] = $this.Lines[$this.CursorLine].Remove($this.CursorColumn - 1, 1)
                     $this.CursorColumn--
                     $changed = $true
                 }
                 elseif ($this.CursorLine -gt 0) {
-                    $currentLine = $this.Lines[$this.CursorLine]
-                    $previousLine = $this.Lines[$this.CursorLine - 1]
-                    $this.CursorColumn = $previousLine.Length
-                    $this.Lines[$this.CursorLine - 1] = $previousLine + $currentLine
+                    $previousLineLength = $this.Lines[$this.CursorLine - 1].Length
+                    $this.Lines[$this.CursorLine - 1] += $this.Lines[$this.CursorLine]
                     $this.Lines.RemoveAt($this.CursorLine)
                     $this.CursorLine--
+                    $this.CursorColumn = $previousLineLength
                     $changed = $true
                 }
             }
             ([ConsoleKey]::Delete) {
-                $currentLine = $this.Lines[$this.CursorLine]
-                if ($this.CursorColumn -lt $currentLine.Length) {
-                    $this.Lines[$this.CursorLine] = $currentLine.Remove($this.CursorColumn, 1)
+                if ($this.CursorColumn -lt $this.Lines[$this.CursorLine].Length) {
+                    $this.Lines[$this.CursorLine] = $this.Lines[$this.CursorLine].Remove($this.CursorColumn, 1)
                     $changed = $true
                 }
                 elseif ($this.CursorLine -lt $this.Lines.Count - 1) {
-                    $nextLine = $this.Lines[$this.CursorLine + 1]
-                    $this.Lines[$this.CursorLine] = $currentLine + $nextLine
+                    $this.Lines[$this.CursorLine] += $this.Lines[$this.CursorLine + 1]
                     $this.Lines.RemoveAt($this.CursorLine + 1)
                     $changed = $true
                 }
             }
             default {
                 if ($key.KeyChar -and [char]::IsControl($key.KeyChar) -eq $false) {
-                    $currentLine = $this.Lines[$this.CursorLine]
-                    $this.Lines[$this.CursorLine] = $currentLine.Insert($this.CursorColumn, $key.KeyChar)
+                    $this.Lines[$this.CursorLine] = $this.Lines[$this.CursorLine].Insert($this.CursorColumn, $key.KeyChar)
                     $this.CursorColumn++
                     $changed = $true
                 }
-                else {
-                    $handled = $false
-                }
+                else { $handled = $false }
             }
         }
         
         if ($handled) {
             if ($changed -and $this.OnChange) {
-                try { & $this.OnChange $this $this.GetText() } catch {}
+                try { & $this.OnChange $this $this.GetText() } catch {
+                    Write-Log -Level Warning -Message "Error in MultilineTextBoxComponent '$($this.Name)' OnChange handler: $($_.Exception.Message)"
+                }
             }
             $this.RequestRedraw()
         }
@@ -698,19 +712,12 @@ class MultilineTextBoxComponent : UIElement {
         return $handled
     }
     
-    [string] GetText() {
-        return ($this.Lines -join "`n")
-    }
+    [string] GetText() { return ($this.Lines -join "`n") }
     
     [void] SetText([string]$text) {
         $this.Lines.Clear()
-        $splitLines = $text -split "`n"
-        foreach ($line in $splitLines) {
-            $this.Lines.Add($line)
-        }
-        if ($this.Lines.Count -eq 0) {
-            $this.Lines.Add("")
-        }
+        $this.Lines.AddRange(($text -split "`n"))
+        if ($this.Lines.Count -eq 0) { $this.Lines.Add("") }
         $this.CursorLine = 0
         $this.CursorColumn = 0
         $this.ScrollOffsetY = 0
@@ -1467,10 +1474,32 @@ class ComboBoxComponent : UIElement {
 #<!-- END_PAGE: ACO.009 -->
 
 #<!-- PAGE: ACO.010 - Table Class -->
-# ===== CLASS: Table =====
-# Module: advanced-data-components
-# Dependencies: UIElement, TuiCell
-# Purpose: High-performance data grid with virtual scrolling
+# ==============================================================================
+# CLASS: Table
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiBox (AFU.001)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   A high-performance data grid for displaying tabular data with virtual
+#   scrolling (both vertical and horizontal) and row selection.
+#
+# KEY LOGIC:
+#   - Manages a list of `PSObject` items.
+#   - `OnRender` is the core. It only draws the visible rows based on the
+#     `_scrollOffset`. It calculates which rows and columns are in the
+#     viewport and renders them, providing a "virtualized" view.
+#   - `DrawHeader` and `DrawRow` handle the rendering of individual parts,
+#     accounting for horizontal scroll position.
+#   - `HandleInput` manages selection changes with arrow keys, PageUp/Down, etc.,
+#     and updates the `_scrollOffset` to keep the selection in view.
+# ==============================================================================
 class Table : UIElement {
     [List[PSObject]]$Items
     [List[string]]$Columns
@@ -1497,7 +1526,7 @@ class Table : UIElement {
         foreach ($col in $columns) {
             $this.Columns.Add($col)
             if (-not $this.ColumnWidths.ContainsKey($col)) {
-                $this.ColumnWidths[$col] = 15  # Default width
+                $this.ColumnWidths[$col] = 15
             }
         }
     }
@@ -1511,14 +1540,12 @@ class Table : UIElement {
                     $val = $item.$col
                     if ($null -ne $val) {
                         $len = $val.ToString().Length
-                        if ($len -gt $maxWidth) {
-                            $maxWidth = $len
-                        }
+                        if ($len -gt $maxWidth) { $maxWidth = $len }
                     }
                 }
             }
             
-            $this.ColumnWidths[$col] = [Math]::Min($maxWidth + 2, 30)  # Cap at 30
+            $this.ColumnWidths[$col] = [Math]::Min($maxWidth + 2, 30)
         }
     }
     
@@ -1528,11 +1555,7 @@ class Table : UIElement {
         try {
             $bgColor = Get-ThemeColor("component.background")
             $fgColor = Get-ThemeColor("Foreground")
-            if ($this.IsFocused) { 
-                $borderColor = Get-ThemeColor("Primary") 
-            } else { 
-                $borderColor = Get-ThemeColor("component.border") 
-            }
+            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
             $headerBg = Get-ThemeColor("list.header.bg")
             $selectedBg = Get-ThemeColor("list.item.selected.background")
             
@@ -1543,7 +1566,6 @@ class Table : UIElement {
             $contentWidth = $this.Width
             $contentHeight = $this.Height
             
-            # Draw border if enabled
             if ($this.ShowBorder) {
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
@@ -1558,13 +1580,11 @@ class Table : UIElement {
             $currentY = $contentY
             $dataStartY = $contentY
             
-            # Draw header if enabled
             if ($this.ShowHeader -and $this.Columns.Count -gt 0) {
                 $this.DrawHeader($contentX, $currentY, $contentWidth, $headerBg)
                 $currentY++
                 $dataStartY++
                 
-                # Draw separator line
                 for ($x = $contentX; $x -lt $contentX + $contentWidth; $x++) {
                     $this._private_buffer.SetCell($x, $currentY, [TuiCell]::new('-', $borderColor, $bgColor))
                 }
@@ -1572,21 +1592,14 @@ class Table : UIElement {
                 $dataStartY++
             }
             
-            # Calculate visible rows
             $visibleRows = $contentHeight - ($dataStartY - $contentY)
             if ($visibleRows -le 0) { return }
             
-            # Adjust scroll offset to keep selection visible
             if ($this.AllowSelection -and $this.SelectedIndex -ge 0) {
-                if ($this.SelectedIndex -lt $this._scrollOffset) {
-                    $this._scrollOffset = $this.SelectedIndex
-                }
-                elseif ($this.SelectedIndex -ge $this._scrollOffset + $visibleRows) {
-                    $this._scrollOffset = $this.SelectedIndex - $visibleRows + 1
-                }
+                if ($this.SelectedIndex -lt $this._scrollOffset) { $this._scrollOffset = $this.SelectedIndex }
+                elseif ($this.SelectedIndex -ge $this._scrollOffset + $visibleRows) { $this._scrollOffset = $this.SelectedIndex - $visibleRows + 1 }
             }
             
-            # Draw data rows
             for ($i = 0; $i -lt $visibleRows; $i++) {
                 $itemIndex = $i + $this._scrollOffset
                 if ($itemIndex -ge $this.Items.Count) { break }
@@ -1604,7 +1617,6 @@ class Table : UIElement {
                 $currentY++
             }
             
-            # Draw scrollbar if needed
             if ($this.Items.Count -gt $visibleRows) {
                 $this.DrawScrollbar($contentX + $contentWidth - 1, $dataStartY, $visibleRows)
             }
@@ -1624,12 +1636,8 @@ class Table : UIElement {
                 
                 if ($visibleWidth -gt 0) {
                     $headerText = $col
-                    if ($headerText.Length -gt $visibleWidth) {
-                        $headerText = $headerText.Substring(0, $visibleWidth - 1) + ">"
-                    }
-                    else {
-                        $headerText = $headerText.PadRight($visibleWidth)
-                    }
+                    if ($headerText.Length -gt $visibleWidth) { $headerText = $headerText.Substring(0, $visibleWidth - 1) + ">" }
+                    else { $headerText = $headerText.PadRight($visibleWidth) }
                     
                     $drawX = [Math]::Max($x, $currentX)
                     Write-TuiText -Buffer $this._private_buffer -X $drawX -Y $y -Text $headerText -Style @{ FG = Get-ThemeColor("list.header.fg"); BG = $headerBg }
@@ -1642,7 +1650,6 @@ class Table : UIElement {
     }
     
     hidden [void] DrawRow([PSObject]$item, [int]$x, [int]$y, [int]$maxWidth, [string]$fg, [string]$bg) {
-        # Clear row first
         for ($i = 0; $i -lt $maxWidth; $i++) {
             $this._private_buffer.SetCell($x + $i, $y, [TuiCell]::new(' ', $fg, $bg))
         }
@@ -1656,9 +1663,7 @@ class Table : UIElement {
                 $value = ""
                 if ($item.PSObject.Properties[$col]) {
                     $val = $item.$col
-                    if ($null -ne $val) {
-                        $value = $val.ToString()
-                    }
+                    if ($null -ne $val) { $value = $val.ToString() }
                 }
                 
                 $visibleStart = [Math]::Max(0, $x - $currentX)
@@ -1699,46 +1704,25 @@ class Table : UIElement {
         $oldSelection = $this.SelectedIndex
         
         switch ($key.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this.SelectedIndex -gt 0) {
-                    $this.SelectedIndex--
-                }
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this.SelectedIndex -lt $this.Items.Count - 1) {
-                    $this.SelectedIndex++
-                }
-            }
-            ([ConsoleKey]::Home) {
-                $this.SelectedIndex = 0
-            }
-            ([ConsoleKey]::End) {
-                $this.SelectedIndex = $this.Items.Count - 1
-            }
+            ([ConsoleKey]::UpArrow) { if ($this.SelectedIndex -gt 0) { $this.SelectedIndex-- } }
+            ([ConsoleKey]::DownArrow) { if ($this.SelectedIndex -lt $this.Items.Count - 1) { $this.SelectedIndex++ } }
+            ([ConsoleKey]::Home) { $this.SelectedIndex = 0 }
+            ([ConsoleKey]::End) { $this.SelectedIndex = $this.Items.Count - 1 }
             ([ConsoleKey]::PageUp) {
-                $pageSize = $this.Height - 4  # Account for border and header
+                $pageSize = $this.Height - 4
                 $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $pageSize)
             }
             ([ConsoleKey]::PageDown) {
                 $pageSize = $this.Height - 4
                 $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $pageSize)
             }
-            ([ConsoleKey]::LeftArrow) {
-                if ($this._horizontalScroll -gt 0) {
-                    $this._horizontalScroll = [Math]::Max(0, $this._horizontalScroll - 5)
-                }
-            }
+            ([ConsoleKey]::LeftArrow) { if ($this._horizontalScroll -gt 0) { $this._horizontalScroll = [Math]::Max(0, $this._horizontalScroll - 5) } }
             ([ConsoleKey]::RightArrow) {
-                $totalWidth = 0
-                foreach ($col in $this.Columns) {
-                    $totalWidth += $this.ColumnWidths[$col]
-                }
+                $totalWidth = ($this.ColumnWidths.Values | Measure-Object -Sum).Sum
                 $maxScroll = [Math]::Max(0, $totalWidth - $this.Width + 2)
                 $this._horizontalScroll = [Math]::Min($maxScroll, $this._horizontalScroll + 5)
             }
-            default {
-                $handled = $false
-            }
+            default { $handled = $false }
         }
         
         if ($handled) {
@@ -1759,21 +1743,40 @@ class Table : UIElement {
 #<!-- END_PAGE: ACO.010 -->
 
 #<!-- PAGE: ACO.011 - Panel Class -->
-# ===== CLASS: Panel =====
-# Module: panels-class
-# Dependencies: UIElement, TuiCell
-# Purpose: Container with layout management
+# ==============================================================================
+# CLASS: Panel
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiBox (AFU.001)
+#
+# PURPOSE:
+#   A fundamental container component that can have a border, a title, and
+#   manage the layout of its child components.
+#
+# KEY LOGIC:
+#   - `OnRender`: Draws its border and title using `Write-TuiBox` and then
+#     calls `ApplyLayout`.
+#   - `ApplyLayout`: If `LayoutType` is not "Manual", it automatically positions
+#     and sizes its children vertically, horizontally, or in a simple grid.
+#   - `UpdateContentDimensions`: A helper method that calculates the available
+#     area for children inside the borders. This is called on creation and
+#     on resize.
+# ==============================================================================
 class Panel : UIElement {
     [string]$Title = ""
     [string]$BorderStyle = "Single"
-    [string]$BorderColor = "#808080"     # FIXED: Changed from ConsoleColor to hex string
-    [string]$BackgroundColor = "#000000" # FIXED: Changed from ConsoleColor to hex string
+    [string]$BorderColor = "#808080"
+    [string]$BackgroundColor = "#000000"
     [bool]$HasBorder = $true
-    [string]$LayoutType = "Manual"  # Manual, Vertical, Horizontal, Grid
+    [string]$LayoutType = "Manual"
     [int]$Padding = 0
     [int]$Spacing = 1
     
-    # Content area properties
     [int]$ContentX = 1
     [int]$ContentY = 1
     [int]$ContentWidth = 0
@@ -1781,10 +1784,8 @@ class Panel : UIElement {
 
     Panel([string]$name) : base($name) {
         $this.IsFocusable = $false
-        # Set reasonable defaults
         if ($this.Width -eq 0) { $this.Width = 30 }
         if ($this.Height -eq 0) { $this.Height = 10 }
-        # Calculate initial content dimensions
         $this.UpdateContentDimensions()
     }
 
@@ -1793,18 +1794,11 @@ class Panel : UIElement {
         
         try {
             $bgColor = Get-ThemeColor("component.background")
-            $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
-            $this._private_buffer.Clear($bgCell)
-
-            # Update content area dimensions
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             $this.UpdateContentDimensions()
 
             if ($this.HasBorder) {
-                if ($this.IsFocused) { 
-                    $borderColorValue = Get-ThemeColor("Primary") 
-                } else { 
-                    $borderColorValue = Get-ThemeColor("component.border") 
-                }
+                $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
@@ -1812,7 +1806,6 @@ class Panel : UIElement {
                     -Title $this.Title
             }
 
-            # Apply layout to children
             $this.ApplyLayout()
         }
         catch {}
@@ -1821,16 +1814,8 @@ class Panel : UIElement {
     [void] ApplyLayout() {
         if ($this.LayoutType -eq "Manual") { return }
 
-        if ($this.HasBorder) { 
-            $layoutX = 1 + $this.Padding 
-        } else { 
-            $layoutX = $this.Padding 
-        }
-        if ($this.HasBorder) { 
-            $layoutY = 1 + $this.Padding 
-        } else { 
-            $layoutY = $this.Padding 
-        }
+        $layoutX = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        $layoutY = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
         $layoutWidth = [Math]::Max(0, $this.Width - (2 * $layoutX))
         $layoutHeight = [Math]::Max(0, $this.Height - (2 * $layoutY))
 
@@ -1857,12 +1842,11 @@ class Panel : UIElement {
                 }
             }
             "Grid" {
-                # Simple grid layout - arrange in rows
-                $cols = [Math]::Max(1, [Math]::Floor($layoutWidth / 20))  # Assume 20 char min width
+                $cols = [Math]::Max(1, [Math]::Floor($layoutWidth / 20))
                 $col = 0
                 $row = 0
                 $cellWidth = [Math]::Max(1, [Math]::Floor($layoutWidth / $cols))
-                $cellHeight = 3  # Default height
+                $cellHeight = 3
                 
                 foreach ($child in $visibleChildren) {
                     $child.X = $layoutX + ($col * $cellWidth)
@@ -1890,7 +1874,6 @@ class Panel : UIElement {
         return $area
     }
     
-    # New method to update content dimensions
     [void] UpdateContentDimensions() {
         $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
         $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
@@ -1899,7 +1882,6 @@ class Panel : UIElement {
         $this.ContentHeight = [Math]::Max(0, $this.Height - $borderOffset)
     }
     
-    # Override Resize to update content dimensions
     [void] OnResize() {
         $this.UpdateContentDimensions()
         ([UIElement]$this).OnResize()
@@ -1909,95 +1891,93 @@ class Panel : UIElement {
 #<!-- END_PAGE: ACO.011 -->
 
 #<!-- PAGE: ACO.012 - ScrollablePanel Class -->
-# ===== CLASS: ScrollablePanel =====
-# Module: panels-class
-# Dependencies: Panel, TuiCell
-# Purpose: Panel with scrolling capabilities
+# ==============================================================================
+# CLASS: ScrollablePanel
+#
+# INHERITS:
+#   - Panel (ACO.011)
+#
+# DEPENDENCIES:
+#   Classes:
+#     - TuiBuffer (ABC.003)
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#
+# PURPOSE:
+#   A panel that provides vertical scrolling for content that exceeds its
+#   visible height. This is a critical component for displaying large lists or
+#   amounts of text.
+#
+# KEY LOGIC:
+#   - It uses a `_virtual_buffer` which is potentially much taller than the
+#     component itself.
+#   - `_RenderContent` is the core. It first renders the base panel (border),
+#     then renders ALL children onto the `_virtual_buffer`. Finally, it
+#     calculates the visible "viewport" based on `ScrollOffsetY` and copies
+#     only that portion from the `_virtual_buffer` to its main `_private_buffer`
+#     for display.
+#   - `HandleInput` (from base Panel, but focusable) and Scroll* methods
+#     manipulate `ScrollOffsetY` to control the viewport.
+# ==============================================================================
 class ScrollablePanel : Panel {
     [int]$ScrollOffsetY = 0
     [int]$MaxScrollY = 0
     [bool]$ShowScrollbar = $true
-    hidden [int]$_contentHeight = 0 # This will be the virtual content height
-    hidden [TuiBuffer]$_virtual_buffer = $null # NEW: To hold the entire scrollable content
+    hidden [int]$_contentHeight = 0
+    hidden [TuiBuffer]$_virtual_buffer = $null
 
     ScrollablePanel([string]$name) : base($name) {
         $this.IsFocusable = $true
-        # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
-        # Start with max possible height or a reasonable large value, will grow as children are added
         $this.{_virtual_buffer} = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
     }
 
-    # Override OnResize to ensure virtual buffer matches actual content area needs
     [void] OnResize([int]$newWidth, [int]$newHeight) {
-        # Call base Panel resize, which updates Width, Height, and _private_buffer
         ([Panel]$this).Resize($newWidth, $newHeight) 
 
-        # Ensure the virtual buffer is wide enough for the content area
         $targetVirtualWidth = $this.ContentWidth 
         if ($this.{_virtual_buffer}.Width -ne $targetVirtualWidth) {
-            $this.{_virtual_buffer}.Resize($targetVirtualWidth, $this.{_virtual_buffer}.Height) # Only resize width for now
+            $this.{_virtual_buffer}.Resize($targetVirtualWidth, $this.{_virtual_buffer}.Height)
         }
-        $this.UpdateMaxScroll() # Recalculate max scroll on resize
+        $this.UpdateMaxScroll()
         $this.RequestRedraw()
     }
 
-    # Override _RenderContent to implement virtual scrolling logic
     hidden [void] _RenderContent() {
-        # 1. First, render the base Panel. This clears its own _private_buffer and draws borders/title.
-        # This implicitly calls ([Panel]$this).OnRender()
         ([Panel]$this)._RenderContent()
 
-        # 2. Render all children onto the _virtual_buffer
-        $this.{_virtual_buffer}.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
+        $this.{_virtual_buffer}.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor))
         
         $actualContentBottom = 0
         foreach ($child in $this.Children | Sort-Object ZIndex) {
             if ($child.Visible) {
-                # Render each child to its own private buffer
                 $child.Render() 
                 if ($null -ne $child._private_buffer) {
-                    # Blend child's buffer onto our _virtual_buffer at its original coordinates
-                    # (relative to the panel's content area)
                     $this.{_virtual_buffer}.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
                 }
-                # Track the maximum vertical extent of children to determine virtual height
                 $childExtent = ($child.Y - $this.ContentY) + $child.Height
-                if ($childExtent -gt $actualContentBottom) {
-                    $actualContentBottom = $childExtent
-                }
+                if ($childExtent -gt $actualContentBottom) { $actualContentBottom = $childExtent }
             }
         }
-        $this._contentHeight = $actualContentBottom # Update actual content height
+        $this._contentHeight = $actualContentBottom
 
-        # 3. Update MaxScrollY and clamp ScrollOffsetY
         $this.UpdateMaxScroll()
 
-        # 4. Extract the visible portion from _virtual_buffer and blend it onto _private_buffer
-        #    This accounts for the scroll offset when drawing to screen.
-        $viewportWidth = $this.ContentWidth
-        $viewportHeight = $this.ContentHeight
-        
-        # Ensure target size for sub-buffer is positive
-        $viewportWidth = [Math]::Max(1, $viewportWidth)
-        $viewportHeight = [Math]::Max(1, $viewportHeight)
+        $viewportWidth = [Math]::Max(1, $this.ContentWidth)
+        $viewportHeight = [Math]::Max(1, $this.ContentHeight)
 
-        $sourceX = 0 # No horizontal scrolling for now, but easily extendable
+        $sourceX = 0
         $sourceY = $this.ScrollOffsetY
         
-        # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
         $effectiveSourceHeight = [Math]::Min($viewportHeight, $this.{_virtual_buffer}.Height - $sourceY)
         if ($effectiveSourceHeight -le 0) {
-            # No content to display in viewport
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
+            Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
             return
         }
 
         $visiblePortion = $this.{_virtual_buffer}.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
         
-        # Blend the visible portion onto our own _private_buffer, at the content area
         $this.{_private_buffer}.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
 
-        # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
         if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
             $this.DrawScrollbar()
         }
@@ -2005,41 +1985,25 @@ class ScrollablePanel : Panel {
         $this._needs_redraw = $false
     }
 
-    # Helper method to calculate MaxScrollY and clamp ScrollOffsetY
     [void] UpdateMaxScroll() {
-        $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
+        $viewportHeight = $this.ContentHeight
         
-        # Ensure virtual buffer height is at least content height
-        $currentVirtualHeight = $this.{_virtual_buffer}.Height
-        $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
-        if ($newVirtualHeight -ne $currentVirtualHeight) {
+        $newVirtualHeight = [Math]::Max($this.{_virtual_buffer}.Height, $this._contentHeight)
+        if ($newVirtualHeight -ne $this.{_virtual_buffer}.Height) {
             $this.{_virtual_buffer}.Resize($this.{_virtual_buffer}.Width, $newVirtualHeight)
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
+            Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
         }
 
         $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
         $this.ScrollOffsetY = [Math]::Max(0, [Math]::Min($this.ScrollOffsetY, $this.MaxScrollY))
-        # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': ContentHeight=$($this._contentHeight), ViewportHeight=$($viewportHeight), MaxScrollY=$($this.MaxScrollY), ScrollOffsetY=$($this.ScrollOffsetY)."
     }
 
-    # Keep DrawScrollbar, HandleInput, ScrollUp/Down/PageUp/Down/ToTop/Bottom methods.
-    # Ensure DrawScrollbar uses the correct ScrollOffsetY, MaxScrollY, and _contentHeight for calculations.
-    # Update SetCell calls in DrawScrollbar to use hex colors.
     [void] DrawScrollbar() {
         $scrollbarX = $this.Width - 1
-        if ($this.HasBorder) { 
-            $scrollbarY = 1 
-        } else { 
-            $scrollbarY = 0 
-        }
-        if ($this.HasBorder) { 
-            $scrollbarTrackHeight = $this.Height - 2 
-        } else { 
-            $scrollbarTrackHeight = $this.Height - 0 
-        }
+        $scrollbarY = if ($this.HasBorder) { 1 } else { 0 }
+        $scrollbarTrackHeight = if ($this.HasBorder) { $this.Height - 2 } else { $this.Height }
 
         if ($this._contentHeight -le $scrollbarTrackHeight) { 
-            # If content fits, clear any previous scrollbar
             $bgColor = Get-ThemeColor "Background"
             for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
                 $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', $bgColor, $bgColor))
@@ -2050,65 +2014,40 @@ class ScrollablePanel : Panel {
         $scrollFg = Get-ThemeColor "list.scrollbar"
         $scrollBg = Get-ThemeColor "Background"
 
-        # Calculate thumb size and position
         $thumbSize = [Math]::Max(1, [int]($scrollbarTrackHeight * $scrollbarTrackHeight / $this._contentHeight))
-        $thumbPos = [int](($scrollbarTrackHeight - $thumbSize) * $this.ScrollOffsetY / $this.MaxScrollY)
+        $thumbPos = if ($this.MaxScrollY -gt 0) { [int](($scrollbarTrackHeight - $thumbSize) * $this.ScrollOffsetY / $this.MaxScrollY) } else { 0 }
         
         for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
             $y = $scrollbarY + $i
-            $char = '│' # Default track character
-            
-            if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) {
-                $char = '█' # Thumb character
-            }
+            $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { '█' } else { '│' }
             $this.{_private_buffer}.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
         }
     }
 
-    # Ensure other scrolling methods call RequestRedraw and UpdateMaxScroll
     [void] ScrollUp([int]$lines = 1) {
         $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Max(0, $this.ScrollOffsetY - $lines)
-        if ($this.ScrollOffsetY -ne $oldScroll) {
-            $this.RequestRedraw()
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled up to $($this.ScrollOffsetY)."
-        }
+        if ($this.ScrollOffsetY -ne $oldScroll) { $this.RequestRedraw() }
     }
 
     [void] ScrollDown([int]$lines = 1) {
         $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Min($this.MaxScrollY, $this.ScrollOffsetY + $lines)
-        if ($this.ScrollOffsetY -ne $oldScroll) {
-            $this.RequestRedraw()
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled down to $($this.ScrollOffsetY)."
-        }
+        if ($this.ScrollOffsetY -ne $oldScroll) { $this.RequestRedraw() }
     }
 
-    [void] ScrollPageUp() {
-        $pageSize = $this.ContentHeight
-        $this.ScrollUp($pageSize)
-    }
-
-    [void] ScrollPageDown() {
-        $pageSize = $this.ContentHeight
-        $this.ScrollDown($pageSize)
-    }
-
+    [void] ScrollPageUp() { $this.ScrollUp($this.ContentHeight) }
+    [void] ScrollPageDown() { $this.ScrollDown($this.ContentHeight) }
     [void] ScrollToTop() {
-        $oldScroll = $this.ScrollOffsetY
-        $this.ScrollOffsetY = 0
-        if ($this.ScrollOffsetY -ne $oldScroll) {
+        if ($this.ScrollOffsetY -ne 0) {
+            $this.ScrollOffsetY = 0
             $this.RequestRedraw()
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to top."
         }
     }
-
     [void] ScrollToBottom() {
-        $oldScroll = $this.ScrollOffsetY
-        $this.ScrollOffsetY = $this.MaxScrollY
-        if ($this.ScrollOffsetY -ne $oldScroll) {
+        if ($this.ScrollOffsetY -ne $this.MaxScrollY) {
+            $this.ScrollOffsetY = $this.MaxScrollY
             $this.RequestRedraw()
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to bottom."
         }
     }
 }
@@ -2126,28 +2065,23 @@ class GroupPanel : Panel {
 
     GroupPanel([string]$name) : base($name) {
         $this.BorderStyle = "Double"
-        $this.BorderColor = "#008B8B"     # FIXED: DarkCyan in hex
-        $this.BackgroundColor = "#000000" # FIXED: Black in hex
+        $this.BorderColor = "#008B8B"
+        $this.BackgroundColor = "#000000"
     }
 
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        # Show children only if expanded
-        foreach ($child in $this.Children) {
-            $child.Visible = $this.IsExpanded
-        }
+        foreach ($child in $this.Children) { $child.Visible = $this.IsExpanded }
 
-        # Adjust height if collapsed
         if (-not $this.IsExpanded -and $this.CanCollapse) {
             $this._originalHeight = $this.Height
-            $this.Height = 3  # Just title bar
+            $this.Height = 3
         }
         elseif ($this.IsExpanded -and $this._originalHeight) {
             $this.Height = $this._originalHeight
         }
 
-        # Add expand/collapse indicator to title
         if ($this.CanCollapse -and $this.Title) {
             $indicator = if ($this.IsExpanded) { "[-]" } else { "[+]" }
             $this.Title = "$indicator $($this.Title.TrimStart('[+]', '[-]').Trim())"
@@ -2182,18 +2116,38 @@ class GroupPanel : Panel {
 #<!-- END_PAGE: ACO.013 -->
 
 #<!-- PAGE: ACO.014 - ListBox Class -->
-# ===== CLASS: ListBox =====
-# Module: tui-components (wrapper)
-# Dependencies: UIElement, TuiCell
-# Purpose: Scrollable item list with selection
+# ==============================================================================
+# CLASS: ListBox
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Functions:
+#     - Get-ThemeColor (AFU.004)
+#     - Write-TuiBox (AFU.001)
+#     - Write-TuiText (AFU.001)
+#
+# PURPOSE:
+#   A simple, focusable component for displaying a scrollable list of items and
+#   managing a single selection.
+#
+# KEY LOGIC:
+#   - `OnRender` draws a border and then iterates through the visible subset of
+#     `Items` based on the `ScrollOffset`. It highlights the `SelectedIndex`
+#     with different colors.
+#   - `HandleInput` manages selection changes via arrow keys, PageUp/Down, etc.
+#   - `EnsureVisible` is a helper method called during rendering to adjust the
+#     `ScrollOffset` so that the `SelectedIndex` is always in the viewport.
+# ==============================================================================
 class ListBox : UIElement {
     [List[object]]$Items
     [int]$SelectedIndex = -1
-    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
-    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
-    [string]$SelectedForegroundColor = "#000000" # Changed from ConsoleColor to hex string
-    [string]$SelectedBackgroundColor = "#00FFFF" # Changed from ConsoleColor to hex string
-    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BackgroundColor = "#000000"
+    [string]$SelectedForegroundColor = "#000000"
+    [string]$SelectedBackgroundColor = "#00FFFF"
+    [string]$BorderColor = "#808080"
     hidden [int]$ScrollOffset = 0
 
     ListBox([string]$name) : base($name) {
@@ -2205,9 +2159,7 @@ class ListBox : UIElement {
 
     [void] AddItem([object]$item) {
         $this.Items.Add($item)
-        if ($this.SelectedIndex -eq -1 -and $this.Items.Count -eq 1) {
-            $this.SelectedIndex = 0
-        }
+        if ($this.SelectedIndex -eq -1 -and $this.Items.Count -eq 1) { $this.SelectedIndex = 0 }
         $this.RequestRedraw()
     }
 
@@ -2224,54 +2176,33 @@ class ListBox : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        # Draw border
         Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
             -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = $bgColor; BorderStyle = "Single" }
             
-            # Calculate visible area
             $contentY = 1
             $contentHeight = $this.Height - 2
             $contentX = 1
             $contentWidth = $this.Width - 2
             
-            # Ensure selected item is visible
             $this.EnsureVisible($this.SelectedIndex)
             
-            # Draw items
             for ($i = 0; $i -lt $contentHeight -and ($i + $this.ScrollOffset) -lt $this.Items.Count; $i++) {
                 $itemIndex = $i + $this.ScrollOffset
                 $item = $this.Items[$itemIndex]
-                if ($item -is [string]) { 
-                    $itemText = $item 
-                } else { 
-                    $itemText = $item.ToString() 
-                }
+                $itemText = if ($item -is [string]) { $item } else { $item.ToString() }
                 
-                if ($itemText.Length -gt $contentWidth) {
-                    $itemText = $itemText.Substring(0, $contentWidth - 3) + "..."
-                }
+                if ($itemText.Length -gt $contentWidth) { $itemText = $itemText.Substring(0, $contentWidth - 3) + "..." }
                 
                 $isSelected = ($itemIndex -eq $this.SelectedIndex)
-                if ($isSelected) { 
-                    $fgColor = Get-ThemeColor("list.item.selected") 
-                } else { 
-                    $fgColor = Get-ThemeColor("list.item.normal") 
-                }
-                if ($isSelected) { 
-                    $itemBgColor = Get-ThemeColor("list.item.selected.background") 
-                } else { 
-                    $itemBgColor = $bgColor 
-                }
+                $fgColor = if ($isSelected) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
+                $itemBgColor = if ($isSelected) { Get-ThemeColor("list.item.selected.background") } else { $bgColor }
                 
-                # Draw item background
                 $this._private_buffer.FillRect(1, $contentY + $i, $this.Width - 2, 1, ' ', @{ BG = $itemBgColor })
                 
-                # Draw item text
                 Write-TuiText -Buffer $this._private_buffer -X $contentX -Y ($contentY + $i) -Text $itemText `
                     -Style @{ FG = $fgColor; BG = $itemBgColor }
             }
             
-            # Draw scrollbar if needed
             if ($this.Items.Count -gt $contentHeight) {
                 $scrollbarX = $this.Width - 2
                 $scrollbarHeight = $contentHeight
@@ -2283,8 +2214,7 @@ class ListBox : UIElement {
                 $scrollbarColor = Get-ThemeColor "list.scrollbar"
                 for ($i = 0; $i -lt $scrollbarHeight; $i++) {
                     $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { '█' } else { '│' }
-                    $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                        [TuiCell]::new($char, $scrollbarColor, $bgColor))
+                    $this._private_buffer.SetCell($scrollbarX, $contentY + $i, [TuiCell]::new($char, $scrollbarColor, $bgColor))
                 }
             }
     }
@@ -2295,22 +2225,10 @@ class ListBox : UIElement {
         $handled = $true
         
         switch ($key.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this.SelectedIndex -gt 0) {
-                    $this.SelectedIndex--
-                }
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this.SelectedIndex -lt $this.Items.Count - 1) {
-                    $this.SelectedIndex++
-                }
-            }
-            ([ConsoleKey]::Home) {
-                $this.SelectedIndex = 0
-            }
-            ([ConsoleKey]::End) {
-                $this.SelectedIndex = $this.Items.Count - 1
-            }
+            ([ConsoleKey]::UpArrow) { if ($this.SelectedIndex -gt 0) { $this.SelectedIndex-- } }
+            ([ConsoleKey]::DownArrow) { if ($this.SelectedIndex -lt $this.Items.Count - 1) { $this.SelectedIndex++ } }
+            ([ConsoleKey]::Home) { $this.SelectedIndex = 0 }
+            ([ConsoleKey]::End) { $this.SelectedIndex = $this.Items.Count - 1 }
             ([ConsoleKey]::PageUp) {
                 $pageSize = $this.Height - 2
                 $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $pageSize)
@@ -2319,14 +2237,10 @@ class ListBox : UIElement {
                 $pageSize = $this.Height - 2
                 $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $pageSize)
             }
-            default {
-                $handled = $false
-            }
+            default { $handled = $false }
         }
         
-        if ($handled) {
-            $this.RequestRedraw()
-        }
+        if ($handled) { $this.RequestRedraw() }
         
         return $handled
     }
@@ -2336,22 +2250,37 @@ class ListBox : UIElement {
         
         $visibleHeight = $this.Height - 2
         
-        if ($index -lt $this.ScrollOffset) {
-            $this.ScrollOffset = $index
-        }
-        elseif ($index -ge $this.ScrollOffset + $visibleHeight) {
-            $this.ScrollOffset = $index - $visibleHeight + 1
-        }
+        if ($index -lt $this.ScrollOffset) { $this.ScrollOffset = $index }
+        elseif ($index -ge $this.ScrollOffset + $visibleHeight) { $this.ScrollOffset = $index - $visibleHeight + 1 }
     }
 }
 
 #<!-- END_PAGE: ACO.014 -->
 
 #<!-- PAGE: ACO.015 - TextBox Class -->
-# ===== CLASS: TextBox =====
-# Module: tui-components (wrapper)
-# Dependencies: TextBoxComponent
-# Purpose: Enhanced wrapper around TextBoxComponent
+# ==============================================================================
+# CLASS: TextBox
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Components:
+#     - TextBoxComponent (ACO.003)
+#   Services:
+#     - FocusManager (ASE.009)
+#
+# PURPOSE:
+#   An enhanced public-facing wrapper around the internal `TextBoxComponent`. It
+#   composes the component as a child, simplifying its API for direct use.
+#
+# KEY LOGIC:
+#   - It creates a `TextBoxComponent` as a child and delegates most of its
+#     functionality (like `HandleInput`) to it.
+#   - Provides simplified public methods like `GetText`, `SetText`, and `Clear`.
+#   - `Focus` method provides a convenient way to set focus using the global
+#     `FocusManager` service.
+# ==============================================================================
 class TextBox : UIElement {
     hidden [TextBoxComponent]$_textBox
 
@@ -2371,10 +2300,7 @@ class TextBox : UIElement {
     }
 
     [void] Focus() {
-        $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
-            $focusManager.SetFocus($this)
-        }
+        $global:TuiState.Services.FocusManager?.SetFocus($this)
     }
 
     [void] OnResize() {
@@ -2394,10 +2320,32 @@ class TextBox : UIElement {
 #<!-- END_PAGE: ACO.015 -->
 
 #<!-- PAGE: ACO.016 - CommandPalette Class -->
-# ===== CLASS: CommandPalette =====
-# Module: command-palette
-# Dependencies: UIElement, Panel, ListBox, TextBox
-# Purpose: Searchable command interface
+# ==============================================================================
+# CLASS: CommandPalette
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Components:
+#     - ListBox (ACO.014)
+#     - TextBox (ACO.015)
+#     - Panel (ACO.011)
+#   Services:
+#     - ActionService (ASE.001)
+#
+# PURPOSE:
+#   A powerful, overlay-based command interface (like in VS Code) that allows
+#   users to search for and execute any action registered with the ActionService.
+#
+# KEY LOGIC:
+#   - Composes a Panel, TextBox, and ListBox to build its UI.
+#   - `RefreshActions` gets all actions from the `ActionService`.
+#   - `FilterActions` is called by the TextBox's OnChange event. It filters the
+#     full action list based on the search text and populates the ListBox.
+#   - `HandleInput` routes most key presses to the TextBox, but intercepts
+#     up/down arrows for the ListBox and Enter to execute the selected action.
+# ==============================================================================
 class CommandPalette : UIElement {
     hidden [ListBox]$_listBox
     hidden [TextBox]$_searchBox
@@ -2422,18 +2370,16 @@ class CommandPalette : UIElement {
     }
 
     hidden [void] Initialize() {
-        # Create main panel
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = "#00FFFF"    # FIXED: Cyan in hex
-        $this._panel.BackgroundColor = "#000000" # FIXED: Black in hex
+        $this._panel.BorderColor = "#00FFFF"
+        $this._panel.BackgroundColor = "#000000"
         $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
 
-        # Create search box
         $this._searchBox = [TextBox]::new("CommandPalette_Search")
         $this._searchBox.X = 2
         $this._searchBox.Y = 1
@@ -2441,7 +2387,6 @@ class CommandPalette : UIElement {
         $this._searchBox.Height = 3
         $this._searchBox._textBox.Placeholder = "Type to search commands..."
         
-        # Fix the OnChange handler to properly capture $this
         $commandPalette = $this
         $this._searchBox._textBox.OnChange = {
             param($sender, $text)
@@ -2450,7 +2395,6 @@ class CommandPalette : UIElement {
         
         $this._panel.AddChild($this._searchBox)
 
-        # Create list box
         $this._listBox = [ListBox]::new("CommandPalette_List")
         $this._listBox.X = 2
         $this._listBox.Y = 4
@@ -2458,7 +2402,6 @@ class CommandPalette : UIElement {
         $this._listBox.Height = $this.Height - 6
         $this._panel.AddChild($this._listBox)
 
-        # Initialize action lists
         $this._allActions = [List[object]]::new()
         $this._filteredActions = [List[object]]::new()
     }
@@ -2474,9 +2417,7 @@ class CommandPalette : UIElement {
 
     [void] Hide() {
         $this.Visible = $false
-        if ($this.OnCancel) {
-            & $this.OnCancel
-        }
+        if ($this.OnCancel) { & $this.OnCancel }
         $this.RequestRedraw()
     }
 
@@ -2486,24 +2427,14 @@ class CommandPalette : UIElement {
         if ($this._actionService) {
             $actions = $this._actionService.GetAllActions()
             if ($actions -and $actions.Values) {
-                foreach ($action in $actions.Values) {
-                    if ($action) {
-                        $this._allActions.Add($action)
-                    }
+                foreach ($action in ($actions.Values | Sort-Object Category, Name)) {
+                    if ($action) { $this._allActions.Add($action) }
                 }
             }
-        }
-        
-        # Sort by category and name
-        $sorted = $this._allActions | Sort-Object Category, Name
-        $this._allActions.Clear()
-        foreach ($item in $sorted) {
-            $this._allActions.Add($item)
         }
     }
 
     [void] FilterActions([string]$searchText) {
-        # Implement debouncing
         $now = [DateTime]::Now
         if (($now - $this._lastSearchTime).TotalMilliseconds -lt 100) {
             $this._pendingSearchText = $searchText
@@ -2514,44 +2445,23 @@ class CommandPalette : UIElement {
         $this._filteredActions.Clear()
         $this._listBox.ClearItems()
         
-        if ([string]::IsNullOrWhiteSpace($searchText)) {
-            # Show all actions
-            foreach ($action in $this._allActions) {
-                $this._filteredActions.Add($action)
-                if ($action.Category) { 
-                    $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
-                } else { 
-                    $displayText = "$($action.Name) - $($action.Description)" 
-                }
-                $this._listBox.AddItem($displayText)
-            }
-        }
-        else {
-            # Use simple contains for better performance
+        $actionsToDisplay = if ([string]::IsNullOrWhiteSpace($searchText)) { $this._allActions } else {
             $searchLower = $searchText.ToLower()
-            foreach ($action in $this._allActions) {
-                # Quick check for name match first (most likely)
-                if ($action.Name.ToLower().Contains($searchLower) -or
-                    ($action.Description -and $action.Description.ToLower().Contains($searchLower)) -or
-                    ($action.Category -and $action.Category.ToLower().Contains($searchLower))) {
-                    
-                    $this._filteredActions.Add($action)
-                    if ($action.Category) { 
-                        $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
-                    } else { 
-                        $displayText = "$($action.Name) - $($action.Description)" 
-                    }
-                    $this._listBox.AddItem($displayText)
-                }
-            }
+            @($this._allActions | Where-Object {
+                $_.Name.ToLower().Contains($searchLower) -or
+                ($_.Description -and $_.Description.ToLower().Contains($searchLower)) -or
+                ($_.Category -and $_.Category.ToLower().Contains($searchLower))
+            })
+        }
+
+        foreach ($action in $actionsToDisplay) {
+            $this._filteredActions.Add($action)
+            $displayText = if ($action.Category) { "[$($action.Category)] $($action.Name) - $($action.Description)" } else { "$($action.Name) - $($action.Description)" }
+            $this._listBox.AddItem($displayText)
         }
         
-        # Reset selection
-        if ($this._filteredActions.Count -gt 0) {
-            $this._listBox.SelectedIndex = 0
-        }
+        if ($this._filteredActions.Count -gt 0) { $this._listBox.SelectedIndex = 0 }
         
-        # Ensure list is refreshed
         $this._listBox.RequestRedraw()
         $this.RequestRedraw()
     }
@@ -2559,91 +2469,38 @@ class CommandPalette : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        # Handle global escape
-        if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.Hide()
-            return $true
-        }
+        if ($key.Key -eq [ConsoleKey]::Escape) { $this.Hide(); return $true }
         
-        # Handle Enter for action selection
         if ($key.Key -eq [ConsoleKey]::Enter) {
-            # Always execute if we have a selection, regardless of which component has focus
             if ($this._listBox.SelectedIndex -ge 0 -and $this._filteredActions.Count -gt 0) {
                 $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
                 if ($selectedAction) {
                     $this.Hide()
-                    if ($this.OnSelect) {
-                        & $this.OnSelect $selectedAction
-                    }
-                    else {
-                        # Execute action directly - FIX: Pass empty hashtable as second parameter
-                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                    }
+                    if ($this.OnSelect) { & $this.OnSelect $selectedAction }
+                    else { $this._actionService.ExecuteAction($selectedAction.Name, @{}) }
                     return $true
                 }
             }
         }
         
-        # Navigation keys always go to list box
         switch ($key.Key) {
-            ([ConsoleKey]::UpArrow) { 
-                $result = $this._listBox.HandleInput($key)
-                $this.RequestRedraw()
-                return $result
-            }
-            ([ConsoleKey]::DownArrow) { 
-                $result = $this._listBox.HandleInput($key)
-                $this.RequestRedraw()
-                return $result
-            }
-            ([ConsoleKey]::PageUp) { 
-                $result = $this._listBox.HandleInput($key)
-                $this.RequestRedraw()
-                return $result
-            }
-            ([ConsoleKey]::PageDown) { 
-                $result = $this._listBox.HandleInput($key)
-                $this.RequestRedraw()
-                return $result
-            }
-            ([ConsoleKey]::Home) { 
-                $result = $this._listBox.HandleInput($key)
-                $this.RequestRedraw()
-                return $result
-            }
-            ([ConsoleKey]::End) { 
-                $result = $this._listBox.HandleInput($key)
-                $this.RequestRedraw()
-                return $result
-            }
-            
-            # Tab to switch focus between search and list
+            ([ConsoleKey]::UpArrow) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::DownArrow) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::PageUp) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::PageDown) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::Home) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::End) { return $this._listBox.HandleInput($key) }
             ([ConsoleKey]::Tab) {
                 $focusManager = $global:TuiState.Services.FocusManager
                 if ($focusManager) {
-                    $currentFocus = $focusManager.FocusedComponent
-                    if ($currentFocus -eq $this._searchBox._textBox) {
-                        $focusManager.SetFocus($this._listBox)
-                    } else {
-                        $focusManager.SetFocus($this._searchBox._textBox)
-                    }
+                    if ($focusManager.FocusedComponent -eq $this._searchBox._textBox) { $focusManager.SetFocus($this._listBox) }
+                    else { $focusManager.SetFocus($this._searchBox._textBox) }
                 }
                 return $true
             }
-            
-            # All other keys go to search
-            default {
-                $result = $this._searchBox.HandleInput($key)
-                # Force redraw after text changes
-                if ($result) {
-                    $this.RequestRedraw()
-                }
-                return $result
-            }
+            default { return $this._searchBox.HandleInput($key) }
         }
         
-        # This line should never be reached due to the default case above,
-        # but PowerShell requires it for all code paths
         return $false
     }
 
@@ -2654,10 +2511,7 @@ class CommandPalette : UIElement {
             $this._panel.X = 0
             $this._panel.Y = 0
             
-            if ($this._searchBox) {
-                $this._searchBox.Width = $this.Width - 4
-            }
-            
+            if ($this._searchBox) { $this._searchBox.Width = $this.Width - 4 }
             if ($this._listBox) {
                 $this._listBox.Width = $this.Width - 4
                 $this._listBox.Height = $this.Height - 6
@@ -2666,12 +2520,8 @@ class CommandPalette : UIElement {
     }
     
     [void] OnRender() {
-        # Ensure we render as overlay with proper dimensions
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
-        
-        # Render children (panel will render border and children)
         ([UIElement]$this).OnRender()
-        
         $this._needs_redraw = $false
     }
 }
@@ -2683,10 +2533,34 @@ class CommandPalette : UIElement {
 #<!-- END_PAGE: ACO.016 -->
 
 #<!-- PAGE: ACO.017 - Dialog Class -->
-# ===== CLASS: Dialog =====
-# Module: dialog-system-class
-# Dependencies: UIElement, Panel
-# Purpose: Base class for modal dialogs
+# ==============================================================================
+# CLASS: Dialog
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Components:
+#     - Panel (ACO.011)
+#   Services:
+#     - EventManager (ASE.007)
+#     - FocusManager (ASE.009)
+#
+# PURPOSE:
+#   The abstract base class for all modal dialogs. It provides the core
+#   functionality for showing, completing, and managing focus within a modal
+#   context.
+#
+# KEY LOGIC:
+#   - Is an `IsOverlay` component, meaning it's rendered on top of everything.
+#   - `Show` makes the dialog visible and positions it.
+#   - `Complete` is the primary method for closing the dialog. It sets a result,
+#     invokes an `OnClose` callback, and crucially, publishes a
+#     `Dialog.Completed` event, which the `DialogManager` service listens for
+#     to handle the actual hiding and focus restoration.
+#   - `SetInitialFocus` is called by the DialogManager to transfer focus to the
+#     first focusable element inside the dialog.
+# ==============================================================================
 class Dialog : UIElement {
     [string]$Title = ""
     [string]$Message = ""
@@ -2710,8 +2584,8 @@ class Dialog : UIElement {
         $this._panel = [Panel]::new($this.Name + "_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = "#00FFFF"    # FIXED: Use hex string for border
-        $this._panel.BackgroundColor = "#000000" # FIXED: Use hex string for background
+        $this._panel.BorderColor = "#00FFFF"
+        $this._panel.BackgroundColor = "#000000"
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
@@ -2727,53 +2601,36 @@ class Dialog : UIElement {
         $this.RequestRedraw()
     }
 
-    # Renamed from Close to Complete to match guide
     [void] Complete([object]$result) {
         $this.Result = $result
         $this._isComplete = $true
         
-        # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
-            try { 
-                & $this.OnClose $result 
-            } catch { 
-                # Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
+            try { & $this.OnClose $result } catch { 
+                Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
             }
         }
         
-        # Publish a general dialog close event for DialogManager to pick up
-        if ($global:TuiState.Services.EventManager) {
-            $global:TuiState.Services.EventManager.Publish("Dialog.Completed", @{ Dialog = $this; Result = $result })
-        }
-        # The DialogManager will then call HideDialog for actual UI removal and focus restoration.
+        $global:TuiState.Services.EventManager?.Publish("Dialog.Completed", @{ Dialog = $this; Result = $result })
     }
 
-    # Legacy method for compatibility
-    [void] Close([object]$result) {
-        $this.Complete($result)
-    }
+    [void] Close([object]$result) { $this.Complete($result) }
 
-    # New method for DialogManager to call to set initial focus within the dialog
     [void] SetInitialFocus() {
         $firstFocusable = $this.Children | Where-Object { $_.IsFocusable -and $_.Visible -and $_.Enabled } | Sort-Object TabIndex, Y, X | Select-Object -First 1
-        if ($firstFocusable -and $global:TuiState.Services.FocusManager) {
-            $global:TuiState.Services.FocusManager.SetFocus($firstFocusable)
-            # Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
+        if ($firstFocusable) {
+            $global:TuiState.Services.FocusManager?.SetFocus($firstFocusable)
+            Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
         }
     }
 
-    # Update Title on render
     [void] OnRender() {
-        # Base Panel's OnRender already draws border and title using ThemeManager colors
-        $this._panel.Title = " $this.Title " # Ensure title is updated on panel
-        $this._panel.OnRender() # Render the internal panel
+        $this._panel.Title = " $this.Title "
+        $this._panel.OnRender()
     }
 
     [object] ShowDialog([string]$title, [string]$message) {
         $this.Show($title, $message)
-        
-        # In a real implementation, this would block until dialog closes
-        # For now, return immediately
         return $this.Result
     }
 }
@@ -2781,10 +2638,28 @@ class Dialog : UIElement {
 #<!-- END_PAGE: ACO.017 -->
 
 #<!-- PAGE: ACO.018 - AlertDialog Class -->
-# ===== CLASS: AlertDialog =====
-# Module: dialog-system-class
-# Dependencies: Dialog, ButtonComponent
-# Purpose: Simple message dialog
+# ==============================================================================
+# CLASS: AlertDialog
+#
+# INHERITS:
+#   - Dialog (ACO.017)
+#
+# DEPENDENCIES:
+#   Components:
+#     - ButtonComponent (ACO.002)
+#
+# PURPOSE:
+#   A simple modal dialog for displaying a message to the user with a single
+#   "OK" button to dismiss it.
+#
+# KEY LOGIC:
+#   - Composes a `ButtonComponent` for the "OK" button.
+#   - The button's `OnClick` event calls `this.Complete($true)`.
+#   - `HandleInput` listens for Enter or Escape as shortcuts to also complete
+#     the dialog.
+#   - `OnEnter` sets focus to the OK button when the dialog is shown.
+#   - `OnRender` performs simple word-wrapping to display the message.
+# ==============================================================================
 class AlertDialog : Dialog {
     hidden [ButtonComponent]$_okButton
 
@@ -2794,7 +2669,6 @@ class AlertDialog : Dialog {
     }
 
     hidden [void] InitializeAlert() {
-        # OK button
         $this._okButton = [ButtonComponent]::new($this.Name + "_OK")
         $this._okButton.Text = "OK"
         $this._okButton.Width = 10
@@ -2807,8 +2681,6 @@ class AlertDialog : Dialog {
 
     [void] Show([string]$title, [string]$message) {
         ([Dialog]$this).Show($title, $message)
-        
-        # Position OK button
         $this._okButton.X = [Math]::Floor(($this.Width - $this._okButton.Width) / 2)
         $this._okButton.Y = $this.Height - 4
     }
@@ -2817,15 +2689,12 @@ class AlertDialog : Dialog {
         ([Dialog]$this).OnRender()
         
         if ($this.Visible -and $this.Message) {
-            # Draw message within the dialog's panel content area
             $panelContentX = $this._panel.ContentX
             $panelContentY = $this._panel.ContentY
-            $maxWidth = $this.Width - 4 # Panel width - 2*border - 2*padding
-
-            # Simple word wrap (use Write-TuiText)
+            $maxWidth = $this.Width - 4
             $words = $this.Message -split ' '
             $currentLine = ""
-            $currentY = $panelContentY + 1 # Start drawing message below title
+            $currentY = $panelContentY + 1
 
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
@@ -2835,9 +2704,7 @@ class AlertDialog : Dialog {
                     }
                     $currentLine = $word
                 }
-                else {
-                    $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
-                }
+                else { $currentLine = if ($currentLine) { "$currentLine $word" } else { $word } }
             }
             if ($currentLine) {
                 Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
@@ -2848,18 +2715,16 @@ class AlertDialog : Dialog {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
 
-        # Let OK button handle input first
         if ($this._okButton.HandleInput($key)) { return $true }
         
         if ($key.Key -eq [ConsoleKey]::Escape -or $key.Key -eq [ConsoleKey]::Enter) {
-            $this.Complete($true) # Complete dialog
+            $this.Complete($true)
             return $true
         }
         return $false
     }
 
     [void] OnEnter() {
-        # Set focus to the OK button when dialog appears
         $global:TuiState.Services.FocusManager?.SetFocus($this._okButton)
     }
 }
@@ -2867,14 +2732,31 @@ class AlertDialog : Dialog {
 #<!-- END_PAGE: ACO.018 -->
 
 #<!-- PAGE: ACO.019 - ConfirmDialog Class -->
-# ===== CLASS: ConfirmDialog =====
-# Module: dialog-system-class
-# Dependencies: Dialog, ButtonComponent
-# Purpose: Yes/No confirmation dialog
+# ==============================================================================
+# CLASS: ConfirmDialog
+#
+# INHERITS:
+#   - Dialog (ACO.017)
+#
+# DEPENDENCIES:
+#   Components:
+#     - ButtonComponent (ACO.002)
+#
+# PURPOSE:
+#   Presents a question to the user with "Yes" and "No" buttons, returning a
+#   boolean result.
+#
+# KEY LOGIC:
+#   - Composes two `ButtonComponent` children, "Yes" and "No".
+#   - `OnClick` handlers for the buttons call `this.Complete($true)` or
+#     `this.Complete($false)`.
+#   - `OnEnter` uses `FocusManager` to set initial focus on the "Yes" button.
+#   - `HandleInput` allows Left/Right arrow keys to toggle focus between the
+#     two buttons, providing an intuitive navigation shortcut.
+# ==============================================================================
 class ConfirmDialog : Dialog {
     hidden [ButtonComponent]$_yesButton
     hidden [ButtonComponent]$_noButton
-    # Removed manual focus tracking - will use FocusManager instead
 
     ConfirmDialog([string]$name) : base($name) {
         $this.Height = 8
@@ -2882,47 +2764,37 @@ class ConfirmDialog : Dialog {
     }
 
     hidden [void] InitializeConfirm() {
-        # Yes button
         $this._yesButton = [ButtonComponent]::new($this.Name + "_Yes")
         $this._yesButton.Text = "Yes"
         $this._yesButton.Width = 10
         $this._yesButton.Height = 3
-        $this._yesButton.TabIndex = 1 # Explicitly set tab order
-        $this._yesButton.OnClick = {
-            $this.Complete($true)
-        }.GetNewClosure()
+        $this._yesButton.TabIndex = 1
+        $this._yesButton.OnClick = { $this.Complete($true) }.GetNewClosure()
         $this._panel.AddChild($this._yesButton)
 
-        # No button
         $this._noButton = [ButtonComponent]::new($this.Name + "_No")
         $this._noButton.Text = "No"
         $this._noButton.Width = 10
         $this._noButton.Height = 3
-        $this._noButton.TabIndex = 2 # Explicitly set tab order
-        $this._noButton.OnClick = {
-            $this.Complete($false)
-        }.GetNewClosure()
+        $this._noButton.TabIndex = 2
+        $this._noButton.OnClick = { $this.Complete($false) }.GetNewClosure()
         $this._panel.AddChild($this._noButton)
     }
 
     [void] Show([string]$title, [string]$message) {
         ([Dialog]$this).Show($title, $message)
         
-        # Position buttons
         $buttonY = $this.Height - 4
         $totalWidth = $this._yesButton.Width + $this._noButton.Width + 4
         $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
         
         $this._yesButton.X = $startX
         $this._yesButton.Y = $buttonY
-        
         $this._noButton.X = $startX + $this._yesButton.Width + 4
         $this._noButton.Y = $buttonY
-        
     }
 
     [void] OnEnter() {
-        # When the dialog is shown, tell the FocusManager to focus the first element (Yes button)
         $global:TuiState.Services.FocusManager?.SetFocus($this._yesButton)
     }
 
@@ -2930,11 +2802,9 @@ class ConfirmDialog : Dialog {
         ([Dialog]$this).OnRender()
         
         if ($this.Visible -and $this.Message) {
-            # Draw message (same as AlertDialog)
             $panelContentX = $this._panel.ContentX
             $panelContentY = $this._panel.ContentY
             $maxWidth = $this.Width - 4
-            
             $words = $this.Message -split ' '
             $currentLine = ""
             $currentY = $panelContentY + 1
@@ -2947,11 +2817,8 @@ class ConfirmDialog : Dialog {
                     }
                     $currentLine = $word
                 }
-                else {
-                    $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
-                }
+                else { $currentLine = if ($currentLine) { "$currentLine $word" } else { $word } }
             }
-            
             if ($currentLine) {
                 Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
             }
@@ -2960,30 +2827,17 @@ class ConfirmDialog : Dialog {
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
+        if ($key.Key -eq [ConsoleKey]::Escape) { $this.Complete($false); return $true }
 
-        # Handle Escape to cancel
-        if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.Complete($false) # Using new Complete method
-            return $true
-        }
-
-        # The global input handler will route Tab/Shift+Tab to the FocusManager.
-        # Left/Right arrow keys can be used to switch between Yes/No buttons
         if ($key.Key -eq [ConsoleKey]::LeftArrow -or $key.Key -eq [ConsoleKey]::RightArrow) {
             $focusManager = $global:TuiState.Services.FocusManager
             if ($focusManager) {
-                # Toggle focus between the two buttons
-                if ($focusManager.FocusedComponent -eq $this._yesButton) {
-                    $focusManager.SetFocus($this._noButton)
-                } else {
-                    $focusManager.SetFocus($this._yesButton)
-                }
+                if ($focusManager.FocusedComponent -eq $this._yesButton) { $focusManager.SetFocus($this._noButton) }
+                else { $focusManager.SetFocus($this._yesButton) }
                 return $true
             }
         }
         
-        # Let the focused child handle the input
-        # The FocusManager will have already routed input to the focused button
         return $false
     }
 }
@@ -3000,7 +2854,7 @@ class InputDialog : Dialog {
     hidden [ButtonComponent]$_okButton
     hidden [ButtonComponent]$_cancelButton
     hidden [bool]$_focusOnInput = $true
-    hidden [int]$_focusIndex = 0  # 0=input, 1=ok, 2=cancel
+    hidden [int]$_focusIndex = 0
 
     InputDialog([string]$name) : base($name) {
         $this.Height = 10
@@ -3008,7 +2862,6 @@ class InputDialog : Dialog {
     }
 
     hidden [void] InitializeInput() {
-        # Input box
         $this._inputBox = [TextBoxComponent]::new($this.Name + "_Input")
         $this._inputBox.Width = $this.Width - 4
         $this._inputBox.Height = 3
@@ -3016,24 +2869,18 @@ class InputDialog : Dialog {
         $this._inputBox.Y = 4
         $this._panel.AddChild($this._inputBox)
 
-        # OK button
         $this._okButton = [ButtonComponent]::new($this.Name + "_OK")
         $this._okButton.Text = "OK"
         $this._okButton.Width = 10
         $this._okButton.Height = 3
-        $this._okButton.OnClick = {
-            $this.Close($this._inputBox.Text)
-        }.GetNewClosure()
+        $this._okButton.OnClick = { $this.Close($this._inputBox.Text) }.GetNewClosure()
         $this._panel.AddChild($this._okButton)
 
-        # Cancel button
         $this._cancelButton = [ButtonComponent]::new($this.Name + "_Cancel")
         $this._cancelButton.Text = "Cancel"
         $this._cancelButton.Width = 10
         $this._cancelButton.Height = 3
-        $this._cancelButton.OnClick = {
-            $this.Close($null)
-        }.GetNewClosure()
+        $this._cancelButton.OnClick = { $this.Close($null) }.GetNewClosure()
         $this._panel.AddChild($this._cancelButton)
     }
 
@@ -3043,18 +2890,15 @@ class InputDialog : Dialog {
         $this._inputBox.Text = $defaultValue
         $this._inputBox.CursorPosition = $defaultValue.Length
         
-        # Position buttons
         $buttonY = $this.Height - 4
         $totalWidth = $this._okButton.Width + $this._cancelButton.Width + 4
         $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
         
         $this._okButton.X = $startX
         $this._okButton.Y = $buttonY
-        
         $this._cancelButton.X = $startX + $this._okButton.Width + 4
         $this._cancelButton.Y = $buttonY
         
-        # Set initial focus
         $this._focusIndex = 0
         $this.UpdateFocus()
     }
@@ -3069,18 +2913,13 @@ class InputDialog : Dialog {
         ([Dialog]$this).OnRender()
         
         if ($this.Visible -and $this.Message) {
-            # Draw message
             $this._panel._private_buffer.WriteString(2, 2, 
                 $this.Message, [ConsoleColor]::White, [ConsoleColor]::Black)
         }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.Close($null)
-            return $true
-        }
-        
+        if ($key.Key -eq [ConsoleKey]::Escape) { $this.Close($null); return $true }
         if ($key.Key -eq [ConsoleKey]::Tab) {
             $this._focusIndex = ($this._focusIndex + 1) % 3
             $this.UpdateFocus()
@@ -3098,7 +2937,30 @@ class InputDialog : Dialog {
     }
 }
 
-# Task Create/Edit Dialog
+# ==============================================================================
+# CLASS: TaskDialog
+#
+# INHERITS:
+#   - Dialog (ACO.017)
+#
+# DEPENDENCIES:
+#   Models:
+#     - PmcTask (AMO.003)
+#   Components:
+#     - Various input components like TextBoxComponent, ComboBoxComponent, etc.
+#
+# PURPOSE:
+#   A complex dialog form for creating or editing a `PmcTask` object.
+#
+# KEY LOGIC:
+#   - It composes multiple input components (TextBox, ComboBox, etc.) to
+#     represent the fields of a `PmcTask`.
+#   - `Initialize` populates the input fields with the data from the `PmcTask`
+#     object passed to its constructor.
+#   - `GetTask` is called after the dialog is completed with an "OK" result.
+#     It reads the values from the input components and updates the internal
+#     `_task` object before returning it.
+# ==============================================================================
 class TaskDialog : Dialog {
     hidden [TextBoxComponent] $_titleBox
     hidden [MultilineTextBoxComponent] $_descriptionBox
@@ -3126,128 +2988,41 @@ class TaskDialog : Dialog {
         $inputWidth = $this.ContentWidth - $inputX - 2
         
         # Title
-        $titleLabel = [LabelComponent]::new("TitleLabel")
-        $titleLabel.Text = "Title:"
-        $titleLabel.X = 2
-        $titleLabel.Y = $contentY
-        $this._panel.AddChild($titleLabel)
-        
-        $this._titleBox = [TextBoxComponent]::new("TitleBox")
-        $this._titleBox.X = $inputX
-        $this._titleBox.Y = $contentY
-        $this._titleBox.Width = $inputWidth
-        $this._titleBox.Height = 1
-        $this._titleBox.Text = $this._task.Title
-        $this._panel.AddChild($this._titleBox)
+        $titleLabel = [LabelComponent]::new("TitleLabel"); $titleLabel.Text = "Title:"; $titleLabel.X = 2; $titleLabel.Y = $contentY; $this._panel.AddChild($titleLabel)
+        $this._titleBox = [TextBoxComponent]::new("TitleBox"); $this._titleBox.X = $inputX; $this._titleBox.Y = $contentY; $this._titleBox.Width = $inputWidth; $this._titleBox.Height = 1; $this._titleBox.Text = $this._task.Title; $this._panel.AddChild($this._titleBox)
         $contentY += 2
         
         # Description
-        $descLabel = [LabelComponent]::new("DescLabel")
-        $descLabel.Text = "Description:"
-        $descLabel.X = 2
-        $descLabel.Y = $contentY
-        $this._panel.AddChild($descLabel)
-        
-        $this._descriptionBox = [MultilineTextBoxComponent]::new("DescBox")
-        $this._descriptionBox.X = $inputX
-        $this._descriptionBox.Y = $contentY
-        $this._descriptionBox.Width = $inputWidth
-        $this._descriptionBox.Height = 3
-        $this._descriptionBox.Text = $this._task.Description
-        $this._panel.AddChild($this._descriptionBox)
+        $descLabel = [LabelComponent]::new("DescLabel"); $descLabel.Text = "Description:"; $descLabel.X = 2; $descLabel.Y = $contentY; $this._panel.AddChild($descLabel)
+        $this._descriptionBox = [MultilineTextBoxComponent]::new("DescBox"); $this._descriptionBox.X = $inputX; $this._descriptionBox.Y = $contentY; $this._descriptionBox.Width = $inputWidth; $this._descriptionBox.Height = 3; $this._descriptionBox.Text = $this._task.Description; $this._panel.AddChild($this._descriptionBox)
         $contentY += 4
         
         # Status
-        $statusLabel = [LabelComponent]::new("StatusLabel")
-        $statusLabel.Text = "Status:"
-        $statusLabel.X = 2
-        $statusLabel.Y = $contentY
-        $this._panel.AddChild($statusLabel)
-        
-        $this._statusCombo = [ComboBoxComponent]::new("StatusCombo")
-        $this._statusCombo.X = $inputX
-        $this._statusCombo.Y = $contentY
-        $this._statusCombo.Width = $inputWidth
-        $this._statusCombo.Height = 1
-        $this._statusCombo.Items = @([TaskStatus]::GetEnumNames())
-        $this._statusCombo.SelectedIndex = [Array]::IndexOf($this._statusCombo.Items, $this._task.Status.ToString())
-        $this._panel.AddChild($this._statusCombo)
+        $statusLabel = [LabelComponent]::new("StatusLabel"); $statusLabel.Text = "Status:"; $statusLabel.X = 2; $statusLabel.Y = $contentY; $this._panel.AddChild($statusLabel)
+        $this._statusCombo = [ComboBoxComponent]::new("StatusCombo"); $this._statusCombo.X = $inputX; $this._statusCombo.Y = $contentY; $this._statusCombo.Width = $inputWidth; $this._statusCombo.Height = 1; $this._statusCombo.Items = @([TaskStatus]::GetEnumNames()); $this._statusCombo.SelectedIndex = [Array]::IndexOf($this._statusCombo.Items, $this._task.Status.ToString()); $this._panel.AddChild($this._statusCombo)
         $contentY += 2
         
         # Priority
-        $priorityLabel = [LabelComponent]::new("PriorityLabel")
-        $priorityLabel.Text = "Priority:"
-        $priorityLabel.X = 2
-        $priorityLabel.Y = $contentY
-        $this._panel.AddChild($priorityLabel)
-        
-        $this._priorityCombo = [ComboBoxComponent]::new("PriorityCombo")
-        $this._priorityCombo.X = $inputX
-        $this._priorityCombo.Y = $contentY
-        $this._priorityCombo.Width = $inputWidth
-        $this._priorityCombo.Height = 1
-        $this._priorityCombo.Items = @([TaskPriority]::GetEnumNames())
-        $this._priorityCombo.SelectedIndex = [Array]::IndexOf($this._priorityCombo.Items, $this._task.Priority.ToString())
-        $this._panel.AddChild($this._priorityCombo)
+        $priorityLabel = [LabelComponent]::new("PriorityLabel"); $priorityLabel.Text = "Priority:"; $priorityLabel.X = 2; $priorityLabel.Y = $contentY; $this._panel.AddChild($priorityLabel)
+        $this._priorityCombo = [ComboBoxComponent]::new("PriorityCombo"); $this._priorityCombo.X = $inputX; $this._priorityCombo.Y = $contentY; $this._priorityCombo.Width = $inputWidth; $this._priorityCombo.Height = 1; $this._priorityCombo.Items = @([TaskPriority]::GetEnumNames()); $this._priorityCombo.SelectedIndex = [Array]::IndexOf($this._priorityCombo.Items, $this._task.Priority.ToString()); $this._panel.AddChild($this._priorityCombo)
         $contentY += 2
         
         # Progress
-        $progressLabel = [LabelComponent]::new("ProgressLabel")
-        $progressLabel.Text = "Progress %:"
-        $progressLabel.X = 2
-        $progressLabel.Y = $contentY
-        $this._panel.AddChild($progressLabel)
-        
-        $this._progressInput = [NumericInputComponent]::new("ProgressInput")
-        $this._progressInput.X = $inputX
-        $this._progressInput.Y = $contentY
-        $this._progressInput.Width = 10
-        $this._progressInput.Height = 1
-        $this._progressInput.MinValue = 0
-        $this._progressInput.MaxValue = 100
-        $this._progressInput.Value = $this._task.Progress
-        $this._panel.AddChild($this._progressInput)
+        $progressLabel = [LabelComponent]::new("ProgressLabel"); $progressLabel.Text = "Progress %:"; $progressLabel.X = 2; $progressLabel.Y = $contentY; $this._panel.AddChild($progressLabel)
+        $this._progressInput = [NumericInputComponent]::new("ProgressInput"); $this._progressInput.X = $inputX; $this._progressInput.Y = $contentY; $this._progressInput.Width = 10; $this._progressInput.Height = 1; $this._progressInput.MinValue = 0; $this._progressInput.MaxValue = 100; $this._progressInput.Value = $this._task.Progress; $this._panel.AddChild($this._progressInput)
         $contentY += 3
         
         # Buttons
-        $buttonY = $this.ContentHeight - 3
-        $buttonWidth = 12
-        $spacing = 2
-        $totalButtonWidth = ($buttonWidth * 2) + $spacing
-        $startX = [Math]::Floor(($this.ContentWidth - $totalButtonWidth) / 2)
-        
-        $this._saveButton = [ButtonComponent]::new("SaveButton")
-        $this._saveButton.Text = "Save"
-        $this._saveButton.X = $startX
-        $this._saveButton.Y = $buttonY
-        $this._saveButton.Width = $buttonWidth
-        $this._saveButton.Height = 1
+        $buttonY = $this.ContentHeight - 3; $buttonWidth = 12; $spacing = 2; $totalButtonWidth = ($buttonWidth * 2) + $spacing; $startX = [Math]::Floor(($this.ContentWidth - $totalButtonWidth) / 2)
         $thisDialog = $this
-        $this._saveButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::OK
-            $thisDialog.Complete($thisDialog.DialogResult)
-        }.GetNewClosure()
-        $this._panel.AddChild($this._saveButton)
+        $this._saveButton = [ButtonComponent]::new("SaveButton"); $this._saveButton.Text = "Save"; $this._saveButton.X = $startX; $this._saveButton.Y = $buttonY; $this._saveButton.Width = $buttonWidth; $this._saveButton.Height = 1; $this._saveButton.OnClick = { $thisDialog.DialogResult = [DialogResult]::OK; $thisDialog.Complete($thisDialog.DialogResult) }.GetNewClosure(); $this._panel.AddChild($this._saveButton)
+        $this._cancelButton = [ButtonComponent]::new("CancelButton"); $this._cancelButton.Text = "Cancel"; $this._cancelButton.X = $startX + $buttonWidth + $spacing; $this._cancelButton.Y = $buttonY; $this._cancelButton.Width = $buttonWidth; $this._cancelButton.Height = 1; $this._cancelButton.OnClick = { $thisDialog.DialogResult = [DialogResult]::Cancel; $thisDialog.Complete($thisDialog.DialogResult) }.GetNewClosure(); $this._panel.AddChild($this._cancelButton)
         
-        $this._cancelButton = [ButtonComponent]::new("CancelButton")
-        $this._cancelButton.Text = "Cancel"
-        $this._cancelButton.X = $startX + $buttonWidth + $spacing
-        $this._cancelButton.Y = $buttonY
-        $this._cancelButton.Width = $buttonWidth
-        $this._cancelButton.Height = 1
-        $this._cancelButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::Cancel
-            $thisDialog.Complete($thisDialog.DialogResult)
-        }.GetNewClosure()
-        $this._panel.AddChild($this._cancelButton)
-        
-        # Set initial focus
         Set-ComponentFocus -Component $this._titleBox
     }
     
     [PmcTask] GetTask() {
         if ($this.DialogResult -eq [DialogResult]::OK) {
-            # Update task with form values
             $this._task.Title = $this._titleBox.Text
             $this._task.Description = $this._descriptionBox.Text
             $this._task.Status = [TaskStatus]::($this._statusCombo.Items[$this._statusCombo.SelectedIndex])
@@ -3259,7 +3034,28 @@ class TaskDialog : Dialog {
     }
 }
 
-# Task Delete Confirmation Dialog
+# ==============================================================================
+# CLASS: TaskDeleteDialog
+#
+# INHERITS:
+#   - ConfirmDialog (ACO.019)
+#
+# DEPENDENCIES:
+#   Models:
+#     - PmcTask (AMO.003)
+#   Components:
+#     - LabelComponent (ACO.001)
+#
+# PURPOSE:
+#   A specialized confirmation dialog used specifically for deleting a task.
+#   It enhances the standard ConfirmDialog by displaying the name of the task
+#   being deleted.
+#
+# KEY LOGIC:
+#   - It inherits all the "Yes/No" button logic from `ConfirmDialog`.
+#   - `Initialize` overrides the base to add an extra `LabelComponent` that
+#     shows the title of the `_task` object, providing context to the user.
+# ==============================================================================
 class TaskDeleteDialog : ConfirmDialog {
     hidden [PmcTask] $_task
     
@@ -3270,7 +3066,6 @@ class TaskDeleteDialog : ConfirmDialog {
     [void] Initialize() {
         ([ConfirmDialog]$this).Initialize()
         
-        # Add task details to the message
         if ($this._task) {
             $detailsLabel = [LabelComponent]::new("TaskDetails")
             $detailsLabel.Text = "Task: $($this._task.Title)"
@@ -3289,14 +3084,31 @@ class TaskDeleteDialog : ConfirmDialog {
 #<!-- END_PAGE: ACO.020 -->
 
 #<!-- PAGE: ACO.021 - NavigationMenu Class -->
-# ===== CLASS: NavigationMenu =====
-# Module: navigation-class
-# Dependencies: UIElement, NavigationItem
-# Purpose: Local menu component
+# ==============================================================================
+# CLASS: NavigationMenu
+#
+# INHERITS:
+#   - UIElement (ABC.004)
+#
+# DEPENDENCIES:
+#   Models:
+#     - NavigationItem (AMO.005)
+#
+# PURPOSE:
+#   A simple menu component for displaying a list of `NavigationItem` objects
+#   either horizontally or vertically. Used for top-level or contextual menus.
+#
+# KEY LOGIC:
+#   - `OnRender` calls either `RenderHorizontal` or `RenderVertical` based on
+#     the `Orientation` property.
+#   - `HandleInput` allows navigation with arrow keys appropriate for the
+#     orientation. Pressing Enter executes the `Action` scriptblock of the
+#     currently selected `NavigationItem`.
+# ==============================================================================
 class NavigationMenu : UIElement {
     [List[NavigationItem]]$Items
     [int]$SelectedIndex = 0
-    [string]$Orientation = "Horizontal"  # Horizontal or Vertical
+    [string]$Orientation = "Horizontal"
     [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
     [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
     [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::DarkBlue
@@ -3318,20 +3130,14 @@ class NavigationMenu : UIElement {
         
         try {
             $this._private_buffer.Clear([TuiCell]::new(' ', $this.ForegroundColor, $this.BackgroundColor))
-            
-            if ($this.Orientation -eq "Horizontal") {
-                $this.RenderHorizontal()
-            }
-            else {
-                $this.RenderVertical()
-            }
+            if ($this.Orientation -eq "Horizontal") { $this.RenderHorizontal() }
+            else { $this.RenderVertical() }
         }
         catch {}
     }
 
     hidden [void] RenderHorizontal() {
         $currentX = 0
-        
         for ($i = 0; $i -lt $this.Items.Count; $i++) {
             $item = $this.Items[$i]
             $isSelected = ($i -eq $this.SelectedIndex -and $this.IsFocused)
@@ -3339,26 +3145,19 @@ class NavigationMenu : UIElement {
             $fg = if ($isSelected) { $this.SelectedForegroundColor } else { $this.ForegroundColor }
             $bg = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.BackgroundColor }
             
-            # Draw item
-            $text = " $($item.Text) "
-            if ($item.Hotkey) {
-                $text = " $($item.Text) ($($item.Hotkey)) "
-            }
+            $text = if ($item.Hotkey) { " $($item.Text) ($($item.Hotkey)) " } else { " $($item.Text) " }
             
             if ($currentX + $text.Length -le $this.Width) {
                 for ($x = 0; $x -lt $text.Length; $x++) {
-                    $this._private_buffer.SetCell($currentX + $x, 0, 
-                        [TuiCell]::new($text[$x], $fg, $bg))
+                    $this._private_buffer.SetCell($currentX + $x, 0, [TuiCell]::new($text[$x], $fg, $bg))
                 }
             }
-            
             $currentX += $text.Length + 1
         }
     }
 
     hidden [void] RenderVertical() {
         $this.Height = [Math]::Max($this.Items.Count, 1)
-        
         for ($i = 0; $i -lt $this.Items.Count; $i++) {
             $item = $this.Items[$i]
             $isSelected = ($i -eq $this.SelectedIndex -and $this.IsFocused)
@@ -3366,20 +3165,10 @@ class NavigationMenu : UIElement {
             $fg = if ($isSelected) { $this.SelectedForegroundColor } else { $this.ForegroundColor }
             $bg = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.BackgroundColor }
             
-            # Clear line
-            for ($x = 0; $x -lt $this.Width; $x++) {
-                $this._private_buffer.SetCell($x, $i, [TuiCell]::new(' ', $fg, $bg))
-            }
+            for ($x = 0; $x -lt $this.Width; $x++) { $this._private_buffer.SetCell($x, $i, [TuiCell]::new(' ', $fg, $bg)) }
             
-            # Draw item
-            $text = $item.Text
-            if ($item.Hotkey) {
-                $text = "$($item.Text) ($($item.Hotkey))"
-            }
-            
-            if ($text.Length -gt $this.Width) {
-                $text = $text.Substring(0, $this.Width - 3) + "..."
-            }
+            $text = if ($item.Hotkey) { "$($item.Text) ($($item.Hotkey))" } else { $item.Text }
+            if ($text.Length -gt $this.Width) { $text = $text.Substring(0, $this.Width - 3) + "..." }
             
             $this._private_buffer.WriteString(0, $i, $text, $fg, $bg)
         }
@@ -3392,49 +3181,22 @@ class NavigationMenu : UIElement {
         
         if ($this.Orientation -eq "Horizontal") {
             switch ($key.Key) {
-                ([ConsoleKey]::LeftArrow) {
-                    if ($this.SelectedIndex -gt 0) {
-                        $this.SelectedIndex--
-                    }
-                }
-                ([ConsoleKey]::RightArrow) {
-                    if ($this.SelectedIndex -lt $this.Items.Count - 1) {
-                        $this.SelectedIndex++
-                    }
-                }
-                ([ConsoleKey]::Enter) {
-                    $this.ExecuteItem($this.SelectedIndex)
-                }
-                default {
-                    # Check hotkeys
-                    $handled = $this.CheckHotkey($key)
-                }
+                ([ConsoleKey]::LeftArrow) { if ($this.SelectedIndex -gt 0) { $this.SelectedIndex-- } }
+                ([ConsoleKey]::RightArrow) { if ($this.SelectedIndex -lt $this.Items.Count - 1) { $this.SelectedIndex++ } }
+                ([ConsoleKey]::Enter) { $this.ExecuteItem($this.SelectedIndex) }
+                default { $handled = $this.CheckHotkey($key) }
             }
         }
         else {
             switch ($key.Key) {
-                ([ConsoleKey]::UpArrow) {
-                    if ($this.SelectedIndex -gt 0) {
-                        $this.SelectedIndex--
-                    }
-                }
-                ([ConsoleKey]::DownArrow) {
-                    if ($this.SelectedIndex -lt $this.Items.Count - 1) {
-                        $this.SelectedIndex++
-                    }
-                }
-                ([ConsoleKey]::Enter) {
-                    $this.ExecuteItem($this.SelectedIndex)
-                }
-                default {
-                    $handled = $this.CheckHotkey($key)
-                }
+                ([ConsoleKey]::UpArrow) { if ($this.SelectedIndex -gt 0) { $this.SelectedIndex-- } }
+                ([ConsoleKey]::DownArrow) { if ($this.SelectedIndex -lt $this.Items.Count - 1) { $this.SelectedIndex++ } }
+                ([ConsoleKey]::Enter) { $this.ExecuteItem($this.SelectedIndex) }
+                default { $handled = $this.CheckHotkey($key) }
             }
         }
         
-        if ($handled) {
-            $this.RequestRedraw()
-        }
+        if ($handled) { $this.RequestRedraw() }
         
         return $handled
     }
@@ -3454,12 +3216,7 @@ class NavigationMenu : UIElement {
     hidden [void] ExecuteItem([int]$index) {
         if ($index -ge 0 -and $index -lt $this.Items.Count) {
             $item = $this.Items[$index]
-            if ($item.Action) {
-                try {
-                    & $item.Action
-                }
-                catch {}
-            }
+            if ($item.Action) { try { & $item.Action } catch {} }
         }
     }
 }

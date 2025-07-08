@@ -132,46 +132,130 @@ function Initialize-TuiEngine {
 
 function Start-TuiEngine {
     [CmdletBinding()]
-    param()
+    param(
+        [int]$TargetFPS = 30,
+        [switch]$EnablePerformanceMonitoring,
+        [int]$PerformanceReportInterval = 300  # frames
+    )
     
     try {
-        Write-Verbose "Starting TUI Engine main loop..."
+        Write-Log -Level Info -Message "Starting TUI Engine with target FPS: $TargetFPS"
+        
+        # Calculate frame timing
+        $targetFrameTime = [timespan]::FromSeconds(1.0 / $TargetFPS)
+        $frameStopwatch = [System.Diagnostics.Stopwatch]::new()
+        $performanceStopwatch = [System.Diagnostics.Stopwatch]::new()
+        
+        # Performance monitoring variables
+        $frameTimeHistory = [System.Collections.Generic.Queue[double]]::new()
+        $maxHistorySize = 60  # Keep last 60 frame times
+        $slowFrameCount = 0
+        $skippedFrameCount = 0
         
         $global:TuiState.Running = $true
-        $frameTimer = [System.Diagnostics.Stopwatch]::new()
+        $global:TuiState.FrameCount = 0
         
-        while ($global:TuiState.Running) {
-            $frameTimer.Restart()
-            
-            # Check for resize
-            if ([Console]::WindowWidth -ne $global:TuiState.BufferWidth -or 
-                [Console]::WindowHeight -ne $global:TuiState.BufferHeight) {
-                Update-TuiEngineSize
-            }
-            
-            # Process input
-            Process-TuiInput
-            
-            # Render if dirty
-            if ($global:TuiState.IsDirty) {
-                Invoke-TuiRender
-                $global:TuiState.IsDirty = $false
-            }
-            
-            # Frame timing (target 60 FPS)
-            $frameTimer.Stop()
-            $frameTime = $frameTimer.ElapsedMilliseconds
-            if ($frameTime -lt 16) {
-                Start-Sleep -Milliseconds (16 - $frameTime)
-            }
-            
-            $global:TuiState.FrameCount++
+        if ($EnablePerformanceMonitoring) {
+            $performanceStopwatch.Start()
         }
         
-        Write-Verbose "TUI Engine stopped after $($global:TuiState.FrameCount) frames"
+        while ($global:TuiState.Running) {
+            $frameStopwatch.Restart()
+            
+            try {
+                # Phase 1: Handle console resize
+                if ([Console]::WindowWidth -ne $global:TuiState.BufferWidth -or 
+                    [Console]::WindowHeight -ne $global:TuiState.BufferHeight) {
+                    
+                    Invoke-WithErrorHandling -Component "TuiEngine" -Context "Resize" -ScriptBlock {
+                        Update-TuiEngineSize
+                    }
+                }
+                
+                # Phase 2: Process input (always process input for responsiveness)
+                Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
+                    Process-TuiInput
+                }
+                
+                # Phase 3: Render frame
+                # Always render to maintain consistent frame rate and handle animations
+                Invoke-WithErrorHandling -Component "TuiEngine" -Context "Render" -ScriptBlock {
+                    Invoke-TuiRender
+                }
+                
+                $global:TuiState.FrameCount++
+                
+                # Phase 4: Performance monitoring
+                if ($EnablePerformanceMonitoring) {
+                    $frameTime = $frameStopwatch.ElapsedMilliseconds
+                    
+                    # Track frame times
+                    $frameTimeHistory.Enqueue($frameTime)
+                    if ($frameTimeHistory.Count -gt $maxHistorySize) {
+                        $frameTimeHistory.Dequeue()
+                    }
+                    
+                    # Count slow frames
+                    if ($frameTime -gt $targetFrameTime.TotalMilliseconds) {
+                        $slowFrameCount++
+                    }
+                    
+                    # Report performance every N frames
+                    if ($global:TuiState.FrameCount % $PerformanceReportInterval -eq 0) {
+                        $avgFrameTime = ($frameTimeHistory | Measure-Object -Average).Average
+                        $maxFrameTime = ($frameTimeHistory | Measure-Object -Maximum).Maximum
+                        $currentFPS = if ($avgFrameTime -gt 0) { 1000.0 / $avgFrameTime } else { 0 }
+                        
+                        Write-Log -Level Info -Message "TUI Performance Report - Frame: $($global:TuiState.FrameCount), Avg FPS: $([Math]::Round($currentFPS, 1)), Avg Frame Time: $([Math]::Round($avgFrameTime, 1))ms, Max Frame Time: $([Math]::Round($maxFrameTime, 1))ms, Slow Frames: $slowFrameCount, Skipped: $skippedFrameCount"
+                        
+                        # Reset counters
+                        $slowFrameCount = 0
+                        $skippedFrameCount = 0
+                    }
+                }
+                
+                # Phase 5: Frame rate throttling
+                $frameStopwatch.Stop()
+                $elapsedTime = $frameStopwatch.Elapsed
+                
+                if ($elapsedTime -lt $targetFrameTime) {
+                    # We have time to spare - sleep for the remainder
+                    $sleepTime = $targetFrameTime - $elapsedTime
+                    if ($sleepTime.TotalMilliseconds -gt 0) {
+                        Start-Sleep -Milliseconds $sleepTime.TotalMilliseconds
+                    }
+                }
+                elseif ($elapsedTime.TotalMilliseconds -gt $targetFrameTime.TotalMilliseconds * 2) {
+                    # Frame took more than twice the target time - we're falling behind
+                    $skippedFrameCount++
+                    
+                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                        Write-Log -Level Warning -Message "TUI Engine: Frame $($global:TuiState.FrameCount) took $([Math]::Round($elapsedTime.TotalMilliseconds, 1))ms (target: $([Math]::Round($targetFrameTime.TotalMilliseconds, 1))ms)"
+                    }
+                }
+            }
+            catch {
+                Write-Log -Level Error -Message "TUI Engine: Frame $($global:TuiState.FrameCount) error: $($_.Exception.Message)"
+                
+                # Don't exit on frame errors - try to continue
+                Start-Sleep -Milliseconds 50  # Brief pause to prevent tight error loop
+            }
+        }
+        
+        # Final performance report
+        if ($EnablePerformanceMonitoring -and $performanceStopwatch.IsRunning) {
+            $performanceStopwatch.Stop()
+            $totalSeconds = $performanceStopwatch.Elapsed.TotalSeconds
+            $avgFPS = if ($totalSeconds -gt 0) { $global:TuiState.FrameCount / $totalSeconds } else { 0 }
+            
+            Write-Log -Level Info -Message "TUI Engine stopped after $($global:TuiState.FrameCount) frames in $([Math]::Round($totalSeconds, 1))s. Average FPS: $([Math]::Round($avgFPS, 1))"
+        }
+        else {
+            Write-Log -Level Info -Message "TUI Engine stopped after $($global:TuiState.FrameCount) frames"
+        }
     }
     catch {
-        Write-Error "TUI Engine error: $_"
+        Write-Log -Level Error -Message "TUI Engine critical error: $($_.Exception.Message)"
         Invoke-PanicHandler $_
     }
     finally {
@@ -452,85 +536,45 @@ function Render-DifferentialBuffer {
 function Process-TuiInput {
     [CmdletBinding()]
     param()
-    
     try {
-        if ([Console]::KeyAvailable) {
+        while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # If there's an active overlay (like a dialog), give it priority
+            # --- Input Priority Chain ---
+
+            # 1. Dialogs / Other Modal Overlays have top priority.
             if ($global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
-                if ($topOverlay -and $topOverlay.Visible) {
-                    if ($topOverlay.HandleInput($keyInfo)) {
-                        $global:TuiState.IsDirty = $true
-                        return
-                    }
-                }
+                # The CommandPalette is now managed by this logic, so check if it's the top overlay
+                if ($topOverlay?.HandleInput($keyInfo)) { $global:TuiState.IsDirty = $true; continue }
             }
             
-            # Check command palette if visible
-            if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                if ($global:TuiState.CommandPalette.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
+            # --- Normal Input Flow (when no modal overlays are active) ---
 
-            # Give the currently focused component a chance to handle the input first
+            # 2. The currently focused component gets the next chance.
             $focusManager = $global:TuiState.Services.FocusManager
-            if ($focusManager -and $focusManager.FocusedComponent) {
-                if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
-                    return
-                }
-            }
+            if ($focusManager.FocusedComponent?.HandleInput($keyInfo)) { $global:TuiState.IsDirty = $true; continue }
 
-            # Check global hotkeys via KeybindingService (including Ctrl+P and Tab)
-            if ($global:TuiState.Services.KeybindingService) {
-                $action = $global:TuiState.Services.KeybindingService.GetAction($keyInfo)
+            # 3. Global Keybindings are checked if no component handled the key.
+            $keybindingService = $global:TuiState.Services.KeybindingService
+            if ($keybindingService) {
+                $action = $keybindingService.GetAction($keyInfo)
                 if ($action) {
-                    # Handle framework-level actions that need special processing
-                    if ($action -eq "app.commandPalette") {
-                        if ($global:TuiState.CommandPalette) {
-                            $global:TuiState.CommandPalette.Show()
-                            $global:TuiState.IsDirty = $true
-                            return
-                        }
-                    }
-                    elseif ($action -eq "navigation.nextComponent" -or $action -eq "navigation.previousComponent") {
-                        if ($focusManager) {
-                            $reverse = ($action -eq "navigation.previousComponent")
-                            $focusManager.MoveFocus($reverse)
-                            $global:TuiState.IsDirty = $true
-                            return
-                        }
-                    }
-                    else {
-                        # Execute other actions via ActionService
-                        if ($global:TuiState.Services.ActionService) {
-                            try {
-                                $global:TuiState.Services.ActionService.ExecuteAction($action, @{})
-                                $global:TuiState.IsDirty = $true
-                                return
-                            }
-                            catch {
-                                Write-Log -Level Warning -Message "Failed to execute action '$action' via keybinding: $($_.Exception.Message)" -Data $_
-                            }
-                        }
-                    }
+                    $global:TuiState.Services.ActionService?.ExecuteAction($action, @{})
+                    $global:TuiState.IsDirty = $true
+                    continue
                 }
             }
             
-            # Finally, give the current screen a chance to handle the input
-            $navService = $global:TuiState.Services.NavigationService
-            if ($navService -and $navService.CurrentScreen -and $navService.CurrentScreen.HandleInput($keyInfo)) {
+            # 4. Current Screen gets last chance
+            if ($global:TuiState.CurrentScreen?.HandleInput($keyInfo)) {
                 $global:TuiState.IsDirty = $true
-                return
+                continue
             }
         }
     }
     catch {
-        Write-Error "Input processing error: $_"
+        Write-Log -Level Error -Message "Input processing error: $($_.Exception.Message)" -Data $_
     }
 }
 
@@ -727,7 +771,7 @@ function Start-AxiomPhoenix {
         # Extract key services for quick access
         $serviceNames = @(
             'ActionService', 'KeybindingService', 'NavigationService', 
-            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager' # Add new services
+            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 'TuiFrameworkService' # Add new services
         )
         
         foreach ($serviceName in $serviceNames) {
