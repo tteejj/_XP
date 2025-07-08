@@ -416,6 +416,11 @@ class TaskListScreen : Screen {
     hidden [ScrollablePanel] $_taskListPanel
     hidden [Panel] $_detailPanel
     hidden [Panel] $_statusBar
+    hidden [ButtonComponent] $_newButton
+    hidden [ButtonComponent] $_editButton
+    hidden [ButtonComponent] $_deleteButton
+    hidden [ButtonComponent] $_completeButton
+    hidden [TextBoxComponent] $_filterBox
     #endregion
 
     #region State
@@ -449,13 +454,29 @@ class TaskListScreen : Screen {
         $this._mainPanel.UpdateContentDimensions()
         $this.AddChild($this._mainPanel)
 
+        # Add filter textbox at the top
+        $this._filterBox = [TextBoxComponent]::new("FilterBox")
+        $this._filterBox.Placeholder = "Type to filter tasks..."
+        $this._filterBox.X = 2
+        $this._filterBox.Y = 2
+        $this._filterBox.Width = [Math]::Floor($this.Width * 0.6) - 4
+        $this._filterBox.Height = 1
+        $thisScreen = $this
+        $this._filterBox.OnChange = {
+            param($newText)
+            $thisScreen._filterText = $newText
+            $thisScreen._RefreshTasks()
+            $thisScreen._UpdateDisplay()
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._filterBox)
+
         # Task list panel (left side)
         $listWidth = [Math]::Floor($this.Width * 0.6)
         $this._taskListPanel = [ScrollablePanel]::new("Tasks")
         $this._taskListPanel.X = 1
-        $this._taskListPanel.Y = 1
+        $this._taskListPanel.Y = 4  # Move down to accommodate filter
         $this._taskListPanel.Width = $listWidth
-        $this._taskListPanel.Height = $this.Height - 4
+        $this._taskListPanel.Height = $this.Height - 8  # Adjust for buttons and filter
         $this._taskListPanel.Title = "Tasks"
         $this._taskListPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._taskListPanel)
@@ -467,7 +488,7 @@ class TaskListScreen : Screen {
         $this._detailPanel.X = $detailX
         $this._detailPanel.Y = 1
         $this._detailPanel.Width = $detailWidth
-        $this._detailPanel.Height = $this.Height - 4
+        $this._detailPanel.Height = $this.Height - 8  # Adjust for buttons
         $this._detailPanel.Title = "Task Details"
         $this._detailPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._detailPanel)
@@ -480,6 +501,111 @@ class TaskListScreen : Screen {
         $this._statusBar.Height = 1
         $this._statusBar.HasBorder = $false
         $this._mainPanel.AddChild($this._statusBar)
+        
+        # Add CRUD action buttons at the bottom
+        $buttonY = $this.Height - 3
+        $buttonSpacing = 15
+        $currentX = 2
+        
+        # New button
+        $this._newButton = [ButtonComponent]::new("NewButton")
+        $this._newButton.Text = "[N]ew Task"
+        $this._newButton.X = $currentX
+        $this._newButton.Y = $buttonY
+        $this._newButton.Width = 12
+        $this._newButton.Height = 1
+        $this._newButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager) {
+                $dialog = [TaskDialog]::new("New Task", $null)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                    $newTask = $dialog.GetTask()
+                    $dataManager.AddTask($newTask)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "New task created: $($newTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._newButton)
+        $currentX += $buttonSpacing
+        
+        # Edit button
+        $this._editButton = [ButtonComponent]::new("EditButton")
+        $this._editButton.Text = "[E]dit Task"
+        $this._editButton.X = $currentX
+        $this._editButton.Y = $buttonY
+        $this._editButton.Width = 12
+        $this._editButton.Height = 1
+        $this._editButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
+                $dialog = [TaskDialog]::new("Edit Task", $thisScreen._selectedTask)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                    $updatedTask = $dialog.GetTask()
+                    $dataManager.UpdateTask($updatedTask)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "Task updated: $($updatedTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._editButton)
+        $currentX += $buttonSpacing
+        
+        # Delete button
+        $this._deleteButton = [ButtonComponent]::new("DeleteButton")
+        $this._deleteButton.Text = "[D]elete Task"
+        $this._deleteButton.X = $currentX
+        $this._deleteButton.Y = $buttonY
+        $this._deleteButton.Width = 14
+        $this._deleteButton.Height = 1
+        $this._deleteButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
+                $dialog = [TaskDeleteDialog]::new($thisScreen._selectedTask)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::Yes) {
+                    $dataManager.DeleteTask($thisScreen._selectedTask.Id)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._deleteButton)
+        $currentX += $buttonSpacing + 2
+        
+        # Complete button
+        $this._completeButton = [ButtonComponent]::new("CompleteButton")
+        $this._completeButton.Text = "[C]omplete"
+        $this._completeButton.X = $currentX
+        $this._completeButton.Y = $buttonY
+        $this._completeButton.Width = 12
+        $this._completeButton.Height = 1
+        $this._completeButton.OnClick = {
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dataManager -and $thisScreen._selectedTask) {
+                $thisScreen._selectedTask.Complete()
+                $dataManager.UpdateTask($thisScreen._selectedTask)
+                $thisScreen._RefreshTasks()
+                $thisScreen._UpdateDisplay()
+                Write-Verbose "Task completed: $($thisScreen._selectedTask.Title)"
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._completeButton)
         
         $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
     }
@@ -523,49 +649,30 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] _RefreshTasks() {
-        $dataManager = $this.ServiceContainer.GetService("DataManager")
-        if (-not $dataManager) {
-            Write-Verbose "TaskListScreen: DataManager service not found"
-            return
-        }
-        
-        $allTasks = $dataManager.GetTasks()
-        $this._tasks.Clear()
-        if ($allTasks -and $allTasks.Count -gt 0) {
-            $this._tasks.AddRange($allTasks)
-        }
-        
-        # Apply filters if any
-        if (-not [string]::IsNullOrEmpty($this._filterText)) {
-            $filtered = $this._tasks | Where-Object { 
-                $_.Title -like "*$($this._filterText)*" -or 
-                $_.Description -like "*$($this._filterText)*" 
+        $dataManager = $this.ServiceContainer?.GetService("DataManager")
+        if ($dataManager) {
+            $allTasks = $dataManager.GetTasks()
+            
+            # Apply text filter if present
+            if (![string]::IsNullOrWhiteSpace($this._filterText)) {
+                $filterLower = $this._filterText.ToLower()
+                $allTasks = @($allTasks | Where-Object {
+                    $_.Title.ToLower().Contains($filterLower) -or
+                    ($_.Description -and $_.Description.ToLower().Contains($filterLower))
+                })
             }
-            $this._tasks.Clear()
-            if ($filtered) {
-                $this._tasks.AddRange(@($filtered))
+            
+            $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
+            if ($allTasks) {
+                $this._tasks.AddRange(@($allTasks))
             }
+        } else {
+            $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
         }
         
-        if ($null -ne $this._filterStatus) {
-            $filtered = $this._tasks | Where-Object { $_.Status -eq $this._filterStatus }
-            $this._tasks.Clear()
-            if ($filtered) {
-                $this._tasks.AddRange(@($filtered))
-            }
-        }
-        
-        if ($null -ne $this._filterPriority) {
-            $filtered = $this._tasks | Where-Object { $_.Priority -eq $this._filterPriority }
-            $this._tasks.Clear()
-            if ($filtered) {
-                $this._tasks.AddRange(@($filtered))
-            }
-        }
-        
-        # Update selection
-        if ($this._selectedIndex -ge @($this._tasks).Count) {
-            $this._selectedIndex = [Math]::Max(0, @($this._tasks).Count - 1)
+        # Reset selection if needed
+        if ($this._selectedIndex -ge $this._tasks.Count) {
+            $this._selectedIndex = [Math]::Max(0, $this._tasks.Count - 1)
         }
         
         if ($this._tasks.Count -gt 0) {
@@ -573,8 +680,6 @@ class TaskListScreen : Screen {
         } else {
             $this._selectedTask = $null
         }
-        
-        $this._UpdateDisplay()
     }
 
     hidden [void] _UpdateDisplay() {
@@ -869,19 +974,33 @@ class TaskListScreen : Screen {
                 $this._UpdateDisplay()
             }
             ([ConsoleKey]::Enter) {
-                # Edit task - would trigger command palette or dialog
-                Write-Verbose "TaskListScreen: Edit task requested for: $($this._selectedTask.Title)"
-            }
-            ([ConsoleKey]::D) {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
-                    # Delete task
-                    Write-Verbose "TaskListScreen: Delete task requested for: $($this._selectedTask.Title)"
+                # Edit task
+                if ($this._selectedTask -and $this._editButton) {
+                    $this._editButton.OnClick.Invoke()
                 }
             }
             ([ConsoleKey]::N) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     # New task
-                    Write-Verbose "TaskListScreen: New task requested"
+                    $this._newButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::E) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    # Edit task
+                    $this._editButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::D) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    # Delete task
+                    $this._deleteButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::C) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    # Complete task
+                    $this._completeButton.OnClick.Invoke()
                 }
             }
             default {
@@ -893,6 +1012,175 @@ class TaskListScreen : Screen {
 
 #endregion
 #<!-- END_PAGE: ASC.002 -->
+
+class ThemePickerScreen : Screen {
+    hidden [ScrollablePanel] $_themePanel
+    hidden [Panel] $_mainPanel
+    hidden [array] $_themes
+    hidden [int] $_selectedIndex = 0
+    hidden $_themeManager  # Remove type annotation since ThemeManager is defined later
+    
+    ThemePickerScreen([object]$serviceContainer) : base("ThemePickerScreen", $serviceContainer) {}
+    
+    [void] Initialize() {
+        # Get theme manager
+        $this._themeManager = $this.ServiceContainer?.GetService("ThemeManager")
+        if (-not $this._themeManager) {
+            Write-Verbose "ThemePickerScreen: ThemeManager not found"
+            return
+        }
+        
+        # Get available themes
+        $this._themes = $this._themeManager.GetAvailableThemes()
+        
+        # Main panel
+        $this._mainPanel = [Panel]::new("Theme Selector")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this.AddChild($this._mainPanel)
+        
+        # Instructions
+        $instructionLabel = [LabelComponent]::new("Instructions")
+        $instructionLabel.Text = "Use ↑↓ to navigate, Enter to select theme, Esc to cancel"
+        $instructionLabel.X = 2
+        $instructionLabel.Y = 2
+        $instructionLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $this._mainPanel.AddChild($instructionLabel)
+        
+        # Theme list panel
+        $this._themePanel = [ScrollablePanel]::new("Themes")
+        $this._themePanel.X = 2
+        $this._themePanel.Y = 4
+        $this._themePanel.Width = $this.Width - 4
+        $this._themePanel.Height = $this.Height - 6
+        $this._mainPanel.AddChild($this._themePanel)
+        
+        $this._UpdateThemeList()
+    }
+    
+    hidden [void] _UpdateThemeList() {
+        $this._themePanel.Children.Clear()
+        
+        for ($i = 0; $i -lt $this._themes.Count; $i++) {
+            $themeName = $this._themes[$i]
+            $isSelected = ($i -eq $this._selectedIndex)
+            
+            # Create panel for theme item
+            $themeItemPanel = [Panel]::new("Theme_$themeName")
+            $themeItemPanel.X = 0
+            $themeItemPanel.Y = $i * 3  # 3 lines per theme
+            $themeItemPanel.Width = $this._themePanel.ContentWidth
+            $themeItemPanel.Height = 2
+            $themeItemPanel.HasBorder = $false
+            
+            if ($isSelected) {
+                $themeItemPanel.BackgroundColor = Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF"
+            }
+            
+            # Theme name label
+            $nameLabel = [LabelComponent]::new("Name_$themeName")
+            $nameLabel.Text = if ($isSelected) { "▶ $themeName" } else { "  $themeName" }
+            $nameLabel.X = 1
+            $nameLabel.Y = 0
+            $nameLabel.ForegroundColor = if ($isSelected) { 
+                Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
+            } else { 
+                Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF" 
+            }
+            $themeItemPanel.AddChild($nameLabel)
+            
+            # Preview colors
+            $previewLabel = [LabelComponent]::new("Preview_$themeName")
+            $previewText = "    Preview: "
+            $previewLabel.Text = $previewText
+            $previewLabel.X = 1
+            $previewLabel.Y = 1
+            $previewLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $themeItemPanel.AddChild($previewLabel)
+            
+            # Load theme temporarily to get colors
+            $currentTheme = $this._themeManager.ThemeName
+            $this._themeManager.LoadTheme($themeName)
+            
+            # Color blocks
+            $colorX = $previewText.Length + 1
+            $colors = @("Primary", "Secondary", "Accent", "Success", "Warning", "Error")
+            foreach ($colorName in $colors) {
+                $colorLabel = [LabelComponent]::new("Color_${themeName}_${colorName}")
+                $colorLabel.Text = "██"
+                $colorLabel.X = $colorX
+                $colorLabel.Y = 1
+                $colorLabel.ForegroundColor = $this._themeManager.GetColor($colorName)
+                $themeItemPanel.AddChild($colorLabel)
+                $colorX += 3
+            }
+            
+            # Restore current theme
+            $this._themeManager.LoadTheme($currentTheme)
+            
+            $this._themePanel.AddChild($themeItemPanel)
+        }
+        
+        $this._themePanel.RequestRedraw()
+    }
+    
+    [void] OnEnter() {
+        # Find current theme index
+        $currentTheme = $this._themeManager.ThemeName
+        for ($i = 0; $i -lt $this._themes.Count; $i++) {
+            if ($this._themes[$i] -eq $currentTheme) {
+                $this._selectedIndex = $i
+                break
+            }
+        }
+        $this._UpdateThemeList()
+    }
+    
+    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::UpArrow) {
+                if ($this._selectedIndex -gt 0) {
+                    $this._selectedIndex--
+                    if ($this._selectedIndex -lt $this._themePanel.ScrollOffsetY) {
+                        $this._themePanel.ScrollUp()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this._selectedIndex -lt $this._themes.Count - 1) {
+                    $this._selectedIndex++
+                    $visibleEnd = $this._themePanel.ScrollOffsetY + ($this._themePanel.ContentHeight / 3) - 1
+                    if ($this._selectedIndex -gt $visibleEnd) {
+                        $this._themePanel.ScrollDown()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                # Apply selected theme
+                $selectedTheme = $this._themes[$this._selectedIndex]
+                $this._themeManager.LoadTheme($selectedTheme)
+                Write-Verbose "Applied theme: $selectedTheme"
+                
+                # Go back
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                }
+            }
+            ([ConsoleKey]::Escape) {
+                # Cancel without changing theme
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                }
+            }
+        }
+    }
+}
 
 #<!-- PAGE: ASC.003 - Screen Utilities -->
 #region Screen Utilities

@@ -32,6 +32,17 @@ enum BillingType {
     NonBillable
 }
 
+enum DialogResult {
+    None
+    OK
+    Cancel
+    Yes
+    No
+    Abort
+    Retry
+    Ignore
+}
+
 #endregion
 #<!-- END_PAGE: AMO.001 -->
 
@@ -282,6 +293,14 @@ class PmcProject : ValidationBase {
     [string[]]$Tags = @()                    # Project tags
     [hashtable]$Metadata = @{}               # Additional project metadata
     [bool]$IsActive = $true                  # Whether project is active
+    
+    # Enhanced properties from reference implementation
+    [string]$ID1                             # Optional secondary identifier
+    [Nullable[datetime]]$BFDate              # Bring-Forward date for follow-ups
+    [string]$ProjectFolderPath               # Full path to the project's root folder on disk
+    [string]$CaaFileName                     # Relative name of the associated CAA file
+    [string]$RequestFileName                 # Relative name of the associated Request file
+    [string]$T2020FileName                   # Relative name of the associated T2020 file
 
     # Default constructor
     PmcProject() {}

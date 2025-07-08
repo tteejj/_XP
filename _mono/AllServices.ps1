@@ -173,6 +173,39 @@ class ActionService {
             Hotkey = "Ctrl+P"
         })
         
+        # Theme picker action
+        $this.RegisterAction("ui.theme.picker", {
+            $navService = $global:ServiceContainer.GetService("NavigationService")
+            $themeScreen = [ThemePickerScreen]::new($global:ServiceContainer)
+            $themeScreen.Initialize()
+            $navService.NavigateTo($themeScreen)
+        }, @{
+            Category = "UI"
+            Description = "Change Theme"
+        })
+        
+        # Task management actions
+        $this.RegisterAction("task.new", {
+            $navService = $global:ServiceContainer.GetService("NavigationService")
+            $currentScreen = $navService?.CurrentScreen
+            if ($currentScreen -is [TaskListScreen]) {
+                $currentScreen._newButton.OnClick.Invoke()
+            }
+        }, @{
+            Category = "Tasks"
+            Description = "New Task"
+        })
+        
+        $this.RegisterAction("task.list", {
+            $navService = $global:ServiceContainer.GetService("NavigationService")
+            $taskScreen = [TaskListScreen]::new($global:ServiceContainer)
+            $taskScreen.Initialize()
+            $navService.NavigateTo($taskScreen)
+        }, @{
+            Category = "Tasks"
+            Description = "View All Tasks"
+        })
+        
         Write-Verbose "ActionService: Registered default actions"
     }
 }
@@ -1059,6 +1092,173 @@ class ThemeManager {
         $this.ThemeName = "Default"
     }
     
+    [void] LoadSynthwaveTheme() {
+        $this.CurrentTheme = @{
+            # Core colors
+            "Background" = "#1a1a2e"
+            "Foreground" = "#eee"
+            "Border" = "#ff006e"
+            "Title" = "#ff77e9"
+            
+            # Semantic colors
+            "Primary" = "#00f5ff"
+            "Secondary" = "#ff006e"
+            "Accent" = "#fffc00"
+            "Info" = "#00f5ff"
+            "Success" = "#00ff88"
+            "Warning" = "#fffc00"
+            "Error" = "#ff006e"
+            "Subtle" = "#8b5cf6"
+            
+            # Component colors
+            "button.normal.bg" = "#2d1b69"
+            "button.normal.fg" = "#ff77e9"
+            "button.focus.bg" = "#ff006e"
+            "button.focus.fg" = "#ffffff"
+            "button.pressed.bg" = "#ff77e9"
+            "button.pressed.fg" = "#1a1a2e"
+            
+            "textbox.normal.bg" = "#2d1b69"
+            "textbox.normal.fg" = "#00f5ff"
+            "textbox.focus.bg" = "#3d2b79"
+            "textbox.focus.fg" = "#ffffff"
+            "textbox.placeholder" = "#8b5cf6"
+            
+            "list.item.normal" = "#eee"
+            "list.item.selected" = "#1a1a2e"
+            "list.item.selected.background" = "#ff77e9"
+            
+            "scrollbar.track" = "#2d1b69"
+            "scrollbar.thumb" = "#ff006e"
+            
+            "status.bar.bg" = "#ff006e"
+            "status.bar.fg" = "#ffffff"
+            
+            "panel.background" = "#16213e"
+            "group.background" = "#0f3460"
+            
+            "link" = "#00f5ff"
+            "code" = "#fffc00"
+        }
+        $this.ThemeName = "Synthwave"
+    }
+    
+    [void] LoadHighContrastLightTheme() {
+        $this.CurrentTheme = @{
+            # Core colors
+            "Background" = "#ffffff"
+            "Foreground" = "#000000"
+            "Border" = "#000000"
+            "Title" = "#000000"
+            
+            # Semantic colors
+            "Primary" = "#0066cc"
+            "Secondary" = "#663399"
+            "Accent" = "#ff6600"
+            "Info" = "#0099cc"
+            "Success" = "#009900"
+            "Warning" = "#ff9900"
+            "Error" = "#cc0000"
+            "Subtle" = "#666666"
+            
+            # Component colors
+            "button.normal.bg" = "#f0f0f0"
+            "button.normal.fg" = "#000000"
+            "button.focus.bg" = "#0066cc"
+            "button.focus.fg" = "#ffffff"
+            "button.pressed.bg" = "#003366"
+            "button.pressed.fg" = "#ffffff"
+            
+            "textbox.normal.bg" = "#ffffff"
+            "textbox.normal.fg" = "#000000"
+            "textbox.focus.bg" = "#e6f2ff"
+            "textbox.focus.fg" = "#000000"
+            "textbox.placeholder" = "#666666"
+            
+            "list.item.normal" = "#000000"
+            "list.item.selected" = "#ffffff"
+            "list.item.selected.background" = "#0066cc"
+            
+            "scrollbar.track" = "#cccccc"
+            "scrollbar.thumb" = "#666666"
+            
+            "status.bar.bg" = "#000000"
+            "status.bar.fg" = "#ffffff"
+            
+            "panel.background" = "#f9f9f9"
+            "group.background" = "#eeeeee"
+            
+            "link" = "#0066cc"
+            "code" = "#663399"
+        }
+        $this.ThemeName = "HighContrastLight"
+    }
+    
+    [void] LoadPaperTheme() {
+        $this.CurrentTheme = @{
+            # Core colors - sepia/e-ink style
+            "Background" = "#f4f1ea"
+            "Foreground" = "#3e3e3e"
+            "Border" = "#8b7355"
+            "Title" = "#5d4e37"
+            
+            # Semantic colors
+            "Primary" = "#704214"
+            "Secondary" = "#8b7355"
+            "Accent" = "#a0522d"
+            "Info" = "#4682b4"
+            "Success" = "#228b22"
+            "Warning" = "#ff8c00"
+            "Error" = "#b22222"
+            "Subtle" = "#8b8378"
+            
+            # Component colors
+            "button.normal.bg" = "#e8dcc6"
+            "button.normal.fg" = "#3e3e3e"
+            "button.focus.bg" = "#8b7355"
+            "button.focus.fg" = "#f4f1ea"
+            "button.pressed.bg" = "#5d4e37"
+            "button.pressed.fg" = "#f4f1ea"
+            
+            "textbox.normal.bg" = "#faf8f3"
+            "textbox.normal.fg" = "#3e3e3e"
+            "textbox.focus.bg" = "#ffffff"
+            "textbox.focus.fg" = "#2e2e2e"
+            "textbox.placeholder" = "#8b8378"
+            
+            "list.item.normal" = "#3e3e3e"
+            "list.item.selected" = "#f4f1ea"
+            "list.item.selected.background" = "#704214"
+            
+            "scrollbar.track" = "#e8dcc6"
+            "scrollbar.thumb" = "#8b7355"
+            
+            "status.bar.bg" = "#5d4e37"
+            "status.bar.fg" = "#f4f1ea"
+            
+            "panel.background" = "#ede7d9"
+            "group.background" = "#e0d5c7"
+            
+            "link" = "#704214"
+            "code" = "#8b0000"
+        }
+        $this.ThemeName = "Paper"
+    }
+    
+    [string[]] GetAvailableThemes() {
+        return @("Default", "Synthwave", "HighContrastLight", "Paper")
+    }
+    
+    [void] LoadTheme([string]$themeName) {
+        switch ($themeName) {
+            "Default" { $this.LoadDefaultTheme() }
+            "Synthwave" { $this.LoadSynthwaveTheme() }
+            "HighContrastLight" { $this.LoadHighContrastLightTheme() }
+            "Paper" { $this.LoadPaperTheme() }
+            default { $this.LoadDefaultTheme() }
+        }
+    }
+    
     [object] GetColor([string]$colorName) {
         if ([string]::IsNullOrWhiteSpace($colorName)) {
             return "#808080" # Default fallback hex
@@ -1113,23 +1313,6 @@ class ThemeManager {
         Write-Verbose "ThemeManager: Set color '$colorName' to '$hexColor'"
     }
     
-    [void] LoadTheme([string]$themeName) {
-        # In a full implementation, this would load from JSON files
-        # For now, just support the default theme
-        switch ($themeName.ToLower()) {
-            "default" {
-                $this.LoadDefaultTheme()
-            }
-            "dark" {
-                $this.LoadDefaultTheme() # Same as default for now
-            }
-            default {
-                Write-Warning "ThemeManager: Unknown theme '$themeName', loading default"
-                $this.LoadDefaultTheme()
-            }
-        }
-        Write-Verbose "ThemeManager: Loaded theme '$themeName'"
-    }
     
     [hashtable] GetAllColors() {
         return $this.CurrentTheme.Clone()
