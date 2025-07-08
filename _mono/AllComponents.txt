@@ -39,15 +39,15 @@ class LabelComponent : UIElement {
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Get foreground color
-        $fg = if ($this.ForegroundColor) {
+        if ($this.ForegroundColor) {
             if ($this.ForegroundColor -is [ConsoleColor]) {
                 # Convert ConsoleColor to hex if needed
-                Get-ThemeColor("Foreground") # Use theme default instead
+                $fg = Get-ThemeColor("Foreground") # Use theme default instead
             } else {
-                $this.ForegroundColor # Assume it's already hex
+                $fg = $this.ForegroundColor # Assume it's already hex
             }
         } else {
-            Get-ThemeColor("Foreground")
+            $fg = Get-ThemeColor("Foreground")
         }
         
         # Draw text
@@ -332,8 +332,16 @@ class CheckBoxComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
-        $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
+        if ($this.IsFocused) { 
+            $fgColor = Get-ThemeColor("Primary") 
+        } else { 
+            $fgColor = Get-ThemeColor("Foreground") 
+        }
+        if ($this.Checked) { 
+            $checkMark = "[X]" 
+        } else { 
+            $checkMark = "[ ]" 
+        }
         $fullText = "$checkMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -387,8 +395,16 @@ class RadioButtonComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
-        $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
+        if ($this.IsFocused) { 
+            $fgColor = Get-ThemeColor("Primary") 
+        } else { 
+            $fgColor = Get-ThemeColor("Foreground") 
+        }
+        if ($this.Selected) { 
+            $radioMark = "(o)" 
+        } else { 
+            $radioMark = "( )" 
+        }
         $fullText = "$radioMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -764,9 +780,11 @@ class NumericInputComponent : UIElement {
             if ($this.IsFocused -and $this._cursorPosition -le $displayValue.Length) {
                 $cursorX = 1 + $this._cursorPosition
                 if ($cursorX -lt $this.Width - 2) {
-                    $cursorChar = if ($this._cursorPosition -lt $this._textValue.Length) {
-                        $this._textValue[$this._cursorPosition]
-                    } else { ' ' }
+                    if ($this._cursorPosition -lt $this._textValue.Length) {
+                        $cursorChar = $this._textValue[$this._cursorPosition]
+                    } else { 
+                        $cursorChar = ' ' 
+                    }
                     
                     $this._private_buffer.SetCell($cursorX, 1, 
                         [TuiCell]::new($cursorChar, $bgColor, $fgColor))
@@ -924,10 +942,18 @@ class DateInputComponent : UIElement {
         try {
             $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
             $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            if ($this.IsFocused) { 
+                $borderColorValue = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" 
+            } else { 
+                $borderColorValue = Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor 
+            }
             
             # Adjust height based on calendar visibility
-            $renderHeight = if ($this._showCalendar) { 10 } else { 3 }
+            if ($this._showCalendar) { 
+                $renderHeight = 10 
+            } else { 
+                $renderHeight = 3 
+            }
             if ($this.Height -ne $renderHeight) {
                 $this.Height = $renderHeight
                 $this.RequestRedraw()
@@ -1146,7 +1172,11 @@ class ComboBoxComponent : UIElement {
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw main box
-            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            if ($this.IsFocused) { 
+                $borderColor = Get-ThemeColor("Primary") 
+            } else { 
+                $borderColor = Get-ThemeColor("component.border") 
+            }
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
                 -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
             
@@ -1160,10 +1190,10 @@ class ComboBoxComponent : UIElement {
                 $displayText = $this.GetDisplayText($item)
             }
             
-            $textColor = if ($displayText) { 
-                Get-ThemeColor("input.foreground") 
+            if ($displayText) { 
+                $textColor = Get-ThemeColor("input.foreground") 
             } else { 
-                Get-ThemeColor("input.placeholder") 
+                $textColor = Get-ThemeColor("input.placeholder") 
             }
             
             $maxTextWidth = $this.Width - 4  # Border + dropdown arrow
@@ -1175,8 +1205,16 @@ class ComboBoxComponent : UIElement {
                 -Style @{ FG = $textColor; BG = $bgColor }
             
             # Draw dropdown arrow
-            $arrowChar = if ($this._isDropdownOpen) { '▲' } else { '▼' }
-            $arrowColor = if ($this.IsFocused) { Get-ThemeColor("Accent") } else { Get-ThemeColor("Subtle") }
+            if ($this._isDropdownOpen) { 
+                $arrowChar = '▲' 
+            } else { 
+                $arrowChar = '▼' 
+            }
+            if ($this.IsFocused) { 
+                $arrowColor = Get-ThemeColor("Accent") 
+            } else { 
+                $arrowColor = Get-ThemeColor("Subtle") 
+            }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $arrowColor, $bgColor))
             
             # Draw dropdown if open (as overlay)
@@ -1490,7 +1528,11 @@ class Table : UIElement {
         try {
             $bgColor = Get-ThemeColor("component.background")
             $fgColor = Get-ThemeColor("Foreground")
-            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            if ($this.IsFocused) { 
+                $borderColor = Get-ThemeColor("Primary") 
+            } else { 
+                $borderColor = Get-ThemeColor("component.border") 
+            }
             $headerBg = Get-ThemeColor("list.header.bg")
             $selectedBg = Get-ThemeColor("list.item.selected.background")
             
@@ -1758,7 +1800,11 @@ class Panel : UIElement {
             $this.UpdateContentDimensions()
 
             if ($this.HasBorder) {
-                $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+                if ($this.IsFocused) { 
+                    $borderColorValue = Get-ThemeColor("Primary") 
+                } else { 
+                    $borderColorValue = Get-ThemeColor("component.border") 
+                }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
@@ -1775,8 +1821,16 @@ class Panel : UIElement {
     [void] ApplyLayout() {
         if ($this.LayoutType -eq "Manual") { return }
 
-        $layoutX = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
-        $layoutY = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        if ($this.HasBorder) { 
+            $layoutX = 1 + $this.Padding 
+        } else { 
+            $layoutX = $this.Padding 
+        }
+        if ($this.HasBorder) { 
+            $layoutY = 1 + $this.Padding 
+        } else { 
+            $layoutY = $this.Padding 
+        }
         $layoutWidth = [Math]::Max(0, $this.Width - (2 * $layoutX))
         $layoutHeight = [Math]::Max(0, $this.Height - (2 * $layoutY))
 
@@ -1973,8 +2027,16 @@ class ScrollablePanel : Panel {
     # Update SetCell calls in DrawScrollbar to use hex colors.
     [void] DrawScrollbar() {
         $scrollbarX = $this.Width - 1
-        $scrollbarY = if ($this.HasBorder) { 1 } else { 0 }
-        $scrollbarTrackHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+        if ($this.HasBorder) { 
+            $scrollbarY = 1 
+        } else { 
+            $scrollbarY = 0 
+        }
+        if ($this.HasBorder) { 
+            $scrollbarTrackHeight = $this.Height - 2 
+        } else { 
+            $scrollbarTrackHeight = $this.Height - 0 
+        }
 
         if ($this._contentHeight -le $scrollbarTrackHeight) { 
             # If content fits, clear any previous scrollbar
@@ -2179,22 +2241,26 @@ class ListBox : UIElement {
             for ($i = 0; $i -lt $contentHeight -and ($i + $this.ScrollOffset) -lt $this.Items.Count; $i++) {
                 $itemIndex = $i + $this.ScrollOffset
                 $item = $this.Items[$itemIndex]
-                $itemText = if ($item -is [string]) { $item } else { $item.ToString() }
+                if ($item -is [string]) { 
+                    $itemText = $item 
+                } else { 
+                    $itemText = $item.ToString() 
+                }
                 
                 if ($itemText.Length -gt $contentWidth) {
                     $itemText = $itemText.Substring(0, $contentWidth - 3) + "..."
                 }
                 
                 $isSelected = ($itemIndex -eq $this.SelectedIndex)
-                $fgColor = if ($isSelected) { 
-                    Get-ThemeColor("list.item.selected") 
+                if ($isSelected) { 
+                    $fgColor = Get-ThemeColor("list.item.selected") 
                 } else { 
-                    Get-ThemeColor("list.item.normal") 
+                    $fgColor = Get-ThemeColor("list.item.normal") 
                 }
-                $itemBgColor = if ($isSelected) { 
-                    Get-ThemeColor("list.item.selected.background") 
+                if ($isSelected) { 
+                    $itemBgColor = Get-ThemeColor("list.item.selected.background") 
                 } else { 
-                    $bgColor 
+                    $itemBgColor = $bgColor 
                 }
                 
                 # Draw item background
@@ -2341,6 +2407,8 @@ class CommandPalette : UIElement {
     hidden [object]$_actionService
     hidden [scriptblock]$OnCancel
     hidden [scriptblock]$OnSelect
+    hidden [System.DateTime]$_lastSearchTime = [DateTime]::MinValue
+    hidden [string]$_pendingSearchText = ""
 
     CommandPalette([string]$name, [object]$actionService) : base($name) {
         $this.IsFocusable = $true
@@ -2435,6 +2503,14 @@ class CommandPalette : UIElement {
     }
 
     [void] FilterActions([string]$searchText) {
+        # Implement debouncing
+        $now = [DateTime]::Now
+        if (($now - $this._lastSearchTime).TotalMilliseconds -lt 100) {
+            $this._pendingSearchText = $searchText
+            return
+        }
+        $this._lastSearchTime = $now
+        
         $this._filteredActions.Clear()
         $this._listBox.ClearItems()
         
@@ -2442,32 +2518,37 @@ class CommandPalette : UIElement {
             # Show all actions
             foreach ($action in $this._allActions) {
                 $this._filteredActions.Add($action)
-                $displayText = if ($action.Category) { 
-                    "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                if ($action.Category) { 
+                    $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
                 } else { 
-                    "$($action.Name) - $($action.Description)" 
+                    $displayText = "$($action.Name) - $($action.Description)" 
                 }
                 $this._listBox.AddItem($displayText)
             }
         }
         else {
-            # Fuzzy search
+            # Use simple contains for better performance
             $searchLower = $searchText.ToLower()
             foreach ($action in $this._allActions) {
-                $nameMatch = $action.Name.ToLower().Contains($searchLower)
-                $descMatch = $action.Description.ToLower().Contains($searchLower)
-                $catMatch = $action.Category -and $action.Category.ToLower().Contains($searchLower)
-                
-                if ($nameMatch -or $descMatch -or $catMatch) {
+                # Quick check for name match first (most likely)
+                if ($action.Name.ToLower().Contains($searchLower) -or
+                    ($action.Description -and $action.Description.ToLower().Contains($searchLower)) -or
+                    ($action.Category -and $action.Category.ToLower().Contains($searchLower))) {
+                    
                     $this._filteredActions.Add($action)
-                    $displayText = if ($action.Category) { 
-                        "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                    if ($action.Category) { 
+                        $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
                     } else { 
-                        "$($action.Name) - $($action.Description)" 
+                        $displayText = "$($action.Name) - $($action.Description)" 
                     }
                     $this._listBox.AddItem($displayText)
                 }
             }
+        }
+        
+        # Reset selection
+        if ($this._filteredActions.Count -gt 0) {
+            $this._listBox.SelectedIndex = 0
         }
         
         # Ensure list is refreshed
@@ -2613,6 +2694,7 @@ class Dialog : UIElement {
     hidden [object]$Result = $null
     hidden [bool]$_isComplete = $false
     [scriptblock]$OnClose
+    [DialogResult]$DialogResult = [DialogResult]::None
 
     Dialog([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -3016,6 +3098,190 @@ class InputDialog : Dialog {
     }
 }
 
+# Task Create/Edit Dialog
+class TaskDialog : Dialog {
+    hidden [TextBoxComponent] $_titleBox
+    hidden [MultilineTextBoxComponent] $_descriptionBox
+    hidden [ComboBoxComponent] $_statusCombo
+    hidden [ComboBoxComponent] $_priorityCombo
+    hidden [NumericInputComponent] $_progressInput
+    hidden [ButtonComponent] $_saveButton
+    hidden [ButtonComponent] $_cancelButton
+    hidden [PmcTask] $_task
+    hidden [bool] $_isNewTask
+    
+    TaskDialog([string]$title, [PmcTask]$task) : base($title) {
+        $this._task = if ($task) { $task } else { [PmcTask]::new() }
+        $this._isNewTask = ($null -eq $task)
+        $this.Width = 60
+        $this.Height = 20
+    }
+    
+    [void] Initialize() {
+        ([Dialog]$this).Initialize()
+        
+        $contentY = 2
+        $labelWidth = 12
+        $inputX = $labelWidth + 2
+        $inputWidth = $this.ContentWidth - $inputX - 2
+        
+        # Title
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = $contentY
+        $this._panel.AddChild($titleLabel)
+        
+        $this._titleBox = [TextBoxComponent]::new("TitleBox")
+        $this._titleBox.X = $inputX
+        $this._titleBox.Y = $contentY
+        $this._titleBox.Width = $inputWidth
+        $this._titleBox.Height = 1
+        $this._titleBox.Text = $this._task.Title
+        $this._panel.AddChild($this._titleBox)
+        $contentY += 2
+        
+        # Description
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = $contentY
+        $this._panel.AddChild($descLabel)
+        
+        $this._descriptionBox = [MultilineTextBoxComponent]::new("DescBox")
+        $this._descriptionBox.X = $inputX
+        $this._descriptionBox.Y = $contentY
+        $this._descriptionBox.Width = $inputWidth
+        $this._descriptionBox.Height = 3
+        $this._descriptionBox.Text = $this._task.Description
+        $this._panel.AddChild($this._descriptionBox)
+        $contentY += 4
+        
+        # Status
+        $statusLabel = [LabelComponent]::new("StatusLabel")
+        $statusLabel.Text = "Status:"
+        $statusLabel.X = 2
+        $statusLabel.Y = $contentY
+        $this._panel.AddChild($statusLabel)
+        
+        $this._statusCombo = [ComboBoxComponent]::new("StatusCombo")
+        $this._statusCombo.X = $inputX
+        $this._statusCombo.Y = $contentY
+        $this._statusCombo.Width = $inputWidth
+        $this._statusCombo.Height = 1
+        $this._statusCombo.Items = @([TaskStatus]::GetEnumNames())
+        $this._statusCombo.SelectedIndex = [Array]::IndexOf($this._statusCombo.Items, $this._task.Status.ToString())
+        $this._panel.AddChild($this._statusCombo)
+        $contentY += 2
+        
+        # Priority
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 2
+        $priorityLabel.Y = $contentY
+        $this._panel.AddChild($priorityLabel)
+        
+        $this._priorityCombo = [ComboBoxComponent]::new("PriorityCombo")
+        $this._priorityCombo.X = $inputX
+        $this._priorityCombo.Y = $contentY
+        $this._priorityCombo.Width = $inputWidth
+        $this._priorityCombo.Height = 1
+        $this._priorityCombo.Items = @([TaskPriority]::GetEnumNames())
+        $this._priorityCombo.SelectedIndex = [Array]::IndexOf($this._priorityCombo.Items, $this._task.Priority.ToString())
+        $this._panel.AddChild($this._priorityCombo)
+        $contentY += 2
+        
+        # Progress
+        $progressLabel = [LabelComponent]::new("ProgressLabel")
+        $progressLabel.Text = "Progress %:"
+        $progressLabel.X = 2
+        $progressLabel.Y = $contentY
+        $this._panel.AddChild($progressLabel)
+        
+        $this._progressInput = [NumericInputComponent]::new("ProgressInput")
+        $this._progressInput.X = $inputX
+        $this._progressInput.Y = $contentY
+        $this._progressInput.Width = 10
+        $this._progressInput.Height = 1
+        $this._progressInput.MinValue = 0
+        $this._progressInput.MaxValue = 100
+        $this._progressInput.Value = $this._task.Progress
+        $this._panel.AddChild($this._progressInput)
+        $contentY += 3
+        
+        # Buttons
+        $buttonY = $this.ContentHeight - 3
+        $buttonWidth = 12
+        $spacing = 2
+        $totalButtonWidth = ($buttonWidth * 2) + $spacing
+        $startX = [Math]::Floor(($this.ContentWidth - $totalButtonWidth) / 2)
+        
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save"
+        $this._saveButton.X = $startX
+        $this._saveButton.Y = $buttonY
+        $this._saveButton.Width = $buttonWidth
+        $this._saveButton.Height = 1
+        $thisDialog = $this
+        $this._saveButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::OK
+            $thisDialog.Complete($thisDialog.DialogResult)
+        }.GetNewClosure()
+        $this._panel.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel"
+        $this._cancelButton.X = $startX + $buttonWidth + $spacing
+        $this._cancelButton.Y = $buttonY
+        $this._cancelButton.Width = $buttonWidth
+        $this._cancelButton.Height = 1
+        $this._cancelButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::Cancel
+            $thisDialog.Complete($thisDialog.DialogResult)
+        }.GetNewClosure()
+        $this._panel.AddChild($this._cancelButton)
+        
+        # Set initial focus
+        Set-ComponentFocus -Component $this._titleBox
+    }
+    
+    [PmcTask] GetTask() {
+        if ($this.DialogResult -eq [DialogResult]::OK) {
+            # Update task with form values
+            $this._task.Title = $this._titleBox.Text
+            $this._task.Description = $this._descriptionBox.Text
+            $this._task.Status = [TaskStatus]::($this._statusCombo.Items[$this._statusCombo.SelectedIndex])
+            $this._task.Priority = [TaskPriority]::($this._priorityCombo.Items[$this._priorityCombo.SelectedIndex])
+            $this._task.SetProgress($this._progressInput.Value)
+            $this._task.UpdatedAt = [DateTime]::Now
+        }
+        return $this._task
+    }
+}
+
+# Task Delete Confirmation Dialog
+class TaskDeleteDialog : ConfirmDialog {
+    hidden [PmcTask] $_task
+    
+    TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
+        $this._task = $task
+    }
+    
+    [void] Initialize() {
+        ([ConfirmDialog]$this).Initialize()
+        
+        # Add task details to the message
+        if ($this._task) {
+            $detailsLabel = [LabelComponent]::new("TaskDetails")
+            $detailsLabel.Text = "Task: $($this._task.Title)"
+            $detailsLabel.X = 2
+            $detailsLabel.Y = 4
+            $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+            $this._panel.AddChild($detailsLabel)
+        }
+    }
+}
+
 #endregion Dialog Components
 
 #region Navigation Components
@@ -3201,3 +3467,15 @@ class NavigationMenu : UIElement {
 #<!-- END_PAGE: ACO.021 -->
 
 #endregion Navigation Components
+
+#region Dialog Result Enum
+enum DialogResult {
+    None = 0
+    OK = 1
+    Cancel = 2
+    Yes = 3
+    No = 4
+    Retry = 5
+    Abort = 6
+}
+#endregion

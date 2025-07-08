@@ -1042,298 +1042,223 @@ class NavigationService {
 # Purpose: Visual theming system with consistent hex color output
 class ThemeManager {
     [hashtable]$CurrentTheme = @{}
-    [string]$ThemeName = "Default"
+    [string]$ThemeName = "Synthwave"
+    [hashtable]$Themes = @{}
     
     ThemeManager() {
-        $this.LoadDefaultTheme()
-        Write-Verbose "ThemeManager: Initialized with theme '$($this.ThemeName)'"
+        $this.InitializeThemes()
+        $this.LoadTheme($this.ThemeName)
     }
     
-    [void] LoadDefaultTheme() {
-        # Default dark theme with all hex colors
-        $this.CurrentTheme = @{
+    [void] InitializeThemes() {
+        # Synthwave Theme - Neon cyberpunk aesthetic
+        $this.Themes["Synthwave"] = @{
             # Base colors
-            "Background" = "#000000"
-            "Foreground" = "#FFFFFF"
-            "Primary" = "#00FFFF"
-            "Secondary" = "#008080"
-            "Accent" = "#FFFF00"
-            "Subtle" = "#808080"
-            "Success" = "#00FF00"
-            "Warning" = "#FFFF00"
-            "Error" = "#FF0000"
-            "Info" = "#00FFFF"
-            
-            # Component colors
-            "component.background" = "#000000"
-            "component.border" = "#808080"
-            "component.title" = "#00FFFF"
-            
-            # Button colors
-            "button.normal.fg" = "#FFFFFF"
-            "button.normal.bg" = "#333333"
-            "button.focused.fg" = "#000000"
-            "button.focused.bg" = "#00FFFF"
-            "button.pressed.fg" = "#FFFFFF"
-            "button.pressed.bg" = "#008080"
-            "button.disabled.fg" = "#666666"
-            "button.disabled.bg" = "#222222"
-            
-            # Input colors
-            "input.background" = "#000000"
-            "input.foreground" = "#FFFFFF"
-            "input.border" = "#808080"
-            "input.cursor" = "#00FFFF"
-            "input.placeholder" = "#666666"
-            
-            # List colors
-            "list.item.normal" = "#FFFFFF"
-            "list.item.selected" = "#000000"
-            "list.item.selected.background" = "#00FFFF"
-            "list.header.fg" = "#FFFF00"
-            "list.header.bg" = "#333333"
-            "list.scrollbar" = "#808080"
-            
-            # Dialog colors
-            "dialog.border" = "#00FFFF"
-            "dialog.background" = "#000000"
-            "dialog.foreground" = "#FFFFFF"
-            
-            # Status colors
-            "status.background" = "#333333"
-            "status.foreground" = "#FFFFFF"
-        }
-        $this.ThemeName = "Default"
-    }
-    
-    [void] LoadSynthwaveTheme() {
-        $this.CurrentTheme = @{
-            # Core colors
-            "Background" = "#1a1a2e"
-            "Foreground" = "#eee"
-            "Border" = "#ff006e"
-            "Title" = "#ff77e9"
-            
-            # Semantic colors
-            "Primary" = "#00f5ff"
-            "Secondary" = "#ff006e"
-            "Accent" = "#fffc00"
-            "Info" = "#00f5ff"
-            "Success" = "#00ff88"
-            "Warning" = "#fffc00"
+            "Background" = "#0a0e27"
+            "Foreground" = "#f92aad"
+            "Subtle" = "#72f1b8"
+            "Primary" = "#ff6ac1"
+            "Accent" = "#ffcc00"
+            "Secondary" = "#5a189a"
             "Error" = "#ff006e"
-            "Subtle" = "#8b5cf6"
+            "Warning" = "#ffbe0b"
+            "Success" = "#3bf4fb"
+            "Info" = "#8338ec"
             
-            # Component colors
-            "button.normal.bg" = "#2d1b69"
-            "button.normal.fg" = "#ff77e9"
-            "button.focus.bg" = "#ff006e"
-            "button.focus.fg" = "#ffffff"
-            "button.pressed.bg" = "#ff77e9"
-            "button.pressed.fg" = "#1a1a2e"
+            # Component specific
+            "component.background" = "#0a0e27"
+            "component.border" = "#f92aad"
+            "component.title" = "#ffcc00"
             
-            "textbox.normal.bg" = "#2d1b69"
-            "textbox.normal.fg" = "#00f5ff"
-            "textbox.focus.bg" = "#3d2b79"
-            "textbox.focus.fg" = "#ffffff"
-            "textbox.placeholder" = "#8b5cf6"
+            # Input
+            "input.background" = "#1a1e3a"
+            "input.foreground" = "#f92aad"
+            "input.placeholder" = "#72f1b8"
             
-            "list.item.normal" = "#eee"
-            "list.item.selected" = "#1a1a2e"
-            "list.item.selected.background" = "#ff77e9"
+            # Button states
+            "button.normal.fg" = "#0a0e27"
+            "button.normal.bg" = "#f92aad"
+            "button.focused.fg" = "#0a0e27"
+            "button.focused.bg" = "#ff6ac1"
+            "button.pressed.fg" = "#0a0e27"
+            "button.pressed.bg" = "#ffcc00"
+            "button.disabled.fg" = "#555555"
+            "button.disabled.bg" = "#2a2e4a"
             
-            "scrollbar.track" = "#2d1b69"
-            "scrollbar.thumb" = "#ff006e"
-            
-            "status.bar.bg" = "#ff006e"
-            "status.bar.fg" = "#ffffff"
-            
-            "panel.background" = "#16213e"
-            "group.background" = "#0f3460"
-            
-            "link" = "#00f5ff"
-            "code" = "#fffc00"
+            # List/Table
+            "list.header.fg" = "#ffcc00"
+            "list.header.bg" = "#1a1e3a"
+            "list.item.normal" = "#f92aad"
+            "list.item.selected" = "#0a0e27"
+            "list.item.selected.background" = "#ff6ac1"
+            "list.scrollbar" = "#72f1b8"
         }
-        $this.ThemeName = "Synthwave"
-    }
-    
-    [void] LoadHighContrastLightTheme() {
-        $this.CurrentTheme = @{
-            # Core colors
-            "Background" = "#ffffff"
-            "Foreground" = "#000000"
-            "Border" = "#000000"
-            "Title" = "#000000"
+        
+        # Aurora Theme - Northern lights inspired
+        $this.Themes["Aurora"] = @{
+            # Base colors
+            "Background" = "#011627"
+            "Foreground" = "#d6deeb"
+            "Subtle" = "#7fdbca"
+            "Primary" = "#82aaff"
+            "Accent" = "#21c7a8"
+            "Secondary" = "#c792ea"
+            "Error" = "#ef5350"
+            "Warning" = "#ffeb95"
+            "Success" = "#22da6e"
+            "Info" = "#82aaff"
             
-            # Semantic colors
-            "Primary" = "#0066cc"
-            "Secondary" = "#663399"
-            "Accent" = "#ff6600"
-            "Info" = "#0099cc"
-            "Success" = "#009900"
-            "Warning" = "#ff9900"
-            "Error" = "#cc0000"
-            "Subtle" = "#666666"
+            # Component specific
+            "component.background" = "#011627"
+            "component.border" = "#5f7e97"
+            "component.title" = "#21c7a8"
             
-            # Component colors
-            "button.normal.bg" = "#f0f0f0"
-            "button.normal.fg" = "#000000"
-            "button.focus.bg" = "#0066cc"
-            "button.focus.fg" = "#ffffff"
-            "button.pressed.bg" = "#003366"
-            "button.pressed.fg" = "#ffffff"
+            # Input
+            "input.background" = "#0e293f"
+            "input.foreground" = "#d6deeb"
+            "input.placeholder" = "#637777"
             
-            "textbox.normal.bg" = "#ffffff"
-            "textbox.normal.fg" = "#000000"
-            "textbox.focus.bg" = "#e6f2ff"
-            "textbox.focus.fg" = "#000000"
-            "textbox.placeholder" = "#666666"
+            # Button states
+            "button.normal.fg" = "#011627"
+            "button.normal.bg" = "#82aaff"
+            "button.focused.fg" = "#011627"
+            "button.focused.bg" = "#21c7a8"
+            "button.pressed.fg" = "#011627"
+            "button.pressed.bg" = "#c792ea"
+            "button.disabled.fg" = "#444444"
+            "button.disabled.bg" = "#1d3b53"
             
-            "list.item.normal" = "#000000"
-            "list.item.selected" = "#ffffff"
-            "list.item.selected.background" = "#0066cc"
-            
-            "scrollbar.track" = "#cccccc"
-            "scrollbar.thumb" = "#666666"
-            
-            "status.bar.bg" = "#000000"
-            "status.bar.fg" = "#ffffff"
-            
-            "panel.background" = "#f9f9f9"
-            "group.background" = "#eeeeee"
-            
-            "link" = "#0066cc"
-            "code" = "#663399"
+            # List/Table
+            "list.header.fg" = "#21c7a8"
+            "list.header.bg" = "#0e293f"
+            "list.item.normal" = "#d6deeb"
+            "list.item.selected" = "#011627"
+            "list.item.selected.background" = "#82aaff"
+            "list.scrollbar" = "#5f7e97"
         }
-        $this.ThemeName = "HighContrastLight"
-    }
-    
-    [void] LoadPaperTheme() {
-        $this.CurrentTheme = @{
-            # Core colors - sepia/e-ink style
-            "Background" = "#f4f1ea"
-            "Foreground" = "#3e3e3e"
-            "Border" = "#8b7355"
-            "Title" = "#5d4e37"
+        
+        # Ocean Theme - Deep sea aesthetics
+        $this.Themes["Ocean"] = @{
+            # Base colors
+            "Background" = "#0f111a"
+            "Foreground" = "#8f93a2"
+            "Subtle" = "#4b526d"
+            "Primary" = "#00bcd4"
+            "Accent" = "#00e676"
+            "Secondary" = "#536dfe"
+            "Error" = "#ff5252"
+            "Warning" = "#ffb74d"
+            "Success" = "#00e676"
+            "Info" = "#448aff"
             
-            # Semantic colors
-            "Primary" = "#704214"
-            "Secondary" = "#8b7355"
-            "Accent" = "#a0522d"
-            "Info" = "#4682b4"
-            "Success" = "#228b22"
-            "Warning" = "#ff8c00"
-            "Error" = "#b22222"
-            "Subtle" = "#8b8378"
+            # Component specific
+            "component.background" = "#0f111a"
+            "component.border" = "#1f2937"
+            "component.title" = "#00bcd4"
             
-            # Component colors
-            "button.normal.bg" = "#e8dcc6"
-            "button.normal.fg" = "#3e3e3e"
-            "button.focus.bg" = "#8b7355"
-            "button.focus.fg" = "#f4f1ea"
-            "button.pressed.bg" = "#5d4e37"
-            "button.pressed.fg" = "#f4f1ea"
+            # Input
+            "input.background" = "#1a1f2e"
+            "input.foreground" = "#8f93a2"
+            "input.placeholder" = "#4b526d"
             
-            "textbox.normal.bg" = "#faf8f3"
-            "textbox.normal.fg" = "#3e3e3e"
-            "textbox.focus.bg" = "#ffffff"
-            "textbox.focus.fg" = "#2e2e2e"
-            "textbox.placeholder" = "#8b8378"
+            # Button states
+            "button.normal.fg" = "#0f111a"
+            "button.normal.bg" = "#00bcd4"
+            "button.focused.fg" = "#0f111a"
+            "button.focused.bg" = "#00e676"
+            "button.pressed.fg" = "#0f111a"
+            "button.pressed.bg" = "#536dfe"
+            "button.disabled.fg" = "#333333"
+            "button.disabled.bg" = "#1a1f2e"
             
-            "list.item.normal" = "#3e3e3e"
-            "list.item.selected" = "#f4f1ea"
-            "list.item.selected.background" = "#704214"
-            
-            "scrollbar.track" = "#e8dcc6"
-            "scrollbar.thumb" = "#8b7355"
-            
-            "status.bar.bg" = "#5d4e37"
-            "status.bar.fg" = "#f4f1ea"
-            
-            "panel.background" = "#ede7d9"
-            "group.background" = "#e0d5c7"
-            
-            "link" = "#704214"
-            "code" = "#8b0000"
+            # List/Table
+            "list.header.fg" = "#00e676"
+            "list.header.bg" = "#1a1f2e"
+            "list.item.normal" = "#8f93a2"
+            "list.item.selected" = "#0f111a"
+            "list.item.selected.background" = "#00bcd4"
+            "list.scrollbar" = "#4b526d"
         }
-        $this.ThemeName = "Paper"
-    }
-    
-    [string[]] GetAvailableThemes() {
-        return @("Default", "Synthwave", "HighContrastLight", "Paper")
+        
+        # Forest Theme - Nature inspired
+        $this.Themes["Forest"] = @{
+            # Base colors
+            "Background" = "#0d1117"
+            "Foreground" = "#c9d1d9"
+            "Subtle" = "#8b949e"
+            "Primary" = "#58a6ff"
+            "Accent" = "#56d364"
+            "Secondary" = "#d29922"
+            "Error" = "#f85149"
+            "Warning" = "#f0883e"
+            "Success" = "#56d364"
+            "Info" = "#58a6ff"
+            
+            # Component specific
+            "component.background" = "#0d1117"
+            "component.border" = "#30363d"
+            "component.title" = "#56d364"
+            
+            # Input
+            "input.background" = "#161b22"
+            "input.foreground" = "#c9d1d9"
+            "input.placeholder" = "#484f58"
+            
+            # Button states
+            "button.normal.fg" = "#0d1117"
+            "button.normal.bg" = "#58a6ff"
+            "button.focused.fg" = "#0d1117"
+            "button.focused.bg" = "#56d364"
+            "button.pressed.fg" = "#0d1117"
+            "button.pressed.bg" = "#d29922"
+            "button.disabled.fg" = "#484f58"
+            "button.disabled.bg" = "#21262d"
+            
+            # List/Table
+            "list.header.fg" = "#56d364"
+            "list.header.bg" = "#161b22"
+            "list.item.normal" = "#c9d1d9"
+            "list.item.selected" = "#0d1117"
+            "list.item.selected.background" = "#58a6ff"
+            "list.scrollbar" = "#8b949e"
+        }
     }
     
     [void] LoadTheme([string]$themeName) {
-        switch ($themeName) {
-            "Default" { $this.LoadDefaultTheme() }
-            "Synthwave" { $this.LoadSynthwaveTheme() }
-            "HighContrastLight" { $this.LoadHighContrastLightTheme() }
-            "Paper" { $this.LoadPaperTheme() }
-            default { $this.LoadDefaultTheme() }
+        if ($this.Themes.ContainsKey($themeName)) {
+            $this.CurrentTheme = $this.Themes[$themeName].Clone()
+            $this.ThemeName = $themeName
         }
     }
     
-    [object] GetColor([string]$colorName) {
-        if ([string]::IsNullOrWhiteSpace($colorName)) {
-            return "#808080" # Default fallback hex
-        }
-        
+    [void] LoadDefaultTheme() {
+        $this.LoadTheme("Synthwave")
+    }
+    
+    [string] GetColor([string]$colorName) {
+        return $this.GetColor($colorName, "#FFFFFF")
+    }
+    
+    [string] GetColor([string]$colorName, [string]$defaultColor) {
         if ($this.CurrentTheme.ContainsKey($colorName)) {
-            $color = $this.CurrentTheme[$colorName]
-            
-            # Ensure we always return hex format (fixes issue #18)
-            if ($color -is [ConsoleColor]) {
-                # Convert ConsoleColor to hex immediately
-                $hexMap = @{
-                    [ConsoleColor]::Black = "#000000"
-                    [ConsoleColor]::DarkBlue = "#000080"
-                    [ConsoleColor]::DarkGreen = "#008000"
-                    [ConsoleColor]::DarkCyan = "#008080"
-                    [ConsoleColor]::DarkRed = "#800000"
-                    [ConsoleColor]::DarkMagenta = "#800080"
-                    [ConsoleColor]::DarkYellow = "#808000"
-                    [ConsoleColor]::Gray = "#C0C0C0"
-                    [ConsoleColor]::DarkGray = "#808080"
-                    [ConsoleColor]::Blue = "#0000FF"
-                    [ConsoleColor]::Green = "#00FF00"
-                    [ConsoleColor]::Cyan = "#00FFFF"
-                    [ConsoleColor]::Red = "#FF0000"
-                    [ConsoleColor]::Magenta = "#FF00FF"
-                    [ConsoleColor]::Yellow = "#FFFF00"
-                    [ConsoleColor]::White = "#FFFFFF"
-                }
-                return $hexMap[$color] ?? "#808080"
-            }
-            
-            # Already a hex string or other format
-            return $color
+            return $this.CurrentTheme[$colorName]
         }
-        
-        # Write-Log -Level Debug -Message "ThemeManager: Color '$colorName' not found in theme, using default hex #808080"
-        return "#808080" # Always return hex string, never ConsoleColor enum
+        return $defaultColor
     }
     
-    [void] SetColor([string]$colorName, [string]$hexColor) {
-        if ([string]::IsNullOrWhiteSpace($colorName)) {
-            throw "Color name cannot be null or empty"
-        }
-        
-        # Validate hex color format
-        if (-not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
-            throw "Color must be in hex format (#RRGGBB)"
-        }
-        
-        $this.CurrentTheme[$colorName] = $hexColor
-        Write-Verbose "ThemeManager: Set color '$colorName' to '$hexColor'"
+    [void] SetColor([string]$colorName, [string]$colorValue) {
+        $this.CurrentTheme[$colorName] = $colorValue
     }
     
-    
-    [hashtable] GetAllColors() {
-        return $this.CurrentTheme.Clone()
+    [string[]] GetAvailableThemes() {
+        return $this.Themes.Keys | Sort-Object
     }
     
-    [void] Cleanup() {
-        Write-Verbose "ThemeManager: Cleanup complete"
+    [void] CycleTheme() {
+        $themes = $this.GetAvailableThemes()
+        $currentIndex = [array]::IndexOf($themes, $this.ThemeName)
+        $nextIndex = ($currentIndex + 1) % $themes.Count
+        $this.LoadTheme($themes[$nextIndex])
     }
 }
 

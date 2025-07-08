@@ -1,3 +1,14 @@
+# Copy the enhanced Start.ps1 file
+# This updates the existing Start.ps1 with the beautiful splash screen version
+
+# Backup the original
+if (Test-Path ".\Start.ps1") {
+    Copy-Item ".\Start.ps1" ".\Start.ps1.backup" -Force
+    Write-Host "Original Start.ps1 backed up to Start.ps1.backup" -ForegroundColor Yellow
+}
+
+# Create the enhanced Start.ps1
+@'
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Enhanced Application Startup
 # Beautiful splash screen and smooth initialization
@@ -316,3 +327,15 @@ catch {
     $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
 }
+'@ | Set-Content ".\Start.ps1" -Encoding UTF8
+
+Write-Host "Enhanced Start.ps1 created successfully!" -ForegroundColor Green
+Write-Host ""
+Write-Host "The application now features:" -ForegroundColor Cyan
+Write-Host "  • Beautiful animated splash screen" -ForegroundColor White
+Write-Host "  • Theme selection parameter" -ForegroundColor White
+Write-Host "  • Enhanced sample data with emojis" -ForegroundColor White
+Write-Host "  • Fancy service initialization messages" -ForegroundColor White
+Write-Host ""
+Write-Host "Run with: ./Start.ps1" -ForegroundColor Yellow
+Write-Host "Or try:  ./Start.ps1 -Theme Aurora" -ForegroundColor Yellow

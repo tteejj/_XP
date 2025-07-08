@@ -1,314 +1,318 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Application Entry Point
-# Loads all framework files and starts the application
-# ==============================================================================
-#
-# TABLE OF CONTENTS DIRECTIVE:
-# When modifying this file, ensure page markers remain accurate and update
-# TableOfContents.md to reflect any structural changes.
-#
-# Search for "PAGE: STA.###" to find specific sections.
-# Each section ends with "END_PAGE: STA.###"
+# Axiom-Phoenix v4.0 - Enhanced Application Startup
+# Beautiful splash screen and smooth initialization
 # ==============================================================================
 
-#<!-- PAGE: STA.001 - Script Configuration -->
-#region Script Configuration
-
-# Clean session by removing any existing types
-if ($global:TuiState) {
-    Write-Host "Cleaning previous session..." -ForegroundColor Yellow
-    try {
-        if ($global:TuiState.Running) {
-            $global:TuiState.Running = $false
-        }
-        Remove-Variable -Name TuiState -Scope Global -Force -ErrorAction SilentlyContinue
-    } catch {}
-}
-
-# Remove any loaded types from previous runs
-$typesToRemove = @(
-    'TuiAnsiHelper', 'TuiCell', 'TuiBuffer', 'UIElement', 'Component', 'Screen', 'ServiceContainer',
-    'ValidationBase', 'PmcTask', 'PmcProject', 'TimeEntry', 'NavigationItem',
-    'LabelComponent', 'ButtonComponent', 'TextBoxComponent', 'CheckBoxComponent', 'RadioButtonComponent',
-    'Panel', 'ScrollablePanel', 'GroupPanel', 'ListBox', 'TextBox', 'CommandPalette',
-    'ActionService', 'KeybindingService', 'DataManager', 'NavigationService', 'ThemeManager', 'Logger', 'EventManager'
+param(
+    [string]$Theme = "Synthwave",
+    [switch]$NoSplash,
+    [switch]$Debug
 )
 
-foreach ($typeName in $typesToRemove) {
-    try {
-        [System.Management.Automation.PSObject].Assembly.GetTypes() | 
-            Where-Object { $_.Name -eq $typeName } | 
-            ForEach-Object { 
-                Remove-TypeData -TypeName $_.FullName -ErrorAction SilentlyContinue 
-            }
-    } catch {}
-}
-
-Set-StrictMode -Version Latest
+# Set error action preference
 $ErrorActionPreference = 'Stop'
-$VerbosePreference = 'SilentlyContinue'  # Change to 'Continue' for debug output
 
-#endregion
-#<!-- END_PAGE: STA.001 -->
-
-#<!-- PAGE: STA.002 - Framework Loading & Service Initialization -->
-#region Load Framework Files
-
-try {
-    Write-Host "Loading Axiom-Phoenix v4.0..." -ForegroundColor Cyan
+# Function to display animated splash screen
+function Show-SplashScreen {
+    param([int]$Duration = 3000)
     
-    $scriptRoot = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
+    Clear-Host
+    $host.UI.RawUI.CursorSize = 0  # Hide cursor
     
-    # Define files in dependency order (CRITICAL: Do not change order!)
-    $filesToLoad = @(
-        'AllBaseClasses.ps1'   # Foundation types with zero dependencies
-        'AllModels.ps1'        # Data models, depends on base classes
-        'AllFunctions.ps1'     # Helper functions, must be loaded BEFORE components use them
-        'AllComponents.ps1'    # UI components, depends on base + models + functions
-        'AllScreens.ps1'       # Screens, depends on all above
-        'AllServices.ps1'      # Services, can use everything
-        'AllRuntime.ps1'       # Engine and runtime, orchestrates everything
+    $width = $host.UI.RawUI.WindowSize.Width
+    $height = $host.UI.RawUI.WindowSize.Height
+    
+    # ASCII Art Logo
+    $logo = @"
+    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                                                                   ║
+    ║      ___   _  _  _  ___  __  __     ___  _  _  ___  ___  _  _  _ ║
+    ║     / _ \ | \/ || |/ _ \|  \/  |   | _ \| || |/ _ \| __|| \| || |║
+    ║    | |_| | >  < | | (_) | |\/| |   |  _/| __ | (_) | _| | .  || |║
+    ║    |_| |_|/_/\_\|_|\___/|_|  |_|   |_|  |_||_|\___/|___||_|\_||_|║
+    ║                                                                   ║
+    ║                        v4.0 ENHANCED EDITION                      ║
+    ║                                                                   ║
+    ╚═══════════════════════════════════════════════════════════════════╝
+"@
+    
+    $tagline = "The Future of Terminal User Interfaces"
+    $credits = "Powered by PowerShell 7+ | Built with ❤️"
+    
+    # Calculate positions
+    $logoLines = $logo -split "`n"
+    $logoWidth = ($logoLines | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum
+    $startX = [Math]::Max(0, [Math]::Floor(($width - $logoWidth) / 2))
+    $startY = [Math]::Max(0, [Math]::Floor(($height - $logoLines.Count - 4) / 2))
+    
+    # Synthwave colors for animation
+    $colors = @(
+        [ConsoleColor]::Magenta,
+        [ConsoleColor]::Cyan,
+        [ConsoleColor]::Yellow,
+        [ConsoleColor]::Green,
+        [ConsoleColor]::Blue
     )
     
-    # Load each file
-    foreach ($file in $filesToLoad) {
-        $filePath = Join-Path $scriptRoot $file
+    # Animate logo appearance
+    $steps = 20
+    $stepDelay = $Duration / $steps
+    
+    for ($i = 0; $i -lt $steps; $i++) {
+        $colorIndex = $i % $colors.Count
+        $host.UI.RawUI.ForegroundColor = $colors[$colorIndex]
         
-        if (-not (Test-Path $filePath)) {
-            throw "Required file not found: $filePath"
+        # Clear and redraw
+        Clear-Host
+        
+        # Draw logo with fade-in effect
+        $y = $startY
+        foreach ($line in $logoLines) {
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($startX, $y)
+            if ($i -ge $steps / 2 -or $y -eq $startY -or $y -eq ($startY + $logoLines.Count - 1)) {
+                Write-Host $line -NoNewline
+            }
+            $y++
         }
         
-        Write-Verbose "Loading: $file"
-        . $filePath
+        # Draw tagline
+        if ($i -ge $steps * 0.6) {
+            $taglineX = [Math]::Floor(($width - $tagline.Length) / 2)
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($taglineX, $startY + $logoLines.Count + 1)
+            Write-Host $tagline -ForegroundColor Cyan -NoNewline
+        }
+        
+        # Draw credits
+        if ($i -ge $steps * 0.8) {
+            $creditsX = [Math]::Floor(($width - $credits.Length) / 2)
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($creditsX, $startY + $logoLines.Count + 3)
+            Write-Host $credits -ForegroundColor DarkGray -NoNewline
+        }
+        
+        # Progress bar
+        $progressY = $height - 3
+        $progressWidth = 60
+        $progressX = [Math]::Floor(($width - $progressWidth) / 2)
+        $progress = [Math]::Floor(($i / $steps) * $progressWidth)
+        
+        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($progressX, $progressY)
+        Write-Host "[" -NoNewline -ForegroundColor DarkGray
+        Write-Host ("█" * $progress) -NoNewline -ForegroundColor Green
+        Write-Host ("░" * ($progressWidth - $progress)) -NoNewline -ForegroundColor DarkGray
+        Write-Host "]" -NoNewline -ForegroundColor DarkGray
+        
+        # Loading message
+        $messages = @(
+            "Initializing quantum cores...",
+            "Loading neural matrices...",
+            "Calibrating photon streams...",
+            "Synchronizing time crystals...",
+            "Establishing neural link..."
+        )
+        $messageIndex = [Math]::Floor(($i / $steps) * $messages.Count)
+        $message = $messages[$messageIndex]
+        $messageX = [Math]::Floor(($width - $message.Length) / 2)
+        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($messageX, $progressY + 1)
+        Write-Host $message -ForegroundColor Yellow
+        
+        Start-Sleep -Milliseconds $stepDelay
     }
     
-    Write-Host "Framework loaded successfully!" -ForegroundColor Green
+    # Final pause
+    Start-Sleep -Milliseconds 500
+    
+    # Reset
+    $host.UI.RawUI.ForegroundColor = [ConsoleColor]::Gray
+    $host.UI.RawUI.CursorSize = 25  # Restore cursor
+    Clear-Host
 }
-catch {
-    Write-Host "Failed to load framework files!" -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    exit 1
-}
 
-#endregion
-
-#region Initialize Services
-
+# Main startup sequence
 try {
-    Write-Host "Initializing services..." -ForegroundColor Cyan
+    # Show splash screen unless disabled
+    if (-not $NoSplash) {
+        Show-SplashScreen -Duration 2000
+    }
     
-    # Initialize global state BEFORE creating services
-    if (-not $global:TuiState) {
-        $global:TuiState = @{
-            Services = @{}
+    Write-Host "Loading Axiom-Phoenix v4.0 Enhanced..." -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Verify PowerShell version
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        Write-Host "ERROR: PowerShell 7.0 or higher is required!" -ForegroundColor Red
+        Write-Host "Current version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
+        Write-Host "Download from: https://github.com/PowerShell/PowerShell" -ForegroundColor Cyan
+        exit 1
+    }
+    
+    # Get script directory
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    if ([string]::IsNullOrEmpty($scriptDir)) {
+        $scriptDir = Get-Location
+    }
+    
+    # Load framework files in order with progress indication
+    $files = @(
+        @{ File = "AllBaseClasses.ps1"; Description = "Core Framework" },
+        @{ File = "AllModels.ps1"; Description = "Data Models" },
+        @{ File = "AllComponents.ps1"; Description = "UI Components" },
+        @{ File = "AllScreens.ps1"; Description = "Application Screens" },
+        @{ File = "AllFunctions.ps1"; Description = "Utility Functions" },
+        @{ File = "AllServices.ps1"; Description = "Business Services" },
+        @{ File = "AllRuntime.ps1"; Description = "Runtime Engine" }
+    )
+    
+    $totalFiles = $files.Count
+    $currentFile = 0
+    
+    foreach ($fileInfo in $files) {
+        $currentFile++
+        $percent = [Math]::Floor(($currentFile / $totalFiles) * 100)
+        
+        Write-Host "[$percent%] " -NoNewline -ForegroundColor Green
+        Write-Host "Loading $($fileInfo.Description)... " -NoNewline -ForegroundColor Gray
+        
+        $filePath = Join-Path $scriptDir $fileInfo.File
+        if (Test-Path $filePath) {
+            . $filePath
+            Write-Host "✓" -ForegroundColor Green
+        } else {
+            Write-Host "✗" -ForegroundColor Red
+            throw "File not found: $filePath"
         }
     }
+    
+    Write-Host ""
+    Write-Host "All framework files loaded successfully!" -ForegroundColor Green
+    Write-Host ""
     
     # Create service container
+    Write-Host "Initializing services..." -ForegroundColor Cyan
     $container = [ServiceContainer]::new()
     
-    # Register core services
-    # First register Logger and immediately add to global state
-    $logger = [Logger]::new()
-    $container.Register("Logger", $logger)
-    $global:TuiState.Services['Logger'] = $logger
-    Write-Verbose "Registered Logger service"
+    # Register services with fancy names
+    $services = @(
+        @{ Type = "Logger"; Name = "Neural Logger" },
+        @{ Type = "EventManager"; Name = "Quantum Event System" },
+        @{ Type = "ThemeManager"; Name = "Photon Theme Engine" },
+        @{ Type = "DataManager"; Name = "Data Matrix" },
+        @{ Type = "ActionService"; Name = "Command Nexus" },
+        @{ Type = "KeybindingService"; Name = "Neural Keybinds" },
+        @{ Type = "NavigationService"; Name = "Dimensional Navigator" },
+        @{ Type = "FocusManager"; Name = "Focus Controller" },
+        @{ Type = "DialogManager"; Name = "Dialog Orchestrator" }
+    )
     
-    # Register EventManager
-    $eventManager = [EventManager]::new()
-    $container.Register("EventManager", $eventManager)
-    Write-Verbose "Registered EventManager service"
-    
-    # Register ThemeManager
-    $themeManager = [ThemeManager]::new()
-    $container.Register("ThemeManager", $themeManager)
-    $themeManager.LoadDefaultTheme()
-    Write-Verbose "Registered ThemeManager service"
-    
-    # Register ActionService
-    $actionService = [ActionService]::new($eventManager)
-    $container.Register("ActionService", $actionService)
-    Write-Verbose "Registered ActionService"
-    
-    # Register DataManager
-    $dataPath = Join-Path $env:APPDATA "AxiomPhoenix\data.json"
-    $dataManager = [DataManager]::new($dataPath, $eventManager)
-    $container.Register("DataManager", $dataManager)
-    Write-Verbose "Registered DataManager"
-    
-    # Register NavigationService
-    $navigationService = [NavigationService]::new(@{ EventManager = $eventManager })
-    $container.Register("NavigationService", $navigationService)
-    Write-Verbose "Registered NavigationService"
-    
-    # Register FocusManager
-    $focusManager = [FocusManager]::new($eventManager)
-    $container.Register("FocusManager", $focusManager)
-    Write-Verbose "Registered FocusManager"
-    
-    # Register KeybindingService (depends on ActionService)
-    $keybindingService = [KeybindingService]::new($actionService)
-    $container.Register("KeybindingService", $keybindingService)
-    Write-Verbose "Registered KeybindingService"
-    
-    # Register DialogManager (depends on EventManager and FocusManager)
-    $dialogManager = [DialogManager]::new($eventManager, $focusManager)
-    $container.Register("DialogManager", $dialogManager)
-    Write-Verbose "Registered DialogManager"
-    
-    # Initialize default actions
-    $actionService.RegisterDefaultActions()
-    Write-Verbose "Registered default actions"
-    
-    # Initialize default keybindings
-    $keybindingService.SetDefaultBindings()
-    Write-Verbose "Set default keybindings"
-    
-    # Register navigation actions
-    $actionService.RegisterAction("navigation.dashboard", {
-        $dashboard = [DashboardScreen]::new($container)
-        $navigationService.NavigateTo($dashboard)
-    }, @{
-        Category = "Navigation"
-        Description = "Go to Dashboard"
-    })
-    
-    $actionService.RegisterAction("navigation.taskList", {
-        $taskList = [TaskListScreen]::new($container)
-        $navigationService.NavigateTo($taskList)
-    }, @{
-        Category = "Navigation"
-        Description = "Go to Task List"
-    })
-    
-    Write-Host "Services initialized successfully!" -ForegroundColor Green
-}
-catch {
-    Write-Host "Failed to initialize services!" -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host $_.ScriptStackTrace -ForegroundColor Red
-    exit 1
-}
-
-#endregion
-#<!-- END_PAGE: STA.002 -->
-
-#<!-- PAGE: STA.003 - Data Loading & Application Startup -->
-#region Load Sample Data
-
-try {
-    Write-Host "Loading sample data..." -ForegroundColor Cyan
-    
-    # Try to load existing data first
-    try {
-        $dataManager.LoadData()
+    foreach ($service in $services) {
+        Write-Host "  • Initializing $($service.Name)... " -NoNewline -ForegroundColor Gray
         
-        if ($dataManager.GetTasks().Count -eq 0) {
-            throw "No existing data found"
+        $instance = switch ($service.Type) {
+            "Logger" { [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")) }
+            "EventManager" { [EventManager]::new() }
+            "ThemeManager" { [ThemeManager]::new() }
+            "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
+            "ActionService" { [ActionService]::new() }
+            "KeybindingService" { [KeybindingService]::new() }
+            "NavigationService" { [NavigationService]::new() }
+            "FocusManager" { [FocusManager]::new() }
+            "DialogManager" { [DialogManager]::new() }
         }
         
-        Write-Host "Loaded $($dataManager.GetTasks().Count) tasks from storage" -ForegroundColor Green
+        $container.Register($service.Type, $instance, "Singleton")
+        Write-Host "✓" -ForegroundColor Green
     }
-    catch {
-        Write-Host "Creating sample data..." -ForegroundColor Yellow
-        
-        # Create sample project
-        $project = [PmcProject]::new("DEMO", "Demo Project", "Sample project for demonstration", "Admin")
-        $dataManager.AddProject($project)
-        
-        # Create sample tasks
-        $sampleTasks = @(
-            @{
-                Title = "Complete TUI Framework Migration"
-                Description = "Migrate all axiom components to mono structure"
-                Priority = [TaskPriority]::High
-                Status = [TaskStatus]::InProgress
-                Progress = 75
-            },
-            @{
-                Title = "Write Documentation"
-                Description = "Create comprehensive documentation for the framework"
-                Priority = [TaskPriority]::Medium
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            },
-            @{
-                Title = "Add Unit Tests"
-                Description = "Implement unit tests for core components"
-                Priority = [TaskPriority]::Medium
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            },
-            @{
-                Title = "Optimize Rendering Performance"
-                Description = "Profile and optimize the differential rendering system"
-                Priority = [TaskPriority]::Low
-                Status = [TaskStatus]::InProgress
-                Progress = 30
-            },
-            @{
-                Title = "Create Theme Editor"
-                Description = "Build a visual theme editor screen"
-                Priority = [TaskPriority]::Low
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            }
-        )
-        
-        foreach ($taskData in $sampleTasks) {
-            $task = [PmcTask]::new($taskData.Title, $taskData.Description, $taskData.Priority, "DEMO")
-            $task.Status = $taskData.Status
-            $task.Progress = $taskData.Progress
-            
-            if ($taskData.Progress -eq 100) {
-                $task.Complete()
-            }
-            
-            $dataManager.AddTask($task)
+    
+    # Set the selected theme
+    $themeManager = $container.GetService("ThemeManager")
+    if ($themeManager -and $Theme) {
+        $themeManager.LoadTheme($Theme)
+        Write-Host ""
+        Write-Host "Theme '$Theme' activated!" -ForegroundColor Magenta
+    }
+    
+    # Create sample data with enhanced items
+    Write-Host ""
+    Write-Host "Generating sample data..." -ForegroundColor Cyan
+    $dataManager = $container.GetService("DataManager")
+    
+    # Enhanced sample tasks
+    $sampleTasks = @(
+        @{
+            Title = "🚀 Launch Quantum Core Module"
+            Description = "Initialize the quantum processing core for enhanced computational capabilities"
+            Priority = "High"
+            Progress = 75
+        },
+        @{
+            Title = "🧬 Optimize Neural Networks"
+            Description = "Fine-tune the AI neural network parameters for improved performance"
+            Priority = "Medium"
+            Progress = 45
+        },
+        @{
+            Title = "🌊 Calibrate Wave Functions"
+            Description = "Adjust quantum wave function parameters for stable operation"
+            Priority = "High"
+            Progress = 90
+        },
+        @{
+            Title = "💎 Crystal Matrix Alignment"
+            Description = "Align the photonic crystal matrix for optimal light transmission"
+            Priority = "Low"
+            Progress = 20
+        },
+        @{
+            Title = "⚡ Energy Field Stabilization"
+            Description = "Stabilize the plasma energy field generators"
+            Priority = "Medium"
+            Progress = 60
         }
-        
-        Write-Host "Created $($sampleTasks.Count) sample tasks" -ForegroundColor Green
+    )
+    
+    foreach ($taskData in $sampleTasks) {
+        $task = [PmcTask]::new()
+        $task.Title = $taskData.Title
+        $task.Description = $taskData.Description
+        $task.Priority = [TaskPriority]::$($taskData.Priority)
+        $task.SetProgress($taskData.Progress)
+        $task.ProjectKey = "PHOENIX"
+        $dataManager.AddTask($task) | Out-Null
     }
+    
+    Write-Host "Sample data created!" -ForegroundColor Green
+    
+    # Start application
+    Write-Host ""
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " AXIOM-PHOENIX v4.0 ENHANCED - READY TO LAUNCH! " -ForegroundColor Yellow
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Press any key to enter the matrix..." -ForegroundColor Green
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    
+    # Launch the application
+    Clear-Host
+    Start-AxiomPhoenix -Services $container
 }
 catch {
-    Write-Warning "Failed to load sample data: $($_.Exception.Message)"
-    # Continue anyway - app can run without data
-}
-
-#endregion
-
-#region Start Application
-
-try {
-    Write-Host "`nStarting Axiom-Phoenix..." -ForegroundColor Cyan
-    Write-Host "Press Ctrl+P to open the Command Palette" -ForegroundColor Yellow
-    Write-Host "Press Ctrl+Q to exit`n" -ForegroundColor Yellow
-    
-    Start-Sleep -Seconds 2
-    
-    # Create initial screen
-    $dashboardScreen = [DashboardScreen]::new($container)
-    
-    # Start the application
-    Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
-}
-catch {
-    Write-Host "`nApplication error!" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "CRITICAL ERROR!" -ForegroundColor Red -BackgroundColor DarkRed
+    Write-Host "Failed to load framework files!" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Error Details:" -ForegroundColor Yellow
     Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Stack Trace:" -ForegroundColor Yellow
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
     
-    Write-Host "`nPress any key to exit..." -ForegroundColor White
-    [Console]::ReadKey($true) | Out-Null
+    if ($Debug) {
+        Write-Host ""
+        Write-Host "Full Exception:" -ForegroundColor Yellow
+        Write-Host $_ -ForegroundColor DarkGray
+    }
+    
+    Write-Host ""
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
 }
-finally {
-    # Ensure console is restored
-    try {
-        [Console]::CursorVisible = $true
-        [Console]::Clear()
-    }
-    catch {}
-}
-
-#endregion
-#<!-- END_PAGE: STA.003 -->

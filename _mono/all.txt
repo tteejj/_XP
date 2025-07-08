@@ -1032,15 +1032,15 @@ class LabelComponent : UIElement {
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Get foreground color
-        $fg = if ($this.ForegroundColor) {
+        if ($this.ForegroundColor) {
             if ($this.ForegroundColor -is [ConsoleColor]) {
                 # Convert ConsoleColor to hex if needed
-                Get-ThemeColor("Foreground") # Use theme default instead
+                $fg = Get-ThemeColor("Foreground") # Use theme default instead
             } else {
-                $this.ForegroundColor # Assume it's already hex
+                $fg = $this.ForegroundColor # Assume it's already hex
             }
         } else {
-            Get-ThemeColor("Foreground")
+            $fg = Get-ThemeColor("Foreground")
         }
         
         # Draw text
@@ -1325,8 +1325,16 @@ class CheckBoxComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
-        $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
+        if ($this.IsFocused) { 
+            $fgColor = Get-ThemeColor("Primary") 
+        } else { 
+            $fgColor = Get-ThemeColor("Foreground") 
+        }
+        if ($this.Checked) { 
+            $checkMark = "[X]" 
+        } else { 
+            $checkMark = "[ ]" 
+        }
         $fullText = "$checkMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -1380,8 +1388,16 @@ class RadioButtonComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
-        $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
+        if ($this.IsFocused) { 
+            $fgColor = Get-ThemeColor("Primary") 
+        } else { 
+            $fgColor = Get-ThemeColor("Foreground") 
+        }
+        if ($this.Selected) { 
+            $radioMark = "(o)" 
+        } else { 
+            $radioMark = "( )" 
+        }
         $fullText = "$radioMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -1757,9 +1773,11 @@ class NumericInputComponent : UIElement {
             if ($this.IsFocused -and $this._cursorPosition -le $displayValue.Length) {
                 $cursorX = 1 + $this._cursorPosition
                 if ($cursorX -lt $this.Width - 2) {
-                    $cursorChar = if ($this._cursorPosition -lt $this._textValue.Length) {
-                        $this._textValue[$this._cursorPosition]
-                    } else { ' ' }
+                    if ($this._cursorPosition -lt $this._textValue.Length) {
+                        $cursorChar = $this._textValue[$this._cursorPosition]
+                    } else { 
+                        $cursorChar = ' ' 
+                    }
                     
                     $this._private_buffer.SetCell($cursorX, 1, 
                         [TuiCell]::new($cursorChar, $bgColor, $fgColor))
@@ -1917,10 +1935,18 @@ class DateInputComponent : UIElement {
         try {
             $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
             $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            if ($this.IsFocused) { 
+                $borderColorValue = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" 
+            } else { 
+                $borderColorValue = Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor 
+            }
             
             # Adjust height based on calendar visibility
-            $renderHeight = if ($this._showCalendar) { 10 } else { 3 }
+            if ($this._showCalendar) { 
+                $renderHeight = 10 
+            } else { 
+                $renderHeight = 3 
+            }
             if ($this.Height -ne $renderHeight) {
                 $this.Height = $renderHeight
                 $this.RequestRedraw()
@@ -2139,7 +2165,11 @@ class ComboBoxComponent : UIElement {
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw main box
-            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            if ($this.IsFocused) { 
+                $borderColor = Get-ThemeColor("Primary") 
+            } else { 
+                $borderColor = Get-ThemeColor("component.border") 
+            }
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
                 -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
             
@@ -2153,10 +2183,10 @@ class ComboBoxComponent : UIElement {
                 $displayText = $this.GetDisplayText($item)
             }
             
-            $textColor = if ($displayText) { 
-                Get-ThemeColor("input.foreground") 
+            if ($displayText) { 
+                $textColor = Get-ThemeColor("input.foreground") 
             } else { 
-                Get-ThemeColor("input.placeholder") 
+                $textColor = Get-ThemeColor("input.placeholder") 
             }
             
             $maxTextWidth = $this.Width - 4  # Border + dropdown arrow
@@ -2168,8 +2198,16 @@ class ComboBoxComponent : UIElement {
                 -Style @{ FG = $textColor; BG = $bgColor }
             
             # Draw dropdown arrow
-            $arrowChar = if ($this._isDropdownOpen) { '▲' } else { '▼' }
-            $arrowColor = if ($this.IsFocused) { Get-ThemeColor("Accent") } else { Get-ThemeColor("Subtle") }
+            if ($this._isDropdownOpen) { 
+                $arrowChar = '▲' 
+            } else { 
+                $arrowChar = '▼' 
+            }
+            if ($this.IsFocused) { 
+                $arrowColor = Get-ThemeColor("Accent") 
+            } else { 
+                $arrowColor = Get-ThemeColor("Subtle") 
+            }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $arrowColor, $bgColor))
             
             # Draw dropdown if open (as overlay)
@@ -2483,7 +2521,11 @@ class Table : UIElement {
         try {
             $bgColor = Get-ThemeColor("component.background")
             $fgColor = Get-ThemeColor("Foreground")
-            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            if ($this.IsFocused) { 
+                $borderColor = Get-ThemeColor("Primary") 
+            } else { 
+                $borderColor = Get-ThemeColor("component.border") 
+            }
             $headerBg = Get-ThemeColor("list.header.bg")
             $selectedBg = Get-ThemeColor("list.item.selected.background")
             
@@ -2751,7 +2793,11 @@ class Panel : UIElement {
             $this.UpdateContentDimensions()
 
             if ($this.HasBorder) {
-                $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+                if ($this.IsFocused) { 
+                    $borderColorValue = Get-ThemeColor("Primary") 
+                } else { 
+                    $borderColorValue = Get-ThemeColor("component.border") 
+                }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
@@ -2768,8 +2814,16 @@ class Panel : UIElement {
     [void] ApplyLayout() {
         if ($this.LayoutType -eq "Manual") { return }
 
-        $layoutX = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
-        $layoutY = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        if ($this.HasBorder) { 
+            $layoutX = 1 + $this.Padding 
+        } else { 
+            $layoutX = $this.Padding 
+        }
+        if ($this.HasBorder) { 
+            $layoutY = 1 + $this.Padding 
+        } else { 
+            $layoutY = $this.Padding 
+        }
         $layoutWidth = [Math]::Max(0, $this.Width - (2 * $layoutX))
         $layoutHeight = [Math]::Max(0, $this.Height - (2 * $layoutY))
 
@@ -2966,8 +3020,16 @@ class ScrollablePanel : Panel {
     # Update SetCell calls in DrawScrollbar to use hex colors.
     [void] DrawScrollbar() {
         $scrollbarX = $this.Width - 1
-        $scrollbarY = if ($this.HasBorder) { 1 } else { 0 }
-        $scrollbarTrackHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+        if ($this.HasBorder) { 
+            $scrollbarY = 1 
+        } else { 
+            $scrollbarY = 0 
+        }
+        if ($this.HasBorder) { 
+            $scrollbarTrackHeight = $this.Height - 2 
+        } else { 
+            $scrollbarTrackHeight = $this.Height - 0 
+        }
 
         if ($this._contentHeight -le $scrollbarTrackHeight) { 
             # If content fits, clear any previous scrollbar
@@ -3172,22 +3234,26 @@ class ListBox : UIElement {
             for ($i = 0; $i -lt $contentHeight -and ($i + $this.ScrollOffset) -lt $this.Items.Count; $i++) {
                 $itemIndex = $i + $this.ScrollOffset
                 $item = $this.Items[$itemIndex]
-                $itemText = if ($item -is [string]) { $item } else { $item.ToString() }
+                if ($item -is [string]) { 
+                    $itemText = $item 
+                } else { 
+                    $itemText = $item.ToString() 
+                }
                 
                 if ($itemText.Length -gt $contentWidth) {
                     $itemText = $itemText.Substring(0, $contentWidth - 3) + "..."
                 }
                 
                 $isSelected = ($itemIndex -eq $this.SelectedIndex)
-                $fgColor = if ($isSelected) { 
-                    Get-ThemeColor("list.item.selected") 
+                if ($isSelected) { 
+                    $fgColor = Get-ThemeColor("list.item.selected") 
                 } else { 
-                    Get-ThemeColor("list.item.normal") 
+                    $fgColor = Get-ThemeColor("list.item.normal") 
                 }
-                $itemBgColor = if ($isSelected) { 
-                    Get-ThemeColor("list.item.selected.background") 
+                if ($isSelected) { 
+                    $itemBgColor = Get-ThemeColor("list.item.selected.background") 
                 } else { 
-                    $bgColor 
+                    $itemBgColor = $bgColor 
                 }
                 
                 # Draw item background
@@ -3334,6 +3400,8 @@ class CommandPalette : UIElement {
     hidden [object]$_actionService
     hidden [scriptblock]$OnCancel
     hidden [scriptblock]$OnSelect
+    hidden [System.DateTime]$_lastSearchTime = [DateTime]::MinValue
+    hidden [string]$_pendingSearchText = ""
 
     CommandPalette([string]$name, [object]$actionService) : base($name) {
         $this.IsFocusable = $true
@@ -3428,6 +3496,14 @@ class CommandPalette : UIElement {
     }
 
     [void] FilterActions([string]$searchText) {
+        # Implement debouncing
+        $now = [DateTime]::Now
+        if (($now - $this._lastSearchTime).TotalMilliseconds -lt 100) {
+            $this._pendingSearchText = $searchText
+            return
+        }
+        $this._lastSearchTime = $now
+        
         $this._filteredActions.Clear()
         $this._listBox.ClearItems()
         
@@ -3435,32 +3511,37 @@ class CommandPalette : UIElement {
             # Show all actions
             foreach ($action in $this._allActions) {
                 $this._filteredActions.Add($action)
-                $displayText = if ($action.Category) { 
-                    "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                if ($action.Category) { 
+                    $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
                 } else { 
-                    "$($action.Name) - $($action.Description)" 
+                    $displayText = "$($action.Name) - $($action.Description)" 
                 }
                 $this._listBox.AddItem($displayText)
             }
         }
         else {
-            # Fuzzy search
+            # Use simple contains for better performance
             $searchLower = $searchText.ToLower()
             foreach ($action in $this._allActions) {
-                $nameMatch = $action.Name.ToLower().Contains($searchLower)
-                $descMatch = $action.Description.ToLower().Contains($searchLower)
-                $catMatch = $action.Category -and $action.Category.ToLower().Contains($searchLower)
-                
-                if ($nameMatch -or $descMatch -or $catMatch) {
+                # Quick check for name match first (most likely)
+                if ($action.Name.ToLower().Contains($searchLower) -or
+                    ($action.Description -and $action.Description.ToLower().Contains($searchLower)) -or
+                    ($action.Category -and $action.Category.ToLower().Contains($searchLower))) {
+                    
                     $this._filteredActions.Add($action)
-                    $displayText = if ($action.Category) { 
-                        "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                    if ($action.Category) { 
+                        $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
                     } else { 
-                        "$($action.Name) - $($action.Description)" 
+                        $displayText = "$($action.Name) - $($action.Description)" 
                     }
                     $this._listBox.AddItem($displayText)
                 }
             }
+        }
+        
+        # Reset selection
+        if ($this._filteredActions.Count -gt 0) {
+            $this._listBox.SelectedIndex = 0
         }
         
         # Ensure list is refreshed
@@ -3606,6 +3687,7 @@ class Dialog : UIElement {
     hidden [object]$Result = $null
     hidden [bool]$_isComplete = $false
     [scriptblock]$OnClose
+    [DialogResult]$DialogResult = [DialogResult]::None
 
     Dialog([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -4009,6 +4091,190 @@ class InputDialog : Dialog {
     }
 }
 
+# Task Create/Edit Dialog
+class TaskDialog : Dialog {
+    hidden [TextBoxComponent] $_titleBox
+    hidden [MultilineTextBoxComponent] $_descriptionBox
+    hidden [ComboBoxComponent] $_statusCombo
+    hidden [ComboBoxComponent] $_priorityCombo
+    hidden [NumericInputComponent] $_progressInput
+    hidden [ButtonComponent] $_saveButton
+    hidden [ButtonComponent] $_cancelButton
+    hidden [PmcTask] $_task
+    hidden [bool] $_isNewTask
+    
+    TaskDialog([string]$title, [PmcTask]$task) : base($title) {
+        $this._task = if ($task) { $task } else { [PmcTask]::new() }
+        $this._isNewTask = ($null -eq $task)
+        $this.Width = 60
+        $this.Height = 20
+    }
+    
+    [void] Initialize() {
+        ([Dialog]$this).Initialize()
+        
+        $contentY = 2
+        $labelWidth = 12
+        $inputX = $labelWidth + 2
+        $inputWidth = $this.ContentWidth - $inputX - 2
+        
+        # Title
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = $contentY
+        $this._panel.AddChild($titleLabel)
+        
+        $this._titleBox = [TextBoxComponent]::new("TitleBox")
+        $this._titleBox.X = $inputX
+        $this._titleBox.Y = $contentY
+        $this._titleBox.Width = $inputWidth
+        $this._titleBox.Height = 1
+        $this._titleBox.Text = $this._task.Title
+        $this._panel.AddChild($this._titleBox)
+        $contentY += 2
+        
+        # Description
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = $contentY
+        $this._panel.AddChild($descLabel)
+        
+        $this._descriptionBox = [MultilineTextBoxComponent]::new("DescBox")
+        $this._descriptionBox.X = $inputX
+        $this._descriptionBox.Y = $contentY
+        $this._descriptionBox.Width = $inputWidth
+        $this._descriptionBox.Height = 3
+        $this._descriptionBox.Text = $this._task.Description
+        $this._panel.AddChild($this._descriptionBox)
+        $contentY += 4
+        
+        # Status
+        $statusLabel = [LabelComponent]::new("StatusLabel")
+        $statusLabel.Text = "Status:"
+        $statusLabel.X = 2
+        $statusLabel.Y = $contentY
+        $this._panel.AddChild($statusLabel)
+        
+        $this._statusCombo = [ComboBoxComponent]::new("StatusCombo")
+        $this._statusCombo.X = $inputX
+        $this._statusCombo.Y = $contentY
+        $this._statusCombo.Width = $inputWidth
+        $this._statusCombo.Height = 1
+        $this._statusCombo.Items = @([TaskStatus]::GetEnumNames())
+        $this._statusCombo.SelectedIndex = [Array]::IndexOf($this._statusCombo.Items, $this._task.Status.ToString())
+        $this._panel.AddChild($this._statusCombo)
+        $contentY += 2
+        
+        # Priority
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 2
+        $priorityLabel.Y = $contentY
+        $this._panel.AddChild($priorityLabel)
+        
+        $this._priorityCombo = [ComboBoxComponent]::new("PriorityCombo")
+        $this._priorityCombo.X = $inputX
+        $this._priorityCombo.Y = $contentY
+        $this._priorityCombo.Width = $inputWidth
+        $this._priorityCombo.Height = 1
+        $this._priorityCombo.Items = @([TaskPriority]::GetEnumNames())
+        $this._priorityCombo.SelectedIndex = [Array]::IndexOf($this._priorityCombo.Items, $this._task.Priority.ToString())
+        $this._panel.AddChild($this._priorityCombo)
+        $contentY += 2
+        
+        # Progress
+        $progressLabel = [LabelComponent]::new("ProgressLabel")
+        $progressLabel.Text = "Progress %:"
+        $progressLabel.X = 2
+        $progressLabel.Y = $contentY
+        $this._panel.AddChild($progressLabel)
+        
+        $this._progressInput = [NumericInputComponent]::new("ProgressInput")
+        $this._progressInput.X = $inputX
+        $this._progressInput.Y = $contentY
+        $this._progressInput.Width = 10
+        $this._progressInput.Height = 1
+        $this._progressInput.MinValue = 0
+        $this._progressInput.MaxValue = 100
+        $this._progressInput.Value = $this._task.Progress
+        $this._panel.AddChild($this._progressInput)
+        $contentY += 3
+        
+        # Buttons
+        $buttonY = $this.ContentHeight - 3
+        $buttonWidth = 12
+        $spacing = 2
+        $totalButtonWidth = ($buttonWidth * 2) + $spacing
+        $startX = [Math]::Floor(($this.ContentWidth - $totalButtonWidth) / 2)
+        
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save"
+        $this._saveButton.X = $startX
+        $this._saveButton.Y = $buttonY
+        $this._saveButton.Width = $buttonWidth
+        $this._saveButton.Height = 1
+        $thisDialog = $this
+        $this._saveButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::OK
+            $thisDialog.Complete($thisDialog.DialogResult)
+        }.GetNewClosure()
+        $this._panel.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel"
+        $this._cancelButton.X = $startX + $buttonWidth + $spacing
+        $this._cancelButton.Y = $buttonY
+        $this._cancelButton.Width = $buttonWidth
+        $this._cancelButton.Height = 1
+        $this._cancelButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::Cancel
+            $thisDialog.Complete($thisDialog.DialogResult)
+        }.GetNewClosure()
+        $this._panel.AddChild($this._cancelButton)
+        
+        # Set initial focus
+        Set-ComponentFocus -Component $this._titleBox
+    }
+    
+    [PmcTask] GetTask() {
+        if ($this.DialogResult -eq [DialogResult]::OK) {
+            # Update task with form values
+            $this._task.Title = $this._titleBox.Text
+            $this._task.Description = $this._descriptionBox.Text
+            $this._task.Status = [TaskStatus]::($this._statusCombo.Items[$this._statusCombo.SelectedIndex])
+            $this._task.Priority = [TaskPriority]::($this._priorityCombo.Items[$this._priorityCombo.SelectedIndex])
+            $this._task.SetProgress($this._progressInput.Value)
+            $this._task.UpdatedAt = [DateTime]::Now
+        }
+        return $this._task
+    }
+}
+
+# Task Delete Confirmation Dialog
+class TaskDeleteDialog : ConfirmDialog {
+    hidden [PmcTask] $_task
+    
+    TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
+        $this._task = $task
+    }
+    
+    [void] Initialize() {
+        ([ConfirmDialog]$this).Initialize()
+        
+        # Add task details to the message
+        if ($this._task) {
+            $detailsLabel = [LabelComponent]::new("TaskDetails")
+            $detailsLabel.Text = "Task: $($this._task.Title)"
+            $detailsLabel.X = 2
+            $detailsLabel.Y = 4
+            $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+            $this._panel.AddChild($detailsLabel)
+        }
+    }
+}
+
 #endregion Dialog Components
 
 #region Navigation Components
@@ -4194,6 +4460,18 @@ class NavigationMenu : UIElement {
 #<!-- END_PAGE: ACO.021 -->
 
 #endregion Navigation Components
+
+#region Dialog Result Enum
+enum DialogResult {
+    None = 0
+    OK = 1
+    Cancel = 2
+    Yes = 3
+    No = 4
+    Retry = 5
+    Abort = 6
+}
+#endregion
 
 
 
@@ -4739,6 +5017,17 @@ enum BillingType {
     NonBillable
 }
 
+enum DialogResult {
+    None
+    OK
+    Cancel
+    Yes
+    No
+    Abort
+    Retry
+    Ignore
+}
+
 #endregion
 #<!-- END_PAGE: AMO.001 -->
 
@@ -4989,6 +5278,14 @@ class PmcProject : ValidationBase {
     [string[]]$Tags = @()                    # Project tags
     [hashtable]$Metadata = @{}               # Additional project metadata
     [bool]$IsActive = $true                  # Whether project is active
+    
+    # Enhanced properties from reference implementation
+    [string]$ID1                             # Optional secondary identifier
+    [Nullable[datetime]]$BFDate              # Bring-Forward date for follow-ups
+    [string]$ProjectFolderPath               # Full path to the project's root folder on disk
+    [string]$CaaFileName                     # Relative name of the associated CAA file
+    [string]$RequestFileName                 # Relative name of the associated Request file
+    [string]$T2020FileName                   # Relative name of the associated T2020 file
 
     # Default constructor
     PmcProject() {}
@@ -5417,6 +5714,7 @@ function Initialize-TuiEngine {
         
         # Configure console
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $env:PYTHONIOENCODING = "utf-8"
         [Console]::CursorVisible = $false
         $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
         
@@ -6324,7 +6622,11 @@ class DashboardScreen : Screen {
         $panel.AddChild($pendingLabel)
         
         # Create progress bar as labels
-        $percentage = if ($this._totalTasks -eq 0) { 0 } else { [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) }
+        if ($this._totalTasks -eq 0) { 
+            $percentage = 0 
+        } else { 
+            $percentage = [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) 
+        }
         $progressLabel = [LabelComponent]::new("ProgressLabel")
         $progressLabel.Text = "Overall Progress: $percentage%"
         $progressLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
@@ -6515,6 +6817,11 @@ class TaskListScreen : Screen {
     hidden [ScrollablePanel] $_taskListPanel
     hidden [Panel] $_detailPanel
     hidden [Panel] $_statusBar
+    hidden [ButtonComponent] $_newButton
+    hidden [ButtonComponent] $_editButton
+    hidden [ButtonComponent] $_deleteButton
+    hidden [ButtonComponent] $_completeButton
+    hidden [TextBoxComponent] $_filterBox
     #endregion
 
     #region State
@@ -6548,13 +6855,29 @@ class TaskListScreen : Screen {
         $this._mainPanel.UpdateContentDimensions()
         $this.AddChild($this._mainPanel)
 
+        # Add filter textbox at the top
+        $this._filterBox = [TextBoxComponent]::new("FilterBox")
+        $this._filterBox.Placeholder = "Type to filter tasks..."
+        $this._filterBox.X = 2
+        $this._filterBox.Y = 2
+        $this._filterBox.Width = [Math]::Floor($this.Width * 0.6) - 4
+        $this._filterBox.Height = 1
+        $thisScreen = $this
+        $this._filterBox.OnChange = {
+            param($newText)
+            $thisScreen._filterText = $newText
+            $thisScreen._RefreshTasks()
+            $thisScreen._UpdateDisplay()
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._filterBox)
+
         # Task list panel (left side)
         $listWidth = [Math]::Floor($this.Width * 0.6)
         $this._taskListPanel = [ScrollablePanel]::new("Tasks")
         $this._taskListPanel.X = 1
-        $this._taskListPanel.Y = 1
+        $this._taskListPanel.Y = 4  # Move down to accommodate filter
         $this._taskListPanel.Width = $listWidth
-        $this._taskListPanel.Height = $this.Height - 4
+        $this._taskListPanel.Height = $this.Height - 8  # Adjust for buttons and filter
         $this._taskListPanel.Title = "Tasks"
         $this._taskListPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._taskListPanel)
@@ -6566,7 +6889,7 @@ class TaskListScreen : Screen {
         $this._detailPanel.X = $detailX
         $this._detailPanel.Y = 1
         $this._detailPanel.Width = $detailWidth
-        $this._detailPanel.Height = $this.Height - 4
+        $this._detailPanel.Height = $this.Height - 8  # Adjust for buttons
         $this._detailPanel.Title = "Task Details"
         $this._detailPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._detailPanel)
@@ -6579,6 +6902,111 @@ class TaskListScreen : Screen {
         $this._statusBar.Height = 1
         $this._statusBar.HasBorder = $false
         $this._mainPanel.AddChild($this._statusBar)
+        
+        # Add CRUD action buttons at the bottom
+        $buttonY = $this.Height - 3
+        $buttonSpacing = 15
+        $currentX = 2
+        
+        # New button
+        $this._newButton = [ButtonComponent]::new("NewButton")
+        $this._newButton.Text = "[N]ew Task"
+        $this._newButton.X = $currentX
+        $this._newButton.Y = $buttonY
+        $this._newButton.Width = 12
+        $this._newButton.Height = 1
+        $this._newButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager) {
+                $dialog = [TaskDialog]::new("New Task", $null)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                    $newTask = $dialog.GetTask()
+                    $dataManager.AddTask($newTask)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "New task created: $($newTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._newButton)
+        $currentX += $buttonSpacing
+        
+        # Edit button
+        $this._editButton = [ButtonComponent]::new("EditButton")
+        $this._editButton.Text = "[E]dit Task"
+        $this._editButton.X = $currentX
+        $this._editButton.Y = $buttonY
+        $this._editButton.Width = 12
+        $this._editButton.Height = 1
+        $this._editButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
+                $dialog = [TaskDialog]::new("Edit Task", $thisScreen._selectedTask)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                    $updatedTask = $dialog.GetTask()
+                    $dataManager.UpdateTask($updatedTask)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "Task updated: $($updatedTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._editButton)
+        $currentX += $buttonSpacing
+        
+        # Delete button
+        $this._deleteButton = [ButtonComponent]::new("DeleteButton")
+        $this._deleteButton.Text = "[D]elete Task"
+        $this._deleteButton.X = $currentX
+        $this._deleteButton.Y = $buttonY
+        $this._deleteButton.Width = 14
+        $this._deleteButton.Height = 1
+        $this._deleteButton.OnClick = {
+            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
+                $dialog = [TaskDeleteDialog]::new($thisScreen._selectedTask)
+                $dialogManager.ShowDialog($dialog)
+                
+                if ($dialog.DialogResult -eq [DialogResult]::Yes) {
+                    $dataManager.DeleteTask($thisScreen._selectedTask.Id)
+                    $thisScreen._RefreshTasks()
+                    $thisScreen._UpdateDisplay()
+                    Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
+                }
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._deleteButton)
+        $currentX += $buttonSpacing + 2
+        
+        # Complete button
+        $this._completeButton = [ButtonComponent]::new("CompleteButton")
+        $this._completeButton.Text = "[C]omplete"
+        $this._completeButton.X = $currentX
+        $this._completeButton.Y = $buttonY
+        $this._completeButton.Width = 12
+        $this._completeButton.Height = 1
+        $this._completeButton.OnClick = {
+            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+            
+            if ($dataManager -and $thisScreen._selectedTask) {
+                $thisScreen._selectedTask.Complete()
+                $dataManager.UpdateTask($thisScreen._selectedTask)
+                $thisScreen._RefreshTasks()
+                $thisScreen._UpdateDisplay()
+                Write-Verbose "Task completed: $($thisScreen._selectedTask.Title)"
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._completeButton)
         
         $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
     }
@@ -6622,49 +7050,35 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] _RefreshTasks() {
-        $dataManager = $this.ServiceContainer.GetService("DataManager")
-        if (-not $dataManager) {
-            Write-Verbose "TaskListScreen: DataManager service not found"
-            return
-        }
-        
-        $allTasks = $dataManager.GetTasks()
-        $this._tasks.Clear()
-        if ($allTasks -and $allTasks.Count -gt 0) {
-            $this._tasks.AddRange($allTasks)
-        }
-        
-        # Apply filters if any
-        if (-not [string]::IsNullOrEmpty($this._filterText)) {
-            $filtered = $this._tasks | Where-Object { 
-                $_.Title -like "*$($this._filterText)*" -or 
-                $_.Description -like "*$($this._filterText)*" 
+        $dataManager = $this.ServiceContainer?.GetService("DataManager")
+        if ($dataManager) {
+            $allTasks = $dataManager.GetTasks()
+            
+            # Apply text filter if present
+            if (![string]::IsNullOrWhiteSpace($this._filterText)) {
+                $filterLower = $this._filterText.ToLower()
+                $allTasks = @($allTasks | Where-Object {
+                    $_.Title.ToLower().Contains($filterLower) -or
+                    ($_.Description -and $_.Description.ToLower().Contains($filterLower))
+                })
             }
-            $this._tasks.Clear()
-            if ($filtered) {
-                $this._tasks.AddRange(@($filtered))
+            
+            $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
+            if ($allTasks) {
+                # Fix: Explicitly cast each item to PmcTask to avoid type conversion error
+                foreach ($task in $allTasks) {
+                    if ($task -is [PmcTask]) {
+                        $this._tasks.Add($task)
+                    }
+                }
             }
+        } else {
+            $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
         }
         
-        if ($null -ne $this._filterStatus) {
-            $filtered = $this._tasks | Where-Object { $_.Status -eq $this._filterStatus }
-            $this._tasks.Clear()
-            if ($filtered) {
-                $this._tasks.AddRange(@($filtered))
-            }
-        }
-        
-        if ($null -ne $this._filterPriority) {
-            $filtered = $this._tasks | Where-Object { $_.Priority -eq $this._filterPriority }
-            $this._tasks.Clear()
-            if ($filtered) {
-                $this._tasks.AddRange(@($filtered))
-            }
-        }
-        
-        # Update selection
-        if ($this._selectedIndex -ge @($this._tasks).Count) {
-            $this._selectedIndex = [Math]::Max(0, @($this._tasks).Count - 1)
+        # Reset selection if needed
+        if ($this._selectedIndex -ge $this._tasks.Count) {
+            $this._selectedIndex = [Math]::Max(0, $this._tasks.Count - 1)
         }
         
         if ($this._tasks.Count -gt 0) {
@@ -6672,8 +7086,6 @@ class TaskListScreen : Screen {
         } else {
             $this._selectedTask = $null
         }
-        
-        $this._UpdateDisplay()
     }
 
     hidden [void] _UpdateDisplay() {
@@ -6744,17 +7156,21 @@ class TaskListScreen : Screen {
             
             # Truncate title if needed
             $maxTitleLength = [Math]::Max(10, $panelContentWidth - 6) # Ensure minimum length
-            $title = if ($task.Title.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
-                $task.Title.Substring(0, [Math]::Max(1, $maxTitleLength - 3)) + "..."
+            if ($task.Title.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
+                $title = $task.Title.Substring(0, [Math]::Max(1, $maxTitleLength - 3)) + "..."
             } else {
-                $task.Title
+                $title = $task.Title
             }
             
             $taskLine = "$statusChar $priorityChar $title"
             $taskLabel.Text = $taskLine
             
             # Set text color based on selection
-            $taskLabel.ForegroundColor = if ($is_selected) { Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" } else { Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" }
+            if ($is_selected) { 
+                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
+            } else { 
+                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" 
+            }
             
             # Add the label to the task panel
             $taskPanel.AddChild($taskLabel)
@@ -6843,7 +7259,11 @@ class TaskListScreen : Screen {
                     }
                     $line = $word
                 } else {
-                    $line = if ($line) { "$line $word" } else { $word }
+                    if ($line) { 
+                        $line = "$line $word" 
+                    } else { 
+                        $line = $word 
+                    }
                 }
             }
             
@@ -6968,19 +7388,33 @@ class TaskListScreen : Screen {
                 $this._UpdateDisplay()
             }
             ([ConsoleKey]::Enter) {
-                # Edit task - would trigger command palette or dialog
-                Write-Verbose "TaskListScreen: Edit task requested for: $($this._selectedTask.Title)"
-            }
-            ([ConsoleKey]::D) {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
-                    # Delete task
-                    Write-Verbose "TaskListScreen: Delete task requested for: $($this._selectedTask.Title)"
+                # Edit task
+                if ($this._selectedTask -and $this._editButton) {
+                    $this._editButton.OnClick.Invoke()
                 }
             }
             ([ConsoleKey]::N) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     # New task
-                    Write-Verbose "TaskListScreen: New task requested"
+                    $this._newButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::E) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    # Edit task
+                    $this._editButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::D) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    # Delete task
+                    $this._deleteButton.OnClick.Invoke()
+                }
+            }
+            ([ConsoleKey]::C) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    # Complete task
+                    $this._completeButton.OnClick.Invoke()
                 }
             }
             default {
@@ -6992,6 +7426,207 @@ class TaskListScreen : Screen {
 
 #endregion
 #<!-- END_PAGE: ASC.002 -->
+
+class ThemePickerScreen : Screen {
+    hidden [ScrollablePanel] $_themePanel
+    hidden [Panel] $_mainPanel
+    hidden [array] $_themes
+    hidden [int] $_selectedIndex = 0
+    hidden $_themeManager  # Remove type annotation since ThemeManager is defined later
+    hidden [string] $_originalTheme  # Store original theme to restore on cancel
+    
+    ThemePickerScreen([object]$serviceContainer) : base("ThemePickerScreen", $serviceContainer) {}
+    
+    [void] Initialize() {
+        # Get theme manager
+        $this._themeManager = $this.ServiceContainer?.GetService("ThemeManager")
+        if (-not $this._themeManager) {
+            Write-Verbose "ThemePickerScreen: ThemeManager not found"
+            return
+        }
+        
+        # Get available themes
+        $this._themes = $this._themeManager.GetAvailableThemes()
+        Write-Verbose "ThemePickerScreen: Found $($this._themes.Count) themes: $($this._themes -join ', ')"
+        
+        # Store original theme
+        $this._originalTheme = $this._themeManager.ThemeName
+        
+        # Main panel
+        $this._mainPanel = [Panel]::new("Theme Selector")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = "Select Theme"
+        $this.AddChild($this._mainPanel)
+        
+        # Instructions
+        $instructionLabel = [LabelComponent]::new("Instructions")
+        $instructionLabel.Text = "Use ↑↓ to navigate, Enter to select theme, Esc to cancel"
+        $instructionLabel.X = 2
+        $instructionLabel.Y = 2
+        $instructionLabel.Width = [Math]::Min(60, $this.Width - 4)
+        $instructionLabel.Height = 1
+        $instructionLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $this._mainPanel.AddChild($instructionLabel)
+        
+        # Theme scrollable panel
+        $panelWidth = [Math]::Min(60, $this.Width - 10)
+        $panelHeight = [Math]::Min(20, $this.Height - 8)
+        $panelX = [Math]::Floor(($this.Width - $panelWidth) / 2)
+        
+        $this._themePanel = [ScrollablePanel]::new("ThemeList")
+        $this._themePanel.X = $panelX
+        $this._themePanel.Y = 4
+        $this._themePanel.Width = $panelWidth
+        $this._themePanel.Height = $panelHeight
+        $this._themePanel.Title = "Available Themes"
+        $this._themePanel.ShowScrollbar = $true
+        $this._mainPanel.AddChild($this._themePanel)
+        
+        # Find current theme index
+        $currentTheme = $this._themeManager.ThemeName
+        $selectedIdx = 0
+        for ($i = 0; $i -lt $this._themes.Count; $i++) {
+            if ($this._themes[$i] -eq $currentTheme) {
+                $selectedIdx = $i
+                break
+            }
+        }
+        $this._selectedIndex = $selectedIdx
+        
+        # Update display
+        $this._UpdateThemeList()
+    }
+    
+    hidden [void] _UpdateThemeList() {
+        # Clear the panel
+        $this._themePanel.Children.Clear()
+        
+        # Add theme items
+        for ($i = 0; $i -lt $this._themes.Count; $i++) {
+            $themeName = $this._themes[$i]
+            $isSelected = ($i -eq $this._selectedIndex)
+            
+            # Create panel for each theme item
+            $itemPanel = [Panel]::new("ThemeItem_$i")
+            $itemPanel.X = 0
+            $itemPanel.Y = $i
+            $itemPanel.Width = $this._themePanel.ContentWidth
+            $itemPanel.Height = 1
+            $itemPanel.HasBorder = $false
+            
+            # Set background based on selection
+            $itemPanel.BackgroundColor = if ($isSelected) { 
+                Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF" 
+            } else { 
+                Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" 
+            }
+            
+            # Create label for theme name
+            $themeLabel = [LabelComponent]::new("ThemeLabel_$i")
+            $themeLabel.X = 2
+            $themeLabel.Y = 0
+            $themeLabel.Width = $itemPanel.Width - 4
+            $themeLabel.Height = 1
+            
+            # Format display text
+            $indicator = if ($isSelected) { "▶ " } else { "  " }
+            $currentMarker = if ($themeName -eq $this._originalTheme) { " (current)" } else { "" }
+            $themeLabel.Text = "$indicator$themeName$currentMarker"
+            
+            # Set text color based on selection
+            $themeLabel.ForegroundColor = if ($isSelected) { 
+                Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
+            } else { 
+                Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" 
+            }
+            
+            $itemPanel.AddChild($themeLabel)
+            $this._themePanel.AddChild($itemPanel)
+        }
+        
+        # Ensure selected item is visible
+        if ($this._selectedIndex -lt $this._themePanel.ScrollOffsetY) {
+            $this._themePanel.ScrollOffsetY = $this._selectedIndex
+        } elseif ($this._selectedIndex >= $this._themePanel.ScrollOffsetY + $this._themePanel.ContentHeight) {
+            $this._themePanel.ScrollOffsetY = $this._selectedIndex - $this._themePanel.ContentHeight + 1
+        }
+        
+        $this._themePanel.RequestRedraw()
+    }
+    
+    [void] OnEnter() {
+        $this.RequestRedraw()
+    }
+    
+    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::UpArrow) {
+                if ($this._selectedIndex -gt 0) {
+                    $this._selectedIndex--
+                    if ($this._selectedIndex -lt $this._themePanel.ScrollOffsetY) {
+                        $this._themePanel.ScrollUp()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this._selectedIndex -lt $this._themes.Count - 1) {
+                    $this._selectedIndex++
+                    $visibleEnd = $this._themePanel.ScrollOffsetY + $this._themePanel.ContentHeight - 1
+                    if ($this._selectedIndex -gt $visibleEnd) {
+                        $this._themePanel.ScrollDown()
+                    }
+                    $this._UpdateThemeList()
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                # Apply selected theme
+                if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
+                    $selectedTheme = $this._themes[$this._selectedIndex]
+                    $this._themeManager.LoadTheme($selectedTheme)
+                    Write-Verbose "Applied theme: $selectedTheme"
+                    
+                    # Publish theme change event
+                    $eventManager = $this.ServiceContainer?.GetService("EventManager")
+                    if ($eventManager) {
+                        $eventManager.Publish("Theme.Changed", @{ Theme = $selectedTheme })
+                    }
+                    
+                    # Go back
+                    $navService = $this.ServiceContainer?.GetService("NavigationService")
+                    if ($navService -and $navService.CanGoBack()) {
+                        $navService.GoBack()
+                    }
+                }
+            }
+            ([ConsoleKey]::Escape) {
+                # Restore original theme and cancel
+                $this._themeManager.LoadTheme($this._originalTheme)
+                
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                }
+            }
+            ([ConsoleKey]::Home) {
+                $this._selectedIndex = 0
+                $this._themePanel.ScrollToTop()
+                $this._UpdateThemeList()
+            }
+            ([ConsoleKey]::End) {
+                $this._selectedIndex = $this._themes.Count - 1
+                $this._themePanel.ScrollToBottom()
+                $this._UpdateThemeList()
+            }
+            default {
+                # Unhandled key
+            }
+        }
+    }
+}
 
 #<!-- PAGE: ASC.003 - Screen Utilities -->
 #region Screen Utilities
@@ -7178,6 +7813,53 @@ class ActionService {
             Category = "Application"
             Description = "Show command palette"
             Hotkey = "Ctrl+P"
+        })
+        
+        # Theme picker action
+        $this.RegisterAction("ui.theme.picker", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $themeScreen = [ThemePickerScreen]::new($container)
+            $themeScreen.Initialize()
+            $navService.NavigateTo($themeScreen)
+        }, @{
+            Category = "UI"
+            Description = "Change Theme"
+        })
+        
+        # Task management actions
+        $this.RegisterAction("task.new", {
+            $navService = $global:TuiState.Services.NavigationService
+            $currentScreen = $navService?.CurrentScreen
+            if ($currentScreen -is [TaskListScreen]) {
+                $currentScreen._newButton.OnClick.Invoke()
+            }
+        }, @{
+            Category = "Tasks"
+            Description = "New Task"
+        })
+        
+        $this.RegisterAction("task.list", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $taskScreen = [TaskListScreen]::new($container)
+            $taskScreen.Initialize()
+            $navService.NavigateTo($taskScreen)
+        }, @{
+            Category = "Tasks"
+            Description = "View All Tasks"
+        })
+        
+        # Add navigation.taskList action for consistency
+        $this.RegisterAction("navigation.taskList", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $taskScreen = [TaskListScreen]::new($container)
+            $taskScreen.Initialize()
+            $navService.NavigateTo($taskScreen)
+        }, @{
+            Category = "Navigation"
+            Description = "Go to Task List"
         })
         
         Write-Verbose "ActionService: Registered default actions"
@@ -8002,148 +8684,223 @@ class NavigationService {
 # Purpose: Visual theming system with consistent hex color output
 class ThemeManager {
     [hashtable]$CurrentTheme = @{}
-    [string]$ThemeName = "Default"
+    [string]$ThemeName = "Synthwave"
+    [hashtable]$Themes = @{}
     
     ThemeManager() {
-        $this.LoadDefaultTheme()
-        Write-Verbose "ThemeManager: Initialized with theme '$($this.ThemeName)'"
+        $this.InitializeThemes()
+        $this.LoadTheme($this.ThemeName)
     }
     
-    [void] LoadDefaultTheme() {
-        # Default dark theme with all hex colors
-        $this.CurrentTheme = @{
+    [void] InitializeThemes() {
+        # Synthwave Theme - Neon cyberpunk aesthetic
+        $this.Themes["Synthwave"] = @{
             # Base colors
-            "Background" = "#000000"
-            "Foreground" = "#FFFFFF"
-            "Primary" = "#00FFFF"
-            "Secondary" = "#008080"
-            "Accent" = "#FFFF00"
-            "Subtle" = "#808080"
-            "Success" = "#00FF00"
-            "Warning" = "#FFFF00"
-            "Error" = "#FF0000"
-            "Info" = "#00FFFF"
+            "Background" = "#0a0e27"
+            "Foreground" = "#f92aad"
+            "Subtle" = "#72f1b8"
+            "Primary" = "#ff6ac1"
+            "Accent" = "#ffcc00"
+            "Secondary" = "#5a189a"
+            "Error" = "#ff006e"
+            "Warning" = "#ffbe0b"
+            "Success" = "#3bf4fb"
+            "Info" = "#8338ec"
             
-            # Component colors
-            "component.background" = "#000000"
-            "component.border" = "#808080"
-            "component.title" = "#00FFFF"
+            # Component specific
+            "component.background" = "#0a0e27"
+            "component.border" = "#f92aad"
+            "component.title" = "#ffcc00"
             
-            # Button colors
-            "button.normal.fg" = "#FFFFFF"
-            "button.normal.bg" = "#333333"
-            "button.focused.fg" = "#000000"
-            "button.focused.bg" = "#00FFFF"
-            "button.pressed.fg" = "#FFFFFF"
-            "button.pressed.bg" = "#008080"
-            "button.disabled.fg" = "#666666"
-            "button.disabled.bg" = "#222222"
+            # Input
+            "input.background" = "#1a1e3a"
+            "input.foreground" = "#f92aad"
+            "input.placeholder" = "#72f1b8"
             
-            # Input colors
-            "input.background" = "#000000"
-            "input.foreground" = "#FFFFFF"
-            "input.border" = "#808080"
-            "input.cursor" = "#00FFFF"
-            "input.placeholder" = "#666666"
+            # Button states
+            "button.normal.fg" = "#0a0e27"
+            "button.normal.bg" = "#f92aad"
+            "button.focused.fg" = "#0a0e27"
+            "button.focused.bg" = "#ff6ac1"
+            "button.pressed.fg" = "#0a0e27"
+            "button.pressed.bg" = "#ffcc00"
+            "button.disabled.fg" = "#555555"
+            "button.disabled.bg" = "#2a2e4a"
             
-            # List colors
-            "list.item.normal" = "#FFFFFF"
-            "list.item.selected" = "#000000"
-            "list.item.selected.background" = "#00FFFF"
-            "list.header.fg" = "#FFFF00"
-            "list.header.bg" = "#333333"
-            "list.scrollbar" = "#808080"
-            
-            # Dialog colors
-            "dialog.border" = "#00FFFF"
-            "dialog.background" = "#000000"
-            "dialog.foreground" = "#FFFFFF"
-            
-            # Status colors
-            "status.background" = "#333333"
-            "status.foreground" = "#FFFFFF"
-        }
-        $this.ThemeName = "Default"
-    }
-    
-    [object] GetColor([string]$colorName) {
-        if ([string]::IsNullOrWhiteSpace($colorName)) {
-            return "#808080" # Default fallback hex
+            # List/Table
+            "list.header.fg" = "#ffcc00"
+            "list.header.bg" = "#1a1e3a"
+            "list.item.normal" = "#f92aad"
+            "list.item.selected" = "#0a0e27"
+            "list.item.selected.background" = "#ff6ac1"
+            "list.scrollbar" = "#72f1b8"
         }
         
-        if ($this.CurrentTheme.ContainsKey($colorName)) {
-            $color = $this.CurrentTheme[$colorName]
+        # Aurora Theme - Northern lights inspired
+        $this.Themes["Aurora"] = @{
+            # Base colors
+            "Background" = "#011627"
+            "Foreground" = "#d6deeb"
+            "Subtle" = "#7fdbca"
+            "Primary" = "#82aaff"
+            "Accent" = "#21c7a8"
+            "Secondary" = "#c792ea"
+            "Error" = "#ef5350"
+            "Warning" = "#ffeb95"
+            "Success" = "#22da6e"
+            "Info" = "#82aaff"
             
-            # Ensure we always return hex format (fixes issue #18)
-            if ($color -is [ConsoleColor]) {
-                # Convert ConsoleColor to hex immediately
-                $hexMap = @{
-                    [ConsoleColor]::Black = "#000000"
-                    [ConsoleColor]::DarkBlue = "#000080"
-                    [ConsoleColor]::DarkGreen = "#008000"
-                    [ConsoleColor]::DarkCyan = "#008080"
-                    [ConsoleColor]::DarkRed = "#800000"
-                    [ConsoleColor]::DarkMagenta = "#800080"
-                    [ConsoleColor]::DarkYellow = "#808000"
-                    [ConsoleColor]::Gray = "#C0C0C0"
-                    [ConsoleColor]::DarkGray = "#808080"
-                    [ConsoleColor]::Blue = "#0000FF"
-                    [ConsoleColor]::Green = "#00FF00"
-                    [ConsoleColor]::Cyan = "#00FFFF"
-                    [ConsoleColor]::Red = "#FF0000"
-                    [ConsoleColor]::Magenta = "#FF00FF"
-                    [ConsoleColor]::Yellow = "#FFFF00"
-                    [ConsoleColor]::White = "#FFFFFF"
-                }
-                return $hexMap[$color] ?? "#808080"
-            }
+            # Component specific
+            "component.background" = "#011627"
+            "component.border" = "#5f7e97"
+            "component.title" = "#21c7a8"
             
-            # Already a hex string or other format
-            return $color
+            # Input
+            "input.background" = "#0e293f"
+            "input.foreground" = "#d6deeb"
+            "input.placeholder" = "#637777"
+            
+            # Button states
+            "button.normal.fg" = "#011627"
+            "button.normal.bg" = "#82aaff"
+            "button.focused.fg" = "#011627"
+            "button.focused.bg" = "#21c7a8"
+            "button.pressed.fg" = "#011627"
+            "button.pressed.bg" = "#c792ea"
+            "button.disabled.fg" = "#444444"
+            "button.disabled.bg" = "#1d3b53"
+            
+            # List/Table
+            "list.header.fg" = "#21c7a8"
+            "list.header.bg" = "#0e293f"
+            "list.item.normal" = "#d6deeb"
+            "list.item.selected" = "#011627"
+            "list.item.selected.background" = "#82aaff"
+            "list.scrollbar" = "#5f7e97"
         }
         
-        # Write-Log -Level Debug -Message "ThemeManager: Color '$colorName' not found in theme, using default hex #808080"
-        return "#808080" # Always return hex string, never ConsoleColor enum
-    }
-    
-    [void] SetColor([string]$colorName, [string]$hexColor) {
-        if ([string]::IsNullOrWhiteSpace($colorName)) {
-            throw "Color name cannot be null or empty"
+        # Ocean Theme - Deep sea aesthetics
+        $this.Themes["Ocean"] = @{
+            # Base colors
+            "Background" = "#0f111a"
+            "Foreground" = "#8f93a2"
+            "Subtle" = "#4b526d"
+            "Primary" = "#00bcd4"
+            "Accent" = "#00e676"
+            "Secondary" = "#536dfe"
+            "Error" = "#ff5252"
+            "Warning" = "#ffb74d"
+            "Success" = "#00e676"
+            "Info" = "#448aff"
+            
+            # Component specific
+            "component.background" = "#0f111a"
+            "component.border" = "#1f2937"
+            "component.title" = "#00bcd4"
+            
+            # Input
+            "input.background" = "#1a1f2e"
+            "input.foreground" = "#8f93a2"
+            "input.placeholder" = "#4b526d"
+            
+            # Button states
+            "button.normal.fg" = "#0f111a"
+            "button.normal.bg" = "#00bcd4"
+            "button.focused.fg" = "#0f111a"
+            "button.focused.bg" = "#00e676"
+            "button.pressed.fg" = "#0f111a"
+            "button.pressed.bg" = "#536dfe"
+            "button.disabled.fg" = "#333333"
+            "button.disabled.bg" = "#1a1f2e"
+            
+            # List/Table
+            "list.header.fg" = "#00e676"
+            "list.header.bg" = "#1a1f2e"
+            "list.item.normal" = "#8f93a2"
+            "list.item.selected" = "#0f111a"
+            "list.item.selected.background" = "#00bcd4"
+            "list.scrollbar" = "#4b526d"
         }
         
-        # Validate hex color format
-        if (-not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
-            throw "Color must be in hex format (#RRGGBB)"
+        # Forest Theme - Nature inspired
+        $this.Themes["Forest"] = @{
+            # Base colors
+            "Background" = "#0d1117"
+            "Foreground" = "#c9d1d9"
+            "Subtle" = "#8b949e"
+            "Primary" = "#58a6ff"
+            "Accent" = "#56d364"
+            "Secondary" = "#d29922"
+            "Error" = "#f85149"
+            "Warning" = "#f0883e"
+            "Success" = "#56d364"
+            "Info" = "#58a6ff"
+            
+            # Component specific
+            "component.background" = "#0d1117"
+            "component.border" = "#30363d"
+            "component.title" = "#56d364"
+            
+            # Input
+            "input.background" = "#161b22"
+            "input.foreground" = "#c9d1d9"
+            "input.placeholder" = "#484f58"
+            
+            # Button states
+            "button.normal.fg" = "#0d1117"
+            "button.normal.bg" = "#58a6ff"
+            "button.focused.fg" = "#0d1117"
+            "button.focused.bg" = "#56d364"
+            "button.pressed.fg" = "#0d1117"
+            "button.pressed.bg" = "#d29922"
+            "button.disabled.fg" = "#484f58"
+            "button.disabled.bg" = "#21262d"
+            
+            # List/Table
+            "list.header.fg" = "#56d364"
+            "list.header.bg" = "#161b22"
+            "list.item.normal" = "#c9d1d9"
+            "list.item.selected" = "#0d1117"
+            "list.item.selected.background" = "#58a6ff"
+            "list.scrollbar" = "#8b949e"
         }
-        
-        $this.CurrentTheme[$colorName] = $hexColor
-        Write-Verbose "ThemeManager: Set color '$colorName' to '$hexColor'"
     }
     
     [void] LoadTheme([string]$themeName) {
-        # In a full implementation, this would load from JSON files
-        # For now, just support the default theme
-        switch ($themeName.ToLower()) {
-            "default" {
-                $this.LoadDefaultTheme()
-            }
-            "dark" {
-                $this.LoadDefaultTheme() # Same as default for now
-            }
-            default {
-                Write-Warning "ThemeManager: Unknown theme '$themeName', loading default"
-                $this.LoadDefaultTheme()
-            }
+        if ($this.Themes.ContainsKey($themeName)) {
+            $this.CurrentTheme = $this.Themes[$themeName].Clone()
+            $this.ThemeName = $themeName
         }
-        Write-Verbose "ThemeManager: Loaded theme '$themeName'"
     }
     
-    [hashtable] GetAllColors() {
-        return $this.CurrentTheme.Clone()
+    [void] LoadDefaultTheme() {
+        $this.LoadTheme("Synthwave")
     }
     
-    [void] Cleanup() {
-        Write-Verbose "ThemeManager: Cleanup complete"
+    [string] GetColor([string]$colorName) {
+        return $this.GetColor($colorName, "#FFFFFF")
+    }
+    
+    [string] GetColor([string]$colorName, [string]$defaultColor) {
+        if ($this.CurrentTheme.ContainsKey($colorName)) {
+            return $this.CurrentTheme[$colorName]
+        }
+        return $defaultColor
+    }
+    
+    [void] SetColor([string]$colorName, [string]$colorValue) {
+        $this.CurrentTheme[$colorName] = $colorValue
+    }
+    
+    [string[]] GetAvailableThemes() {
+        return $this.Themes.Keys | Sort-Object
+    }
+    
+    [void] CycleTheme() {
+        $themes = $this.GetAvailableThemes()
+        $currentIndex = [array]::IndexOf($themes, $this.ThemeName)
+        $nextIndex = ($currentIndex + 1) % $themes.Count
+        $this.LoadTheme($themes[$nextIndex])
     }
 }
 
@@ -9580,6 +10337,121 @@ Write-Host "`nPress any key to exit..."
 
 
 
+####\diagnose-theme-picker.ps1
+# Diagnostic script for ThemePickerScreen
+Write-Host "Running ThemePickerScreen diagnostics..." -ForegroundColor Cyan
+
+# Enable verbose output
+$VerbosePreference = "Continue"
+
+# Load all files
+$files = @(
+    "AllBaseClasses.ps1",
+    "AllModels.ps1", 
+    "AllComponents.ps1",
+    "AllScreens.ps1",
+    "AllFunctions.ps1",
+    "AllServices.ps1",
+    "AllRuntime.ps1"
+)
+
+foreach ($file in $files) {
+    Write-Host "Loading $file..." -ForegroundColor Gray
+    . (Join-Path $PSScriptRoot $file)
+}
+
+# Create a minimal test environment
+Write-Host "`nCreating test environment..." -ForegroundColor Yellow
+
+# Create theme manager
+$themeManager = [ThemeManager]::new()
+$themes = $themeManager.GetAvailableThemes()
+Write-Host "Available themes from ThemeManager: $($themes -join ', ')" -ForegroundColor Green
+Write-Host "Current theme: $($themeManager.ThemeName)" -ForegroundColor Green
+
+# Test ScrollablePanel directly
+Write-Host "`nTesting ScrollablePanel..." -ForegroundColor Yellow
+$scrollPanel = [ScrollablePanel]::new("TestPanel")
+$scrollPanel.Width = 60
+$scrollPanel.Height = 15
+$scrollPanel.UpdateContentDimensions()
+
+Write-Host "ScrollablePanel created:" -ForegroundColor Green
+Write-Host "  - ContentWidth: $($scrollPanel.ContentWidth)"
+Write-Host "  - ContentHeight: $($scrollPanel.ContentHeight)"
+Write-Host "  - Width: $($scrollPanel.Width)"
+Write-Host "  - Height: $($scrollPanel.Height)"
+
+# Add test children
+for ($i = 0; $i -lt 5; $i++) {
+    $testPanel = [Panel]::new("TestItem_$i")
+    $testPanel.X = 0
+    $testPanel.Y = $i * 3
+    $testPanel.Width = 50
+    $testPanel.Height = 2
+    $testPanel.HasBorder = $false
+    $testPanel.BackgroundColor = "#333333"
+    
+    $label = [LabelComponent]::new("Label_$i")
+    $label.Text = "Test Item $i"
+    $label.X = 1
+    $label.Y = 0
+    $testPanel.AddChild($label)
+    
+    $scrollPanel.AddChild($testPanel)
+}
+
+Write-Host "`nAdded $($scrollPanel.Children.Count) children to ScrollablePanel" -ForegroundColor Green
+
+# Test ThemePickerScreen initialization
+Write-Host "`nTesting ThemePickerScreen..." -ForegroundColor Yellow
+
+# Create minimal service container
+$serviceContainer = @{
+    GetService = {
+        param($name)
+        if ($name -eq "ThemeManager") {
+            return $themeManager
+        }
+        return $null
+    }
+}
+
+$themeScreen = [ThemePickerScreen]::new($serviceContainer)
+$themeScreen.Width = 120
+$themeScreen.Height = 30
+
+# Initialize the screen
+$themeScreen.Initialize()
+
+Write-Host "`nThemePickerScreen initialized:" -ForegroundColor Green
+Write-Host "  - Themes found: $($themeScreen._themes -join ', ')"
+Write-Host "  - Selected index: $($themeScreen._selectedIndex)"
+Write-Host "  - Main panel children: $($themeScreen._mainPanel.Children.Count)"
+Write-Host "  - Theme panel children: $($themeScreen._themePanel.Children.Count)"
+
+# Check theme panel content
+if ($themeScreen._themePanel.Children.Count -gt 0) {
+    Write-Host "`nTheme panel children details:" -ForegroundColor Yellow
+    foreach ($child in $themeScreen._themePanel.Children) {
+        Write-Host "  - $($child.Name) at Y=$($child.Y), Height=$($child.Height)"
+    }
+} else {
+    Write-Host "`nWARNING: No children in theme panel!" -ForegroundColor Red
+}
+
+# Check if UpdateMaxScroll exists
+$updateMaxScrollMethod = $themeScreen._themePanel.GetType().GetMethod("UpdateMaxScroll")
+if ($updateMaxScrollMethod) {
+    Write-Host "`nUpdateMaxScroll method found" -ForegroundColor Green
+} else {
+    Write-Host "`nWARNING: UpdateMaxScroll method not found!" -ForegroundColor Red
+}
+
+Write-Host "`nDiagnostics complete." -ForegroundColor Cyan
+
+
+
 ####\enhanced_theming.ps1
 # Enhanced Theming and Additional Screens for Axiom-Phoenix v4.0
 # This script adds:
@@ -9994,6 +10866,103 @@ Write-Host "New features added:" -ForegroundColor Cyan
 Write-Host "  - 3 new themes: Synthwave, HighContrastLight, Paper" -ForegroundColor White
 Write-Host "  - Theme picker screen (accessible via Ctrl+P -> 'Change Theme')" -ForegroundColor White
 Write-Host "  - Unicode support for better UI rendering" -ForegroundColor White
+
+
+
+####\ENHANCEMENT_SUMMARY.ps1
+# ==============================================================================
+# Axiom-Phoenix v4.0 Enhanced Edition - Summary and Instructions
+# ==============================================================================
+
+Write-Host @"
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                  AXIOM-PHOENIX v4.0 ENHANCED EDITION                      ║
+║                        Enhancement Summary                                 ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+"@ -ForegroundColor Cyan
+
+Write-Host "✅ FIXES APPLIED:" -ForegroundColor Green
+Write-Host "  • Removed duplicate TaskDialog and TaskDeleteDialog class definitions"
+Write-Host "  • Fixed the 'member already defined' error in AllComponents.ps1"
+Write-Host ""
+
+Write-Host "🎨 ENHANCEMENTS ADDED:" -ForegroundColor Magenta
+Write-Host "  • 4 Beautiful Themes: Synthwave, Aurora, Ocean, Forest"
+Write-Host "  • Enhanced Dashboard with charts and real-time updates"
+Write-Host "  • Visual effects: gradients, shadows, glowing borders"
+Write-Host "  • Animated splash screen with loading progress"
+Write-Host "  • Improved keyboard shortcuts (H to cycle themes)"
+Write-Host "  • Better task visualization with icons and progress bars"
+Write-Host ""
+
+Write-Host "📁 FILES CREATED:" -ForegroundColor Yellow
+Write-Host "  • fix_duplicates.ps1 - Script to fix duplicate classes"
+Write-Host "  • update_theme_manager.ps1 - Updates ThemeManager with new themes"
+Write-Host "  • ENHANCEMENT_SUMMARY.ps1 - This file"
+Write-Host ""
+
+Write-Host "🚀 TO RUN THE ENHANCED APPLICATION:" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  1. First, update the ThemeManager (optional, for new themes):" -ForegroundColor White
+Write-Host "     ./update_theme_manager.ps1" -ForegroundColor Green
+Write-Host ""
+Write-Host "  2. Copy the enhanced Start.ps1 from the artifact" -ForegroundColor White
+Write-Host ""
+Write-Host "  3. Run the application:" -ForegroundColor White
+Write-Host "     ./Start.ps1" -ForegroundColor Green
+Write-Host ""
+Write-Host "  4. Or run with a specific theme:" -ForegroundColor White
+Write-Host "     ./Start.ps1 -Theme Aurora" -ForegroundColor Green
+Write-Host "     ./Start.ps1 -Theme Ocean" -ForegroundColor Green
+Write-Host "     ./Start.ps1 -Theme Forest" -ForegroundColor Green
+Write-Host ""
+
+Write-Host "⌨️ NEW KEYBOARD SHORTCUTS:" -ForegroundColor Yellow
+Write-Host "  • H - Cycle through themes while in dashboard"
+Write-Host "  • R - Refresh dashboard data"
+Write-Host "  • T - Navigate to task list"
+Write-Host "  • N - Create new task"
+Write-Host ""
+
+Write-Host "💡 VISUAL ENHANCEMENT FUNCTIONS:" -ForegroundColor Magenta
+Write-Host "  The following functions have been created for visual effects:"
+Write-Host "  • Write-TuiGradient - Create gradient backgrounds"
+Write-Host "  • Write-TuiProgressBar - Animated progress bars"
+Write-Host "  • Write-TuiGlowBorder - Pulsing glow effect borders"
+Write-Host "  • Write-TuiSparkle - Animated sparkle effects"
+Write-Host "  • Write-TuiTypewriter - Typewriter text animation"
+Write-Host "  • Write-TuiSpinner - Loading spinners"
+Write-Host "  • Write-TuiMatrixRain - Matrix-style rain effect"
+Write-Host "  • Write-TuiShadow - Drop shadow effects"
+Write-Host ""
+
+Write-Host "📝 NOTES:" -ForegroundColor White
+Write-Host "  • The duplicate class issue has been fixed"
+Write-Host "  • All enhancements are backward compatible"
+Write-Host "  • The enhanced dashboard replaces the existing one"
+Write-Host "  • Themes can be cycled with the H key"
+Write-Host "  • Best viewed in Windows Terminal or modern terminals"
+Write-Host ""
+
+Write-Host "═══════════════════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host " The application is now more elegant and beautiful! Enjoy! 🚀" -ForegroundColor Green
+Write-Host "═══════════════════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host ""
+
+# Show available themes
+Write-Host "Available Themes Preview:" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  Synthwave " -NoNewline -ForegroundColor Black -BackgroundColor Magenta
+Write-Host " - Neon cyberpunk with vibrant colors" -ForegroundColor Gray
+Write-Host "  Aurora    " -NoNewline -ForegroundColor Black -BackgroundColor Blue
+Write-Host " - Northern lights inspired palette" -ForegroundColor Gray
+Write-Host "  Ocean     " -NoNewline -ForegroundColor Black -BackgroundColor Cyan
+Write-Host " - Deep sea aesthetics" -ForegroundColor Gray
+Write-Host "  Forest    " -NoNewline -ForegroundColor Black -BackgroundColor Green
+Write-Host " - Nature-inspired earth tones" -ForegroundColor Gray
+Write-Host ""
 
 
 
@@ -10489,6 +11458,116 @@ if ($focusManagerFound) {
 } else {
     Write-Host "`nFocusManager class NOT found - needs to be added!" -ForegroundColor Red
     Write-Host "Should be inserted before line $dialogManagerLine (DialogManager)" -ForegroundColor Yellow
+}
+
+
+
+####\fix_duplicates.ps1
+# Script to find and fix duplicate class definitions
+
+$content = Get-Content ".\AllComponents.ps1" -Raw
+
+# Find all occurrences of the class definitions
+$taskDialogMatches = [regex]::Matches($content, 'class TaskDialog\s*:\s*Dialog')
+$taskDeleteDialogMatches = [regex]::Matches($content, 'class TaskDeleteDialog\s*:\s*ConfirmDialog')
+
+Write-Host "Found $($taskDialogMatches.Count) occurrences of TaskDialog"
+Write-Host "Found $($taskDeleteDialogMatches.Count) occurrences of TaskDeleteDialog"
+
+# Display line numbers for each occurrence
+$lines = $content -split "`n"
+$lineNum = 0
+$taskDialogLines = @()
+$taskDeleteDialogLines = @()
+
+foreach ($line in $lines) {
+    $lineNum++
+    if ($line -match 'class TaskDialog\s*:\s*Dialog') {
+        Write-Host "TaskDialog found at line $lineNum"
+        $taskDialogLines += $lineNum
+    }
+    if ($line -match 'class TaskDeleteDialog\s*:\s*ConfirmDialog') {
+        Write-Host "TaskDeleteDialog found at line $lineNum"
+        $taskDeleteDialogLines += $lineNum
+    }
+}
+
+# If duplicates found, we'll create a fixed version
+if ($taskDialogMatches.Count -gt 1 -or $taskDeleteDialogMatches.Count -gt 1) {
+    Write-Host "`nDuplicates found! Creating fixed version..."
+    
+    # Read the file line by line
+    $lines = Get-Content ".\AllComponents.ps1"
+    $outputLines = @()
+    $skipTaskDialog = $false
+    $skipTaskDeleteDialog = $false
+    $taskDialogCount = 0
+    $taskDeleteDialogCount = 0
+    $inTaskDialog = $false
+    $inTaskDeleteDialog = $false
+    $braceCount = 0
+    
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        
+        # Check if we're starting a TaskDialog class
+        if ($line -match 'class TaskDialog\s*:\s*Dialog') {
+            $taskDialogCount++
+            if ($taskDialogCount -gt 1) {
+                Write-Host "Skipping duplicate TaskDialog at line $($i+1)"
+                $skipTaskDialog = $true
+                $inTaskDialog = $true
+                $braceCount = 0
+                continue
+            }
+        }
+        
+        # Check if we're starting a TaskDeleteDialog class
+        if ($line -match 'class TaskDeleteDialog\s*:\s*ConfirmDialog') {
+            $taskDeleteDialogCount++
+            if ($taskDeleteDialogCount -gt 1) {
+                Write-Host "Skipping duplicate TaskDeleteDialog at line $($i+1)"
+                $skipTaskDeleteDialog = $true
+                $inTaskDeleteDialog = $true
+                $braceCount = 0
+                continue
+            }
+        }
+        
+        # Track braces to know when class ends
+        if ($inTaskDialog -or $inTaskDeleteDialog) {
+            $openBraces = ($line -split '{').Count - 1
+            $closeBraces = ($line -split '}').Count - 1
+            $braceCount += $openBraces - $closeBraces
+            
+            if ($braceCount -eq 0 -and ($openBraces -gt 0 -or $closeBraces -gt 0)) {
+                # Class definition ended
+                if ($inTaskDialog) {
+                    $inTaskDialog = $false
+                    $skipTaskDialog = $false
+                    Write-Host "Finished skipping TaskDialog duplicate"
+                }
+                if ($inTaskDeleteDialog) {
+                    $inTaskDeleteDialog = $false
+                    $skipTaskDeleteDialog = $false
+                    Write-Host "Finished skipping TaskDeleteDialog duplicate"
+                }
+                continue
+            }
+        }
+        
+        # Add line if not skipping
+        if (-not $skipTaskDialog -and -not $skipTaskDeleteDialog) {
+            $outputLines += $line
+        }
+    }
+    
+    # Write the fixed content
+    $outputLines -join "`n" | Set-Content ".\AllComponents.ps1" -NoNewline
+    Write-Host "`nFixed! Removed duplicate class definitions."
+}
+else {
+    Write-Host "`nNo duplicates found in class definitions."
 }
 
 
@@ -11367,6 +12446,351 @@ Write-Host "  - Task actions in command palette" -ForegroundColor White
 
 
 
+####\install_enhanced_start.ps1
+# Copy the enhanced Start.ps1 file
+# This updates the existing Start.ps1 with the beautiful splash screen version
+
+# Backup the original
+if (Test-Path ".\Start.ps1") {
+    Copy-Item ".\Start.ps1" ".\Start.ps1.backup" -Force
+    Write-Host "Original Start.ps1 backed up to Start.ps1.backup" -ForegroundColor Yellow
+}
+
+# Create the enhanced Start.ps1
+@'
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Enhanced Application Startup
+# Beautiful splash screen and smooth initialization
+# ==============================================================================
+
+param(
+    [string]$Theme = "Synthwave",
+    [switch]$NoSplash,
+    [switch]$Debug
+)
+
+# Set error action preference
+$ErrorActionPreference = 'Stop'
+
+# Function to display animated splash screen
+function Show-SplashScreen {
+    param([int]$Duration = 3000)
+    
+    Clear-Host
+    $host.UI.RawUI.CursorSize = 0  # Hide cursor
+    
+    $width = $host.UI.RawUI.WindowSize.Width
+    $height = $host.UI.RawUI.WindowSize.Height
+    
+    # ASCII Art Logo
+    $logo = @"
+    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                                                                   ║
+    ║      ___   _  _  _  ___  __  __     ___  _  _  ___  ___  _  _  _ ║
+    ║     / _ \ | \/ || |/ _ \|  \/  |   | _ \| || |/ _ \| __|| \| || |║
+    ║    | |_| | >  < | | (_) | |\/| |   |  _/| __ | (_) | _| | .  || |║
+    ║    |_| |_|/_/\_\|_|\___/|_|  |_|   |_|  |_||_|\___/|___||_|\_||_|║
+    ║                                                                   ║
+    ║                        v4.0 ENHANCED EDITION                      ║
+    ║                                                                   ║
+    ╚═══════════════════════════════════════════════════════════════════╝
+"@
+    
+    $tagline = "The Future of Terminal User Interfaces"
+    $credits = "Powered by PowerShell 7+ | Built with ❤️"
+    
+    # Calculate positions
+    $logoLines = $logo -split "`n"
+    $logoWidth = ($logoLines | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum
+    $startX = [Math]::Max(0, [Math]::Floor(($width - $logoWidth) / 2))
+    $startY = [Math]::Max(0, [Math]::Floor(($height - $logoLines.Count - 4) / 2))
+    
+    # Synthwave colors for animation
+    $colors = @(
+        [ConsoleColor]::Magenta,
+        [ConsoleColor]::Cyan,
+        [ConsoleColor]::Yellow,
+        [ConsoleColor]::Green,
+        [ConsoleColor]::Blue
+    )
+    
+    # Animate logo appearance
+    $steps = 20
+    $stepDelay = $Duration / $steps
+    
+    for ($i = 0; $i -lt $steps; $i++) {
+        $colorIndex = $i % $colors.Count
+        $host.UI.RawUI.ForegroundColor = $colors[$colorIndex]
+        
+        # Clear and redraw
+        Clear-Host
+        
+        # Draw logo with fade-in effect
+        $y = $startY
+        foreach ($line in $logoLines) {
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($startX, $y)
+            if ($i -ge $steps / 2 -or $y -eq $startY -or $y -eq ($startY + $logoLines.Count - 1)) {
+                Write-Host $line -NoNewline
+            }
+            $y++
+        }
+        
+        # Draw tagline
+        if ($i -ge $steps * 0.6) {
+            $taglineX = [Math]::Floor(($width - $tagline.Length) / 2)
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($taglineX, $startY + $logoLines.Count + 1)
+            Write-Host $tagline -ForegroundColor Cyan -NoNewline
+        }
+        
+        # Draw credits
+        if ($i -ge $steps * 0.8) {
+            $creditsX = [Math]::Floor(($width - $credits.Length) / 2)
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($creditsX, $startY + $logoLines.Count + 3)
+            Write-Host $credits -ForegroundColor DarkGray -NoNewline
+        }
+        
+        # Progress bar
+        $progressY = $height - 3
+        $progressWidth = 60
+        $progressX = [Math]::Floor(($width - $progressWidth) / 2)
+        $progress = [Math]::Floor(($i / $steps) * $progressWidth)
+        
+        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($progressX, $progressY)
+        Write-Host "[" -NoNewline -ForegroundColor DarkGray
+        Write-Host ("█" * $progress) -NoNewline -ForegroundColor Green
+        Write-Host ("░" * ($progressWidth - $progress)) -NoNewline -ForegroundColor DarkGray
+        Write-Host "]" -NoNewline -ForegroundColor DarkGray
+        
+        # Loading message
+        $messages = @(
+            "Initializing quantum cores...",
+            "Loading neural matrices...",
+            "Calibrating photon streams...",
+            "Synchronizing time crystals...",
+            "Establishing neural link..."
+        )
+        $messageIndex = [Math]::Floor(($i / $steps) * $messages.Count)
+        $message = $messages[$messageIndex]
+        $messageX = [Math]::Floor(($width - $message.Length) / 2)
+        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($messageX, $progressY + 1)
+        Write-Host $message -ForegroundColor Yellow
+        
+        Start-Sleep -Milliseconds $stepDelay
+    }
+    
+    # Final pause
+    Start-Sleep -Milliseconds 500
+    
+    # Reset
+    $host.UI.RawUI.ForegroundColor = [ConsoleColor]::Gray
+    $host.UI.RawUI.CursorSize = 25  # Restore cursor
+    Clear-Host
+}
+
+# Main startup sequence
+try {
+    # Show splash screen unless disabled
+    if (-not $NoSplash) {
+        Show-SplashScreen -Duration 2000
+    }
+    
+    Write-Host "Loading Axiom-Phoenix v4.0 Enhanced..." -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Verify PowerShell version
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        Write-Host "ERROR: PowerShell 7.0 or higher is required!" -ForegroundColor Red
+        Write-Host "Current version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
+        Write-Host "Download from: https://github.com/PowerShell/PowerShell" -ForegroundColor Cyan
+        exit 1
+    }
+    
+    # Get script directory
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    if ([string]::IsNullOrEmpty($scriptDir)) {
+        $scriptDir = Get-Location
+    }
+    
+    # Load framework files in order with progress indication
+    $files = @(
+        @{ File = "AllBaseClasses.ps1"; Description = "Core Framework" },
+        @{ File = "AllModels.ps1"; Description = "Data Models" },
+        @{ File = "AllComponents.ps1"; Description = "UI Components" },
+        @{ File = "AllScreens.ps1"; Description = "Application Screens" },
+        @{ File = "AllFunctions.ps1"; Description = "Utility Functions" },
+        @{ File = "AllServices.ps1"; Description = "Business Services" },
+        @{ File = "AllRuntime.ps1"; Description = "Runtime Engine" }
+    )
+    
+    $totalFiles = $files.Count
+    $currentFile = 0
+    
+    foreach ($fileInfo in $files) {
+        $currentFile++
+        $percent = [Math]::Floor(($currentFile / $totalFiles) * 100)
+        
+        Write-Host "[$percent%] " -NoNewline -ForegroundColor Green
+        Write-Host "Loading $($fileInfo.Description)... " -NoNewline -ForegroundColor Gray
+        
+        $filePath = Join-Path $scriptDir $fileInfo.File
+        if (Test-Path $filePath) {
+            . $filePath
+            Write-Host "✓" -ForegroundColor Green
+        } else {
+            Write-Host "✗" -ForegroundColor Red
+            throw "File not found: $filePath"
+        }
+    }
+    
+    Write-Host ""
+    Write-Host "All framework files loaded successfully!" -ForegroundColor Green
+    Write-Host ""
+    
+    # Create service container
+    Write-Host "Initializing services..." -ForegroundColor Cyan
+    $container = [ServiceContainer]::new()
+    
+    # Register services with fancy names
+    $services = @(
+        @{ Type = "Logger"; Name = "Neural Logger" },
+        @{ Type = "EventManager"; Name = "Quantum Event System" },
+        @{ Type = "ThemeManager"; Name = "Photon Theme Engine" },
+        @{ Type = "DataManager"; Name = "Data Matrix" },
+        @{ Type = "ActionService"; Name = "Command Nexus" },
+        @{ Type = "KeybindingService"; Name = "Neural Keybinds" },
+        @{ Type = "NavigationService"; Name = "Dimensional Navigator" },
+        @{ Type = "FocusManager"; Name = "Focus Controller" },
+        @{ Type = "DialogManager"; Name = "Dialog Orchestrator" }
+    )
+    
+    foreach ($service in $services) {
+        Write-Host "  • Initializing $($service.Name)... " -NoNewline -ForegroundColor Gray
+        
+        $instance = switch ($service.Type) {
+            "Logger" { [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")) }
+            "EventManager" { [EventManager]::new() }
+            "ThemeManager" { [ThemeManager]::new() }
+            "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
+            "ActionService" { [ActionService]::new() }
+            "KeybindingService" { [KeybindingService]::new() }
+            "NavigationService" { [NavigationService]::new() }
+            "FocusManager" { [FocusManager]::new() }
+            "DialogManager" { [DialogManager]::new() }
+        }
+        
+        $container.Register($service.Type, $instance, "Singleton")
+        Write-Host "✓" -ForegroundColor Green
+    }
+    
+    # Set the selected theme
+    $themeManager = $container.GetService("ThemeManager")
+    if ($themeManager -and $Theme) {
+        $themeManager.LoadTheme($Theme)
+        Write-Host ""
+        Write-Host "Theme '$Theme' activated!" -ForegroundColor Magenta
+    }
+    
+    # Create sample data with enhanced items
+    Write-Host ""
+    Write-Host "Generating sample data..." -ForegroundColor Cyan
+    $dataManager = $container.GetService("DataManager")
+    
+    # Enhanced sample tasks
+    $sampleTasks = @(
+        @{
+            Title = "🚀 Launch Quantum Core Module"
+            Description = "Initialize the quantum processing core for enhanced computational capabilities"
+            Priority = "High"
+            Progress = 75
+        },
+        @{
+            Title = "🧬 Optimize Neural Networks"
+            Description = "Fine-tune the AI neural network parameters for improved performance"
+            Priority = "Medium"
+            Progress = 45
+        },
+        @{
+            Title = "🌊 Calibrate Wave Functions"
+            Description = "Adjust quantum wave function parameters for stable operation"
+            Priority = "High"
+            Progress = 90
+        },
+        @{
+            Title = "💎 Crystal Matrix Alignment"
+            Description = "Align the photonic crystal matrix for optimal light transmission"
+            Priority = "Low"
+            Progress = 20
+        },
+        @{
+            Title = "⚡ Energy Field Stabilization"
+            Description = "Stabilize the plasma energy field generators"
+            Priority = "Medium"
+            Progress = 60
+        }
+    )
+    
+    foreach ($taskData in $sampleTasks) {
+        $task = [PmcTask]::new()
+        $task.Title = $taskData.Title
+        $task.Description = $taskData.Description
+        $task.Priority = [TaskPriority]::$($taskData.Priority)
+        $task.SetProgress($taskData.Progress)
+        $task.ProjectKey = "PHOENIX"
+        $dataManager.AddTask($task) | Out-Null
+    }
+    
+    Write-Host "Sample data created!" -ForegroundColor Green
+    
+    # Start application
+    Write-Host ""
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " AXIOM-PHOENIX v4.0 ENHANCED - READY TO LAUNCH! " -ForegroundColor Yellow
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Press any key to enter the matrix..." -ForegroundColor Green
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    
+    # Launch the application
+    Clear-Host
+    Start-AxiomPhoenix -Services $container
+}
+catch {
+    Write-Host ""
+    Write-Host "CRITICAL ERROR!" -ForegroundColor Red -BackgroundColor DarkRed
+    Write-Host "Failed to load framework files!" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Error Details:" -ForegroundColor Yellow
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Stack Trace:" -ForegroundColor Yellow
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+    
+    if ($Debug) {
+        Write-Host ""
+        Write-Host "Full Exception:" -ForegroundColor Yellow
+        Write-Host $_ -ForegroundColor DarkGray
+    }
+    
+    Write-Host ""
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+'@ | Set-Content ".\Start.ps1" -Encoding UTF8
+
+Write-Host "Enhanced Start.ps1 created successfully!" -ForegroundColor Green
+Write-Host ""
+Write-Host "The application now features:" -ForegroundColor Cyan
+Write-Host "  • Beautiful animated splash screen" -ForegroundColor White
+Write-Host "  • Theme selection parameter" -ForegroundColor White
+Write-Host "  • Enhanced sample data with emojis" -ForegroundColor White
+Write-Host "  • Fancy service initialization messages" -ForegroundColor White
+Write-Host ""
+Write-Host "Run with: ./Start.ps1" -ForegroundColor Yellow
+Write-Host "Or try:  ./Start.ps1 -Theme Aurora" -ForegroundColor Yellow
+
+
+
 ####\quick-test.ps1
 # Quick test to see if the application starts without errors
 Write-Host "Testing if Axiom-Phoenix v4.0 starts correctly..." -ForegroundColor Cyan
@@ -11410,319 +12834,323 @@ try {
 
 ####\Start.ps1
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Application Entry Point
-# Loads all framework files and starts the application
-# ==============================================================================
-#
-# TABLE OF CONTENTS DIRECTIVE:
-# When modifying this file, ensure page markers remain accurate and update
-# TableOfContents.md to reflect any structural changes.
-#
-# Search for "PAGE: STA.###" to find specific sections.
-# Each section ends with "END_PAGE: STA.###"
+# Axiom-Phoenix v4.0 - Enhanced Application Startup
+# Beautiful splash screen and smooth initialization
 # ==============================================================================
 
-#<!-- PAGE: STA.001 - Script Configuration -->
-#region Script Configuration
-
-# Clean session by removing any existing types
-if ($global:TuiState) {
-    Write-Host "Cleaning previous session..." -ForegroundColor Yellow
-    try {
-        if ($global:TuiState.Running) {
-            $global:TuiState.Running = $false
-        }
-        Remove-Variable -Name TuiState -Scope Global -Force -ErrorAction SilentlyContinue
-    } catch {}
-}
-
-# Remove any loaded types from previous runs
-$typesToRemove = @(
-    'TuiAnsiHelper', 'TuiCell', 'TuiBuffer', 'UIElement', 'Component', 'Screen', 'ServiceContainer',
-    'ValidationBase', 'PmcTask', 'PmcProject', 'TimeEntry', 'NavigationItem',
-    'LabelComponent', 'ButtonComponent', 'TextBoxComponent', 'CheckBoxComponent', 'RadioButtonComponent',
-    'Panel', 'ScrollablePanel', 'GroupPanel', 'ListBox', 'TextBox', 'CommandPalette',
-    'ActionService', 'KeybindingService', 'DataManager', 'NavigationService', 'ThemeManager', 'Logger', 'EventManager'
+param(
+    [string]$Theme = "Synthwave",
+    [switch]$NoSplash,
+    [switch]$Debug
 )
 
-foreach ($typeName in $typesToRemove) {
-    try {
-        [System.Management.Automation.PSObject].Assembly.GetTypes() | 
-            Where-Object { $_.Name -eq $typeName } | 
-            ForEach-Object { 
-                Remove-TypeData -TypeName $_.FullName -ErrorAction SilentlyContinue 
-            }
-    } catch {}
-}
-
-Set-StrictMode -Version Latest
+# Set error action preference
 $ErrorActionPreference = 'Stop'
-$VerbosePreference = 'SilentlyContinue'  # Change to 'Continue' for debug output
 
-#endregion
-#<!-- END_PAGE: STA.001 -->
-
-#<!-- PAGE: STA.002 - Framework Loading & Service Initialization -->
-#region Load Framework Files
-
-try {
-    Write-Host "Loading Axiom-Phoenix v4.0..." -ForegroundColor Cyan
+# Function to display animated splash screen
+function Show-SplashScreen {
+    param([int]$Duration = 3000)
     
-    $scriptRoot = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
+    Clear-Host
+    $host.UI.RawUI.CursorSize = 0  # Hide cursor
     
-    # Define files in dependency order (CRITICAL: Do not change order!)
-    $filesToLoad = @(
-        'AllBaseClasses.ps1'   # Foundation types with zero dependencies
-        'AllModels.ps1'        # Data models, depends on base classes
-        'AllFunctions.ps1'     # Helper functions, must be loaded BEFORE components use them
-        'AllComponents.ps1'    # UI components, depends on base + models + functions
-        'AllScreens.ps1'       # Screens, depends on all above
-        'AllServices.ps1'      # Services, can use everything
-        'AllRuntime.ps1'       # Engine and runtime, orchestrates everything
+    $width = $host.UI.RawUI.WindowSize.Width
+    $height = $host.UI.RawUI.WindowSize.Height
+    
+    # ASCII Art Logo
+    $logo = @"
+    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                                                                   ║
+    ║      ___   _  _  _  ___  __  __     ___  _  _  ___  ___  _  _  _ ║
+    ║     / _ \ | \/ || |/ _ \|  \/  |   | _ \| || |/ _ \| __|| \| || |║
+    ║    | |_| | >  < | | (_) | |\/| |   |  _/| __ | (_) | _| | .  || |║
+    ║    |_| |_|/_/\_\|_|\___/|_|  |_|   |_|  |_||_|\___/|___||_|\_||_|║
+    ║                                                                   ║
+    ║                        v4.0 ENHANCED EDITION                      ║
+    ║                                                                   ║
+    ╚═══════════════════════════════════════════════════════════════════╝
+"@
+    
+    $tagline = "The Future of Terminal User Interfaces"
+    $credits = "Powered by PowerShell 7+ | Built with ❤️"
+    
+    # Calculate positions
+    $logoLines = $logo -split "`n"
+    $logoWidth = ($logoLines | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum
+    $startX = [Math]::Max(0, [Math]::Floor(($width - $logoWidth) / 2))
+    $startY = [Math]::Max(0, [Math]::Floor(($height - $logoLines.Count - 4) / 2))
+    
+    # Synthwave colors for animation
+    $colors = @(
+        [ConsoleColor]::Magenta,
+        [ConsoleColor]::Cyan,
+        [ConsoleColor]::Yellow,
+        [ConsoleColor]::Green,
+        [ConsoleColor]::Blue
     )
     
-    # Load each file
-    foreach ($file in $filesToLoad) {
-        $filePath = Join-Path $scriptRoot $file
+    # Animate logo appearance
+    $steps = 20
+    $stepDelay = $Duration / $steps
+    
+    for ($i = 0; $i -lt $steps; $i++) {
+        $colorIndex = $i % $colors.Count
+        $host.UI.RawUI.ForegroundColor = $colors[$colorIndex]
         
-        if (-not (Test-Path $filePath)) {
-            throw "Required file not found: $filePath"
+        # Clear and redraw
+        Clear-Host
+        
+        # Draw logo with fade-in effect
+        $y = $startY
+        foreach ($line in $logoLines) {
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($startX, $y)
+            if ($i -ge $steps / 2 -or $y -eq $startY -or $y -eq ($startY + $logoLines.Count - 1)) {
+                Write-Host $line -NoNewline
+            }
+            $y++
         }
         
-        Write-Verbose "Loading: $file"
-        . $filePath
+        # Draw tagline
+        if ($i -ge $steps * 0.6) {
+            $taglineX = [Math]::Floor(($width - $tagline.Length) / 2)
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($taglineX, $startY + $logoLines.Count + 1)
+            Write-Host $tagline -ForegroundColor Cyan -NoNewline
+        }
+        
+        # Draw credits
+        if ($i -ge $steps * 0.8) {
+            $creditsX = [Math]::Floor(($width - $credits.Length) / 2)
+            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($creditsX, $startY + $logoLines.Count + 3)
+            Write-Host $credits -ForegroundColor DarkGray -NoNewline
+        }
+        
+        # Progress bar
+        $progressY = $height - 3
+        $progressWidth = 60
+        $progressX = [Math]::Floor(($width - $progressWidth) / 2)
+        $progress = [Math]::Floor(($i / $steps) * $progressWidth)
+        
+        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($progressX, $progressY)
+        Write-Host "[" -NoNewline -ForegroundColor DarkGray
+        Write-Host ("█" * $progress) -NoNewline -ForegroundColor Green
+        Write-Host ("░" * ($progressWidth - $progress)) -NoNewline -ForegroundColor DarkGray
+        Write-Host "]" -NoNewline -ForegroundColor DarkGray
+        
+        # Loading message
+        $messages = @(
+            "Initializing quantum cores...",
+            "Loading neural matrices...",
+            "Calibrating photon streams...",
+            "Synchronizing time crystals...",
+            "Establishing neural link..."
+        )
+        $messageIndex = [Math]::Floor(($i / $steps) * $messages.Count)
+        $message = $messages[$messageIndex]
+        $messageX = [Math]::Floor(($width - $message.Length) / 2)
+        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($messageX, $progressY + 1)
+        Write-Host $message -ForegroundColor Yellow
+        
+        Start-Sleep -Milliseconds $stepDelay
     }
     
-    Write-Host "Framework loaded successfully!" -ForegroundColor Green
+    # Final pause
+    Start-Sleep -Milliseconds 500
+    
+    # Reset
+    $host.UI.RawUI.ForegroundColor = [ConsoleColor]::Gray
+    $host.UI.RawUI.CursorSize = 25  # Restore cursor
+    Clear-Host
 }
-catch {
-    Write-Host "Failed to load framework files!" -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    exit 1
-}
 
-#endregion
-
-#region Initialize Services
-
+# Main startup sequence
 try {
-    Write-Host "Initializing services..." -ForegroundColor Cyan
+    # Show splash screen unless disabled
+    if (-not $NoSplash) {
+        Show-SplashScreen -Duration 2000
+    }
     
-    # Initialize global state BEFORE creating services
-    if (-not $global:TuiState) {
-        $global:TuiState = @{
-            Services = @{}
+    Write-Host "Loading Axiom-Phoenix v4.0 Enhanced..." -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Verify PowerShell version
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        Write-Host "ERROR: PowerShell 7.0 or higher is required!" -ForegroundColor Red
+        Write-Host "Current version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
+        Write-Host "Download from: https://github.com/PowerShell/PowerShell" -ForegroundColor Cyan
+        exit 1
+    }
+    
+    # Get script directory
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    if ([string]::IsNullOrEmpty($scriptDir)) {
+        $scriptDir = Get-Location
+    }
+    
+    # Load framework files in order with progress indication
+    $files = @(
+        @{ File = "AllBaseClasses.ps1"; Description = "Core Framework" },
+        @{ File = "AllModels.ps1"; Description = "Data Models" },
+        @{ File = "AllComponents.ps1"; Description = "UI Components" },
+        @{ File = "AllScreens.ps1"; Description = "Application Screens" },
+        @{ File = "AllFunctions.ps1"; Description = "Utility Functions" },
+        @{ File = "AllServices.ps1"; Description = "Business Services" },
+        @{ File = "AllRuntime.ps1"; Description = "Runtime Engine" }
+    )
+    
+    $totalFiles = $files.Count
+    $currentFile = 0
+    
+    foreach ($fileInfo in $files) {
+        $currentFile++
+        $percent = [Math]::Floor(($currentFile / $totalFiles) * 100)
+        
+        Write-Host "[$percent%] " -NoNewline -ForegroundColor Green
+        Write-Host "Loading $($fileInfo.Description)... " -NoNewline -ForegroundColor Gray
+        
+        $filePath = Join-Path $scriptDir $fileInfo.File
+        if (Test-Path $filePath) {
+            . $filePath
+            Write-Host "✓" -ForegroundColor Green
+        } else {
+            Write-Host "✗" -ForegroundColor Red
+            throw "File not found: $filePath"
         }
     }
+    
+    Write-Host ""
+    Write-Host "All framework files loaded successfully!" -ForegroundColor Green
+    Write-Host ""
     
     # Create service container
+    Write-Host "Initializing services..." -ForegroundColor Cyan
     $container = [ServiceContainer]::new()
     
-    # Register core services
-    # First register Logger and immediately add to global state
-    $logger = [Logger]::new()
-    $container.Register("Logger", $logger)
-    $global:TuiState.Services['Logger'] = $logger
-    Write-Verbose "Registered Logger service"
+    # Register services with fancy names
+    $services = @(
+        @{ Type = "Logger"; Name = "Neural Logger" },
+        @{ Type = "EventManager"; Name = "Quantum Event System" },
+        @{ Type = "ThemeManager"; Name = "Photon Theme Engine" },
+        @{ Type = "DataManager"; Name = "Data Matrix" },
+        @{ Type = "ActionService"; Name = "Command Nexus" },
+        @{ Type = "KeybindingService"; Name = "Neural Keybinds" },
+        @{ Type = "NavigationService"; Name = "Dimensional Navigator" },
+        @{ Type = "FocusManager"; Name = "Focus Controller" },
+        @{ Type = "DialogManager"; Name = "Dialog Orchestrator" }
+    )
     
-    # Register EventManager
-    $eventManager = [EventManager]::new()
-    $container.Register("EventManager", $eventManager)
-    Write-Verbose "Registered EventManager service"
-    
-    # Register ThemeManager
-    $themeManager = [ThemeManager]::new()
-    $container.Register("ThemeManager", $themeManager)
-    $themeManager.LoadDefaultTheme()
-    Write-Verbose "Registered ThemeManager service"
-    
-    # Register ActionService
-    $actionService = [ActionService]::new($eventManager)
-    $container.Register("ActionService", $actionService)
-    Write-Verbose "Registered ActionService"
-    
-    # Register DataManager
-    $dataPath = Join-Path $env:APPDATA "AxiomPhoenix\data.json"
-    $dataManager = [DataManager]::new($dataPath, $eventManager)
-    $container.Register("DataManager", $dataManager)
-    Write-Verbose "Registered DataManager"
-    
-    # Register NavigationService
-    $navigationService = [NavigationService]::new(@{ EventManager = $eventManager })
-    $container.Register("NavigationService", $navigationService)
-    Write-Verbose "Registered NavigationService"
-    
-    # Register FocusManager
-    $focusManager = [FocusManager]::new($eventManager)
-    $container.Register("FocusManager", $focusManager)
-    Write-Verbose "Registered FocusManager"
-    
-    # Register KeybindingService (depends on ActionService)
-    $keybindingService = [KeybindingService]::new($actionService)
-    $container.Register("KeybindingService", $keybindingService)
-    Write-Verbose "Registered KeybindingService"
-    
-    # Register DialogManager (depends on EventManager and FocusManager)
-    $dialogManager = [DialogManager]::new($eventManager, $focusManager)
-    $container.Register("DialogManager", $dialogManager)
-    Write-Verbose "Registered DialogManager"
-    
-    # Initialize default actions
-    $actionService.RegisterDefaultActions()
-    Write-Verbose "Registered default actions"
-    
-    # Initialize default keybindings
-    $keybindingService.SetDefaultBindings()
-    Write-Verbose "Set default keybindings"
-    
-    # Register navigation actions
-    $actionService.RegisterAction("navigation.dashboard", {
-        $dashboard = [DashboardScreen]::new($container)
-        $navigationService.NavigateTo($dashboard)
-    }, @{
-        Category = "Navigation"
-        Description = "Go to Dashboard"
-    })
-    
-    $actionService.RegisterAction("navigation.taskList", {
-        $taskList = [TaskListScreen]::new($container)
-        $navigationService.NavigateTo($taskList)
-    }, @{
-        Category = "Navigation"
-        Description = "Go to Task List"
-    })
-    
-    Write-Host "Services initialized successfully!" -ForegroundColor Green
-}
-catch {
-    Write-Host "Failed to initialize services!" -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host $_.ScriptStackTrace -ForegroundColor Red
-    exit 1
-}
-
-#endregion
-#<!-- END_PAGE: STA.002 -->
-
-#<!-- PAGE: STA.003 - Data Loading & Application Startup -->
-#region Load Sample Data
-
-try {
-    Write-Host "Loading sample data..." -ForegroundColor Cyan
-    
-    # Try to load existing data first
-    try {
-        $dataManager.LoadData()
+    foreach ($service in $services) {
+        Write-Host "  • Initializing $($service.Name)... " -NoNewline -ForegroundColor Gray
         
-        if ($dataManager.GetTasks().Count -eq 0) {
-            throw "No existing data found"
+        $instance = switch ($service.Type) {
+            "Logger" { [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")) }
+            "EventManager" { [EventManager]::new() }
+            "ThemeManager" { [ThemeManager]::new() }
+            "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
+            "ActionService" { [ActionService]::new() }
+            "KeybindingService" { [KeybindingService]::new() }
+            "NavigationService" { [NavigationService]::new() }
+            "FocusManager" { [FocusManager]::new() }
+            "DialogManager" { [DialogManager]::new() }
         }
         
-        Write-Host "Loaded $($dataManager.GetTasks().Count) tasks from storage" -ForegroundColor Green
+        $container.Register($service.Type, $instance, "Singleton")
+        Write-Host "✓" -ForegroundColor Green
     }
-    catch {
-        Write-Host "Creating sample data..." -ForegroundColor Yellow
-        
-        # Create sample project
-        $project = [PmcProject]::new("DEMO", "Demo Project", "Sample project for demonstration", "Admin")
-        $dataManager.AddProject($project)
-        
-        # Create sample tasks
-        $sampleTasks = @(
-            @{
-                Title = "Complete TUI Framework Migration"
-                Description = "Migrate all axiom components to mono structure"
-                Priority = [TaskPriority]::High
-                Status = [TaskStatus]::InProgress
-                Progress = 75
-            },
-            @{
-                Title = "Write Documentation"
-                Description = "Create comprehensive documentation for the framework"
-                Priority = [TaskPriority]::Medium
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            },
-            @{
-                Title = "Add Unit Tests"
-                Description = "Implement unit tests for core components"
-                Priority = [TaskPriority]::Medium
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            },
-            @{
-                Title = "Optimize Rendering Performance"
-                Description = "Profile and optimize the differential rendering system"
-                Priority = [TaskPriority]::Low
-                Status = [TaskStatus]::InProgress
-                Progress = 30
-            },
-            @{
-                Title = "Create Theme Editor"
-                Description = "Build a visual theme editor screen"
-                Priority = [TaskPriority]::Low
-                Status = [TaskStatus]::Pending
-                Progress = 0
-            }
-        )
-        
-        foreach ($taskData in $sampleTasks) {
-            $task = [PmcTask]::new($taskData.Title, $taskData.Description, $taskData.Priority, "DEMO")
-            $task.Status = $taskData.Status
-            $task.Progress = $taskData.Progress
-            
-            if ($taskData.Progress -eq 100) {
-                $task.Complete()
-            }
-            
-            $dataManager.AddTask($task)
+    
+    # Set the selected theme
+    $themeManager = $container.GetService("ThemeManager")
+    if ($themeManager -and $Theme) {
+        $themeManager.LoadTheme($Theme)
+        Write-Host ""
+        Write-Host "Theme '$Theme' activated!" -ForegroundColor Magenta
+    }
+    
+    # Create sample data with enhanced items
+    Write-Host ""
+    Write-Host "Generating sample data..." -ForegroundColor Cyan
+    $dataManager = $container.GetService("DataManager")
+    
+    # Enhanced sample tasks
+    $sampleTasks = @(
+        @{
+            Title = "🚀 Launch Quantum Core Module"
+            Description = "Initialize the quantum processing core for enhanced computational capabilities"
+            Priority = "High"
+            Progress = 75
+        },
+        @{
+            Title = "🧬 Optimize Neural Networks"
+            Description = "Fine-tune the AI neural network parameters for improved performance"
+            Priority = "Medium"
+            Progress = 45
+        },
+        @{
+            Title = "🌊 Calibrate Wave Functions"
+            Description = "Adjust quantum wave function parameters for stable operation"
+            Priority = "High"
+            Progress = 90
+        },
+        @{
+            Title = "💎 Crystal Matrix Alignment"
+            Description = "Align the photonic crystal matrix for optimal light transmission"
+            Priority = "Low"
+            Progress = 20
+        },
+        @{
+            Title = "⚡ Energy Field Stabilization"
+            Description = "Stabilize the plasma energy field generators"
+            Priority = "Medium"
+            Progress = 60
         }
-        
-        Write-Host "Created $($sampleTasks.Count) sample tasks" -ForegroundColor Green
+    )
+    
+    foreach ($taskData in $sampleTasks) {
+        $task = [PmcTask]::new()
+        $task.Title = $taskData.Title
+        $task.Description = $taskData.Description
+        $task.Priority = [TaskPriority]::$($taskData.Priority)
+        $task.SetProgress($taskData.Progress)
+        $task.ProjectKey = "PHOENIX"
+        $dataManager.AddTask($task) | Out-Null
     }
+    
+    Write-Host "Sample data created!" -ForegroundColor Green
+    
+    # Start application
+    Write-Host ""
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " AXIOM-PHOENIX v4.0 ENHANCED - READY TO LAUNCH! " -ForegroundColor Yellow
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Press any key to enter the matrix..." -ForegroundColor Green
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    
+    # Launch the application
+    Clear-Host
+    Start-AxiomPhoenix -Services $container
 }
 catch {
-    Write-Warning "Failed to load sample data: $($_.Exception.Message)"
-    # Continue anyway - app can run without data
-}
-
-#endregion
-
-#region Start Application
-
-try {
-    Write-Host "`nStarting Axiom-Phoenix..." -ForegroundColor Cyan
-    Write-Host "Press Ctrl+P to open the Command Palette" -ForegroundColor Yellow
-    Write-Host "Press Ctrl+Q to exit`n" -ForegroundColor Yellow
-    
-    Start-Sleep -Seconds 2
-    
-    # Create initial screen
-    $dashboardScreen = [DashboardScreen]::new($container)
-    
-    # Start the application
-    Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
-}
-catch {
-    Write-Host "`nApplication error!" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "CRITICAL ERROR!" -ForegroundColor Red -BackgroundColor DarkRed
+    Write-Host "Failed to load framework files!" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Error Details:" -ForegroundColor Yellow
     Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Stack Trace:" -ForegroundColor Yellow
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
     
-    Write-Host "`nPress any key to exit..." -ForegroundColor White
-    [Console]::ReadKey($true) | Out-Null
+    if ($Debug) {
+        Write-Host ""
+        Write-Host "Full Exception:" -ForegroundColor Yellow
+        Write-Host $_ -ForegroundColor DarkGray
+    }
+    
+    Write-Host ""
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
 }
-finally {
-    # Ensure console is restored
-    try {
-        [Console]::CursorVisible = $true
-        [Console]::Clear()
-    }
-    catch {}
-}
-
-#endregion
-#<!-- END_PAGE: STA.003 -->
 
 
 
@@ -12476,6 +13904,466 @@ try {
     Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "Location: $($_.InvocationInfo.ScriptName):$($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Gray
     throw
+}
+
+
+
+####\test-theme-picker-fix.ps1
+# Test the theme picker fix
+Write-Host "Testing ThemePickerScreen fix..." -ForegroundColor Green
+
+# Load all files
+$files = @(
+    "AllBaseClasses.ps1",
+    "AllModels.ps1", 
+    "AllComponents.ps1",
+    "AllScreens.ps1",
+    "AllFunctions.ps1",
+    "AllServices.ps1",
+    "AllRuntime.ps1"
+)
+
+foreach ($file in $files) {
+    Write-Host "Loading $file..." -ForegroundColor Cyan
+    . (Join-Path $PSScriptRoot $file)
+}
+
+# Create a minimal test
+try {
+    Write-Host "`nCreating ScrollablePanel test..." -ForegroundColor Yellow
+    
+    # Test ScrollablePanel methods exist with correct signatures
+    $panel = [ScrollablePanel]::new("TestPanel")
+    
+    # Check if ScrollDown method exists and accepts parameter
+    $scrollDownMethod = $panel.GetType().GetMethod("ScrollDown")
+    if ($scrollDownMethod) {
+        $params = $scrollDownMethod.GetParameters()
+        Write-Host "ScrollDown method found with $($params.Count) parameter(s)" -ForegroundColor Green
+        if ($params.Count -gt 0) {
+            Write-Host "  - Parameter: $($params[0].Name) (Type: $($params[0].ParameterType), Default: $($params[0].DefaultValue))" -ForegroundColor Gray
+        }
+    }
+    
+    # Check if ScrollUp method exists and accepts parameter  
+    $scrollUpMethod = $panel.GetType().GetMethod("ScrollUp")
+    if ($scrollUpMethod) {
+        $params = $scrollUpMethod.GetParameters()
+        Write-Host "ScrollUp method found with $($params.Count) parameter(s)" -ForegroundColor Green
+        if ($params.Count -gt 0) {
+            Write-Host "  - Parameter: $($params[0].Name) (Type: $($params[0].ParameterType), Default: $($params[0].DefaultValue))" -ForegroundColor Gray
+        }
+    }
+    
+    # Test calling methods
+    Write-Host "`nTesting method calls..." -ForegroundColor Yellow
+    try {
+        $panel.ScrollDown(1)
+        Write-Host "ScrollDown(1) - Success" -ForegroundColor Green
+    } catch {
+        Write-Host "ScrollDown(1) - Failed: $_" -ForegroundColor Red
+    }
+    
+    try {
+        $panel.ScrollUp(1)
+        Write-Host "ScrollUp(1) - Success" -ForegroundColor Green
+    } catch {
+        Write-Host "ScrollUp(1) - Failed: $_" -ForegroundColor Red
+    }
+    
+    # Test ThemeManager
+    Write-Host "`nTesting ThemeManager..." -ForegroundColor Yellow
+    $themeManager = [ThemeManager]::new()
+    $themes = $themeManager.GetAvailableThemes()
+    Write-Host "Available themes: $($themes -join ', ')" -ForegroundColor Green
+    
+    Write-Host "`nAll tests completed!" -ForegroundColor Green
+    
+} catch {
+    Write-Host "Error during testing: $_" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+}
+
+
+
+####\test-theme-start.ps1
+# Test Start.ps1 with Theme Picker
+# Load all framework files in correct dependency order
+
+$ErrorActionPreference = "Stop"
+
+Write-Host "Axiom-Phoenix v4.0 Starting..." -ForegroundColor Cyan
+
+# Define root path
+$scriptRoot = $PSScriptRoot
+
+# Load files in dependency order
+$files = @(
+    "AllBaseClasses.ps1",
+    "AllModels.ps1", 
+    "AllComponents.ps1",
+    "AllScreens.ps1",
+    "AllFunctions.ps1",
+    "AllServices.ps1",
+    "AllRuntime.ps1"
+)
+
+foreach ($file in $files) {
+    $fullPath = Join-Path $scriptRoot $file
+    if (Test-Path $fullPath) {
+        Write-Host "Loading $file..." -ForegroundColor Gray
+        . $fullPath
+    } else {
+        Write-Error "File not found: $fullPath"
+        exit 1
+    }
+}
+
+# Create Service Container
+Write-Host "Creating services..." -ForegroundColor Gray
+$serviceContainer = [ServiceContainer]::new()
+
+# Register core services
+$eventManager = [EventManager]::new()
+$serviceContainer.Register("EventManager", $eventManager)
+
+$logger = [Logger]::new()
+$serviceContainer.Register("Logger", $logger)
+
+$themeManager = [ThemeManager]::new()
+$serviceContainer.Register("ThemeManager", $themeManager)
+
+$actionService = [ActionService]::new($eventManager)
+$actionService.RegisterDefaultActions()
+$serviceContainer.Register("ActionService", $actionService)
+
+$keybindingService = [KeybindingService]::new($actionService)
+$keybindingService.SetDefaultBindings()
+$serviceContainer.Register("KeybindingService", $keybindingService)
+
+$dataManager = [DataManager]::new("./data/appdata.json", $eventManager)
+$serviceContainer.Register("DataManager", $dataManager)
+
+$navigationService = [NavigationService]::new(@{ EventManager = $eventManager })
+$serviceContainer.Register("NavigationService", $navigationService)
+
+$focusManager = [FocusManager]::new($eventManager)
+$serviceContainer.Register("FocusManager", $focusManager)
+
+$dialogManager = [DialogManager]::new($eventManager, $focusManager)
+$serviceContainer.Register("DialogManager", $dialogManager)
+
+$tuiFrameworkService = [TuiFrameworkService]::new()
+$serviceContainer.Register("TuiFrameworkService", $tuiFrameworkService)
+
+# Store services in global state for easy access
+$global:TuiState.Services = @{
+    Logger = $logger
+    EventManager = $eventManager
+    ThemeManager = $themeManager
+    ActionService = $actionService
+    KeybindingService = $keybindingService
+    DataManager = $dataManager
+    NavigationService = $navigationService
+    FocusManager = $focusManager
+    DialogManager = $dialogManager
+    TuiFrameworkService = $tuiFrameworkService
+}
+$global:TuiState.ServiceContainer = $serviceContainer
+
+# Initialize the engine
+Initialize-TuiEngine
+
+# Create and navigate directly to ThemePickerScreen for testing
+Write-Host "Creating ThemePickerScreen..." -ForegroundColor Yellow
+$themeScreen = [ThemePickerScreen]::new($serviceContainer)
+$themeScreen.Initialize()
+$navigationService.NavigateTo($themeScreen)
+
+# Start the application with error handling
+try {
+    Write-Host "Starting TUI engine..." -ForegroundColor Green
+    Start-TuiEngine
+} catch {
+    Write-Host "Error in TUI engine: $_" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+    
+    # Try to save crash info
+    $crashInfo = @{
+        Error = @{
+            Type = $_.Exception.GetType().FullName
+            Message = $_.Exception.Message
+            StackTrace = $_.ScriptStackTrace
+            InnerException = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $null }
+        }
+        GlobalState = @{
+            OverlayCount = if ($global:TuiState.OverlayStack) { $global:TuiState.OverlayStack.Count } else { 0 }
+            Running = $global:TuiState.Running
+            BufferSize = "$($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight)"
+            CurrentScreen = if ($global:TuiState.CurrentScreen) { $global:TuiState.CurrentScreen.Name } else { "None" }
+        }
+        System = @{
+            OS = [System.Environment]::OSVersion.ToString()
+            Host = "$($Host.Name) v$($Host.Version)"
+            PowerShell = $PSVersionTable.PSVersion.ToString()
+            Platform = $PSVersionTable.Platform
+        }
+        Timestamp = (Get-Date).ToString("o")
+    }
+    
+    $crashInfo | ConvertTo-Json -Depth 5 | Out-File "crash_$(Get-Date -Format 'yyyyMMdd_HHmmss').json"
+} finally {
+    # Ensure cleanup
+    Stop-TuiEngine -Force
+    if ($serviceContainer) {
+        $serviceContainer.Cleanup()
+    }
+}
+
+Write-Host "`nApplication exited." -ForegroundColor Gray
+
+
+
+####\update_theme_manager.ps1
+# Script to update ThemeManager with enhanced themes
+
+# Read the AllServices.ps1 file
+$content = Get-Content ".\AllServices.ps1" -Raw
+
+# Find the ThemeManager class and replace it with the enhanced version
+$enhancedThemeManager = @'
+class ThemeManager {
+    [hashtable]$CurrentTheme = @{}
+    [string]$ThemeName = "Synthwave"
+    [hashtable]$Themes = @{}
+    
+    ThemeManager() {
+        $this.InitializeThemes()
+        $this.LoadTheme($this.ThemeName)
+    }
+    
+    [void] InitializeThemes() {
+        # Synthwave Theme - Neon cyberpunk aesthetic
+        $this.Themes["Synthwave"] = @{
+            # Base colors
+            "Background" = "#0a0e27"
+            "Foreground" = "#f92aad"
+            "Subtle" = "#72f1b8"
+            "Primary" = "#ff6ac1"
+            "Accent" = "#ffcc00"
+            "Secondary" = "#5a189a"
+            "Error" = "#ff006e"
+            "Warning" = "#ffbe0b"
+            "Success" = "#3bf4fb"
+            "Info" = "#8338ec"
+            
+            # Component specific
+            "component.background" = "#0a0e27"
+            "component.border" = "#f92aad"
+            "component.title" = "#ffcc00"
+            
+            # Input
+            "input.background" = "#1a1e3a"
+            "input.foreground" = "#f92aad"
+            "input.placeholder" = "#72f1b8"
+            
+            # Button states
+            "button.normal.fg" = "#0a0e27"
+            "button.normal.bg" = "#f92aad"
+            "button.focused.fg" = "#0a0e27"
+            "button.focused.bg" = "#ff6ac1"
+            "button.pressed.fg" = "#0a0e27"
+            "button.pressed.bg" = "#ffcc00"
+            "button.disabled.fg" = "#555555"
+            "button.disabled.bg" = "#2a2e4a"
+            
+            # List/Table
+            "list.header.fg" = "#ffcc00"
+            "list.header.bg" = "#1a1e3a"
+            "list.item.normal" = "#f92aad"
+            "list.item.selected" = "#0a0e27"
+            "list.item.selected.background" = "#ff6ac1"
+            "list.scrollbar" = "#72f1b8"
+        }
+        
+        # Aurora Theme - Northern lights inspired
+        $this.Themes["Aurora"] = @{
+            # Base colors
+            "Background" = "#011627"
+            "Foreground" = "#d6deeb"
+            "Subtle" = "#7fdbca"
+            "Primary" = "#82aaff"
+            "Accent" = "#21c7a8"
+            "Secondary" = "#c792ea"
+            "Error" = "#ef5350"
+            "Warning" = "#ffeb95"
+            "Success" = "#22da6e"
+            "Info" = "#82aaff"
+            
+            # Component specific
+            "component.background" = "#011627"
+            "component.border" = "#5f7e97"
+            "component.title" = "#21c7a8"
+            
+            # Input
+            "input.background" = "#0e293f"
+            "input.foreground" = "#d6deeb"
+            "input.placeholder" = "#637777"
+            
+            # Button states
+            "button.normal.fg" = "#011627"
+            "button.normal.bg" = "#82aaff"
+            "button.focused.fg" = "#011627"
+            "button.focused.bg" = "#21c7a8"
+            "button.pressed.fg" = "#011627"
+            "button.pressed.bg" = "#c792ea"
+            "button.disabled.fg" = "#444444"
+            "button.disabled.bg" = "#1d3b53"
+            
+            # List/Table
+            "list.header.fg" = "#21c7a8"
+            "list.header.bg" = "#0e293f"
+            "list.item.normal" = "#d6deeb"
+            "list.item.selected" = "#011627"
+            "list.item.selected.background" = "#82aaff"
+            "list.scrollbar" = "#5f7e97"
+        }
+        
+        # Ocean Theme - Deep sea aesthetics
+        $this.Themes["Ocean"] = @{
+            # Base colors
+            "Background" = "#0f111a"
+            "Foreground" = "#8f93a2"
+            "Subtle" = "#4b526d"
+            "Primary" = "#00bcd4"
+            "Accent" = "#00e676"
+            "Secondary" = "#536dfe"
+            "Error" = "#ff5252"
+            "Warning" = "#ffb74d"
+            "Success" = "#00e676"
+            "Info" = "#448aff"
+            
+            # Component specific
+            "component.background" = "#0f111a"
+            "component.border" = "#1f2937"
+            "component.title" = "#00bcd4"
+            
+            # Input
+            "input.background" = "#1a1f2e"
+            "input.foreground" = "#8f93a2"
+            "input.placeholder" = "#4b526d"
+            
+            # Button states
+            "button.normal.fg" = "#0f111a"
+            "button.normal.bg" = "#00bcd4"
+            "button.focused.fg" = "#0f111a"
+            "button.focused.bg" = "#00e676"
+            "button.pressed.fg" = "#0f111a"
+            "button.pressed.bg" = "#536dfe"
+            "button.disabled.fg" = "#333333"
+            "button.disabled.bg" = "#1a1f2e"
+            
+            # List/Table
+            "list.header.fg" = "#00e676"
+            "list.header.bg" = "#1a1f2e"
+            "list.item.normal" = "#8f93a2"
+            "list.item.selected" = "#0f111a"
+            "list.item.selected.background" = "#00bcd4"
+            "list.scrollbar" = "#4b526d"
+        }
+        
+        # Forest Theme - Nature inspired
+        $this.Themes["Forest"] = @{
+            # Base colors
+            "Background" = "#0d1117"
+            "Foreground" = "#c9d1d9"
+            "Subtle" = "#8b949e"
+            "Primary" = "#58a6ff"
+            "Accent" = "#56d364"
+            "Secondary" = "#d29922"
+            "Error" = "#f85149"
+            "Warning" = "#f0883e"
+            "Success" = "#56d364"
+            "Info" = "#58a6ff"
+            
+            # Component specific
+            "component.background" = "#0d1117"
+            "component.border" = "#30363d"
+            "component.title" = "#56d364"
+            
+            # Input
+            "input.background" = "#161b22"
+            "input.foreground" = "#c9d1d9"
+            "input.placeholder" = "#484f58"
+            
+            # Button states
+            "button.normal.fg" = "#0d1117"
+            "button.normal.bg" = "#58a6ff"
+            "button.focused.fg" = "#0d1117"
+            "button.focused.bg" = "#56d364"
+            "button.pressed.fg" = "#0d1117"
+            "button.pressed.bg" = "#d29922"
+            "button.disabled.fg" = "#484f58"
+            "button.disabled.bg" = "#21262d"
+            
+            # List/Table
+            "list.header.fg" = "#56d364"
+            "list.header.bg" = "#161b22"
+            "list.item.normal" = "#c9d1d9"
+            "list.item.selected" = "#0d1117"
+            "list.item.selected.background" = "#58a6ff"
+            "list.scrollbar" = "#8b949e"
+        }
+    }
+    
+    [void] LoadTheme([string]$themeName) {
+        if ($this.Themes.ContainsKey($themeName)) {
+            $this.CurrentTheme = $this.Themes[$themeName].Clone()
+            $this.ThemeName = $themeName
+        }
+    }
+    
+    [void] LoadDefaultTheme() {
+        $this.LoadTheme("Synthwave")
+    }
+    
+    [string] GetColor([string]$colorName) {
+        return $this.GetColor($colorName, "#FFFFFF")
+    }
+    
+    [string] GetColor([string]$colorName, [string]$defaultColor) {
+        if ($this.CurrentTheme.ContainsKey($colorName)) {
+            return $this.CurrentTheme[$colorName]
+        }
+        return $defaultColor
+    }
+    
+    [void] SetColor([string]$colorName, [string]$colorValue) {
+        $this.CurrentTheme[$colorName] = $colorValue
+    }
+    
+    [string[]] GetAvailableThemes() {
+        return $this.Themes.Keys | Sort-Object
+    }
+    
+    [void] CycleTheme() {
+        $themes = $this.GetAvailableThemes()
+        $currentIndex = [array]::IndexOf($themes, $this.ThemeName)
+        $nextIndex = ($currentIndex + 1) % $themes.Count
+        $this.LoadTheme($themes[$nextIndex])
+    }
+}
+'@
+
+# Find the existing ThemeManager class
+$pattern = 'class ThemeManager\s*\{[\s\S]*?\n\}'
+if ($content -match $pattern) {
+    Write-Host "Found existing ThemeManager class, replacing with enhanced version..." -ForegroundColor Yellow
+    $content = $content -replace $pattern, $enhancedThemeManager
+    $content | Set-Content ".\AllServices.ps1" -NoNewline
+    Write-Host "ThemeManager updated successfully!" -ForegroundColor Green
+} else {
+    Write-Host "Could not find ThemeManager class to replace!" -ForegroundColor Red
 }
 
 

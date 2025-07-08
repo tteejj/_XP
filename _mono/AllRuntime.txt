@@ -100,6 +100,7 @@ function Initialize-TuiEngine {
         
         # Configure console
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $env:PYTHONIOENCODING = "utf-8"
         [Console]::CursorVisible = $false
         $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
         
