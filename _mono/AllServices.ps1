@@ -877,7 +877,9 @@ class NavigationService {
             }
             
             # Resize screen to match current console dimensions
-            $screen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
+            $width = [Math]::Max(80, $global:TuiState.BufferWidth)
+            $height = [Math]::Max(24, $global:TuiState.BufferHeight)
+            $screen.Resize($width, $height)
             
             $screen.OnEnter() # Call lifecycle method
             

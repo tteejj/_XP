@@ -27,7 +27,7 @@ class LabelComponent : UIElement {
 
     LabelComponent([string]$name) : base($name) {
         $this.IsFocusable = $false
-        $this.Width = 10
+        $this.Width = 30  # Increased default width
         $this.Height = 1
     }
 
@@ -1739,6 +1739,9 @@ class Panel : UIElement {
 
     Panel([string]$name) : base($name) {
         $this.IsFocusable = $false
+        # Set reasonable defaults
+        if ($this.Width -eq 0) { $this.Width = 30 }
+        if ($this.Height -eq 0) { $this.Height = 10 }
         # Calculate initial content dimensions
         $this.UpdateContentDimensions()
     }
@@ -1837,8 +1840,9 @@ class Panel : UIElement {
     [void] UpdateContentDimensions() {
         $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
         $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
-        $this.ContentWidth = [Math]::Max(0, $this.Width - (if ($this.HasBorder) { 2 } else { 0 }))
-        $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
+        $borderOffset = if ($this.HasBorder) { 2 } else { 0 }
+        $this.ContentWidth = [Math]::Max(0, $this.Width - $borderOffset)
+        $this.ContentHeight = [Math]::Max(0, $this.Height - $borderOffset)
     }
     
     # Override Resize to update content dimensions

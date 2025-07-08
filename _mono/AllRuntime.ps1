@@ -346,12 +346,6 @@ function Invoke-TuiRender {
             }
         }
         
-        # Debug: Add a test message to see if rendering is working
-        if ($global:TuiState.FrameCount -eq 0) {
-            $testMsg = "RENDERING IS WORKING - Frame: $($global:TuiState.FrameCount)"
-            $global:TuiState.CompositorBuffer.WriteString(2, 2, $testMsg, @{ FG = "#FFFF00"; BG = "#000000" })
-        }
-        
         # Force full redraw on first frame by making previous buffer different
         if ($global:TuiState.FrameCount -eq 0) {
             Write-Verbose "First frame - initializing previous buffer for differential rendering"

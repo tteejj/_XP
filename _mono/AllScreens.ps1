@@ -41,12 +41,17 @@ class DashboardScreen : Screen {
             return
         }
         
+        # Ensure minimum size
+        if ($this.Width -lt 80) { $this.Width = 80 }
+        if ($this.Height -lt 24) { $this.Height = 24 }
+        
         $this._mainPanel = [Panel]::new("Axiom-Phoenix Dashboard")
         $this._mainPanel.X = 0
         $this._mainPanel.Y = 0
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = "Axiom-Phoenix Dashboard"
+        $this._mainPanel.UpdateContentDimensions()
         $this.AddChild($this._mainPanel)
 
         $summaryWidth = [Math]::Floor($this.Width * 0.5)
@@ -56,6 +61,7 @@ class DashboardScreen : Screen {
         $this._summaryPanel.Width = $summaryWidth
         $this._summaryPanel.Height = 12
         $this._summaryPanel.Title = "Task Summary"
+        $this._summaryPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._summaryPanel)
 
         $helpX = $summaryWidth + 2
@@ -66,6 +72,7 @@ class DashboardScreen : Screen {
         $this._helpPanel.Width = $helpWidth
         $this._helpPanel.Height = 12
         $this._helpPanel.Title = "Quick Start"
+        $this._helpPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._helpPanel)
 
         $this._statusPanel = [Panel]::new("System Status")
@@ -74,6 +81,7 @@ class DashboardScreen : Screen {
         $this._statusPanel.Width = $this.Width - 2
         $this._statusPanel.Height = $this.Height - 15
         $this._statusPanel.Title = "System Status"
+        $this._statusPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._statusPanel)
     }
 
@@ -157,13 +165,14 @@ class DashboardScreen : Screen {
         $panel = $this._summaryPanel
         if (-not $panel) { return }
         
-        # Ensure content dimensions are calculated
-        if ($panel.ContentWidth -eq 0) {
-            $panel.UpdateContentDimensions()
-        }
-        
         # Clear children
         $panel.Children.Clear()
+        
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
+        
+        # Ensure we have a reasonable width
+        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
 
         # Create label components instead of direct buffer drawing
         $titleLabel = [LabelComponent]::new("SummaryTitle")
@@ -171,19 +180,19 @@ class DashboardScreen : Screen {
         $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
         $titleLabel.X = 1
         $titleLabel.Y = 0
-        $titleLabel.Width = $panel.ContentWidth - 2
+        $titleLabel.Width = $labelWidth
         $titleLabel.Height = 1
         $panel.AddChild($titleLabel)
         
         # Only create separator if there's space for it
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        $lineWidth = [Math]::Max(0, $labelWidth)
         if ($lineWidth -gt 0) {
             $separatorLabel = [LabelComponent]::new("SummarySeparator")
             $separatorLabel.Text = '─' * $lineWidth
             $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
             $separatorLabel.X = 1
             $separatorLabel.Y = 1
-            $separatorLabel.Width = $panel.ContentWidth - 2
+            $separatorLabel.Width = $labelWidth
             $separatorLabel.Height = 1
             $panel.AddChild($separatorLabel)
         }
@@ -193,7 +202,7 @@ class DashboardScreen : Screen {
         $totalLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $totalLabel.X = 1
         $totalLabel.Y = 3
-        $totalLabel.Width = $panel.ContentWidth - 2
+        $totalLabel.Width = $labelWidth
         $totalLabel.Height = 1
         $panel.AddChild($totalLabel)
         
@@ -202,7 +211,7 @@ class DashboardScreen : Screen {
         $completedLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
         $completedLabel.X = 1
         $completedLabel.Y = 4
-        $completedLabel.Width = $panel.ContentWidth - 2
+        $completedLabel.Width = $labelWidth
         $completedLabel.Height = 1
         $panel.AddChild($completedLabel)
         
@@ -211,7 +220,7 @@ class DashboardScreen : Screen {
         $pendingLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
         $pendingLabel.X = 1
         $pendingLabel.Y = 5
-        $pendingLabel.Width = $panel.ContentWidth - 2
+        $pendingLabel.Width = $labelWidth
         $pendingLabel.Height = 1
         $panel.AddChild($pendingLabel)
         
@@ -222,12 +231,12 @@ class DashboardScreen : Screen {
         $progressLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $progressLabel.X = 1
         $progressLabel.Y = 7
-        $progressLabel.Width = $panel.ContentWidth - 2
+        $progressLabel.Width = $labelWidth
         $progressLabel.Height = 1
         $panel.AddChild($progressLabel)
         
         # Progress bar visualization
-        $barWidth = 20
+        $barWidth = [Math]::Min(20, $labelWidth - 2)
         $filledWidth = [Math]::Floor($barWidth * $percentage / 100)
         $emptyWidth = $barWidth - $filledWidth
         $barText = "[" + ("█" * $filledWidth) + ("░" * $emptyWidth) + "]"
@@ -237,7 +246,7 @@ class DashboardScreen : Screen {
         $barLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
         $barLabel.X = 1
         $barLabel.Y = 8
-        $barLabel.Width = $panel.ContentWidth - 2
+        $barLabel.Width = $labelWidth
         $barLabel.Height = 1
         $panel.AddChild($barLabel)
         
@@ -248,13 +257,14 @@ class DashboardScreen : Screen {
         $panel = $this._helpPanel
         if (-not $panel) { return }
         
-        # Ensure content dimensions are calculated
-        if ($panel.ContentWidth -eq 0) {
-            $panel.UpdateContentDimensions()
-        }
-        
         # Clear children
         $panel.Children.Clear()
+        
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
+        
+        # Ensure we have a reasonable width
+        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
         
         $paletteHotkey = "Ctrl+P"
         
@@ -264,18 +274,18 @@ class DashboardScreen : Screen {
         $welcomeLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
         $welcomeLabel.X = 1
         $welcomeLabel.Y = 0
-        $welcomeLabel.Width = $panel.ContentWidth - 2
+        $welcomeLabel.Width = $labelWidth
         $welcomeLabel.Height = 1
         $panel.AddChild($welcomeLabel)
         
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        $lineWidth = [Math]::Max(0, $labelWidth)
         if ($lineWidth -gt 0) {
             $separatorLabel = [LabelComponent]::new("HelpSeparator")
             $separatorLabel.Text = '─' * $lineWidth
             $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
             $separatorLabel.X = 1
             $separatorLabel.Y = 1
-            $separatorLabel.Width = $panel.ContentWidth - 2
+            $separatorLabel.Width = $labelWidth
             $separatorLabel.Height = 1
             $panel.AddChild($separatorLabel)
         }
@@ -286,7 +296,7 @@ class DashboardScreen : Screen {
         $instructionLabel1.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $instructionLabel1.X = 1
         $instructionLabel1.Y = 3
-        $instructionLabel1.Width = $panel.ContentWidth - 2
+        $instructionLabel1.Width = $labelWidth
         $instructionLabel1.Height = 1
         $panel.AddChild($instructionLabel1)
         
@@ -295,7 +305,7 @@ class DashboardScreen : Screen {
         $instructionLabel2.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $instructionLabel2.X = 1
         $instructionLabel2.Y = 4
-        $instructionLabel2.Width = $panel.ContentWidth - 2
+        $instructionLabel2.Width = $labelWidth
         $instructionLabel2.Height = 1
         $panel.AddChild($instructionLabel2)
 
@@ -304,7 +314,7 @@ class DashboardScreen : Screen {
         $infoLabel1.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
         $infoLabel1.X = 1
         $infoLabel1.Y = 6
-        $infoLabel1.Width = $panel.ContentWidth - 2
+        $infoLabel1.Width = $labelWidth
         $infoLabel1.Height = 1
         $panel.AddChild($infoLabel1)
         
@@ -313,7 +323,7 @@ class DashboardScreen : Screen {
         $infoLabel2.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
         $infoLabel2.X = 1
         $infoLabel2.Y = 7
-        $infoLabel2.Width = $panel.ContentWidth - 2
+        $infoLabel2.Width = $labelWidth
         $infoLabel2.Height = 1
         $panel.AddChild($infoLabel2)
         
@@ -324,13 +334,14 @@ class DashboardScreen : Screen {
         $panel = $this._statusPanel
         if (-not $panel) { return }
         
-        # Ensure content dimensions are calculated
-        if ($panel.ContentWidth -eq 0) {
-            $panel.UpdateContentDimensions()
-        }
-        
         # Clear children
         $panel.Children.Clear()
+        
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
+        
+        # Ensure we have a reasonable width
+        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
 
         $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
 
@@ -340,18 +351,18 @@ class DashboardScreen : Screen {
         $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
         $titleLabel.X = 1
         $titleLabel.Y = 0
-        $titleLabel.Width = $panel.ContentWidth - 2
+        $titleLabel.Width = $labelWidth
         $titleLabel.Height = 1
         $panel.AddChild($titleLabel)
         
-        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        $lineWidth = [Math]::Max(0, $labelWidth)
         if ($lineWidth -gt 0) {
             $separatorLabel = [LabelComponent]::new("StatusSeparator")
             $separatorLabel.Text = '─' * $lineWidth
             $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
             $separatorLabel.X = 1
             $separatorLabel.Y = 1
-            $separatorLabel.Width = $panel.ContentWidth - 2
+            $separatorLabel.Width = $labelWidth
             $separatorLabel.Height = 1
             $panel.AddChild($separatorLabel)
         }
@@ -361,7 +372,7 @@ class DashboardScreen : Screen {
         $versionLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $versionLabel.X = 1
         $versionLabel.Y = 3
-        $versionLabel.Width = $panel.ContentWidth - 2
+        $versionLabel.Width = $labelWidth
         $versionLabel.Height = 1
         $panel.AddChild($versionLabel)
         
@@ -370,7 +381,7 @@ class DashboardScreen : Screen {
         $memoryLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $memoryLabel.X = 1
         $memoryLabel.Y = 4
-        $memoryLabel.Width = $panel.ContentWidth - 2
+        $memoryLabel.Width = $labelWidth
         $memoryLabel.Height = 1
         $panel.AddChild($memoryLabel)
         
@@ -379,7 +390,7 @@ class DashboardScreen : Screen {
         $hostLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $hostLabel.X = 1
         $hostLabel.Y = 5
-        $hostLabel.Width = $panel.ContentWidth - 2
+        $hostLabel.Width = $labelWidth
         $hostLabel.Height = 1
         $panel.AddChild($hostLabel)
         
@@ -412,8 +423,8 @@ class TaskListScreen : Screen {
     hidden [int] $_selectedIndex = 0
     hidden [PmcTask] $_selectedTask
     hidden [string] $_filterText = ""
-    hidden [TaskStatus] $_filterStatus = $null
-    hidden [TaskPriority] $_filterPriority = $null
+    hidden [System.Nullable[TaskStatus]] $_filterStatus = $null
+    hidden [System.Nullable[TaskPriority]] $_filterPriority = $null
     hidden [string] $_taskChangeSubscriptionId = $null # Store event subscription ID
     #endregion
 
@@ -425,12 +436,17 @@ class TaskListScreen : Screen {
             return
         }
         
+        # Ensure minimum size
+        if ($this.Width -lt 80) { $this.Width = 80 }
+        if ($this.Height -lt 24) { $this.Height = 24 }
+        
         $this._mainPanel = [Panel]::new("Task List")
         $this._mainPanel.X = 0
         $this._mainPanel.Y = 0
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = "Task List"
+        $this._mainPanel.UpdateContentDimensions()
         $this.AddChild($this._mainPanel)
 
         # Task list panel (left side)
@@ -441,6 +457,7 @@ class TaskListScreen : Screen {
         $this._taskListPanel.Width = $listWidth
         $this._taskListPanel.Height = $this.Height - 4
         $this._taskListPanel.Title = "Tasks"
+        $this._taskListPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._taskListPanel)
 
         # Detail panel (right side)
@@ -452,6 +469,7 @@ class TaskListScreen : Screen {
         $this._detailPanel.Width = $detailWidth
         $this._detailPanel.Height = $this.Height - 4
         $this._detailPanel.Title = "Task Details"
+        $this._detailPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._detailPanel)
 
         # Status bar
@@ -592,7 +610,8 @@ class TaskListScreen : Screen {
             $taskPanel = [Panel]::new("TaskItem_$($task.Id)")
             $taskPanel.X = 0
             $taskPanel.Y = $i # Y position is its index in the list
-            $taskPanel.Width = $panel.ContentWidth
+            $panelContentWidth = if ($panel.ContentWidth -le 0) { [Math]::Max(30, $panel.Width - 2) } else { $panel.ContentWidth }
+            $taskPanel.Width = $panelContentWidth
             $taskPanel.Height = 1
             $taskPanel.HasBorder = $false
             
@@ -604,6 +623,8 @@ class TaskListScreen : Screen {
             $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
             $taskLabel.X = 1 # Indent slightly
             $taskLabel.Y = 0 # Relative to the task panel
+            $taskLabel.Width = [Math]::Max(20, $panelContentWidth - 2) # Set proper width
+            $taskLabel.Height = 1
             
             # Status indicator
             $statusChar = switch ($task.Status) {
@@ -623,9 +644,9 @@ class TaskListScreen : Screen {
             }
             
             # Truncate title if needed
-            $maxTitleLength = $panel.ContentWidth - 6 # Adjusted for status/priority chars and padding
-            $title = if ($task.Title.Length -gt $maxTitleLength) {
-                $task.Title.Substring(0, $maxTitleLength - 3) + "..."
+            $maxTitleLength = [Math]::Max(10, $panelContentWidth - 6) # Ensure minimum length
+            $title = if ($task.Title.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
+                $task.Title.Substring(0, [Math]::Max(1, $maxTitleLength - 3)) + "..."
             } else {
                 $task.Title
             }
@@ -653,6 +674,9 @@ class TaskListScreen : Screen {
         
         # Clear children
         $panel.Children.Clear()
+        
+        # Force content dimensions update
+        $panel.UpdateContentDimensions()
         
         $task = $this._selectedTask
         $y = 1 # Start position relative to panel
@@ -703,7 +727,7 @@ class TaskListScreen : Screen {
             # Word wrap description
             $words = $task.Description -split '\s+'
             $line = ""
-            $maxLineLength = $panel.ContentWidth - 2
+            $maxLineLength = [Math]::Max(10, $panel.ContentWidth - 2)
             $lineIndex = 0
             
             foreach ($word in $words) {

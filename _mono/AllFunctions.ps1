@@ -115,7 +115,14 @@ function Write-TuiBox {
     # Draw title if specified
     if (-not [string]::IsNullOrEmpty($Title) -and $Y -ge 0 -and $Y -lt $Buffer.Height) {
         $titleText = " $Title "
-        if ($titleText.Length -le ($Width - 2)) {
+        
+        # Truncate title if too long
+        $maxTitleLength = $Width - 2
+        if ($titleText.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
+            $titleText = $titleText.Substring(0, $maxTitleLength - 3) + "..."
+        }
+        
+        if ($titleText.Length -le ($Width - 2) -and $Width -gt 2) {
             $titleAlignment = $Style.TitleAlignment ?? "TopBorder" # Default to current behavior
             $titleX = $X + [Math]::Floor(($Width - $titleText.Length) / 2)
             

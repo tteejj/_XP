@@ -380,8 +380,8 @@ class UIElement {
     [string] $Name = "UIElement" 
     [int] $X = 0               
     [int] $Y = 0               
-    [int] $Width = 10          
-    [int] $Height = 3          
+    [int] $Width = 30          
+    [int] $Height = 10          
     [bool] $Visible = $true    
     [bool] $Enabled = $true    
     [bool] $IsFocusable = $false 
