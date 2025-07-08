@@ -170,15 +170,18 @@ class DashboardScreen : Screen {
         $titleLabel.Height = 1
         $panel.AddChild($titleLabel)
         
-        $separatorLabel = [LabelComponent]::new("SummarySeparator")
+        # Only create separator if there's space for it
         $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
-        $separatorLabel.Text = if ($lineWidth -gt 0) { '─' * $lineWidth } else { "" }
-        $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-        $separatorLabel.X = 1
-        $separatorLabel.Y = 1
-        $separatorLabel.Width = $panel.ContentWidth - 2
-        $separatorLabel.Height = 1
-        $panel.AddChild($separatorLabel)
+        if ($lineWidth -gt 0) {
+            $separatorLabel = [LabelComponent]::new("SummarySeparator")
+            $separatorLabel.Text = '─' * $lineWidth
+            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $separatorLabel.X = 1
+            $separatorLabel.Y = 1
+            $separatorLabel.Width = $panel.ContentWidth - 2
+            $separatorLabel.Height = 1
+            $panel.AddChild($separatorLabel)
+        }
         
         $totalLabel = [LabelComponent]::new("TotalTasks")
         $totalLabel.Text = "Total Tasks:    $($this._totalTasks)"

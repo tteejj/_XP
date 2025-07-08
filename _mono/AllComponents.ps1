@@ -2355,10 +2355,14 @@ class CommandPalette : UIElement {
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
         $this._searchBox._textBox.Placeholder = "Type to search commands..."
+        
+        # Fix the OnChange handler to properly capture $this
+        $commandPalette = $this
         $this._searchBox._textBox.OnChange = {
             param($sender, $text)
-            $this.FilterActions($text)
+            $commandPalette.FilterActions($text)
         }.GetNewClosure()
+        
         $this._panel.AddChild($this._searchBox)
 
         # Create list box
@@ -2448,6 +2452,10 @@ class CommandPalette : UIElement {
                 }
             }
         }
+        
+        # Ensure list is refreshed
+        $this._listBox.RequestRedraw()
+        $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -2459,11 +2467,10 @@ class CommandPalette : UIElement {
             return $true
         }
         
-        # Handle Enter for action selection - but only if list has focus
-        if ($key.Key -eq [ConsoleKey]::Enter -and $this._listBox.SelectedIndex -ge 0) {
-            # Check if we are in the listbox (not in search)
-            $focusedComponent = $global:TuiState.FocusedComponent
-            if ($focusedComponent -eq $this._listBox -or $focusedComponent -eq $this) {
+        # Handle Enter for action selection
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            # Always execute if we have a selection, regardless of which component has focus
+            if ($this._listBox.SelectedIndex -ge 0 -and $this._filteredActions.Count -gt 0) {
                 $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
                 if ($selectedAction) {
                     $this.Hide()
@@ -2474,20 +2481,43 @@ class CommandPalette : UIElement {
                         # Execute action directly - FIX: Pass empty hashtable as second parameter
                         $this._actionService.ExecuteAction($selectedAction.Name, @{})
                     }
+                    return $true
                 }
-                return $true
             }
         }
         
-        # Proper input delegation with explicit switch
+        # Navigation keys always go to list box
         switch ($key.Key) {
-            # Navigation keys go to list box
-            ([ConsoleKey]::UpArrow) { return $this._listBox.HandleInput($key) }
-            ([ConsoleKey]::DownArrow) { return $this._listBox.HandleInput($key) }
-            ([ConsoleKey]::PageUp) { return $this._listBox.HandleInput($key) }
-            ([ConsoleKey]::PageDown) { return $this._listBox.HandleInput($key) }
-            ([ConsoleKey]::Home) { return $this._listBox.HandleInput($key) }
-            ([ConsoleKey]::End) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::UpArrow) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::DownArrow) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::PageUp) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::PageDown) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::Home) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
+            ([ConsoleKey]::End) { 
+                $result = $this._listBox.HandleInput($key)
+                $this.RequestRedraw()
+                return $result
+            }
             
             # Tab to switch focus between search and list
             ([ConsoleKey]::Tab) {
@@ -2503,9 +2533,14 @@ class CommandPalette : UIElement {
                 return $true
             }
             
-            # All other keys (including Enter when in search box) go to search
+            # All other keys go to search
             default {
-                return $this._searchBox.HandleInput($key)
+                $result = $this._searchBox.HandleInput($key)
+                # Force redraw after text changes
+                if ($result) {
+                    $this.RequestRedraw()
+                }
+                return $result
             }
         }
     }
@@ -2514,11 +2549,28 @@ class CommandPalette : UIElement {
         if ($this._panel) {
             $this._panel.Width = $this.Width
             $this._panel.Height = $this.Height
+            $this._panel.X = 0
+            $this._panel.Y = 0
             
-            $this._searchBox.Width = $this.Width - 4
-            $this._listBox.Width = $this.Width - 4
-            $this._listBox.Height = $this.Height - 6
+            if ($this._searchBox) {
+                $this._searchBox.Width = $this.Width - 4
+            }
+            
+            if ($this._listBox) {
+                $this._listBox.Width = $this.Width - 4
+                $this._listBox.Height = $this.Height - 6
+            }
         }
+    }
+    
+    [void] OnRender() {
+        # Ensure we render as overlay with proper dimensions
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        # Render children (panel will render border and children)
+        ([UIElement]$this).OnRender()
+        
+        $this._needs_redraw = $false
     }
 }
 
