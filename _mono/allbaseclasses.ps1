@@ -93,8 +93,15 @@ class TuiCell {
     TuiCell() { }
     TuiCell([char]$char) { $this.Char = $char }
     
-    # Updated Constructor: Consolidate previous fg/bg and fg/bg/bold/underline constructors
-    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold=$false, [bool]$italic=$false, [bool]$underline=$false, [bool]$strikethrough=$false) {
+    # Constructor with 3 parameters (char, fg, bg)
+    TuiCell([char]$char, [string]$fg, [string]$bg) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+    }
+    
+    # Full constructor with all parameters
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold, [bool]$italic, [bool]$underline, [bool]$strikethrough) {
         $this.Char = $char
         $this.ForegroundColor = $fg
         $this.BackgroundColor = $bg
