@@ -1,192 +1,85 @@
 # Axiom-Phoenix v4.0 Mono Framework - Table of Contents
 
-This document provides a comprehensive index of all sections in the mono framework files. Each section has a unique page ID that can be searched to quickly locate content.
+This document provides a comprehensive, metadata-rich index of the framework. It is designed to be easily parsed by both developers and Large Language Models (LLMs) to understand class relationships and dependencies.
 
-## Search Instructions
+## Key Service & Data Flow Relationships
 
-To find a specific section, search for the page marker in the format:
-- **Beginning**: `<!-- PAGE: [ID] - [SECTION_NAME] -->`
-- **End**: `<!-- END_PAGE: [ID] -->`
-
-Example: Search for `PAGE: ABC.001` to find the TuiAnsiHelper class.
-
-## File Structure Overview
-
-| File | Prefix | Description |
-|------|--------|-------------|
-| AllBaseClasses.ps1 | ABC | Foundation classes with no external dependencies |
-| AllModels.ps1 | AMO | Data models, enums, and validation classes |
-| AllComponents.ps1 | ACO | UI components extending UIElement |
-| AllScreens.ps1 | ASC | Application screens and views |
-| AllFunctions.ps1 | AFU | Standalone utility functions |
-| AllServices.ps1 | ASE | Business services and managers |
-| AllRuntime.ps1 | ART | Engine, runtime, and main loop |
-| Start.ps1 | STA | Application entry point |
+*   **Engine & Rendering:** `Start-TuiEngine` (ART.002) is the main loop. It uses `Invoke-TuiRender` (ART.003), which gets the `CurrentScreen` from `NavigationService` (ASE.004) to render content into the main `CompositorBuffer`. `Render-DifferentialBuffer` (ART.003) compares compositor states to minimize console writes.
+*   **Input & Focus:** `Process-TuiInput` (ART.004) receives key presses. It prioritizes overlays (managed by `DialogManager`, ASE.009), then the focused component (managed by `FocusManager`, ASE.009), then global keybindings (`KeybindingService`, ASE.002), and finally the `CurrentScreen`.
+*   **Navigation & Actions:** `KeybindingService` (ASE.002) maps keys to action names. `ActionService` (ASE.001) executes the logic for these actions. Navigation actions (e.g., `navigation.taskList`) typically use the `NavigationService` (ASE.004) to change the `CurrentScreen`.
+*   **Data Persistence:** UI components (like `TaskListScreen`, ASC.002) use `DataManager` (ASE.003) to load and save `PmcTask` (AMO.003) and `PmcProject` (AMO.004) models.
+*   **Styling:** All components use `Get-ThemeColor` (AFU.004) which pulls values from `ThemeManager` (ASE.005). Rendered `TuiCell` (ABC.002) objects use `TuiAnsiHelper` (ABC.001) to generate final ANSI codes.
 
 ---
 
-## AllBaseClasses.ps1 (ABC)
+## AllBaseClasses.ps1 (ABC) - Foundation
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| ABC.001 | TuiAnsiHelper Class | ANSI escape code generation with truecolor support |
-| ABC.002 | TuiCell Class | Single character cell with styling information |
-| ABC.003 | TuiBuffer Class | 2D array of TuiCells for rendering |
-| ABC.004 | UIElement Class | Base class for all UI components |
-| ABC.005 | Component Class | Generic container component |
-| ABC.006 | Screen Class | Top-level container for application views |
-| ABC.007 | ServiceContainer Class | Dependency injection container |
+| ABC.001 | TuiAnsiHelper Class | **Purpose:** Static class for generating ANSI escape codes from hex colors and attributes. |
+| ABC.002 | TuiCell Class | **Purpose:** Represents a single character cell with full styling (FG/BG hex, attributes, Z-Index). The core unit of rendering. |
+| ABC.003 | TuiBuffer Class | **Purpose:** A 2D array of `TuiCell` objects. Provides drawing primitives like `WriteString` and `BlendBuffer`. |
+| ABC.004 | UIElement Class | **Inherits:** N/A. **Purpose:** The abstract base for all visual components. Manages position, size, children, visibility, and the core rendering lifecycle (`OnRender`, `HandleInput`). |
+| ABC.005 | Component Class | **Inherits:** UIElement (ABC.004). **Purpose:** A generic, empty container component. |
+| ABC.006 | Screen Class | **Inherits:** UIElement (ABC.004). **Purpose:** Top-level container for a view. Integrates with the service container and has lifecycle methods (`OnEnter`, `OnExit`). Managed by `NavigationService`. |
+| ABC.007 | ServiceContainer Class | **Purpose:** A dependency injection (DI) container for registering and resolving application services. |
 
 ---
 
-## AllModels.ps1 (AMO)
+## AllModels.ps1 (AMO) - Data Structures
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| AMO.001 | Enums | TaskStatus, TaskPriority, BillingType enumerations |
-| AMO.002 | ValidationBase Class | Base validation methods |
-| AMO.003 | PmcTask Class | Core task entity with lifecycle methods |
-| AMO.004 | PmcProject Class | Project container entity |
-| AMO.005 | TimeEntry Class | Time tracking entity for billable work |
+| AMO.001 | Enums | **Purpose:** Defines application-specific enumerations like `TaskStatus` and `TaskPriority`. |
+| AMO.002 | ValidationBase Class | **Purpose:** Provides static validation methods (e.g., `ValidateNotEmpty`) for use in other model classes. |
+| AMO.003 | PmcTask, PmcProject, TimeEntry | **Purpose:** Core data models for the application. They are plain objects with no UI dependencies. Managed by `DataManager`. |
+| AMO.004 | Exception Classes | **Purpose:** Custom, framework-specific exception types for more granular error handling. |
+| AMO.005 | NavigationItem Class | **Purpose:** A model representing a single item within a `NavigationMenu`. |
 
 ---
 
-## AllComponents.ps1 (ACO)
+## AllComponents.ps1 (ACO) - UI Library
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| ACO.001 | LabelComponent Class | Static text display component |
-| ACO.002 | ButtonComponent Class | Interactive button with click events |
-| ACO.003 | TextBoxComponent Class | Advanced text input with scrolling |
-| ACO.004 | CheckBoxComponent Class | Boolean checkbox input |
-| ACO.005 | RadioButtonComponent Class | Exclusive selection within groups |
-| ACO.006 | MultilineTextBoxComponent Class | Full text editor with scrolling |
-| ACO.007 | NumericInputComponent Class | Numeric input with spinners and validation |
-| ACO.008 | DateInputComponent Class | Date picker with calendar interface |
-| ACO.009 | ComboBoxComponent Class | Dropdown with search and overlay rendering |
-| ACO.010 | Table Class | High-performance data grid with virtual scrolling |
-| ACO.011 | Panel Class | Container with layout management |
-| ACO.012 | ScrollablePanel Class | Panel with scrolling capabilities |
-| ACO.013 | GroupPanel Class | Themed panel for grouping |
-| ACO.014 | ListBox Class | Scrollable item list with selection |
-| ACO.015 | TextBox Class | Enhanced wrapper around TextBoxComponent |
-| ACO.016 | CommandPalette Class | Searchable command interface |
-| ACO.017 | Dialog Class | Base dialog class |
-| ACO.018 | AlertDialog Class | Simple alert dialog |
-| ACO.019 | ConfirmDialog Class | Yes/No confirmation dialog |
-| ACO.020 | InputDialog Class | Text input dialog |
-| ACO.021 | NavigationMenu Class | Local menu component |
-| ACO.022 | VerticalStackPanel Class | Declarative panel that arranges children vertically |
+| ACO.001-010 | Core & Advanced Components | **Inherit:** UIElement (ABC.004). **Purpose:** A library of reusable UI controls (Label, Button, TextBox, Table, etc.). They handle their own rendering and input logic. |
+| ACO.011 | Panel Class | **Inherits:** UIElement (ABC.004). **Purpose:** A container with borders, a title, and basic layout management for its children. |
+| ACO.012 | ScrollablePanel Class | **Inherits:** Panel (ACO.011). **Purpose:** A panel that provides vertical scrolling for content that exceeds its visible height. |
+| ACO.013-021 | Composite & Dialog Components | **Inherit:** UIElement or other components. **Purpose:** More complex, specialized components built by combining simpler ones (e.g., `CommandPalette`, `Dialogs`, `ListBox`). |
 
 ---
 
-## AllScreens.ps1 (ASC)
+## AllScreens.ps1 (ASC) - Application Views
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| ASC.001 | DashboardScreen Class | Main application dashboard |
-| ASC.002 | TaskListScreen Class | Task management interface |
-| ASC.003 | Screen Utilities | Helper functions for screens |
+| ASC.001-003 | Screen Implementations | **Inherit:** Screen (ABC.006). **Purpose:** Concrete application views like `DashboardScreen` and `TaskListScreen`. They compose various UI components to build a user interface. |
 
 ---
 
-## AllFunctions.ps1 (AFU)
+## AllFunctions.ps1 (AFU) - Global Utilities
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| AFU.001 | TUI Drawing Functions | Write-TuiText, Write-TuiBox |
-| AFU.002 | Border Functions | Get-TuiBorderChars |
-| AFU.003 | Factory Functions | Component creation functions |
-| AFU.004 | Theme Functions | Get-ThemeColor utilities |
-| AFU.005 | Focus Management | Focus handling functions |
-| AFU.006 | Logging Functions | Write-Log utilities |
-| AFU.007 | Event Functions | Event subscription/publishing |
-| AFU.008 | Error Handling | Error management utilities |
-| AFU.009 | Input Processing | Input handling functions |
-| AFU.010 | Utility Functions | Miscellaneous helper functions |
+| AFU.001-010 | Utility Functions | **Purpose:** Global, stateless helper functions. `Write-TuiBox` draws borders, `Get-ThemeColor` accesses themes, `Write-Log` centralizes logging. |
 
 ---
 
-## AllServices.ps1 (ASE)
+## AllServices.ps1 (ASE) - Business Logic & Managers
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| ASE.001 | ActionService Class | Central command registry |
-| ASE.002 | KeybindingService Class | Global keyboard management |
-| ASE.003 | DataManager Class | Data persistence and management |
-| ASE.004 | NavigationService Class | Screen navigation management |
-| ASE.005 | ThemeManager Class | Visual theming system |
-| ASE.006 | Logger Class | Application logging |
-| ASE.007 | EventManager Class | Pub/sub event system |
-| ASE.008 | TuiFrameworkService Class | Framework service management |
-| ASE.009 | Additional Service Classes | FocusManager and DialogManager |
+| ASE.001-009 | Service Classes | **Purpose:** Long-lived objects that manage a core aspect of the application (e.g., `NavigationService`, `FocusManager`, `DataManager`). They are registered with the `ServiceContainer`. |
 
 ---
 
-## AllRuntime.ps1 (ART)
+## AllRuntime.ps1 (ART) - The Engine
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| ART.001 | Global State | TuiState hashtable initialization |
-| ART.002 | Engine Management | Initialize/Start/Stop TUI engine |
-| ART.003 | Rendering System | Frame rendering and differential updates |
-| ART.004 | Input Processing | Keyboard input handling |
-| ART.005 | Screen Management | Screen stack operations |
-| ART.006 | Error Handling | Panic handler and crash management |
-
----
-
-## Start.ps1 (STA)
-
-| Page ID | Section Name | Description |
-|---------|--------------|-------------|
-| STA.001 | File Loading | Module/file loading in dependency order |
-| STA.002 | Service Initialization | ServiceContainer setup and registration |
-| STA.003 | Application Startup | Main application entry point |
-
----
-
-## Maintenance Instructions
-
-When modifying any of the framework files:
-
-1. **Adding new classes/functions**: Add appropriate page markers around new sections
-2. **Removing sections**: Remove corresponding page markers and update this table
-3. **Reorganizing code**: Ensure page markers remain accurate and update this table
-4. **Major refactoring**: Review and update the entire table of contents
-
-### Page Marker Format
-
-```html
-<!-- PAGE: [PREFIX].[3-DIGIT-NUMBER] - [SECTION_NAME] -->
-[Section content here]
-<!-- END_PAGE: [PREFIX].[3-DIGIT-NUMBER] -->
-```
-
-### Update Process
-
-1. Modify the relevant framework file(s)
-2. Update page markers as needed
-3. Update this TableOfContents.md file to reflect changes
-4. Ensure page IDs remain unique and sequential
-
----
-
-*Last Updated: December 2024*
-*Framework Version: Axiom-Phoenix v4.0 Mono*
-
-## Current Implementation Status
-
-✅ **Completed Files with Page Markers:**
-- AllBaseClasses.ps1 (ABC.001-ABC.007) - **COMPLETE**
-- AllModels.ps1 (AMO.001-AMO.005) - **COMPLETE**
-- AllComponents.ps1 (ACO.001-ACO.021) - **COMPLETE**
-- AllScreens.ps1 (ASC.001-ASC.003) - **COMPLETE**
-- AllFunctions.ps1 (AFU.001-AFU.010) - **COMPLETE**
-- AllServices.ps1 (ASE.001-ASE.009) - **COMPLETE**
-- AllRuntime.ps1 (ART.001-ART.006) - **COMPLETE**
-- Start.ps1 (STA.001-STA.003) - **COMPLETE**
-
-📋 **All Files Complete:**
-- **8 of 8 framework files** have complete page marker implementation
-- **Total sections indexed: 64** across all files
+| ART.001 | Global State | **Purpose:** Initializes the `$global:TuiState` hashtable, the central state store for the running application. |
+| ART.002 | Engine Management | **Purpose:** `Initialize-TuiEngine` and `Start-TuiEngine` functions that set up the console and run the main application loop. |
+| ART.003 | Rendering System | **Purpose:** `Invoke-TuiRender` and `Render-DifferentialBuffer` handle the frame-by-frame drawing process. |
+| ART.004 | Input Processing | **Purpose:** `Process-TuiInput` contains the main input handling logic, routing key presses to the correct components. |
+| ART.005 | Overlay Management | **Purpose:** Deprecated functions for showing overlays. Logic now resides in `DialogManager`. |
+| ART.006 | Error Handling & Startup | **Purpose:** Contains the `Invoke-PanicHandler` for unrecoverable errors and the `Start-AxiomPhoenix` entry point function. |
