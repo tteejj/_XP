@@ -469,9 +469,9 @@ class MultilineTextBoxComponent : UIElement {
     [int]$ScrollOffsetX = 0
     [bool]$ReadOnly = $false
     [scriptblock]$OnChange
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     MultilineTextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -485,11 +485,11 @@ class MultilineTextBoxComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = $this.BackgroundColor
-            $fgColor = $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { "#00FFFF" } else { $this.BorderColor }
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
@@ -528,7 +528,7 @@ class MultilineTextBoxComponent : UIElement {
                     }
                     
                     if ($visiblePart) {
-                        $this._private_buffer.WriteString(1, $y + 1, $visiblePart, $fgColor, $bgColor)
+                        Write-TuiText -Buffer $this._private_buffer -X 1 -Y ($y + 1) -Text $visiblePart -Style @{ FG = $fgColor; BG = $bgColor }
                     }
                 }
             }
@@ -719,6 +719,9 @@ class NumericInputComponent : UIElement {
     [scriptblock]$OnChange
     hidden [string]$_textValue = "0"
     hidden [int]$_cursorPosition = 1
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     NumericInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -732,17 +735,16 @@ class NumericInputComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height $this.Height `
-                -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                -BorderStyle Single
+                -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw spinners
             $spinnerColor = if ($this.IsFocused) { "#FFFF00" } else { "#808080" }
@@ -756,7 +758,7 @@ class NumericInputComponent : UIElement {
                 $displayValue = $displayValue.Substring(0, $maxTextWidth)
             }
             
-            $this._private_buffer.WriteString(1, 1, $displayValue, $fgColor, $bgColor)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayValue -Style @{ FG = $fgColor; BG = $bgColor }
             
             # Draw cursor if focused
             if ($this.IsFocused -and $this._cursorPosition -le $displayValue.Length) {
@@ -905,6 +907,9 @@ class DateInputComponent : UIElement {
     [scriptblock]$OnChange
     hidden [bool]$_showCalendar = $false
     hidden [DateTime]$_viewMonth
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     DateInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -917,9 +922,9 @@ class DateInputComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = [ConsoleColor]::Black
-            $fgColor = [ConsoleColor]::White
-            $borderColor = if ($this.IsFocused) { [ConsoleColor]::Cyan } else { [ConsoleColor]::Gray }
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
             # Adjust height based on calendar visibility
             $renderHeight = if ($this._showCalendar) { 10 } else { 3 }
@@ -929,20 +934,19 @@ class DateInputComponent : UIElement {
                 return
             }
             
-            $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
+            $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw text box
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                 -Width $this.Width -Height 3 `
-                -ForegroundColor $borderColor -BackgroundColor $bgColor `
-                -BorderStyle Single
+                -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw date value
             $dateStr = $this.Value.ToString("yyyy-MM-dd")
-            $this._private_buffer.WriteString(1, 1, $dateStr, $fgColor, $bgColor)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $dateStr -Style @{ FG = $fgColor; BG = $bgColor }
             
             # Draw calendar icon
-            $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('📅', $borderColor, $bgColor))
+            $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('📅', $borderColorValue, $bgColor))
             
             # Draw calendar if shown
             if ($this._showCalendar) {
@@ -967,7 +971,7 @@ class DateInputComponent : UIElement {
         # Month/Year header
         $monthYearStr = $this._viewMonth.ToString("MMMM yyyy")
         $headerX = $startX + [Math]::Floor(($this.Width - $monthYearStr.Length) / 2)
-        $this._private_buffer.WriteString($headerX, $startY + 1, $monthYearStr, $headerColor, $bgColor)
+        Write-TuiText -Buffer $this._private_buffer -X $headerX -Y ($startY + 1) -Text $monthYearStr -Style @{ FG = $headerColor; BG = $bgColor }
         
         # Navigation arrows
         $this._private_buffer.SetCell($startX + 1, $startY + 1, [TuiCell]::new('<', $headerColor, $bgColor))
@@ -977,7 +981,7 @@ class DateInputComponent : UIElement {
         $dayHeaders = @("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
         $dayX = $startX + 2
         foreach ($day in $dayHeaders) {
-            $this._private_buffer.WriteString($dayX, $startY + 2, $day, @{ FG = "#808080"; BG = $bgColor })
+            Write-TuiText -Buffer $this._private_buffer -X $dayX -Y ($startY + 2) -Text $day -Style @{ FG = "#808080"; BG = $bgColor }
             $dayX += 3
         }
         
@@ -1011,7 +1015,7 @@ class DateInputComponent : UIElement {
                     $dayColor = $todayColor
                 }
                 
-                $this._private_buffer.WriteString($dayX, $dayY, $dayStr, $dayColor, $bgColor)
+                Write-TuiText -Buffer $this._private_buffer -X $dayX -Y $dayY -Text $dayStr -Style @{ FG = $dayColor; BG = $bgColor }
                 $currentDay++
             }
         }
@@ -1720,8 +1724,8 @@ class Table : UIElement {
 class Panel : UIElement {
     [string]$Title = ""
     [string]$BorderStyle = "Single"
-    [ConsoleColor]$BorderColor = [ConsoleColor]::Gray
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
+    [string]$BorderColor = "#808080"     # FIXED: Changed from ConsoleColor to hex string
+    [string]$BackgroundColor = "#000000" # FIXED: Changed from ConsoleColor to hex string
     [bool]$HasBorder = $true
     [string]$LayoutType = "Manual"  # Manual, Vertical, Horizontal, Grid
     [int]$Padding = 0
@@ -2043,8 +2047,8 @@ class GroupPanel : Panel {
 
     GroupPanel([string]$name) : base($name) {
         $this.BorderStyle = "Double"
-        $this.BorderColor = [ConsoleColor]::DarkCyan
-        $this.BackgroundColor = [ConsoleColor]::Black
+        $this.BorderColor = "#008B8B"     # FIXED: DarkCyan in hex
+        $this.BackgroundColor = "#000000" # FIXED: Black in hex
     }
 
     [void] OnRender() {
@@ -2335,8 +2339,8 @@ class CommandPalette : UIElement {
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = [ConsoleColor]::Cyan
-        $this._panel.BackgroundColor = [ConsoleColor]::Black
+        $this._panel.BorderColor = "#00FFFF"    # FIXED: Cyan in hex
+        $this._panel.BackgroundColor = "#000000" # FIXED: Black in hex
         $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
@@ -2460,8 +2464,8 @@ class CommandPalette : UIElement {
                     & $this.OnSelect $selectedAction
                 }
                 else {
-                    # Execute action directly
-                    $this._actionService.ExecuteAction($selectedAction.Name)
+                    # Execute action directly - FIX: Pass empty hashtable as second parameter
+                    $this._actionService.ExecuteAction($selectedAction.Name, @{})
                 }
             }
             return $true
@@ -2522,8 +2526,8 @@ class Dialog : UIElement {
         $this._panel = [Panel]::new($this.Name + "_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = Get-ThemeColor("dialog.border")
-        $this._panel.BackgroundColor = Get-ThemeColor("dialog.background")
+        $this._panel.BorderColor = "#00FFFF"    # FIXED: Use hex string for border
+        $this._panel.BackgroundColor = "#000000" # FIXED: Use hex string for background
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
