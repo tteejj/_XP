@@ -39,15 +39,15 @@ class LabelComponent : UIElement {
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Get foreground color
-        $fg = if ($this.ForegroundColor) {
+        if ($this.ForegroundColor) {
             if ($this.ForegroundColor -is [ConsoleColor]) {
                 # Convert ConsoleColor to hex if needed
-                Get-ThemeColor("Foreground") # Use theme default instead
+                $fg = Get-ThemeColor("Foreground") # Use theme default instead
             } else {
-                $this.ForegroundColor # Assume it's already hex
+                $fg = $this.ForegroundColor # Assume it's already hex
             }
         } else {
-            Get-ThemeColor("Foreground")
+            $fg = Get-ThemeColor("Foreground")
         }
         
         # Draw text
@@ -332,8 +332,16 @@ class CheckBoxComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
-        $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
+        if ($this.IsFocused) { 
+            $fgColor = Get-ThemeColor("Primary") 
+        } else { 
+            $fgColor = Get-ThemeColor("Foreground") 
+        }
+        if ($this.Checked) { 
+            $checkMark = "[X]" 
+        } else { 
+            $checkMark = "[ ]" 
+        }
         $fullText = "$checkMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -387,8 +395,16 @@ class RadioButtonComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        $fgColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("Foreground") }
-        $radioMark = if ($this.Selected) { "(o)" } else { "( )" }
+        if ($this.IsFocused) { 
+            $fgColor = Get-ThemeColor("Primary") 
+        } else { 
+            $fgColor = Get-ThemeColor("Foreground") 
+        }
+        if ($this.Selected) { 
+            $radioMark = "(o)" 
+        } else { 
+            $radioMark = "( )" 
+        }
         $fullText = "$radioMark $($this.Text)"
         
         Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $fullText -Style @{ FG = $fgColor; BG = $bgColor }
@@ -764,9 +780,11 @@ class NumericInputComponent : UIElement {
             if ($this.IsFocused -and $this._cursorPosition -le $displayValue.Length) {
                 $cursorX = 1 + $this._cursorPosition
                 if ($cursorX -lt $this.Width - 2) {
-                    $cursorChar = if ($this._cursorPosition -lt $this._textValue.Length) {
-                        $this._textValue[$this._cursorPosition]
-                    } else { ' ' }
+                    if ($this._cursorPosition -lt $this._textValue.Length) {
+                        $cursorChar = $this._textValue[$this._cursorPosition]
+                    } else { 
+                        $cursorChar = ' ' 
+                    }
                     
                     $this._private_buffer.SetCell($cursorX, 1, 
                         [TuiCell]::new($cursorChar, $bgColor, $fgColor))
@@ -924,10 +942,18 @@ class DateInputComponent : UIElement {
         try {
             $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
             $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            if ($this.IsFocused) { 
+                $borderColorValue = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" 
+            } else { 
+                $borderColorValue = Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor 
+            }
             
             # Adjust height based on calendar visibility
-            $renderHeight = if ($this._showCalendar) { 10 } else { 3 }
+            if ($this._showCalendar) { 
+                $renderHeight = 10 
+            } else { 
+                $renderHeight = 3 
+            }
             if ($this.Height -ne $renderHeight) {
                 $this.Height = $renderHeight
                 $this.RequestRedraw()
@@ -1146,7 +1172,11 @@ class ComboBoxComponent : UIElement {
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw main box
-            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            if ($this.IsFocused) { 
+                $borderColor = Get-ThemeColor("Primary") 
+            } else { 
+                $borderColor = Get-ThemeColor("component.border") 
+            }
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
                 -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
             
@@ -1160,10 +1190,10 @@ class ComboBoxComponent : UIElement {
                 $displayText = $this.GetDisplayText($item)
             }
             
-            $textColor = if ($displayText) { 
-                Get-ThemeColor("input.foreground") 
+            if ($displayText) { 
+                $textColor = Get-ThemeColor("input.foreground") 
             } else { 
-                Get-ThemeColor("input.placeholder") 
+                $textColor = Get-ThemeColor("input.placeholder") 
             }
             
             $maxTextWidth = $this.Width - 4  # Border + dropdown arrow
@@ -1175,8 +1205,16 @@ class ComboBoxComponent : UIElement {
                 -Style @{ FG = $textColor; BG = $bgColor }
             
             # Draw dropdown arrow
-            $arrowChar = if ($this._isDropdownOpen) { '▲' } else { '▼' }
-            $arrowColor = if ($this.IsFocused) { Get-ThemeColor("Accent") } else { Get-ThemeColor("Subtle") }
+            if ($this._isDropdownOpen) { 
+                $arrowChar = '▲' 
+            } else { 
+                $arrowChar = '▼' 
+            }
+            if ($this.IsFocused) { 
+                $arrowColor = Get-ThemeColor("Accent") 
+            } else { 
+                $arrowColor = Get-ThemeColor("Subtle") 
+            }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $arrowColor, $bgColor))
             
             # Draw dropdown if open (as overlay)
@@ -1490,7 +1528,11 @@ class Table : UIElement {
         try {
             $bgColor = Get-ThemeColor("component.background")
             $fgColor = Get-ThemeColor("Foreground")
-            $borderColor = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+            if ($this.IsFocused) { 
+                $borderColor = Get-ThemeColor("Primary") 
+            } else { 
+                $borderColor = Get-ThemeColor("component.border") 
+            }
             $headerBg = Get-ThemeColor("list.header.bg")
             $selectedBg = Get-ThemeColor("list.item.selected.background")
             
@@ -1758,7 +1800,11 @@ class Panel : UIElement {
             $this.UpdateContentDimensions()
 
             if ($this.HasBorder) {
-                $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+                if ($this.IsFocused) { 
+                    $borderColorValue = Get-ThemeColor("Primary") 
+                } else { 
+                    $borderColorValue = Get-ThemeColor("component.border") 
+                }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
@@ -1775,8 +1821,16 @@ class Panel : UIElement {
     [void] ApplyLayout() {
         if ($this.LayoutType -eq "Manual") { return }
 
-        $layoutX = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
-        $layoutY = if ($this.HasBorder) { 1 + $this.Padding } else { $this.Padding }
+        if ($this.HasBorder) { 
+            $layoutX = 1 + $this.Padding 
+        } else { 
+            $layoutX = $this.Padding 
+        }
+        if ($this.HasBorder) { 
+            $layoutY = 1 + $this.Padding 
+        } else { 
+            $layoutY = $this.Padding 
+        }
         $layoutWidth = [Math]::Max(0, $this.Width - (2 * $layoutX))
         $layoutHeight = [Math]::Max(0, $this.Height - (2 * $layoutY))
 
@@ -1973,8 +2027,16 @@ class ScrollablePanel : Panel {
     # Update SetCell calls in DrawScrollbar to use hex colors.
     [void] DrawScrollbar() {
         $scrollbarX = $this.Width - 1
-        $scrollbarY = if ($this.HasBorder) { 1 } else { 0 }
-        $scrollbarTrackHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+        if ($this.HasBorder) { 
+            $scrollbarY = 1 
+        } else { 
+            $scrollbarY = 0 
+        }
+        if ($this.HasBorder) { 
+            $scrollbarTrackHeight = $this.Height - 2 
+        } else { 
+            $scrollbarTrackHeight = $this.Height - 0 
+        }
 
         if ($this._contentHeight -le $scrollbarTrackHeight) { 
             # If content fits, clear any previous scrollbar
@@ -2179,22 +2241,26 @@ class ListBox : UIElement {
             for ($i = 0; $i -lt $contentHeight -and ($i + $this.ScrollOffset) -lt $this.Items.Count; $i++) {
                 $itemIndex = $i + $this.ScrollOffset
                 $item = $this.Items[$itemIndex]
-                $itemText = if ($item -is [string]) { $item } else { $item.ToString() }
+                if ($item -is [string]) { 
+                    $itemText = $item 
+                } else { 
+                    $itemText = $item.ToString() 
+                }
                 
                 if ($itemText.Length -gt $contentWidth) {
                     $itemText = $itemText.Substring(0, $contentWidth - 3) + "..."
                 }
                 
                 $isSelected = ($itemIndex -eq $this.SelectedIndex)
-                $fgColor = if ($isSelected) { 
-                    Get-ThemeColor("list.item.selected") 
+                if ($isSelected) { 
+                    $fgColor = Get-ThemeColor("list.item.selected") 
                 } else { 
-                    Get-ThemeColor("list.item.normal") 
+                    $fgColor = Get-ThemeColor("list.item.normal") 
                 }
-                $itemBgColor = if ($isSelected) { 
-                    Get-ThemeColor("list.item.selected.background") 
+                if ($isSelected) { 
+                    $itemBgColor = Get-ThemeColor("list.item.selected.background") 
                 } else { 
-                    $bgColor 
+                    $itemBgColor = $bgColor 
                 }
                 
                 # Draw item background
@@ -2452,10 +2518,10 @@ class CommandPalette : UIElement {
             # Show all actions
             foreach ($action in $this._allActions) {
                 $this._filteredActions.Add($action)
-                $displayText = if ($action.Category) { 
-                    "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                if ($action.Category) { 
+                    $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
                 } else { 
-                    "$($action.Name) - $($action.Description)" 
+                    $displayText = "$($action.Name) - $($action.Description)" 
                 }
                 $this._listBox.AddItem($displayText)
             }
@@ -2470,10 +2536,10 @@ class CommandPalette : UIElement {
                     ($action.Category -and $action.Category.ToLower().Contains($searchLower))) {
                     
                     $this._filteredActions.Add($action)
-                    $displayText = if ($action.Category) { 
-                        "[$($action.Category)] $($action.Name) - $($action.Description)" 
+                    if ($action.Category) { 
+                        $displayText = "[$($action.Category)] $($action.Name) - $($action.Description)" 
                     } else { 
-                        "$($action.Name) - $($action.Description)" 
+                        $displayText = "$($action.Name) - $($action.Description)" 
                     }
                     $this._listBox.AddItem($displayText)
                 }

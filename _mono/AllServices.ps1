@@ -175,8 +175,9 @@ class ActionService {
         
         # Theme picker action
         $this.RegisterAction("ui.theme.picker", {
-            $navService = $global:ServiceContainer.GetService("NavigationService")
-            $themeScreen = [ThemePickerScreen]::new($global:ServiceContainer)
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $themeScreen = [ThemePickerScreen]::new($container)
             $themeScreen.Initialize()
             $navService.NavigateTo($themeScreen)
         }, @{
@@ -186,7 +187,7 @@ class ActionService {
         
         # Task management actions
         $this.RegisterAction("task.new", {
-            $navService = $global:ServiceContainer.GetService("NavigationService")
+            $navService = $global:TuiState.Services.NavigationService
             $currentScreen = $navService?.CurrentScreen
             if ($currentScreen -is [TaskListScreen]) {
                 $currentScreen._newButton.OnClick.Invoke()
@@ -197,8 +198,9 @@ class ActionService {
         })
         
         $this.RegisterAction("task.list", {
-            $navService = $global:ServiceContainer.GetService("NavigationService")
-            $taskScreen = [TaskListScreen]::new($global:ServiceContainer)
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $taskScreen = [TaskListScreen]::new($container)
             $taskScreen.Initialize()
             $navService.NavigateTo($taskScreen)
         }, @{

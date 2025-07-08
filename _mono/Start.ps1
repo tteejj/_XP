@@ -107,6 +107,9 @@ try {
     # Create service container
     $container = [ServiceContainer]::new()
     
+    # Store ServiceContainer reference in TuiState for global access
+    $global:TuiState.ServiceContainer = $container
+    
     # Register core services
     # First register Logger and immediately add to global state
     $logger = [Logger]::new()
