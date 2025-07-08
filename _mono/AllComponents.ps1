@@ -1739,6 +1739,8 @@ class Panel : UIElement {
 
     Panel([string]$name) : base($name) {
         $this.IsFocusable = $false
+        # Calculate initial content dimensions
+        $this.UpdateContentDimensions()
     }
 
     [void] OnRender() {
@@ -1749,11 +1751,8 @@ class Panel : UIElement {
             $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
             $this._private_buffer.Clear($bgCell)
 
-            # Calculate content area
-            $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
-            $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
-            $this.ContentWidth = [Math]::Max(0, $this.Width - (if ($this.HasBorder) { 2 } else { 0 }))
-            $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
+            # Update content area dimensions
+            $this.UpdateContentDimensions()
 
             if ($this.HasBorder) {
                 $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
@@ -1832,6 +1831,20 @@ class Panel : UIElement {
         $area.Width = [Math]::Max(0, $this.Width - (2 * $area.X))
         $area.Height = [Math]::Max(0, $this.Height - (2 * $area.Y))
         return $area
+    }
+    
+    # New method to update content dimensions
+    [void] UpdateContentDimensions() {
+        $this.ContentX = if ($this.HasBorder) { 1 } else { 0 }
+        $this.ContentY = if ($this.HasBorder) { 1 } else { 0 }
+        $this.ContentWidth = [Math]::Max(0, $this.Width - (if ($this.HasBorder) { 2 } else { 0 }))
+        $this.ContentHeight = [Math]::Max(0, $this.Height - (if ($this.HasBorder) { 2 } else { 0 }))
+    }
+    
+    # Override Resize to update content dimensions
+    [void] OnResize() {
+        $this.UpdateContentDimensions()
+        ([UIElement]$this).OnResize()
     }
 }
 
@@ -2543,6 +2556,10 @@ class CommandPalette : UIElement {
                 return $result
             }
         }
+        
+        # This line should never be reached due to the default case above,
+        # but PowerShell requires it for all code paths
+        return $false
     }
 
     [void] OnResize() {

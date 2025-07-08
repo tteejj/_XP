@@ -157,6 +157,11 @@ class DashboardScreen : Screen {
         $panel = $this._summaryPanel
         if (-not $panel) { return }
         
+        # Ensure content dimensions are calculated
+        if ($panel.ContentWidth -eq 0) {
+            $panel.UpdateContentDimensions()
+        }
+        
         # Clear children
         $panel.Children.Clear()
 
@@ -243,6 +248,11 @@ class DashboardScreen : Screen {
         $panel = $this._helpPanel
         if (-not $panel) { return }
         
+        # Ensure content dimensions are calculated
+        if ($panel.ContentWidth -eq 0) {
+            $panel.UpdateContentDimensions()
+        }
+        
         # Clear children
         $panel.Children.Clear()
         
@@ -313,6 +323,11 @@ class DashboardScreen : Screen {
     hidden [void] _UpdateStatusPanel() {
         $panel = $this._statusPanel
         if (-not $panel) { return }
+        
+        # Ensure content dimensions are calculated
+        if ($panel.ContentWidth -eq 0) {
+            $panel.UpdateContentDimensions()
+        }
         
         # Clear children
         $panel.Children.Clear()
