@@ -2,7 +2,16 @@
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
 # TUI engine, screen management, and main application loop
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ART.###" to find specific sections.
+# Each section ends with "END_PAGE: ART.###"
+# ==============================================================================
 
+#<!-- PAGE: ART.001 - Global State -->
 #region Global State
 
 # Initialize global TUI state
@@ -28,10 +37,6 @@ $global:TuiState = @{
     InputPowerShell = $null
     InputAsyncResult = $null
 }
-
-#endregion
-
-#region Error Handling
 
 function Invoke-WithErrorHandling {
     [CmdletBinding()]
@@ -77,7 +82,9 @@ function Invoke-WithErrorHandling {
 }
 
 #endregion
+#<!-- END_PAGE: ART.001 -->
 
+#<!-- PAGE: ART.002 - Engine Management -->
 #region Engine Management
 
 function Initialize-TuiEngine {
@@ -110,7 +117,7 @@ function Initialize-TuiEngine {
         $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($width, $height, "PreviousCompositor")
         
         # Clear with theme background
-        $bgColor = Get-ThemeColor("Background")
+        $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         $global:TuiState.PreviousCompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
@@ -173,7 +180,9 @@ function Start-TuiEngine {
 
 function Stop-TuiEngine {
     [CmdletBinding()]
-    param()
+    param(
+        [switch]$Force
+    )
     
     try {
         Write-Verbose "Stopping TUI Engine..."
@@ -188,18 +197,19 @@ function Stop-TuiEngine {
                 $navService.CurrentScreen.Cleanup()
             }
             catch {
-                Write-Warning "Error cleaning up current screen: $_"
+                Write-Verbose "Error cleaning up current screen: $_"
             }
         }
         
         # Cleanup services
         foreach ($service in $global:TuiState.Services.Values) {
-            if ($service -and $service.PSObject.Methods.Match('Cleanup')) {
+            if ($service -and $service.PSObject -and $service.PSObject.Methods -and 
+                $service.PSObject.Methods.Name -contains 'Cleanup') {
                 try {
                     $service.Cleanup()
                 }
                 catch {
-                    Write-Warning "Error cleaning up service: $_"
+                    Write-Verbose "Error cleaning up service: $_"
                 }
             }
         }
@@ -230,9 +240,13 @@ function Update-TuiEngineSize {
         $global:TuiState.BufferWidth = $newWidth
         $global:TuiState.BufferHeight = $newHeight
         
-        # Resize compositor buffers
-        $global:TuiState.CompositorBuffer.Resize($newWidth, $newHeight)
-        $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
+        # Resize compositor buffers only if they exist
+        if ($null -ne $global:TuiState.CompositorBuffer) {
+            $global:TuiState.CompositorBuffer.Resize($newWidth, $newHeight)
+        }
+        if ($null -ne $global:TuiState.PreviousCompositorBuffer) {
+            $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight)
+        }
         
         # Resize current screen
         $navService = $global:TuiState.Services.NavigationService
@@ -242,7 +256,9 @@ function Update-TuiEngineSize {
         
         # Force full redraw
         $global:TuiState.IsDirty = $true
-        [Console]::Clear()
+        if ($null -ne $global:TuiState.CompositorBuffer) {
+            [Console]::Clear()
+        }
     }
     catch {
         Write-Error "Failed to update engine size: $_"
@@ -250,7 +266,9 @@ function Update-TuiEngineSize {
 }
 
 #endregion
+#<!-- END_PAGE: ART.002 -->
 
+#<!-- PAGE: ART.003 - Rendering System -->
 #region Rendering System
 
 function Invoke-TuiRender {
@@ -260,14 +278,19 @@ function Invoke-TuiRender {
     try {
         $renderTimer = [System.Diagnostics.Stopwatch]::StartNew()
         
+        # Ensure compositor buffer exists
+        if ($null -eq $global:TuiState.CompositorBuffer) {
+            Write-Verbose "Compositor buffer is null, skipping render"
+            return
+        }
+        
         # Clear compositor buffer
         $global:TuiState.CompositorBuffer.Clear()
         
         Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
-        # Get the current screen from NavigationService
-        $navService = $global:TuiState.Services.NavigationService
-        $currentScreenToRender = if ($navService) { $navService.CurrentScreen } else { $null }
+        # Get the current screen from global state (NavigationService updates this)
+        $currentScreenToRender = $global:TuiState.CurrentScreen
         
         # Render current screen
         if ($currentScreenToRender) {
@@ -283,7 +306,7 @@ function Invoke-TuiRender {
                     $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
                 }
                 else {
-                    Write-Warning "Screen buffer is null for $($currentScreenToRender.Name)"
+                    Write-Verbose "Screen buffer is null for $($currentScreenToRender.Name)"
                 }
             }
             catch {
@@ -305,7 +328,7 @@ function Invoke-TuiRender {
                     }
                 }
                 catch {
-                    Write-Warning "Error rendering command palette: $_"
+                    Write-Verbose "Error rendering command palette: $_"
                 }
             }
             
@@ -331,7 +354,7 @@ function Invoke-TuiRender {
         
         # Force full redraw on first frame by making previous buffer different
         if ($global:TuiState.FrameCount -eq 0) {
-            Write-Host "First frame - initializing previous buffer for differential rendering" -ForegroundColor Green
+            Write-Verbose "First frame - initializing previous buffer for differential rendering"
             # Fill previous buffer with different content to force full redraw
             for ($y = 0; $y -lt $global:TuiState.PreviousCompositorBuffer.Height; $y++) {
                 for ($x = 0; $x -lt $global:TuiState.PreviousCompositorBuffer.Width; $x++) {
@@ -357,7 +380,7 @@ function Invoke-TuiRender {
         }
         
         # Clear compositor for next frame
-        $bgColor = Get-ThemeColor("Background")
+        $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Update previous buffer with what was just rendered
@@ -382,6 +405,12 @@ function Render-DifferentialBuffer {
     try {
         $current = $global:TuiState.CompositorBuffer
         $previous = $global:TuiState.PreviousCompositorBuffer
+        
+        # Ensure both buffers exist
+        if ($null -eq $current -or $null -eq $previous) {
+            Write-Verbose "Compositor buffers not initialized, skipping differential render"
+            return
+        }
         
         $ansiBuilder = [System.Text.StringBuilder]::new()
         $currentX = -1
@@ -415,7 +444,7 @@ function Render-DifferentialBuffer {
         
         # Log changes on first few frames
         if ($global:TuiState.FrameCount -lt 5) {
-            Write-Host "Frame $($global:TuiState.FrameCount): $changeCount cells changed" -ForegroundColor Cyan
+            Write-Verbose "Frame $($global:TuiState.FrameCount): $changeCount cells changed"
         }
         
         # Reset styling at end
@@ -431,7 +460,9 @@ function Render-DifferentialBuffer {
 }
 
 #endregion
+#<!-- END_PAGE: ART.003 -->
 
+#<!-- PAGE: ART.004 - Input Processing -->
 #region Input Processing
 
 function Process-TuiInput {
@@ -494,7 +525,7 @@ function Process-TuiInput {
                         # Execute other actions via ActionService
                         if ($global:TuiState.Services.ActionService) {
                             try {
-                                $global:TuiState.Services.ActionService.ExecuteAction($action)
+                                $global:TuiState.Services.ActionService.ExecuteAction($action, @{})
                                 $global:TuiState.IsDirty = $true
                                 return
                             }
@@ -520,7 +551,9 @@ function Process-TuiInput {
 }
 
 #endregion
+#<!-- END_PAGE: ART.004 -->
 
+#<!-- PAGE: ART.005 - Screen Management -->
 #region Overlay Management
 
 function Show-TuiOverlay {
@@ -593,13 +626,9 @@ function Close-TopTuiOverlay {
 }
 
 #endregion
+#<!-- END_PAGE: ART.005 -->
 
-#region Error Handling
-
-# Error handling functions have been consolidated - see Panic Handler region below
-
-#endregion
-
+#<!-- PAGE: ART.006 - Error Handling -->
 #region Panic Handler
 
 function Invoke-PanicHandler {
@@ -696,10 +725,6 @@ function Invoke-PanicHandler {
     exit 1
 }
 
-#endregion
-
-#region Application Entry
-
 function Start-AxiomPhoenix {
     [CmdletBinding()]
     param(
@@ -767,3 +792,4 @@ function Start-AxiomPhoenix {
 }
 
 #endregion
+#<!-- END_PAGE: ART.006 -->

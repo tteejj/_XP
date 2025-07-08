@@ -2,7 +2,16 @@
 # Axiom-Phoenix v4.0 - Application Entry Point
 # Loads all framework files and starts the application
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: STA.###" to find specific sections.
+# Each section ends with "END_PAGE: STA.###"
+# ==============================================================================
 
+#<!-- PAGE: STA.001 - Script Configuration -->
 #region Script Configuration
 
 # Clean session by removing any existing types
@@ -40,7 +49,9 @@ $ErrorActionPreference = 'Stop'
 $VerbosePreference = 'SilentlyContinue'  # Change to 'Continue' for debug output
 
 #endregion
+#<!-- END_PAGE: STA.001 -->
 
+#<!-- PAGE: STA.002 - Framework Loading & Service Initialization -->
 #region Load Framework Files
 
 try {
@@ -86,41 +97,77 @@ catch {
 try {
     Write-Host "Initializing services..." -ForegroundColor Cyan
     
+    # Initialize global state BEFORE creating services
+    if (-not $global:TuiState) {
+        $global:TuiState = @{
+            Services = @{}
+        }
+    }
+    
     # Create service container
     $container = [ServiceContainer]::new()
     
     # Register core services
-    $container.Register("Logger", [Logger]::new())
-    $container.Register("EventManager", [EventManager]::new())
-    $container.Register("ThemeManager", [ThemeManager]::new())
+    # First register Logger and immediately add to global state
+    $logger = [Logger]::new()
+    $container.Register("Logger", $logger)
+    $global:TuiState.Services['Logger'] = $logger
+    Write-Verbose "Registered Logger service"
     
-    # Register services that depend on EventManager
-    $eventManager = $container.GetService("EventManager")
-    $container.Register("ActionService", [ActionService]::new($eventManager))
-    $container.Register("DataManager", [DataManager]::new((Join-Path $env:APPDATA "AxiomPhoenix\data.json"), $eventManager))
-    $container.Register("NavigationService", [NavigationService]::new(@{ EventManager = $eventManager })) # Pass services hashtable
-    $container.Register("FocusManager", [FocusManager]::new($eventManager)) # NEW: Register FocusManager
-
-    # Register services that depend on ActionService
-    $actionService = $container.GetService("ActionService")
-    $container.Register("KeybindingService", [KeybindingService]::new($actionService))
+    # Register EventManager
+    $eventManager = [EventManager]::new()
+    $container.Register("EventManager", $eventManager)
+    Write-Verbose "Registered EventManager service"
     
-    # NEW: Register DialogManager (depends on EventManager and FocusManager)
-    $focusManager = $container.GetService("FocusManager")
-    $container.Register("DialogManager", [DialogManager]::new($eventManager, $focusManager))
-
-    # Register framework service (not implemented in v4.0)
-    # $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
+    # Register ThemeManager
+    $themeManager = [ThemeManager]::new()
+    $container.Register("ThemeManager", $themeManager)
+    $themeManager.LoadDefaultTheme()
+    Write-Verbose "Registered ThemeManager service"
+    
+    # Register ActionService
+    $actionService = [ActionService]::new($eventManager)
+    $container.Register("ActionService", $actionService)
+    Write-Verbose "Registered ActionService"
+    
+    # Register DataManager
+    $dataPath = Join-Path $env:APPDATA "AxiomPhoenix\data.json"
+    $dataManager = [DataManager]::new($dataPath, $eventManager)
+    $container.Register("DataManager", $dataManager)
+    Write-Verbose "Registered DataManager"
+    
+    # Register NavigationService
+    $navigationService = [NavigationService]::new(@{ EventManager = $eventManager })
+    $container.Register("NavigationService", $navigationService)
+    Write-Verbose "Registered NavigationService"
+    
+    # Register FocusManager
+    $focusManager = [FocusManager]::new($eventManager)
+    $container.Register("FocusManager", $focusManager)
+    Write-Verbose "Registered FocusManager"
+    
+    # Register KeybindingService (depends on ActionService)
+    $keybindingService = [KeybindingService]::new($actionService)
+    $container.Register("KeybindingService", $keybindingService)
+    Write-Verbose "Registered KeybindingService"
+    
+    # Register DialogManager (depends on EventManager and FocusManager)
+    $dialogManager = [DialogManager]::new($eventManager, $focusManager)
+    $container.Register("DialogManager", $dialogManager)
+    Write-Verbose "Registered DialogManager"
     
     # Initialize default actions
     $actionService.RegisterDefaultActions()
+    Write-Verbose "Registered default actions"
+    
+    # Initialize default keybindings
+    $keybindingService.SetDefaultBindings()
+    Write-Verbose "Set default keybindings"
     
     # Register navigation actions
-    $navService = $container.GetService("NavigationService")
-    
     $actionService.RegisterAction("navigation.dashboard", {
         $dashboard = [DashboardScreen]::new($container)
-        $navService.NavigateTo($dashboard)
+        $navigationService.NavigateTo($dashboard)
     }, @{
         Category = "Navigation"
         Description = "Go to Dashboard"
@@ -128,7 +175,7 @@ try {
     
     $actionService.RegisterAction("navigation.taskList", {
         $taskList = [TaskListScreen]::new($container)
-        $navService.NavigateTo($taskList)
+        $navigationService.NavigateTo($taskList)
     }, @{
         Category = "Navigation"
         Description = "Go to Task List"
@@ -139,27 +186,28 @@ try {
 catch {
     Write-Host "Failed to initialize services!" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor Red
     exit 1
 }
 
 #endregion
+#<!-- END_PAGE: STA.002 -->
 
+#<!-- PAGE: STA.003 - Data Loading & Application Startup -->
 #region Load Sample Data
 
 try {
     Write-Host "Loading sample data..." -ForegroundColor Cyan
     
-    $dataManager = $container.GetService("DataManager")
-    
     # Try to load existing data first
     try {
         $dataManager.LoadData()
         
-        if ($dataManager.Tasks.Count -eq 0) {
+        if ($dataManager.GetTasks().Count -eq 0) {
             throw "No existing data found"
         }
         
-        Write-Host "Loaded $($dataManager.Tasks.Count) tasks from storage" -ForegroundColor Green
+        Write-Host "Loaded $($dataManager.GetTasks().Count) tasks from storage" -ForegroundColor Green
     }
     catch {
         Write-Host "Creating sample data..." -ForegroundColor Yellow
@@ -263,3 +311,4 @@ finally {
 }
 
 #endregion
+#<!-- END_PAGE: STA.003 -->

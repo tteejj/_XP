@@ -2,6 +2,14 @@
 # Axiom-Phoenix v4.0 - Base Classes (Load First)
 # Core framework classes with NO external dependencies
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ABC.###" to find specific sections.
+# Each section ends with "END_PAGE: ABC.###"
+# ==============================================================================
 
 using namespace System.Collections.Generic
 using namespace System.Collections.Concurrent
@@ -11,6 +19,7 @@ using namespace System.Threading
 # Disable verbose output during TUI rendering
 $script:TuiVerbosePreference = 'SilentlyContinue'
 
+#<!-- PAGE: ABC.001 - TuiAnsiHelper Class -->
 #region TuiAnsiHelper - ANSI Code Generation with Truecolor Support
 class TuiAnsiHelper {
     # No caches needed, sequences are generated dynamically now.
@@ -53,10 +62,10 @@ class TuiAnsiHelper {
 
         # Style attributes
         if ($attributes) {
-            if ([bool]($attributes.Bold ?? $false)) { $sequences.Add("1") }
-            if ([bool]($attributes.Italic ?? $false)) { $sequences.Add("3") }
-            if ([bool]($attributes.Underline ?? $false)) { $sequences.Add("4") }
-            if ([bool]($attributes.Strikethrough ?? $false)) { $sequences.Add("9") }
+            if ($attributes.ContainsKey('Bold') -and [bool]$attributes['Bold']) { $sequences.Add("1") }
+            if ($attributes.ContainsKey('Italic') -and [bool]$attributes['Italic']) { $sequences.Add("3") }
+            if ($attributes.ContainsKey('Underline') -and [bool]$attributes['Underline']) { $sequences.Add("4") }
+            if ($attributes.ContainsKey('Strikethrough') -and [bool]$attributes['Strikethrough']) { $sequences.Add("9") }
         }
 
         if ($sequences.Count -eq 0) { return "" }
@@ -66,7 +75,9 @@ class TuiAnsiHelper {
     static [string] Reset() { return "`e[0m" }
 }
 #endregion
+#<!-- END_PAGE: ABC.001 -->
 
+#<!-- PAGE: ABC.002 - TuiCell Class -->
 #region TuiCell Class - Core Compositor Unit with Truecolor Support
 class TuiCell {
     [char] $Char = ' '
@@ -82,8 +93,15 @@ class TuiCell {
     TuiCell() { }
     TuiCell([char]$char) { $this.Char = $char }
     
-    # Updated Constructor: Consolidate previous fg/bg and fg/bg/bold/underline constructors
-    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold=$false, [bool]$italic=$false, [bool]$underline=$false, [bool]$strikethrough=$false) {
+    # Constructor with 3 parameters (char, fg, bg)
+    TuiCell([char]$char, [string]$fg, [string]$bg) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+    }
+    
+    # Full constructor with all parameters
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold, [bool]$italic, [bool]$underline, [bool]$strikethrough) {
         $this.Char = $char
         $this.ForegroundColor = $fg
         $this.BackgroundColor = $bg
@@ -163,7 +181,9 @@ class TuiCell {
     }
 }
 #endregion
+#<!-- END_PAGE: ABC.002 -->
 
+#<!-- PAGE: ABC.003 - TuiBuffer Class -->
 #region TuiBuffer Class - 2D Array of TuiCells
 class TuiBuffer {
     $Cells       # 2D array of TuiCells - no type constraint to avoid assignment issues
@@ -172,7 +192,20 @@ class TuiBuffer {
     [string] $Name            
     [bool] $IsDirty = $true  
 
-    TuiBuffer([int]$width, [int]$height, [string]$name = "Unnamed") {
+    # Constructor with 2 parameters
+    TuiBuffer([int]$width, [int]$height) {
+        if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
+        if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
+        $this.Width = $width
+        $this.Height = $height
+        $this.Name = "Unnamed"
+        # Initialize cells in a simple way
+        $this.InitializeCells()
+        # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
+    }
+
+    # Constructor with 3 parameters
+    TuiBuffer([int]$width, [int]$height, [string]$name) {
         if ($width -le 0) { throw [System.ArgumentOutOfRangeException]::new("width", "Width must be positive.") }
         if ($height -le 0) { throw [System.ArgumentOutOfRangeException]::new("height", "Height must be positive.") }
         $this.Width = $width
@@ -227,13 +260,14 @@ class TuiBuffer {
         }
         
         # Extract properties from the style object, providing safe defaults (now expecting hex colors)
-        $fg = $style.FG ?? "#FFFFFF" # Default Foreground hex
-        $bg = $style.BG ?? "#000000" # Default Background hex
-        $bold = [bool]($style.Bold ?? $false)
-        $italic = [bool]($style.Italic ?? $false)
-        $underline = [bool]($style.Underline ?? $false)
-        $strikethrough = [bool]($style.Strikethrough ?? $false) # NEW
-        $zIndex = [int]($style.ZIndex ?? 0)
+        # Use hashtable indexing syntax to avoid "property not found" errors
+        $fg = if ($style.ContainsKey('FG')) { $style['FG'] } else { "#FFFFFF" } # Default Foreground hex
+        $bg = if ($style.ContainsKey('BG')) { $style['BG'] } else { "#000000" } # Default Background hex
+        $bold = if ($style.ContainsKey('Bold')) { [bool]$style['Bold'] } else { $false }
+        $italic = if ($style.ContainsKey('Italic')) { [bool]$style['Italic'] } else { $false }
+        $underline = if ($style.ContainsKey('Underline')) { [bool]$style['Underline'] } else { $false }
+        $strikethrough = if ($style.ContainsKey('Strikethrough')) { [bool]$style['Strikethrough'] } else { $false }
+        $zIndex = if ($style.ContainsKey('ZIndex')) { [int]$style['ZIndex'] } else { 0 }
 
         $currentX = $x
         foreach ($char in $text.ToCharArray()) {
@@ -311,7 +345,11 @@ class TuiBuffer {
         $this.WriteString($x, $y, $text, $style)
     }
     
-
+    [void] DrawBox([int]$x, [int]$y, [int]$width, [int]$height, [hashtable]$style = @{}) {
+        # This will now internally call the new Write-TuiBox function in AllFunctions.ps1
+        # It's better to delegate complex drawing like boxes to the global functions.
+        Write-TuiBox -Buffer $this -X $x -Y $y -Width $width -Height $height -Style $style
+    }
     
     [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$char, [hashtable]$style = @{}) {
         # Create a single character string and use WriteString to fill the rectangle
@@ -334,7 +372,9 @@ class TuiBuffer {
     }
 }
 #endregion
+#<!-- END_PAGE: ABC.003 -->
 
+#<!-- PAGE: ABC.004 - UIElement Class -->
 #region UIElement - Base Class for all UI Components
 class UIElement {
     [string] $Name = "UIElement" 
@@ -547,19 +587,18 @@ class UIElement {
         return $false
     }
 
-    [void] OnCleanup()
-    {
-        # This method is intended to be overridden by child classes
-    }
-
     [void] Cleanup()
     {
-        # Call the overrideable cleanup hook first
-        $this.OnCleanup()
-
         # Cleanup all children recursively
         foreach ($child in $this.Children) {
-            $child.Cleanup()
+            if ($child.PSObject.Methods['Cleanup']) {
+                try { 
+                    $child.Cleanup() 
+                } 
+                catch { 
+                    Write-Warning "Failed to cleanup child '$($child.Name)': $($_.Exception.Message)" 
+                }
+            }
         }
         
         # Clear references
@@ -615,7 +654,9 @@ class UIElement {
     }
 }
 #endregion
+#<!-- END_PAGE: ABC.004 -->
 
+#<!-- PAGE: ABC.005 - Component Class -->
 #region Component - A generic container component
 class Component : UIElement {
     Component([string]$name) : base($name) {
@@ -633,7 +674,9 @@ class Component : UIElement {
     }
 }
 #endregion
+#<!-- END_PAGE: ABC.005 -->
 
+#<!-- PAGE: ABC.006 - Screen Class -->
 #region Screen - Top-level Container for Application Views
 class Screen : UIElement {
     [hashtable]$Services
@@ -788,16 +831,16 @@ class Screen : UIElement {
     }
 }
 #endregion
+#<!-- END_PAGE: ABC.006 -->
 
+#<!-- PAGE: ABC.007 - ServiceContainer Class -->
 #region ServiceContainer Class
 class ServiceContainer {
     hidden [hashtable] $_services = @{}
     hidden [hashtable] $_serviceFactories = @{}
 
     ServiceContainer() {
-        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-            Write-Log -Level Info -Message "ServiceContainer created."
-        }
+        # Don't use Write-Log during construction - Logger doesn't exist yet
         Write-Verbose "ServiceContainer: Instance constructed."
     }
 
@@ -942,3 +985,4 @@ class ServiceContainer {
     }
 }
 #endregion
+#<!-- END_PAGE: ABC.007 -->

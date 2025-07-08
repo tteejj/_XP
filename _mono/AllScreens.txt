@@ -2,9 +2,18 @@
 # Axiom-Phoenix v4.0 - All Screens (Load After Components)
 # Application screens that extend Screen base class
 # ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ASC.###" to find specific sections.
+# Each section ends with "END_PAGE: ASC.###"
+# ==============================================================================
 
 using namespace System.Collections.Generic
 
+#<!-- PAGE: ASC.001 - DashboardScreen Class -->
 #region Screen Classes
 
 class DashboardScreen : Screen {
@@ -13,22 +22,22 @@ class DashboardScreen : Screen {
     hidden [Panel] $_summaryPanel
     hidden [Panel] $_statusPanel
     hidden [Panel] $_helpPanel
-    hidden [string] $_dataChangeSubscriptionId = $null
     #endregion
 
     #region State
     hidden [int] $_totalTasks = 0
     hidden [int] $_completedTasks = 0
     hidden [int] $_pendingTasks = 0
+    hidden [string] $_dataChangeSubscriptionId = $null # Store event subscription ID
     #endregion
 
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
     [void] Initialize() {
-        Write-Host "DashboardScreen.Initialize called. Screen size: $($this.Width)x$($this.Height)" -ForegroundColor Green
+        Write-Verbose "DashboardScreen.Initialize called. Screen size: $($this.Width)x$($this.Height)"
         
         if (-not $this.ServiceContainer) {
-            Write-Warning "DashboardScreen.Initialize: ServiceContainer is null"
+            Write-Verbose "DashboardScreen.Initialize: ServiceContainer is null"
             return
         }
         
@@ -69,17 +78,23 @@ class DashboardScreen : Screen {
     }
 
     [void] OnEnter() {
+        # Subscribe to data change events for reactive updates
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager) {
+            # Create handler that properly captures $this
+            $thisScreen = $this
             $handler = {
                 param($eventData)
                 Write-Verbose "DashboardScreen received data change event. Refreshing..."
-                $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
-                $global:TuiState.IsDirty = $true
+                $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+                $thisScreen._RefreshData($dataManager)
             }.GetNewClosure()
+            
+            # Subscribe to both task and project changes
             $this._dataChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
+            Write-Verbose "DashboardScreen subscribed to data change events"
         }
-
+        
         # Force a complete redraw of all panels
         if ($this._summaryPanel) { $this._summaryPanel.RequestRedraw() }
         if ($this._helpPanel) { $this._helpPanel.RequestRedraw() }
@@ -89,25 +104,30 @@ class DashboardScreen : Screen {
         if ($this.ServiceContainer) {
             $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
         } else {
-            Write-Warning "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
+            Write-Verbose "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
             $this._RefreshData($null)
         }
         
         # Force another redraw after data refresh
         $this.RequestRedraw()
     }
-
-    [void] OnCleanup() {
+    
+    [void] OnExit() {
+        # Unsubscribe from data change events
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager -and $this._dataChangeSubscriptionId) {
             $eventManager.Unsubscribe("Tasks.Changed", $this._dataChangeSubscriptionId)
             $this._dataChangeSubscriptionId = $null
+            Write-Verbose "DashboardScreen unsubscribed from data change events"
         }
+        
+        # Call base OnExit
+        ([Screen]$this).OnExit()
     }
 
     hidden [void] _RefreshData([object]$dataManager) {
         if(-not $dataManager) {
-            Write-Warning "DashboardScreen: DataManager service not found."
+            Write-Verbose "DashboardScreen: DataManager service not found."
             $this._totalTasks = 0
             $this._completedTasks = 0
             $this._pendingTasks = 0
@@ -137,19 +157,27 @@ class DashboardScreen : Screen {
         $panel = $this._summaryPanel
         if (-not $panel) { return }
         
+        # Clear children
         $panel.Children.Clear()
-        $y = 0
-        $panel.AddChild(([LabelComponent]::new("SummaryHeader").SetText("Task Overview").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Primary" })))
-        $panel.AddChild(([LabelComponent]::new("SummarySeparator").SetText(('─' * [Math]::Max(0, $panel.ContentWidth - 2))).SetPosition(1, $y++)))
-        $y++
-        $panel.AddChild(([LabelComponent]::new("TotalTasksLabel").SetText("Total Tasks:    $($this._totalTasks)").SetPosition(1, $y++)))
-        $panel.AddChild(([LabelComponent]::new("CompletedTasksLabel").SetText("Completed:      $($this._completedTasks)").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Success" })))
-        $panel.AddChild(([LabelComponent]::new("PendingTasksLabel").SetText("Pending:        $($this._pendingTasks)").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Warning" })))
+
+        $buffer = $panel.GetBuffer()
+        $contentX = $panel.ContentX
+        $contentY = $panel.ContentY
+
+        # Simple text rendering using buffer
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Task Overview" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        if ($lineWidth -gt 0) {
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        }
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         
         # Draw progress bar
-        $buffer = $panel.GetBuffer()
         $percentage = if ($this._totalTasks -eq 0) { 0 } else { [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) }
-        $this._DrawProgressBar($buffer, $panel.ContentX + 1, $panel.ContentY + 7, 20, $percentage, "Overall Progress")
+        $this._DrawProgressBar($buffer, $contentX + 1, $contentY + 7, 20, $percentage, "Overall Progress")
         
         $panel.RequestRedraw()
     }
@@ -157,19 +185,29 @@ class DashboardScreen : Screen {
     hidden [void] _UpdateHelpPanel() {
         $panel = $this._helpPanel
         if (-not $panel) { return }
-
+        
+        # Clear children
         $panel.Children.Clear()
-        $y = 0
-        $panel.AddChild(([LabelComponent]::new("HelpHeader1").SetText("Welcome to Axiom-Phoenix!").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Primary" })))
-        $panel.AddChild(([LabelComponent]::new("HelpSeparator").SetText(('─' * [Math]::Max(0, $panel.ContentWidth - 2))).SetPosition(1, $y++)))
-        $y++
-        $panel.AddChild(([LabelComponent]::new("HelpLine1a").SetText("Press ").SetPosition(1, $y)))
-        $panel.AddChild(([LabelComponent]::new("HelpLine1b").SetText("Ctrl+P").SetPosition(7, $y).SetStyle(@{ FG = Get-ThemeColor "Accent" })))
-        $panel.AddChild(([LabelComponent]::new("HelpLine1c").SetText(" to open the").SetPosition(13, $y++)))
-        $panel.AddChild(([LabelComponent]::new("HelpLine2").SetText("Command Palette.").SetPosition(1, $y)))
-        $y += 2
-        $panel.AddChild(([LabelComponent]::new("HelpLine3").SetText("All navigation and actions are").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Subtle" })))
-        $panel.AddChild(([LabelComponent]::new("HelpLine4").SetText("now available from there.").SetPosition(1, $y).SetStyle(@{ FG = Get-ThemeColor "Subtle" })))
+        
+        $paletteHotkey = "Ctrl+P"
+        
+        $buffer = $panel.GetBuffer()
+        $contentX = $panel.ContentX
+        $contentY = $panel.ContentY
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 0) -Text "Welcome to Axiom-Phoenix!" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        if ($lineWidth -gt 0) {
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        }
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Press " -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 7) -Y ($contentY + 3) -Text $paletteHotkey -Style @{ FG = Get-ThemeColor -ColorName "Accent" -DefaultColor "#FF00FF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 7 + $paletteHotkey.Length) -Y ($contentY + 3) -Text " to open the" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Command Palette." -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 6) -Text "All navigation and actions are" -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "now available from there." -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         
         $panel.RequestRedraw()
     }
@@ -177,16 +215,25 @@ class DashboardScreen : Screen {
     hidden [void] _UpdateStatusPanel() {
         $panel = $this._statusPanel
         if (-not $panel) { return }
-
+        
+        # Clear children
         $panel.Children.Clear()
-        $y = 0
+
         $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
-        $panel.AddChild(([LabelComponent]::new("StatusHeader").SetText("Environment").SetPosition(1, $y++).SetStyle(@{ FG = Get-ThemeColor "Primary" })))
-        $panel.AddChild(([LabelComponent]::new("StatusSeparator").SetText(('─' * [Math]::Max(0, $panel.ContentWidth - 2))).SetPosition(1, $y++)))
-        $y++
-        $panel.AddChild(([LabelComponent]::new("PSVersionLabel").SetText("PowerShell Version: $($global:PSVersionTable.PSVersion)").SetPosition(1, $y++)))
-        $panel.AddChild(([LabelComponent]::new("MemUsageLabel").SetText("Memory Usage: ${memoryMB} MB").SetPosition(1, $y++)))
-        $panel.AddChild(([LabelComponent]::new("HostLabel").SetText("Host: $($global:Host.Name)").SetPosition(1, $y++)))
+
+        $buffer = $panel.GetBuffer()
+        $contentX = $panel.ContentX
+        $contentY = $panel.ContentY
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Environment" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
+        if ($lineWidth -gt 0) {
+            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        }
+        
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "PowerShell Version: $($global:PSVersionTable.PSVersion)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Memory Usage: ${memoryMB} MB" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Host: $($global:Host.Name)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         
         $panel.RequestRedraw()
     }
@@ -196,29 +243,29 @@ class DashboardScreen : Screen {
         $emptyWidth = $width - $filledWidth
         
         # Draw label
-        Write-TuiText -Buffer $buffer -X $x -Y $y -Text $label -Style @{ FG = Get-ThemeColor("Foreground"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X $x -Y $y -Text $label -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         
         # Draw progress bar
         $progressY = $y + 1
-        Write-TuiText -Buffer $buffer -X $x -Y $progressY -Text "[" -Style @{ FG = Get-ThemeColor("component.border"); BG = Get-ThemeColor("Background") }
+        Write-TuiText -Buffer $buffer -X $x -Y $progressY -Text "[" -Style @{ FG = Get-ThemeColor -ColorName "component.border" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         
         if ($filledWidth -gt 0) {
             Write-TuiText -Buffer $buffer -X ($x + 1) -Y $progressY -Text ("█" * $filledWidth) `
-                -Style @{ FG = Get-ThemeColor("Success"); BG = Get-ThemeColor("Background") }
+                -Style @{ FG = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         }
         
         if ($emptyWidth -gt 0) {
             Write-TuiText -Buffer $buffer -X ($x + 1 + $filledWidth) -Y $progressY -Text ("░" * $emptyWidth) `
-                -Style @{ FG = Get-ThemeColor("Subtle"); BG = Get-ThemeColor("Background") }
+                -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         }
         
         Write-TuiText -Buffer $buffer -X ($x + 1 + $width) -Y $progressY -Text "]" `
-            -Style @{ FG = Get-ThemeColor("component.border"); BG = Get-ThemeColor("Background") }
+            -Style @{ FG = Get-ThemeColor -ColorName "component.border" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         
         # Draw percentage
         $percentText = " $([int]$percentage)%"
         Write-TuiText -Buffer $buffer -X ($x + $width + 3) -Y $progressY -Text $percentText `
-            -Style @{ FG = Get-ThemeColor("Info"); BG = Get-ThemeColor("Background") }
+            -Style @{ FG = Get-ThemeColor -ColorName "Info" -DefaultColor "#00BFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
     }
 
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
@@ -226,6 +273,12 @@ class DashboardScreen : Screen {
         # Input not handled
     }
 }
+
+#endregion
+#<!-- END_PAGE: ASC.001 -->
+
+#<!-- PAGE: ASC.002 - TaskListScreen Class -->
+#region TaskListScreen Class
 
 class TaskListScreen : Screen {
     #region UI Components
@@ -242,13 +295,14 @@ class TaskListScreen : Screen {
     hidden [string] $_filterText = ""
     hidden [TaskStatus] $_filterStatus = $null
     hidden [TaskPriority] $_filterPriority = $null
+    hidden [string] $_taskChangeSubscriptionId = $null # Store event subscription ID
     #endregion
 
     TaskListScreen([object]$serviceContainer) : base("TaskListScreen", $serviceContainer) {}
 
     [void] Initialize() {
         if (-not $this.ServiceContainer) {
-            Write-Warning "TaskListScreen.Initialize: ServiceContainer is null"
+            Write-Verbose "TaskListScreen.Initialize: ServiceContainer is null"
             return
         }
         
@@ -294,17 +348,47 @@ class TaskListScreen : Screen {
     }
 
     [void] OnEnter() {
+        # Subscribe to data change events for reactive updates
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            # Create handler that properly captures $this
+            $thisScreen = $this
+            $handler = {
+                param($eventData)
+                Write-Verbose "TaskListScreen received Tasks.Changed event. Refreshing tasks."
+                $thisScreen._RefreshTasks()
+                $thisScreen._UpdateDisplay()
+            }.GetNewClosure()
+            
+            # Store subscription ID for later cleanup
+            $this._taskChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
+            Write-Verbose "TaskListScreen subscribed to Tasks.Changed events"
+        }
+        
         if ($this.ServiceContainer) {
             $this._RefreshTasks()
         }
         
         $this.RequestRedraw()
     }
+    
+    [void] OnExit() {
+        # Unsubscribe from data change events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager -and $this._taskChangeSubscriptionId) {
+            $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
+            $this._taskChangeSubscriptionId = $null
+            Write-Verbose "TaskListScreen unsubscribed from Tasks.Changed events"
+        }
+        
+        # Call base OnExit if needed
+        ([Screen]$this).OnExit()
+    }
 
     hidden [void] _RefreshTasks() {
         $dataManager = $this.ServiceContainer.GetService("DataManager")
         if (-not $dataManager) {
-            Write-Warning "TaskListScreen: DataManager service not found"
+            Write-Verbose "TaskListScreen: DataManager service not found"
             return
         }
         
@@ -376,7 +460,7 @@ class TaskListScreen : Screen {
             $noTasksLabel.X = 2
             $noTasksLabel.Y = 2
             $noTasksLabel.Text = "No tasks found."
-            $noTasksLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $noTasksLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
             $panel.AddChild($noTasksLabel)
             $panel.RequestRedraw()
             return
@@ -395,7 +479,7 @@ class TaskListScreen : Screen {
             
             # Set background based on selection
             $is_selected = ($i -eq $this._selectedIndex)
-            $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected.background") } else { Get-ThemeColor("Background") }
+            $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF" } else { Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
             
             # Create a Label component for the task text
             $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
@@ -431,7 +515,7 @@ class TaskListScreen : Screen {
             $taskLabel.Text = $taskLine
             
             # Set text color based on selection
-            $taskLabel.ForegroundColor = if ($is_selected) { Get-ThemeColor("list.item.selected") } else { Get-ThemeColor("list.item.normal") }
+            $taskLabel.ForegroundColor = if ($is_selected) { Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" } else { Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" }
             
             # Add the label to the task panel
             $taskPanel.AddChild($taskLabel)
@@ -459,7 +543,7 @@ class TaskListScreen : Screen {
         $titleLabel.X = 1
         $titleLabel.Y = $y++
         $titleLabel.Text = "Title: $($task.Title)"
-        $titleLabel.ForegroundColor = Get-ThemeColor("Foreground")
+        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
         $panel.AddChild($titleLabel)
         
         # Status label
@@ -467,7 +551,7 @@ class TaskListScreen : Screen {
         $statusLabel.X = 1
         $statusLabel.Y = $y++
         $statusLabel.Text = "Status: $($task.Status)"
-        $statusLabel.ForegroundColor = Get-ThemeColor("Info")
+        $statusLabel.ForegroundColor = Get-ThemeColor -ColorName "Info" -DefaultColor "#00BFFF"
         $panel.AddChild($statusLabel)
         
         # Priority label
@@ -475,7 +559,7 @@ class TaskListScreen : Screen {
         $priorityLabel.X = 1
         $priorityLabel.Y = $y++
         $priorityLabel.Text = "Priority: $($task.Priority)"
-        $priorityLabel.ForegroundColor = Get-ThemeColor("Warning")
+        $priorityLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
         $panel.AddChild($priorityLabel)
         
         # Progress label
@@ -483,7 +567,7 @@ class TaskListScreen : Screen {
         $progressLabel.X = 1
         $progressLabel.Y = $y++
         $progressLabel.Text = "Progress: $($task.Progress)%"
-        $progressLabel.ForegroundColor = Get-ThemeColor("Success")
+        $progressLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
         $panel.AddChild($progressLabel)
         
         $y++ # Empty line
@@ -493,7 +577,7 @@ class TaskListScreen : Screen {
         $descHeaderLabel.X = 1
         $descHeaderLabel.Y = $y++
         $descHeaderLabel.Text = "Description:"
-        $descHeaderLabel.ForegroundColor = Get-ThemeColor("Subtle")
+        $descHeaderLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
         $panel.AddChild($descHeaderLabel)
         
         if (-not [string]::IsNullOrEmpty($task.Description)) {
@@ -511,7 +595,7 @@ class TaskListScreen : Screen {
                         $descLineLabel.X = 1
                         $descLineLabel.Y = $y++
                         $descLineLabel.Text = $line
-                        $descLineLabel.ForegroundColor = Get-ThemeColor("Foreground")
+                        $descLineLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
                         $panel.AddChild($descLineLabel)
                         $lineIndex++
                     }
@@ -527,7 +611,7 @@ class TaskListScreen : Screen {
                 $descLineLabel.X = 1
                 $descLineLabel.Y = $y++
                 $descLineLabel.Text = $line
-                $descLineLabel.ForegroundColor = Get-ThemeColor("Foreground")
+                $descLineLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
                 $panel.AddChild($descLineLabel)
             }
         } else {
@@ -535,7 +619,7 @@ class TaskListScreen : Screen {
             $noDescLabel.X = 1
             $noDescLabel.Y = $y++
             $noDescLabel.Text = "(No description)"
-            $noDescLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $noDescLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
             $panel.AddChild($noDescLabel)
         }
         
@@ -550,7 +634,7 @@ class TaskListScreen : Screen {
         $panel.Children.Clear()
         
         # Set panel background color
-        $panel.BackgroundColor = Get-ThemeColor("status.bar.bg")
+        $panel.BackgroundColor = Get-ThemeColor -ColorName "status.bar.bg" -DefaultColor "#1E1E1E"
         
         # Status text label
         $statusText = "Tasks: $($this._tasks.Count) | Selected: $($this._selectedIndex + 1)"
@@ -562,7 +646,7 @@ class TaskListScreen : Screen {
         $statusLabel.X = 0
         $statusLabel.Y = 0
         $statusLabel.Text = $statusText
-        $statusLabel.ForegroundColor = Get-ThemeColor("status.bar.fg")
+        $statusLabel.ForegroundColor = Get-ThemeColor -ColorName "status.bar.fg" -DefaultColor "#FFFFFF"
         $panel.AddChild($statusLabel)
         
         # Keyboard hints label
@@ -573,7 +657,7 @@ class TaskListScreen : Screen {
             $hintsLabel.X = $hintsX
             $hintsLabel.Y = 0
             $hintsLabel.Text = $hints
-            $hintsLabel.ForegroundColor = Get-ThemeColor("Subtle")
+            $hintsLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
             $panel.AddChild($hintsLabel)
         }
         
@@ -665,3 +749,13 @@ class TaskListScreen : Screen {
 }
 
 #endregion
+#<!-- END_PAGE: ASC.002 -->
+
+#<!-- PAGE: ASC.003 - Screen Utilities -->
+#region Screen Utilities
+
+# No specific screen utility functions currently implemented
+# This section reserved for future screen helper functions
+
+#endregion
+#<!-- END_PAGE: ASC.003 -->
