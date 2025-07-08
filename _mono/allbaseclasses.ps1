@@ -62,10 +62,10 @@ class TuiAnsiHelper {
 
         # Style attributes
         if ($attributes) {
-            if ([bool]($attributes.Bold ?? $false)) { $sequences.Add("1") }
-            if ([bool]($attributes.Italic ?? $false)) { $sequences.Add("3") }
-            if ([bool]($attributes.Underline ?? $false)) { $sequences.Add("4") }
-            if ([bool]($attributes.Strikethrough ?? $false)) { $sequences.Add("9") }
+            if ($attributes.ContainsKey('Bold') -and [bool]$attributes['Bold']) { $sequences.Add("1") }
+            if ($attributes.ContainsKey('Italic') -and [bool]$attributes['Italic']) { $sequences.Add("3") }
+            if ($attributes.ContainsKey('Underline') -and [bool]$attributes['Underline']) { $sequences.Add("4") }
+            if ($attributes.ContainsKey('Strikethrough') -and [bool]$attributes['Strikethrough']) { $sequences.Add("9") }
         }
 
         if ($sequences.Count -eq 0) { return "" }
@@ -260,13 +260,14 @@ class TuiBuffer {
         }
         
         # Extract properties from the style object, providing safe defaults (now expecting hex colors)
-        $fg = $style.FG ?? "#FFFFFF" # Default Foreground hex
-        $bg = $style.BG ?? "#000000" # Default Background hex
-        $bold = [bool]($style.Bold ?? $false)
-        $italic = [bool]($style.Italic ?? $false)
-        $underline = [bool]($style.Underline ?? $false)
-        $strikethrough = [bool]($style.Strikethrough ?? $false) # NEW
-        $zIndex = [int]($style.ZIndex ?? 0)
+        # Use hashtable indexing syntax to avoid "property not found" errors
+        $fg = if ($style.ContainsKey('FG')) { $style['FG'] } else { "#FFFFFF" } # Default Foreground hex
+        $bg = if ($style.ContainsKey('BG')) { $style['BG'] } else { "#000000" } # Default Background hex
+        $bold = if ($style.ContainsKey('Bold')) { [bool]$style['Bold'] } else { $false }
+        $italic = if ($style.ContainsKey('Italic')) { [bool]$style['Italic'] } else { $false }
+        $underline = if ($style.ContainsKey('Underline')) { [bool]$style['Underline'] } else { $false }
+        $strikethrough = if ($style.ContainsKey('Strikethrough')) { [bool]$style['Strikethrough'] } else { $false }
+        $zIndex = if ($style.ContainsKey('ZIndex')) { [int]$style['ZIndex'] } else { 0 }
 
         $currentX = $x
         foreach ($char in $text.ToCharArray()) {

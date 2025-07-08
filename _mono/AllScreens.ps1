@@ -34,10 +34,10 @@ class DashboardScreen : Screen {
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
     [void] Initialize() {
-        Write-Host "DashboardScreen.Initialize called. Screen size: $($this.Width)x$($this.Height)" -ForegroundColor Green
+        Write-Verbose "DashboardScreen.Initialize called. Screen size: $($this.Width)x$($this.Height)"
         
         if (-not $this.ServiceContainer) {
-            Write-Warning "DashboardScreen.Initialize: ServiceContainer is null"
+            Write-Verbose "DashboardScreen.Initialize: ServiceContainer is null"
             return
         }
         
@@ -81,11 +81,13 @@ class DashboardScreen : Screen {
         # Subscribe to data change events for reactive updates
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager) {
+            # Create handler that properly captures $this
+            $thisScreen = $this
             $handler = {
                 param($eventData)
                 Write-Verbose "DashboardScreen received data change event. Refreshing..."
-                $dataManager = $this.ServiceContainer?.GetService("DataManager")
-                $this._RefreshData($dataManager)
+                $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
+                $thisScreen._RefreshData($dataManager)
             }.GetNewClosure()
             
             # Subscribe to both task and project changes
@@ -102,7 +104,7 @@ class DashboardScreen : Screen {
         if ($this.ServiceContainer) {
             $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
         } else {
-            Write-Warning "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
+            Write-Verbose "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
             $this._RefreshData($null)
         }
         
@@ -125,7 +127,7 @@ class DashboardScreen : Screen {
 
     hidden [void] _RefreshData([object]$dataManager) {
         if(-not $dataManager) {
-            Write-Warning "DashboardScreen: DataManager service not found."
+            Write-Verbose "DashboardScreen: DataManager service not found."
             $this._totalTasks = 0
             $this._completedTasks = 0
             $this._pendingTasks = 0
@@ -300,7 +302,7 @@ class TaskListScreen : Screen {
 
     [void] Initialize() {
         if (-not $this.ServiceContainer) {
-            Write-Warning "TaskListScreen.Initialize: ServiceContainer is null"
+            Write-Verbose "TaskListScreen.Initialize: ServiceContainer is null"
             return
         }
         
@@ -349,13 +351,13 @@ class TaskListScreen : Screen {
         # Subscribe to data change events for reactive updates
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager) {
-            # Use a scriptblock that properly captures $this context
+            # Create handler that properly captures $this
+            $thisScreen = $this
             $handler = {
                 param($eventData)
-                # The $this context is the TaskListScreen instance
                 Write-Verbose "TaskListScreen received Tasks.Changed event. Refreshing tasks."
-                $this._RefreshTasks()
-                $this._UpdateDisplay()
+                $thisScreen._RefreshTasks()
+                $thisScreen._UpdateDisplay()
             }.GetNewClosure()
             
             # Store subscription ID for later cleanup
@@ -386,7 +388,7 @@ class TaskListScreen : Screen {
     hidden [void] _RefreshTasks() {
         $dataManager = $this.ServiceContainer.GetService("DataManager")
         if (-not $dataManager) {
-            Write-Warning "TaskListScreen: DataManager service not found"
+            Write-Verbose "TaskListScreen: DataManager service not found"
             return
         }
         

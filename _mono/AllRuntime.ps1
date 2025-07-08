@@ -197,7 +197,7 @@ function Stop-TuiEngine {
                 $navService.CurrentScreen.Cleanup()
             }
             catch {
-                Write-Warning "Error cleaning up current screen: $_"
+                Write-Verbose "Error cleaning up current screen: $_"
             }
         }
         
@@ -209,7 +209,7 @@ function Stop-TuiEngine {
                     $service.Cleanup()
                 }
                 catch {
-                    Write-Warning "Error cleaning up service: $_"
+                    Write-Verbose "Error cleaning up service: $_"
                 }
             }
         }
@@ -280,7 +280,7 @@ function Invoke-TuiRender {
         
         # Ensure compositor buffer exists
         if ($null -eq $global:TuiState.CompositorBuffer) {
-            Write-Warning "Compositor buffer is null, skipping render"
+            Write-Verbose "Compositor buffer is null, skipping render"
             return
         }
         
@@ -306,7 +306,7 @@ function Invoke-TuiRender {
                     $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
                 }
                 else {
-                    Write-Warning "Screen buffer is null for $($currentScreenToRender.Name)"
+                    Write-Verbose "Screen buffer is null for $($currentScreenToRender.Name)"
                 }
             }
             catch {
@@ -328,7 +328,7 @@ function Invoke-TuiRender {
                     }
                 }
                 catch {
-                    Write-Warning "Error rendering command palette: $_"
+                    Write-Verbose "Error rendering command palette: $_"
                 }
             }
             
@@ -354,7 +354,7 @@ function Invoke-TuiRender {
         
         # Force full redraw on first frame by making previous buffer different
         if ($global:TuiState.FrameCount -eq 0) {
-            Write-Host "First frame - initializing previous buffer for differential rendering" -ForegroundColor Green
+            Write-Verbose "First frame - initializing previous buffer for differential rendering"
             # Fill previous buffer with different content to force full redraw
             for ($y = 0; $y -lt $global:TuiState.PreviousCompositorBuffer.Height; $y++) {
                 for ($x = 0; $x -lt $global:TuiState.PreviousCompositorBuffer.Width; $x++) {
@@ -408,7 +408,7 @@ function Render-DifferentialBuffer {
         
         # Ensure both buffers exist
         if ($null -eq $current -or $null -eq $previous) {
-            Write-Warning "Compositor buffers not initialized, skipping differential render"
+            Write-Verbose "Compositor buffers not initialized, skipping differential render"
             return
         }
         
@@ -444,7 +444,7 @@ function Render-DifferentialBuffer {
         
         # Log changes on first few frames
         if ($global:TuiState.FrameCount -lt 5) {
-            Write-Host "Frame $($global:TuiState.FrameCount): $changeCount cells changed" -ForegroundColor Cyan
+            Write-Verbose "Frame $($global:TuiState.FrameCount): $changeCount cells changed"
         }
         
         # Reset styling at end
@@ -525,7 +525,7 @@ function Process-TuiInput {
                         # Execute other actions via ActionService
                         if ($global:TuiState.Services.ActionService) {
                             try {
-                                $global:TuiState.Services.ActionService.ExecuteAction($action)
+                                $global:TuiState.Services.ActionService.ExecuteAction($action, @{})
                                 $global:TuiState.IsDirty = $true
                                 return
                             }

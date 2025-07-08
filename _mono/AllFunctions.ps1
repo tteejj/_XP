@@ -53,11 +53,11 @@ function Write-TuiBox {
     }
 
     # Extract properties from the style object with safe fallbacks.
-    $borderStyleName = $Style.BorderStyle ?? "Single"
-    $borderColor = $Style.BorderFG ?? "#808080" # Default border color (gray hex)
-    $bgColor = $Style.BG ?? "#000000"           # Default background color (black hex)
-    $titleColor = $Style.TitleFG ?? $borderColor # Title defaults to border color
-    $fillChar = [char]($Style.FillChar ?? ' ')   # Optional fill character
+    $borderStyleName = if ($Style.ContainsKey('BorderStyle')) { $Style['BorderStyle'] } else { "Single" }
+    $borderColor = if ($Style.ContainsKey('BorderFG')) { $Style['BorderFG'] } else { "#808080" } # Default border color (gray hex)
+    $bgColor = if ($Style.ContainsKey('BG')) { $Style['BG'] } else { "#000000" }           # Default background color (black hex)
+    $titleColor = if ($Style.ContainsKey('TitleFG')) { $Style['TitleFG'] } else { $borderColor } # Title defaults to border color
+    $fillChar = if ($Style.ContainsKey('FillChar')) { [char]$Style['FillChar'] } else { ' ' }   # Optional fill character
 
     $borders = Get-TuiBorderChars -Style $borderStyleName
     
@@ -67,8 +67,8 @@ function Write-TuiBox {
     
     $titleTextStyle = @{ FG = $titleColor; BG = $bgColor }
     # Merge any additional title style overrides (e.g., Bold = $true for title)
-    if ($Style.TitleStyle) {
-        foreach ($key in $Style.TitleStyle.Keys) { $titleTextStyle[$key] = $Style.TitleStyle[$key] }
+    if ($Style.ContainsKey('TitleStyle') -and $Style['TitleStyle']) {
+        foreach ($key in $Style['TitleStyle'].Keys) { $titleTextStyle[$key] = $Style['TitleStyle'][$key] }
     }
 
     # Fill background of the entire box area first

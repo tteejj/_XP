@@ -2282,8 +2282,9 @@ class TextBox : UIElement {
     }
 
     [void] Focus() {
-        if ($this.Parent -and $this.Parent._focusManager) {
-            $this.Parent._focusManager.SetFocus($this)
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this)
         }
     }
 
