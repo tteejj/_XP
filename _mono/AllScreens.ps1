@@ -160,24 +160,78 @@ class DashboardScreen : Screen {
         # Clear children
         $panel.Children.Clear()
 
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
-
-        # Simple text rendering using buffer
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Task Overview" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        # Create label components instead of direct buffer drawing
+        $titleLabel = [LabelComponent]::new("SummaryTitle")
+        $titleLabel.Text = "Task Overview"
+        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
+        $titleLabel.X = 1
+        $titleLabel.Y = 0
+        $titleLabel.Width = $panel.ContentWidth - 2
+        $titleLabel.Height = 1
+        $panel.AddChild($titleLabel)
+        
+        $separatorLabel = [LabelComponent]::new("SummarySeparator")
         $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
-        if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        }
+        $separatorLabel.Text = if ($lineWidth -gt 0) { '─' * $lineWidth } else { "" }
+        $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $separatorLabel.X = 1
+        $separatorLabel.Y = 1
+        $separatorLabel.Width = $panel.ContentWidth - 2
+        $separatorLabel.Height = 1
+        $panel.AddChild($separatorLabel)
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Total Tasks:    $($this._totalTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Completed:      $($this._completedTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Pending:        $($this._pendingTasks)" -Style @{ FG = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $totalLabel = [LabelComponent]::new("TotalTasks")
+        $totalLabel.Text = "Total Tasks:    $($this._totalTasks)"
+        $totalLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $totalLabel.X = 1
+        $totalLabel.Y = 3
+        $totalLabel.Width = $panel.ContentWidth - 2
+        $totalLabel.Height = 1
+        $panel.AddChild($totalLabel)
         
-        # Draw progress bar
+        $completedLabel = [LabelComponent]::new("CompletedTasks")
+        $completedLabel.Text = "Completed:      $($this._completedTasks)"
+        $completedLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
+        $completedLabel.X = 1
+        $completedLabel.Y = 4
+        $completedLabel.Width = $panel.ContentWidth - 2
+        $completedLabel.Height = 1
+        $panel.AddChild($completedLabel)
+        
+        $pendingLabel = [LabelComponent]::new("PendingTasks")
+        $pendingLabel.Text = "Pending:        $($this._pendingTasks)"
+        $pendingLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+        $pendingLabel.X = 1
+        $pendingLabel.Y = 5
+        $pendingLabel.Width = $panel.ContentWidth - 2
+        $pendingLabel.Height = 1
+        $panel.AddChild($pendingLabel)
+        
+        # Create progress bar as labels
         $percentage = if ($this._totalTasks -eq 0) { 0 } else { [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) }
-        $this._DrawProgressBar($buffer, $contentX + 1, $contentY + 7, 20, $percentage, "Overall Progress")
+        $progressLabel = [LabelComponent]::new("ProgressLabel")
+        $progressLabel.Text = "Overall Progress: $percentage%"
+        $progressLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $progressLabel.X = 1
+        $progressLabel.Y = 7
+        $progressLabel.Width = $panel.ContentWidth - 2
+        $progressLabel.Height = 1
+        $panel.AddChild($progressLabel)
+        
+        # Progress bar visualization
+        $barWidth = 20
+        $filledWidth = [Math]::Floor($barWidth * $percentage / 100)
+        $emptyWidth = $barWidth - $filledWidth
+        $barText = "[" + ("█" * $filledWidth) + ("░" * $emptyWidth) + "]"
+        
+        $barLabel = [LabelComponent]::new("ProgressBar")
+        $barLabel.Text = $barText
+        $barLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
+        $barLabel.X = 1
+        $barLabel.Y = 8
+        $barLabel.Width = $panel.ContentWidth - 2
+        $barLabel.Height = 1
+        $panel.AddChild($barLabel)
         
         $panel.RequestRedraw()
     }
@@ -191,23 +245,64 @@ class DashboardScreen : Screen {
         
         $paletteHotkey = "Ctrl+P"
         
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
+        # Create label components for help panel
+        $welcomeLabel = [LabelComponent]::new("WelcomeLabel")
+        $welcomeLabel.Text = "Welcome to Axiom-Phoenix!"
+        $welcomeLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
+        $welcomeLabel.X = 1
+        $welcomeLabel.Y = 0
+        $welcomeLabel.Width = $panel.ContentWidth - 2
+        $welcomeLabel.Height = 1
+        $panel.AddChild($welcomeLabel)
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 0) -Text "Welcome to Axiom-Phoenix!" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
         if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+            $separatorLabel = [LabelComponent]::new("HelpSeparator")
+            $separatorLabel.Text = '─' * $lineWidth
+            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $separatorLabel.X = 1
+            $separatorLabel.Y = 1
+            $separatorLabel.Width = $panel.ContentWidth - 2
+            $separatorLabel.Height = 1
+            $panel.AddChild($separatorLabel)
         }
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "Press " -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 7) -Y ($contentY + 3) -Text $paletteHotkey -Style @{ FG = Get-ThemeColor -ColorName "Accent" -DefaultColor "#FF00FF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 7 + $paletteHotkey.Length) -Y ($contentY + 3) -Text " to open the" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Command Palette." -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        # Create multi-part label for the hotkey instruction
+        $instructionLabel1 = [LabelComponent]::new("Instruction1")
+        $instructionLabel1.Text = "Press $paletteHotkey to open the"
+        $instructionLabel1.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $instructionLabel1.X = 1
+        $instructionLabel1.Y = 3
+        $instructionLabel1.Width = $panel.ContentWidth - 2
+        $instructionLabel1.Height = 1
+        $panel.AddChild($instructionLabel1)
+        
+        $instructionLabel2 = [LabelComponent]::new("Instruction2")
+        $instructionLabel2.Text = "Command Palette."
+        $instructionLabel2.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $instructionLabel2.X = 1
+        $instructionLabel2.Y = 4
+        $instructionLabel2.Width = $panel.ContentWidth - 2
+        $instructionLabel2.Height = 1
+        $panel.AddChild($instructionLabel2)
 
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 6) -Text "All navigation and actions are" -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 7) -Text "now available from there." -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $infoLabel1 = [LabelComponent]::new("InfoLabel1")
+        $infoLabel1.Text = "All navigation and actions are"
+        $infoLabel1.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $infoLabel1.X = 1
+        $infoLabel1.Y = 6
+        $infoLabel1.Width = $panel.ContentWidth - 2
+        $infoLabel1.Height = 1
+        $panel.AddChild($infoLabel1)
+        
+        $infoLabel2 = [LabelComponent]::new("InfoLabel2")
+        $infoLabel2.Text = "now available from there."
+        $infoLabel2.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $infoLabel2.X = 1
+        $infoLabel2.Y = 7
+        $infoLabel2.Width = $panel.ContentWidth - 2
+        $infoLabel2.Height = 1
+        $panel.AddChild($infoLabel2)
         
         $panel.RequestRedraw()
     }
@@ -221,52 +316,58 @@ class DashboardScreen : Screen {
 
         $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
 
-        $buffer = $panel.GetBuffer()
-        $contentX = $panel.ContentX
-        $contentY = $panel.ContentY
+        # Create label components for status panel
+        $titleLabel = [LabelComponent]::new("StatusTitle")
+        $titleLabel.Text = "Environment"
+        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
+        $titleLabel.X = 1
+        $titleLabel.Y = 0
+        $titleLabel.Width = $panel.ContentWidth - 2
+        $titleLabel.Height = 1
+        $panel.AddChild($titleLabel)
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y $contentY -Text "Environment" -Style @{ FG = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
         $lineWidth = [Math]::Max(0, $panel.ContentWidth - 2)
         if ($lineWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 1) -Text ('─' * $lineWidth) -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+            $separatorLabel = [LabelComponent]::new("StatusSeparator")
+            $separatorLabel.Text = '─' * $lineWidth
+            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $separatorLabel.X = 1
+            $separatorLabel.Y = 1
+            $separatorLabel.Width = $panel.ContentWidth - 2
+            $separatorLabel.Height = 1
+            $panel.AddChild($separatorLabel)
         }
         
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 3) -Text "PowerShell Version: $($global:PSVersionTable.PSVersion)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 4) -Text "Memory Usage: ${memoryMB} MB" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        Write-TuiText -Buffer $buffer -X ($contentX + 1) -Y ($contentY + 5) -Text "Host: $($global:Host.Name)" -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
+        $versionLabel = [LabelComponent]::new("PSVersion")
+        $versionLabel.Text = "PowerShell Version: $($global:PSVersionTable.PSVersion)"
+        $versionLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $versionLabel.X = 1
+        $versionLabel.Y = 3
+        $versionLabel.Width = $panel.ContentWidth - 2
+        $versionLabel.Height = 1
+        $panel.AddChild($versionLabel)
+        
+        $memoryLabel = [LabelComponent]::new("MemoryUsage")
+        $memoryLabel.Text = "Memory Usage: ${memoryMB} MB"
+        $memoryLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $memoryLabel.X = 1
+        $memoryLabel.Y = 4
+        $memoryLabel.Width = $panel.ContentWidth - 2
+        $memoryLabel.Height = 1
+        $panel.AddChild($memoryLabel)
+        
+        $hostLabel = [LabelComponent]::new("HostName")
+        $hostLabel.Text = "Host: $($global:Host.Name)"
+        $hostLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $hostLabel.X = 1
+        $hostLabel.Y = 5
+        $hostLabel.Width = $panel.ContentWidth - 2
+        $hostLabel.Height = 1
+        $panel.AddChild($hostLabel)
         
         $panel.RequestRedraw()
     }
-    
-    hidden [void] _DrawProgressBar([TuiBuffer]$buffer, [int]$x, [int]$y, [int]$width, [float]$percentage, [string]$label) {
-        $filledWidth = [int]($width * ($percentage / 100))
-        $emptyWidth = $width - $filledWidth
-        
-        # Draw label
-        Write-TuiText -Buffer $buffer -X $x -Y $y -Text $label -Style @{ FG = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        
-        # Draw progress bar
-        $progressY = $y + 1
-        Write-TuiText -Buffer $buffer -X $x -Y $progressY -Text "[" -Style @{ FG = Get-ThemeColor -ColorName "component.border" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        
-        if ($filledWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($x + 1) -Y $progressY -Text ("█" * $filledWidth) `
-                -Style @{ FG = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        }
-        
-        if ($emptyWidth -gt 0) {
-            Write-TuiText -Buffer $buffer -X ($x + 1 + $filledWidth) -Y $progressY -Text ("░" * $emptyWidth) `
-                -Style @{ FG = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        }
-        
-        Write-TuiText -Buffer $buffer -X ($x + 1 + $width) -Y $progressY -Text "]" `
-            -Style @{ FG = Get-ThemeColor -ColorName "component.border" -DefaultColor "#808080"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-        
-        # Draw percentage
-        $percentText = " $([int]$percentage)%"
-        Write-TuiText -Buffer $buffer -X ($x + $width + 3) -Y $progressY -Text $percentText `
-            -Style @{ FG = Get-ThemeColor -ColorName "Info" -DefaultColor "#00BFFF"; BG = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-    }
+
 
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         # Dashboard doesn't handle specific input - all navigation via command palette

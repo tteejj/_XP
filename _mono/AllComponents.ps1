@@ -2193,7 +2193,9 @@ class ListBox : UIElement {
                 $scrollbarX = $this.Width - 2
                 $scrollbarHeight = $contentHeight
                 $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this.Items.Count))
-                $thumbPos = [int]($scrollbarHeight * $this.ScrollOffset / $this.Items.Count)
+                $thumbPos = if ($this.Items.Count -gt $scrollbarHeight) {
+                    [int](($scrollbarHeight - $thumbSize) * $this.ScrollOffset / ($this.Items.Count - $scrollbarHeight))
+                } else { 0 }
                 
                 $scrollbarColor = Get-ThemeColor "list.scrollbar"
                 for ($i = 0; $i -lt $scrollbarHeight; $i++) {
@@ -2451,33 +2453,60 @@ class CommandPalette : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
+        # Handle global escape
         if ($key.Key -eq [ConsoleKey]::Escape) {
             $this.Hide()
             return $true
         }
         
+        # Handle Enter for action selection - but only if list has focus
         if ($key.Key -eq [ConsoleKey]::Enter -and $this._listBox.SelectedIndex -ge 0) {
-            $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-            if ($selectedAction) {
-                $this.Hide()
-                if ($this.OnSelect) {
-                    & $this.OnSelect $selectedAction
+            # Check if we are in the listbox (not in search)
+            $focusedComponent = $global:TuiState.FocusedComponent
+            if ($focusedComponent -eq $this._listBox -or $focusedComponent -eq $this) {
+                $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                if ($selectedAction) {
+                    $this.Hide()
+                    if ($this.OnSelect) {
+                        & $this.OnSelect $selectedAction
+                    }
+                    else {
+                        # Execute action directly - FIX: Pass empty hashtable as second parameter
+                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                    }
                 }
-                else {
-                    # Execute action directly - FIX: Pass empty hashtable as second parameter
-                    $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                }
+                return $true
             }
-            return $true
         }
         
-        # Pass input to search box or list box
-        if ($key.Key -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, 
-                          [ConsoleKey]::PageUp, [ConsoleKey]::PageDown)) {
-            return $this._listBox.HandleInput($key)
-        }
-        else {
-            return $this._searchBox.HandleInput($key)
+        # Proper input delegation with explicit switch
+        switch ($key.Key) {
+            # Navigation keys go to list box
+            ([ConsoleKey]::UpArrow) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::DownArrow) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::PageUp) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::PageDown) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::Home) { return $this._listBox.HandleInput($key) }
+            ([ConsoleKey]::End) { return $this._listBox.HandleInput($key) }
+            
+            # Tab to switch focus between search and list
+            ([ConsoleKey]::Tab) {
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    $currentFocus = $focusManager.FocusedComponent
+                    if ($currentFocus -eq $this._searchBox._textBox) {
+                        $focusManager.SetFocus($this._listBox)
+                    } else {
+                        $focusManager.SetFocus($this._searchBox._textBox)
+                    }
+                }
+                return $true
+            }
+            
+            # All other keys (including Enter when in search box) go to search
+            default {
+                return $this._searchBox.HandleInput($key)
+            }
         }
     }
 

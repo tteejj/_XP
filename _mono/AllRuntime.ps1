@@ -368,23 +368,12 @@ function Invoke-TuiRender {
         Render-DifferentialBuffer
         
         # Swap buffers for next frame - MUST happen AFTER rendering
-        # Create proper copies to avoid reference issues
-        $tempBuffer = [TuiBuffer]::new($global:TuiState.CompositorBuffer.Width, $global:TuiState.CompositorBuffer.Height, "TempBuffer")
-        
-        # Copy current compositor to temp
-        for ($y = 0; $y -lt $global:TuiState.CompositorBuffer.Height; $y++) {
-            for ($x = 0; $x -lt $global:TuiState.CompositorBuffer.Width; $x++) {
-                $cell = $global:TuiState.CompositorBuffer.GetCell($x, $y)
-                $tempBuffer.SetCell($x, $y, [TuiCell]::new($cell))
-            }
-        }
+        # Use the efficient Clone() method instead of manual copying
+        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer.Clone()
         
         # Clear compositor for next frame
         $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-        
-        # Update previous buffer with what was just rendered
-        $global:TuiState.PreviousCompositorBuffer = $tempBuffer
         
         $renderTimer.Stop()
         
