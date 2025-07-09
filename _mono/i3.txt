@@ -1,0 +1,399 @@
+Excellent clarification! That's a much more direct and powerful evolution of the current framework. You're thinking of a "desktop" or "dashboard" model where your existing `Screen` classes act as independent, movable, and resizable "windows" or "widgets" on a single canvas.
+
+This is a fantastic idea and is much closer to the existing architecture. We don't need a complex tiling tree; instead, we can use an "Adapter" pattern. We'll create a special panel that can *host* a screen, and then we'll create a new top-level `DesktopScreen` to manage these hosts.
+
+Here’s what it would take to achieve this, broken down into a concrete, step-by-step plan.
+
+---
+
+### The Core Concept: The `ScreenHostPanel`
+
+The key is to create a new component that acts as an adapter. It will look like a `Panel` from the outside, but it will contain a fully-functional `Screen` on the inside. This `ScreenHostPanel` will be responsible for tricking the hosted screen into thinking it has the whole display to itself, while also managing its lifecycle.
+
+### Phase 1: Create the `ScreenHostPanel` Component
+
+This is the most important new piece. We will add this to `AllComponents.ps1`.
+
+```powershell
+# In AllComponents.ps1, likely in the "Panel Components" section
+
+# ===== CLASS: ScreenHostPanel =====
+# Module: panels-class
+# Dependencies: Panel, Screen
+# Purpose: A panel that can host and manage a Screen object as a child "widget".
+class ScreenHostPanel : Panel {
+    [Screen]$HostedScreen
+    [bool]$IsActiveHost = $false
+
+    ScreenHostPanel([string]$name, [Screen]$screenToHost) : base($name) {
+        if ($null -eq $screenToHost) { throw "screenToHost cannot be null" }
+        
+        $this.HostedScreen = $screenToHost
+        $this.IsFocusable = $true # The host itself must be focusable
+        $this.Title = $screenToHost.Name
+    }
+
+    # Override AddedToParent to initialize the hosted screen
+    [void] AddedToParent() {
+        if ($this.HostedScreen -and -not $this.HostedScreen._isInitialized) {
+            # Initialize the screen and tell it its boundaries are our content area
+            $this.HostedScreen.Initialize()
+            $this.HostedScreen.Resize($this.ContentWidth, $this.ContentHeight)
+            $this.HostedScreen._isInitialized = $true
+            $this.HostedScreen.OnEnter() # Trigger its entry lifecycle
+        }
+    }
+
+    # Override OnResize to pass the new size to the hosted screen
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        ([Panel]$this).OnResize($newWidth, $newHeight) # Call base resize first
+        if ($this.HostedScreen) {
+            # The hosted screen only lives within our content area
+            $this.HostedScreen.Resize($this.ContentWidth, $this.ContentHeight)
+        }
+    }
+
+    # The magic happens in OnRender
+    [void] OnRender() {
+        # 1. First, render the Panel itself (border, title, background)
+        # We can change the border color if this host is "active"
+        $originalBorderColor = $this.BorderColor
+        if ($this.IsActiveHost) {
+            $this.BorderColor = Get-ThemeColor -ColorName "Primary"
+        }
+        ([Panel]$this).OnRender()
+        $this.BorderColor = $originalBorderColor # Reset for next frame
+
+        # 2. Now, render the hosted screen. It will draw to its own _private_buffer.
+        if ($this.HostedScreen) {
+            $this.HostedScreen.Render() # This will call OnRender on the Dashboard/TaskList screen
+            
+            # 3. Get the hosted screen's buffer and blend it into our own buffer.
+            $screenBuffer = $this.HostedScreen.GetBuffer()
+            if ($screenBuffer) {
+                # Blend the screen's content into our content area
+                $this._private_buffer.BlendBuffer($screenBuffer, $this.ContentX, $this.ContentY)
+            }
+        }
+    }
+
+    # Override HandleInput to delegate to the hosted screen
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($this.IsActiveHost -and $this.HostedScreen) {
+            return $this.HostedScreen.HandleInput($keyInfo)
+        }
+        return $false # If not active, we don't handle input
+    }
+    
+    # Override Cleanup to ensure the hosted screen is cleaned up
+    [void] Cleanup() {
+        if ($this.HostedScreen) {
+            $this.HostedScreen.OnExit()
+            $this.HostedScreen.Cleanup()
+        }
+        ([Panel]$this).Cleanup()
+    }
+}
+```
+
+---
+
+### Phase 2: Create the `DesktopScreen`
+
+This new screen will be the main canvas. It won't have much logic of its own; its job is to contain and manage the `ScreenHostPanel`s.
+
+```powershell
+# In AllScreens.ps1
+
+class DesktopScreen : Screen {
+    hidden [System.Collections.Generic.List[ScreenHostPanel]]$_screenHosts
+    hidden [int]$_activeHostIndex = 0
+
+    DesktopScreen([object]$serviceContainer) : base("DesktopScreen", $serviceContainer) {}
+
+    [void] Initialize() {
+        $this._screenHosts = [System.Collections.Generic.List[ScreenHostPanel]]::new()
+        
+        # 1. Create instances of your existing screens
+        $dashboard = [DashboardScreen]::new($this.ServiceContainer)
+        $taskList = [TaskListScreen]::new($this.ServiceContainer)
+        
+        # 2. Wrap them in ScreenHostPanel objects
+        $dashboardHost = [ScreenHostPanel]::new("DashboardHost", $dashboard)
+        $taskListHost = [ScreenHostPanel]::new("TaskListHost", $taskList)
+        
+        # 3. Define their layout on the desktop
+        $dashboardHost.X = 1
+        $dashboardHost.Y = 1
+        $dashboardHost.Width = [Math]::Floor($this.Width * 0.5) - 2
+        $dashboardHost.Height = $this.Height - 2
+        
+        $taskListHost.X = $dashboardHost.X + $dashboardHost.Width + 1
+        $taskListHost.Y = 1
+        $taskListHost.Width = $this.Width - $taskListHost.X - 1
+        $taskListHost.Height = $this.Height - 2
+
+        # 4. Add the hosts to our list and as children of the DesktopScreen
+        $this._screenHosts.Add($dashboardHost)
+        $this._screenHosts.Add($taskListHost)
+        
+        $this.AddChild($dashboardHost)
+        $this.AddChild($taskListHost)
+        
+        # 5. Set the initial active host
+        $this._SetActiveHost(0)
+    }
+
+    hidden [void] _SetActiveHost([int]$index) {
+        if ($index -lt 0 -or $index -ge $this._screenHosts.Count) { return }
+
+        # Deactivate the old host
+        if ($this._screenHosts[$this._activeHostIndex]) {
+            $this._screenHosts[$this._activeHostIndex].IsActiveHost = $false
+        }
+        
+        # Activate the new one
+        $this._activeHostIndex = $index
+        $this._screenHosts[$this._activeHostIndex].IsActiveHost = $true
+        
+        # This is important for focus management
+        $this.SetFocus($this._screenHosts[$this._activeHostIndex])
+        
+        $this.RequestRedraw()
+    }
+
+    # The DesktopScreen's input handler is for managing the "windows"
+    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Use a key combo like Ctrl+Tab to cycle through the hosted screens
+        if ($keyInfo.Key -eq [ConsoleKey]::Tab -and $keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
+            $nextIndex = ($this._activeHostIndex + 1) % $this._screenHosts.Count
+            $this._SetActiveHost($nextIndex)
+            return # We handled this
+        }
+        
+        # Let the active host handle its own input
+        $activeHost = $this._screenHosts[$this._activeHostIndex]
+        if ($activeHost.HandleInput($keyInfo)) {
+            return
+        }
+    }
+    
+    # This is a new helper method needed for tab navigation within the active panel
+    [void] SetFocus([UIElement]$component) {
+        $focusManager = $this.ServiceContainer.GetService("FocusManager")
+        if ($focusManager) {
+            $focusManager.SetFocus($component)
+        }
+    }
+}
+```
+
+---
+
+### Phase 3: Enhance the `FocusManager`
+
+The standard `FocusManager.MoveFocus` won't work correctly because it traverses all children of the *current screen* (`DesktopScreen`). We need to tell it to only traverse the children of the *active host panel*.
+
+```powershell
+# In AllServices.ps1 -> FocusManager class
+
+# Modify the MoveFocus method
+[void] MoveFocus([bool]$reverse = $false) {
+    # Determine the root for our focus search
+    $focusRoot = $this.FocusedComponent
+    while ($focusRoot -and $focusRoot.Parent) {
+        # If the focused component is inside a ScreenHost, the host is our root.
+        if ($focusRoot -is [ScreenHostPanel]) {
+            break 
+        }
+        # Otherwise, keep going up until we find the root Screen.
+        $focusRoot = $focusRoot.Parent
+    }
+    # If we didn't find a specific root, default to the global current screen.
+    if (-not $focusRoot) {
+        $focusRoot = $global:TuiState.CurrentScreen
+    }
+
+    if (-not $focusRoot) { return }
+
+    # The rest of the method is the same, but starts its search from $focusRoot
+    $focusableComponents = [System.Collections.Generic.List[UIElement]]::new()
+    
+    # Helper to recursively find all focusable components within the focus root
+    function Find-Focusable([UIElement]$comp, [System.Collections.Generic.List[UIElement]]$list) {
+        # Don't add the root itself, only its descendants
+        foreach ($child in $comp.Children) {
+            if ($child -and $child.IsFocusable -and $child.Visible -and $child.Enabled) {
+                $list.Add($child)
+            }
+            if ($child.Children.Count -gt 0) {
+                Find-Focusable $child $list
+            }
+        }
+    }
+    
+    Find-Focusable $focusRoot $focusableComponents
+    
+    if ($focusableComponents.Count -eq 0) {
+        # No children to focus, keep focus on the root
+        $this.SetFocus($focusRoot)
+        return
+    }
+    
+    # Sort components by TabIndex, then Y, then X for consistent order
+    $sorted = $focusableComponents | Sort-Object { $_.TabIndex * 10000 + $_.GetAbsolutePosition().Y * 100 + $_.GetAbsolutePosition().X }
+
+    $currentIndex = -1
+    if ($this.FocusedComponent) {
+        for ($i = 0; $i -lt $sorted.Count; $i++) {
+            if ($sorted[$i] -eq $this.FocusedComponent) {
+                $currentIndex = $i
+                break
+            }
+        }
+    }
+    
+    $nextIndex = -1
+    if ($currentIndex -eq -1) {
+        # If current focus is the root, start at the beginning/end
+        $nextIndex = if ($reverse) { $sorted.Count - 1 } else { 0 }
+    } else {
+        if ($reverse) {
+            $nextIndex = ($currentIndex - 1 + $sorted.Count) % $sorted.Count
+        } else {
+            $nextIndex = ($currentIndex + 1) % $sorted.Count
+        }
+    }
+
+    $this.SetFocus($sorted[$nextIndex])
+}
+```
+
+---
+
+### Phase 4: Integration (`Start.ps1`)
+
+The final step is to make the application launch our new `DesktopScreen`.
+
+```powershell
+# In Start.ps1
+
+# ... (after all services are registered) ...
+
+# Create and navigate to the DesktopScreen
+$initialScreen = [DesktopScreen]::new($container)
+$navigationService.NavigateTo($initialScreen)
+
+# Start main loop
+Start-TuiEngine
+```
+
+### Summary of Changes
+
+| Action                                | File(s) to Modify                 | Why it's needed                                                                        |
+| :------------------------------------ | :-------------------------------- | :------------------------------------------------------------------------------------- |
+| **Create `ScreenHostPanel`**          | `AllComponents.ps1`               | Acts as the window/widget frame that hosts existing `Screen` classes.                  |
+| **Create `DesktopScreen`**            | `AllScreens.ps1`                  | Provides the main canvas and manages the layout and activation of the hosted screens.  |
+| **Enhance `FocusManager`**            | `AllServices.ps1`                 | Makes Tab navigation context-aware, so it only cycles through widgets in the active panel. |
+| **Update Application Entry Point**    | `Start.ps1`                       | Launches the new `DesktopScreen` as the root view instead of `DashboardScreen`.        |
+
+This approach is powerful because it's **minimally invasive**. You don't have to rewrite your complex `DashboardScreen` or `TaskListScreen`. You simply wrap them in a host that provides the environment they expect, allowing you to compose them in new and creative ways. You've effectively created a simple, multi-pane windowing system within your TUI.
+
+Excellent question. Stepping back to critically evaluate the plan is a crucial part of any engineering effort. You're right to ask what's missing, what's fragile, and what the "next steps" would be after this initial implementation.
+
+Let's break it down into four categories: **Missing Pieces**, **Fragile Points**, **Immediate Improvements**, and **Future Enhancements**.
+
+---
+
+### 1. Missing Pieces & Logical Gaps in the Plan
+
+These are things that were omitted for simplicity but would be required for a robust implementation.
+
+*   **Global Input Routing:** The current `Process-TuiInput` in `AllRuntime.ps1` is too simple. It gives priority to overlays, then the focused component, then the screen. This will break.
+    *   **Problem:** If the `DesktopScreen`'s `HandleInput` catches `Ctrl+Tab` to switch active hosts, it will never be passed down to the active `ScreenHostPanel`'s `HandleInput`. But if we let the host panel handle it first, the global `Ctrl+Tab` will never fire.
+    *   **Solution:** We need a more sophisticated input pipeline in `Process-TuiInput`.
+        1.  Check for **Global Hotkeys** first (like `Ctrl+P` for Command Palette, or a new `Ctrl+Tab` for switching hosts). The `KeybindingService` is perfect for this.
+        2.  If not a global hotkey, pass the input to the **Active Host Panel's** `HandleInput` method. This lets the hosted screen (`TaskListScreen`, etc.) process its internal keys (like arrow keys for list navigation).
+        3.  The `DesktopScreen`'s `HandleInput` becomes almost redundant, as its job (switching hosts) is now a global keybinding.
+
+*   **Focus Management on Host Switching:** The plan correctly identifies that focus needs to be managed, but it's a bit naive.
+    *   **Problem:** When you switch from `Host A` to `Host B`, `Host A` loses focus, but what component inside `Host A` was focused? When you switch back, how do you restore focus to that specific component?
+    *   **Solution:** The `ScreenHostPanel` needs to remember its last focused component.
+        ```powershell
+        # In ScreenHostPanel class
+        hidden [UIElement]$_lastFocusedChild
+
+        # When the host itself receives OnBlur()
+        [void] OnBlur() {
+            # Find which of my children has focus and store it
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager.FocusedComponent -and $focusManager.FocusedComponent.Parent -eq $this) {
+                 $this._lastFocusedChild = $focusManager.FocusedComponent
+            }
+        }
+
+        # When the host itself receives OnFocus()
+        [void] OnFocus() {
+            # Restore focus to the last known child, or the first focusable one
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($this._lastFocusedChild) {
+                $focusManager.SetFocus($this._lastFocusedChild)
+            } else {
+                # Find first focusable child and set focus
+            }
+        }
+        ```
+
+*   **Dialogs and Overlays:** This is a major gap.
+    *   **Problem:** If the `TaskListScreen` (running inside a host) tries to show a dialog, the dialog's coordinates will be relative to the entire console, but its logic is tied to a screen that *thinks* it's at (0,0). The dialog might appear off-center or break focus management entirely. The `DialogManager` needs to be aware of the "active screen" context.
+    *   **Solution:** The `DialogManager` should be updated. When `ShowDialog` is called, it should not just center on the global console, but on the dimensions of the **active `ScreenHostPanel`**. It also needs to correctly store and restore focus *within that host*.
+
+---
+
+### 2. Fragile Points & Potential Issues
+
+These are aspects of the proposed design that might work initially but could cause problems later.
+
+*   **Performance:** Rendering multiple complex screens every frame could be slow. `DashboardScreen` and `TaskListScreen` both have their own internal logic and component trees.
+    *   **Concern:** The `DesktopScreen.OnRender` method rebuilds its child list every single frame. This is simple but inefficient.
+    *   **Improvement:** The layout calculation in `TilingManager` (from the i3 idea) is actually a good pattern to borrow. In our desktop model, the `DesktopScreen.Initialize` would set the layout, and `OnRender` would just let the children render themselves. We only need to recalculate the layout on a resize event.
+    *   **Mitigation:** For now, the performance will likely be acceptable. PowerShell's class-based rendering is surprisingly fast. But for a more complex desktop with many widgets, we'd need to optimize so that only "dirty" hosts are re-rendered.
+
+*   **Static Layout:** The `DesktopScreen` currently has a hard-coded layout. This works, but it's not very flexible.
+    *   **Concern:** What if the user wants to resize the panels? Or move them? The current plan doesn't account for this.
+    *   **Improvement:** We would need to add mouse support or keybindings (e.g., `Alt+Shift+ArrowKeys`) to manipulate the `X`, `Y`, `Width`, and `Height` properties of the `ScreenHostPanel` children within the `DesktopScreen`. This brings us closer to a true window manager.
+
+*   **Service & State Isolation:** All screens share the same global `ServiceContainer`.
+    *   **Concern:** If `DashboardScreen` and `TaskListScreen` both modify data via the `DataManager`, it works fine. But what if you wanted two `TaskListScreen` instances, each filtered to a different project? They would interfere with each other's state.
+    *   **Solution (Advanced):** For true multi-instance widgets, each `ScreenHostPanel` might need its own sandboxed state or be initialized with specific configuration (e.g., `[TaskListScreen]::new($container, @{ ProjectFilter = 'PROJ-A' })`). This is a v2.0 enhancement.
+
+---
+
+### 3. Immediate Improvements to the Plan
+
+These are refinements that should be included in the first-pass implementation.
+
+*   **Visual Indication of Focus:** The `ScreenHostPanel` plan includes changing the border color of the active host. This is good. We should also **dim the non-active hosts**.
+    *   **How:** In `ScreenHostPanel.OnRender`, if `!$this.IsActiveHost`, we could iterate through every cell in the rendered `_private_buffer` and blend it with a semi-transparent gray cell to "wash out" the color, making it look inactive. This is a powerful visual cue.
+
+*   **Status Bar:** The `DesktopScreen` should have a proper status bar at the bottom.
+    *   **Content:** It should display the available "windows" (e.g., `[1:Dashboard]`, `[2:TaskList]`), highlighting the active one. It could also show the title of the focused component within the active window, and the time. This provides crucial context for the user.
+
+*   **Refined Keybindings:** Relying *only* on `Ctrl+Tab` is limiting. A better scheme would be:
+    *   `Ctrl+Tab`: Cycle forward through hosts.
+    *   `Ctrl+Shift+Tab`: Cycle backward.
+    *   `Ctrl+[1-9]`: Directly jump to host 1-9. This makes the `DesktopScreen` feel much more like a professional tool.
+
+---
+
+### 4. Future Enhancements (The "Wouldn't It Be Cool If..." List)
+
+Once the core system is working, the possibilities are vast:
+
+*   **Dynamic Layouts:** Introduce commands to add/remove hosts dynamically. `action.open_in_new_panel('FileExplorer', 'C:\')`.
+*   **Tiling Mode:** Add a layout mode to the `DesktopScreen` that automatically arranges its children into tiles (borrowing the logic from the i3 idea).
+*   **Tabbed Hosts:** Enhance `ScreenHostPanel` so it can host *multiple* screens in a tabbed interface. `Ctrl+PageUp/PageDown` could switch tabs within the active host.
+*   **Saving/Loading Layouts:** Persist the `DesktopScreen`'s child layout (positions and hosted screen types) to a JSON file, so the user's desktop is restored on next launch.
+*   **Drag-and-Drop:** Add mouse support to drag, drop, and resize the host panels.
+
+By thinking through these missing pieces and potential improvements, the initial plan becomes much more robust and sets a clear path for future development. The core idea of the `ScreenHostPanel` adapter is sound, but it needs to be supported by smarter input routing, focus management, and dialog handling to be truly effective.
