@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # Axiom-Phoenix v4.0 - All Screens (Load After Components)
 # Application screens that extend Screen base class
 # ==============================================================================
@@ -16,395 +16,107 @@ using namespace System.Collections.Generic
 #<!-- PAGE: ASC.001 - DashboardScreen Class -->
 #region Screen Classes
 
+# ==============================================================================
+# CLASS: DashboardScreen (Now serves as the Main Menu)
+#
+# INHERITS:
+#   - Screen (ABC.006)
+#
+# DEPENDENCIES:
+#   Services:
+#     - NavigationService (ASE.004)
+#     - FocusManager (ASE.009)
+#   Components:
+#     - Panel (ACO.011)
+#     - NavigationMenu (ACO.021)
+#     - LabelComponent (ACO.001)
+#
+# PURPOSE:
+#   Serves as the main interactive entry point for the application, allowing
+#   the user to navigate to different screens.
+# ==============================================================================
 class DashboardScreen : Screen {
     #region UI Components
     hidden [Panel] $_mainPanel
-    hidden [Panel] $_summaryPanel
-    hidden [Panel] $_statusPanel
-    hidden [Panel] $_helpPanel
-    #endregion
-
-    #region State
-    hidden [int] $_totalTasks = 0
-    hidden [int] $_completedTasks = 0
-    hidden [int] $_pendingTasks = 0
-    hidden [string] $_dataChangeSubscriptionId = $null # Store event subscription ID
+    hidden [NavigationMenu] $_menu
     #endregion
 
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
+    # The Initialize method is called once by the NavigationService when the screen is first created.
+        # The Initialize method is called once by the NavigationService when the screen is first created.
     [void] Initialize() {
-        Write-Verbose "DashboardScreen.Initialize called. Screen size: $($this.Width)x$($this.Height)"
-        
-        if (-not $this.ServiceContainer) {
-            Write-Verbose "DashboardScreen.Initialize: ServiceContainer is null"
-            return
-        }
-        
-        # Ensure minimum size
-        if ($this.Width -lt 80) { $this.Width = 80 }
-        if ($this.Height -lt 24) { $this.Height = 24 }
-        
-        $this._mainPanel = [Panel]::new("Axiom-Phoenix Dashboard")
-        $this._mainPanel.X = 0
-        $this._mainPanel.Y = 0
+        if (-not $this.ServiceContainer) { return }
+
+        # Main container panel to hold all elements
+        $this._mainPanel = [Panel]::new("MainMenuPanel")
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
-        $this._mainPanel.Title = "Axiom-Phoenix Dashboard"
-        $this._mainPanel.UpdateContentDimensions()
+        $this._mainPanel.Title = " Axiom-Phoenix v4.0 "
         $this.AddChild($this._mainPanel)
 
-        $summaryWidth = [Math]::Floor($this.Width * 0.5)
-        $this._summaryPanel = [Panel]::new("Task Summary")
-        $this._summaryPanel.X = 1
-        $this._summaryPanel.Y = 1
-        $this._summaryPanel.Width = $summaryWidth
-        $this._summaryPanel.Height = 12
-        $this._summaryPanel.Title = "Task Summary"
-        $this._summaryPanel.UpdateContentDimensions()
-        $this._mainPanel.AddChild($this._summaryPanel)
-
-        $helpX = $summaryWidth + 2
-        $helpWidth = $this.Width - $helpX - 1
-        $this._helpPanel = [Panel]::new("Quick Start")
-        $this._helpPanel.X = $helpX
-        $this._helpPanel.Y = 1
-        $this._helpPanel.Width = $helpWidth
-        $this._helpPanel.Height = 12
-        $this._helpPanel.Title = "Quick Start"
-        $this._helpPanel.UpdateContentDimensions()
-        $this._mainPanel.AddChild($this._helpPanel)
-
-        $this._statusPanel = [Panel]::new("System Status")
-        $this._statusPanel.X = 1
-        $this._statusPanel.Y = 14
-        $this._statusPanel.Width = $this.Width - 2
-        $this._statusPanel.Height = $this.Height - 15
-        $this._statusPanel.Title = "System Status"
-        $this._statusPanel.UpdateContentDimensions()
-        $this._mainPanel.AddChild($this._statusPanel)
-    }
-
-    [void] OnEnter() {
-        # Subscribe to data change events for reactive updates
-        $eventManager = $this.ServiceContainer?.GetService("EventManager")
-        if ($eventManager) {
-            # Create handler that properly captures $this
-            $thisScreen = $this
-            $handler = {
-                param($eventData)
-                Write-Verbose "DashboardScreen received data change event. Refreshing..."
-                $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
-                $thisScreen._RefreshData($dataManager)
-            }.GetNewClosure()
+        # ASCII Art Title for branding
+        $titleArt = @(
+            '      ___   _  _  _  ___  __  __   ',
+            '     / _ \ | \/ || |/ _ \|  \/  |  ',
+            '    | |_| | >  < | | (_) | |\/| |  ',
+            '    |_| |_|/_/\_\|_|\___/|_|  |_|  '
+        )
+        $y = 3 # Starting Y position for the title
+        foreach ($line in $titleArt) {
+            $label = [LabelComponent]::new("TitleLine$y")
+            $label.Text = $line
             
-            # Subscribe to both task and project changes
-            $this._dataChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
-            Write-Verbose "DashboardScreen subscribed to data change events"
+            # =============================================================
+            # THE FIX: Explicitly set the width of the label to match the
+            #          length of the text it needs to display.
+            # =============================================================
+            $label.Width = $line.Length
+            
+            $label.ForegroundColor = Get-ThemeColor -ColorName "Primary"
+            # This positioning calculation remains correct.
+            $label.X = [Math]::Floor(($this.Width - $line.Length) / 2)
+            $label.Y = $y++
+            $this._mainPanel.AddChild($label)
         }
-        
-        # Force a complete redraw of all panels
-        if ($this._summaryPanel) { $this._summaryPanel.RequestRedraw() }
-        if ($this._helpPanel) { $this._helpPanel.RequestRedraw() }
-        if ($this._statusPanel) { $this._statusPanel.RequestRedraw() }
-        if ($this._mainPanel) { $this._mainPanel.RequestRedraw() }
-        
-        if ($this.ServiceContainer) {
-            $this._RefreshData($this.ServiceContainer.GetService("DataManager"))
-        } else {
-            Write-Verbose "DashboardScreen.OnEnter: ServiceContainer is null, using defaults"
-            $this._RefreshData($null)
-        }
-        
-        # Force another redraw after data refresh
-        $this.RequestRedraw()
-    }
-    
-    [void] OnExit() {
-        # Unsubscribe from data change events
-        $eventManager = $this.ServiceContainer?.GetService("EventManager")
-        if ($eventManager -and $this._dataChangeSubscriptionId) {
-            $eventManager.Unsubscribe("Tasks.Changed", $this._dataChangeSubscriptionId)
-            $this._dataChangeSubscriptionId = $null
-            Write-Verbose "DashboardScreen unsubscribed from data change events"
-        }
-        
-        # Call base OnExit
-        ([Screen]$this).OnExit()
+        $y++ # Add a blank line for spacing
+
+        # Create the central navigation menu
+        $this._menu = [NavigationMenu]::new("MainMenu")
+        $this._menu.Orientation = "Vertical" # Stack items vertically
+        $this._menu.Width = 40
+        $this._menu.Height = 4 # Height will be determined by the number of items
+        $this._menu.X = [Math]::Floor(($this.Width - $this._menu.Width) / 2)
+        $this._menu.Y = $y
+
+        # Populate the menu items. Each item has a label and an action.
+        $this._menu.AddItem([NavigationItem]::new("TASKS", "Manage Tasks",   ($this._CreateNavigationAction([TaskListScreen]))))
+        $this._menu.AddItem([NavigationItem]::new("THEME", "Change Theme",   ($this._CreateNavigationAction([ThemePickerScreen]))))
+        $this._menu.AddItem([NavigationItem]::new("EXIT",  "Exit Axiom",     { $global:TuiState.Running = $false }))
+
+        $this._mainPanel.AddChild($this._menu)
     }
 
-    hidden [void] _RefreshData([object]$dataManager) {
-        if(-not $dataManager) {
-            Write-Verbose "DashboardScreen: DataManager service not found."
-            $this._totalTasks = 0
-            $this._completedTasks = 0
-            $this._pendingTasks = 0
-        } else {
-            $allTasks = $dataManager.GetTasks()
-            if ($allTasks) {
-                $this._totalTasks = @($allTasks).Count
-                $this._completedTasks = @($allTasks | Where-Object { $_.Completed }).Count
-                $this._pendingTasks = $this._totalTasks - $this._completedTasks
-            } else {
-                $this._totalTasks = 0
-                $this._completedTasks = 0
-                $this._pendingTasks = 0
-            }
-        }
-        $this._UpdateDisplay()
-    }
-    
-    hidden [void] _UpdateDisplay() {
-        $this._UpdateSummaryPanel()
-        $this._UpdateHelpPanel()
-        $this._UpdateStatusPanel()
-        $this.RequestRedraw()
-    }
-    
-    hidden [void] _UpdateSummaryPanel() {
-        $panel = $this._summaryPanel
-        if (-not $panel) { return }
-        
-        # Clear children
-        $panel.Children.Clear()
-        
-        # Force content dimensions update
-        $panel.UpdateContentDimensions()
-        
-        # Ensure we have a reasonable width
-        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
-
-        # Create label components instead of direct buffer drawing
-        $titleLabel = [LabelComponent]::new("SummaryTitle")
-        $titleLabel.Text = "Task Overview"
-        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
-        $titleLabel.X = 1
-        $titleLabel.Y = 0
-        $titleLabel.Width = $labelWidth
-        $titleLabel.Height = 1
-        $panel.AddChild($titleLabel)
-        
-        # Only create separator if there's space for it
-        $lineWidth = [Math]::Max(0, $labelWidth)
-        if ($lineWidth -gt 0) {
-            $separatorLabel = [LabelComponent]::new("SummarySeparator")
-            $separatorLabel.Text = '─' * $lineWidth
-            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-            $separatorLabel.X = 1
-            $separatorLabel.Y = 1
-            $separatorLabel.Width = $labelWidth
-            $separatorLabel.Height = 1
-            $panel.AddChild($separatorLabel)
-        }
-        
-        $totalLabel = [LabelComponent]::new("TotalTasks")
-        $totalLabel.Text = "Total Tasks:    $($this._totalTasks)"
-        $totalLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $totalLabel.X = 1
-        $totalLabel.Y = 3
-        $totalLabel.Width = $labelWidth
-        $totalLabel.Height = 1
-        $panel.AddChild($totalLabel)
-        
-        $completedLabel = [LabelComponent]::new("CompletedTasks")
-        $completedLabel.Text = "Completed:      $($this._completedTasks)"
-        $completedLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
-        $completedLabel.X = 1
-        $completedLabel.Y = 4
-        $completedLabel.Width = $labelWidth
-        $completedLabel.Height = 1
-        $panel.AddChild($completedLabel)
-        
-        $pendingLabel = [LabelComponent]::new("PendingTasks")
-        $pendingLabel.Text = "Pending:        $($this._pendingTasks)"
-        $pendingLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
-        $pendingLabel.X = 1
-        $pendingLabel.Y = 5
-        $pendingLabel.Width = $labelWidth
-        $pendingLabel.Height = 1
-        $panel.AddChild($pendingLabel)
-        
-        # Create progress bar as labels
-        if ($this._totalTasks -eq 0) { 
-            $percentage = 0 
-        } else { 
-            $percentage = [Math]::Round(($this._completedTasks / $this._totalTasks) * 100) 
-        }
-        $progressLabel = [LabelComponent]::new("ProgressLabel")
-        $progressLabel.Text = "Overall Progress: $percentage%"
-        $progressLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $progressLabel.X = 1
-        $progressLabel.Y = 7
-        $progressLabel.Width = $labelWidth
-        $progressLabel.Height = 1
-        $panel.AddChild($progressLabel)
-        
-        # Progress bar visualization
-        $barWidth = [Math]::Min(20, $labelWidth - 2)
-        $filledWidth = [Math]::Floor($barWidth * $percentage / 100)
-        $emptyWidth = $barWidth - $filledWidth
-        $barText = "[" + ("█" * $filledWidth) + ("░" * $emptyWidth) + "]"
-        
-        $barLabel = [LabelComponent]::new("ProgressBar")
-        $barLabel.Text = $barText
-        $barLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
-        $barLabel.X = 1
-        $barLabel.Y = 8
-        $barLabel.Width = $labelWidth
-        $barLabel.Height = 1
-        $panel.AddChild($barLabel)
-        
-        $panel.RequestRedraw()
+    # This lifecycle method is called every time the screen becomes the active view.
+    [void] OnEnter() {
+        # Set the initial focus to our menu so the user can navigate immediately.
+        $this.Services.FocusManager?.SetFocus($this._menu)
     }
 
-    hidden [void] _UpdateHelpPanel() {
-        $panel = $this._helpPanel
-        if (-not $panel) { return }
-        
-        # Clear children
-        $panel.Children.Clear()
-        
-        # Force content dimensions update
-        $panel.UpdateContentDimensions()
-        
-        # Ensure we have a reasonable width
-        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
-        
-        $paletteHotkey = "Ctrl+P"
-        
-        # Create label components for help panel
-        $welcomeLabel = [LabelComponent]::new("WelcomeLabel")
-        $welcomeLabel.Text = "Welcome to Axiom-Phoenix!"
-        $welcomeLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
-        $welcomeLabel.X = 1
-        $welcomeLabel.Y = 0
-        $welcomeLabel.Width = $labelWidth
-        $welcomeLabel.Height = 1
-        $panel.AddChild($welcomeLabel)
-        
-        $lineWidth = [Math]::Max(0, $labelWidth)
-        if ($lineWidth -gt 0) {
-            $separatorLabel = [LabelComponent]::new("HelpSeparator")
-            $separatorLabel.Text = '─' * $lineWidth
-            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-            $separatorLabel.X = 1
-            $separatorLabel.Y = 1
-            $separatorLabel.Width = $labelWidth
-            $separatorLabel.Height = 1
-            $panel.AddChild($separatorLabel)
-        }
-        
-        # Create multi-part label for the hotkey instruction
-        $instructionLabel1 = [LabelComponent]::new("Instruction1")
-        $instructionLabel1.Text = "Press $paletteHotkey to open the"
-        $instructionLabel1.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $instructionLabel1.X = 1
-        $instructionLabel1.Y = 3
-        $instructionLabel1.Width = $labelWidth
-        $instructionLabel1.Height = 1
-        $panel.AddChild($instructionLabel1)
-        
-        $instructionLabel2 = [LabelComponent]::new("Instruction2")
-        $instructionLabel2.Text = "Command Palette."
-        $instructionLabel2.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $instructionLabel2.X = 1
-        $instructionLabel2.Y = 4
-        $instructionLabel2.Width = $labelWidth
-        $instructionLabel2.Height = 1
-        $panel.AddChild($instructionLabel2)
-
-        $infoLabel1 = [LabelComponent]::new("InfoLabel1")
-        $infoLabel1.Text = "All navigation and actions are"
-        $infoLabel1.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-        $infoLabel1.X = 1
-        $infoLabel1.Y = 6
-        $infoLabel1.Width = $labelWidth
-        $infoLabel1.Height = 1
-        $panel.AddChild($infoLabel1)
-        
-        $infoLabel2 = [LabelComponent]::new("InfoLabel2")
-        $infoLabel2.Text = "now available from there."
-        $infoLabel2.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-        $infoLabel2.X = 1
-        $infoLabel2.Y = 7
-        $infoLabel2.Width = $labelWidth
-        $infoLabel2.Height = 1
-        $panel.AddChild($infoLabel2)
-        
-        $panel.RequestRedraw()
-    }
-    
-    hidden [void] _UpdateStatusPanel() {
-        $panel = $this._statusPanel
-        if (-not $panel) { return }
-        
-        # Clear children
-        $panel.Children.Clear()
-        
-        # Force content dimensions update
-        $panel.UpdateContentDimensions()
-        
-        # Ensure we have a reasonable width
-        $labelWidth = [Math]::Max(20, $panel.ContentWidth - 2)
-
-        $memoryMB = try { [Math]::Round((Get-Process -Id $global:PID).WorkingSet64 / 1MB, 2) } catch { 0 }
-
-        # Create label components for status panel
-        $titleLabel = [LabelComponent]::new("StatusTitle")
-        $titleLabel.Text = "Environment"
-        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF"
-        $titleLabel.X = 1
-        $titleLabel.Y = 0
-        $titleLabel.Width = $labelWidth
-        $titleLabel.Height = 1
-        $panel.AddChild($titleLabel)
-        
-        $lineWidth = [Math]::Max(0, $labelWidth)
-        if ($lineWidth -gt 0) {
-            $separatorLabel = [LabelComponent]::new("StatusSeparator")
-            $separatorLabel.Text = '─' * $lineWidth
-            $separatorLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-            $separatorLabel.X = 1
-            $separatorLabel.Y = 1
-            $separatorLabel.Width = $labelWidth
-            $separatorLabel.Height = 1
-            $panel.AddChild($separatorLabel)
-        }
-        
-        $versionLabel = [LabelComponent]::new("PSVersion")
-        $versionLabel.Text = "PowerShell Version: $($global:PSVersionTable.PSVersion)"
-        $versionLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $versionLabel.X = 1
-        $versionLabel.Y = 3
-        $versionLabel.Width = $labelWidth
-        $versionLabel.Height = 1
-        $panel.AddChild($versionLabel)
-        
-        $memoryLabel = [LabelComponent]::new("MemoryUsage")
-        $memoryLabel.Text = "Memory Usage: ${memoryMB} MB"
-        $memoryLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $memoryLabel.X = 1
-        $memoryLabel.Y = 4
-        $memoryLabel.Width = $labelWidth
-        $memoryLabel.Height = 1
-        $panel.AddChild($memoryLabel)
-        
-        $hostLabel = [LabelComponent]::new("HostName")
-        $hostLabel.Text = "Host: $($global:Host.Name)"
-        $hostLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $hostLabel.X = 1
-        $hostLabel.Y = 5
-        $hostLabel.Width = $labelWidth
-        $hostLabel.Height = 1
-        $panel.AddChild($hostLabel)
-        
-        $panel.RequestRedraw()
-    }
-
-
-    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Dashboard doesn't handle specific input - all navigation via command palette
-        # Input not handled
+    # A private helper method to create navigation actions, which keeps the code clean and avoids repetition.
+    # It takes a screen type (like [TaskListScreen]) and returns a scriptblock that navigates to it.
+    hidden [scriptblock] _CreateNavigationAction([type]$ScreenType) {
+        $thisScreen = $this # Capture the current screen instance for use inside the scriptblock
+        return {
+            # This scriptblock will be executed when the user presses Enter on the menu item.
+            $navService = $thisScreen.ServiceContainer.GetService('NavigationService')
+            # Create a new instance of the target screen, passing the service container to it.
+            $screenInstance = $ScreenType::new($thisScreen.ServiceContainer)
+            # It's crucial to call Initialize() on the new screen before navigating.
+            $screenInstance.Initialize()
+            # Tell the NavigationService to make the new screen active.
+            $navService.NavigateTo($screenInstance)
+        }.GetNewClosure()
     }
 }
 
@@ -441,7 +153,7 @@ class TaskListScreen : Screen {
 
     [void] Initialize() {
         if (-not $this.ServiceContainer) {
-            Write-Verbose "TaskListScreen.Initialize: ServiceContainer is null"
+            # Write-Verbose "TaskListScreen.Initialize: ServiceContainer is null"
             return
         }
         
@@ -531,7 +243,7 @@ class TaskListScreen : Screen {
                     $dataManager.AddTask($newTask)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    Write-Verbose "New task created: $($newTask.Title)"
+                    # Write-Verbose "New task created: $($newTask.Title)"
                 }
             }
         }.GetNewClosure()
@@ -558,7 +270,7 @@ class TaskListScreen : Screen {
                     $dataManager.UpdateTask($updatedTask)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    Write-Verbose "Task updated: $($updatedTask.Title)"
+                    # Write-Verbose "Task updated: $($updatedTask.Title)"
                 }
             }
         }.GetNewClosure()
@@ -584,7 +296,7 @@ class TaskListScreen : Screen {
                     $dataManager.DeleteTask($thisScreen._selectedTask.Id)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
+                    # Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
                 }
             }
         }.GetNewClosure()
@@ -606,7 +318,7 @@ class TaskListScreen : Screen {
                 $dataManager.UpdateTask($thisScreen._selectedTask)
                 $thisScreen._RefreshTasks()
                 $thisScreen._UpdateDisplay()
-                Write-Verbose "Task completed: $($thisScreen._selectedTask.Title)"
+                # Write-Verbose "Task completed: $($thisScreen._selectedTask.Title)"
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._completeButton)
@@ -622,14 +334,14 @@ class TaskListScreen : Screen {
             $thisScreen = $this
             $handler = {
                 param($eventData)
-                Write-Verbose "TaskListScreen received Tasks.Changed event. Refreshing tasks."
+                # Write-Verbose "TaskListScreen received Tasks.Changed event. Refreshing tasks."
                 $thisScreen._RefreshTasks()
                 $thisScreen._UpdateDisplay()
             }.GetNewClosure()
             
             # Store subscription ID for later cleanup
             $this._taskChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
-            Write-Verbose "TaskListScreen subscribed to Tasks.Changed events"
+            # Write-Verbose "TaskListScreen subscribed to Tasks.Changed events"
         }
         
         if ($this.ServiceContainer) {
@@ -645,7 +357,7 @@ class TaskListScreen : Screen {
         if ($eventManager -and $this._taskChangeSubscriptionId) {
             $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
             $this._taskChangeSubscriptionId = $null
-            Write-Verbose "TaskListScreen unsubscribed from Tasks.Changed events"
+            # Write-Verbose "TaskListScreen unsubscribed from Tasks.Changed events"
         }
         
         # Call base OnExit if needed
@@ -742,18 +454,18 @@ class TaskListScreen : Screen {
             
             # Status indicator
             $statusChar = switch ($task.Status) {
-                ([TaskStatus]::Pending) { "○" }
-                ([TaskStatus]::InProgress) { "◐" }
-                ([TaskStatus]::Completed) { "●" }
-                ([TaskStatus]::Cancelled) { "✕" }
+                ([TaskStatus]::Pending) { "o" }
+                ([TaskStatus]::InProgress) { "*" }
+                ([TaskStatus]::Completed) { "+" }
+                ([TaskStatus]::Cancelled) { "x" }
                 default { "?" }
             }
             
             # Priority indicator
             $priorityChar = switch ($task.Priority) {
-                ([TaskPriority]::Low) { "↓" }
-                ([TaskPriority]::Medium) { "→" }
-                ([TaskPriority]::High) { "↑" }
+                ([TaskPriority]::Low) { "v" }
+                ([TaskPriority]::Medium) { "-" }
+                ([TaskPriority]::High) { "^" }
                 default { "-" }
             }
             
@@ -915,7 +627,7 @@ class TaskListScreen : Screen {
         $panel.AddChild($statusLabel)
         
         # Keyboard hints label
-        $hints = "↑↓: Navigate | Enter: Edit | D: Delete | N: New"
+        $hints = "Up/Down: Navigate | Enter: Edit | D: Delete | N: New"
         $hintsX = $this.Width - $hints.Length - 3
         if ($hintsX -gt $statusText.Length + 2) {
             $hintsLabel = [LabelComponent]::new("StatusHints")
@@ -1044,13 +756,13 @@ class ThemePickerScreen : Screen {
         # Get theme manager
         $this._themeManager = $this.ServiceContainer?.GetService("ThemeManager")
         if (-not $this._themeManager) {
-            Write-Verbose "ThemePickerScreen: ThemeManager not found"
+            # Write-Verbose "ThemePickerScreen: ThemeManager not found"
             return
         }
         
         # Get available themes
         $this._themes = $this._themeManager.GetAvailableThemes()
-        Write-Verbose "ThemePickerScreen: Found $($this._themes.Count) themes: $($this._themes -join ', ')"
+        # Write-Verbose "ThemePickerScreen: Found $($this._themes.Count) themes: $($this._themes -join ', ')"
         
         # Store original theme
         $this._originalTheme = $this._themeManager.ThemeName
@@ -1066,7 +778,7 @@ class ThemePickerScreen : Screen {
         
         # Instructions
         $instructionLabel = [LabelComponent]::new("Instructions")
-        $instructionLabel.Text = "Use ↑↓ to navigate, Enter to select theme, Esc to cancel"
+        $instructionLabel.Text = "Use Up/Down to navigate, Enter to select theme, Esc to cancel"
         $instructionLabel.X = 2
         $instructionLabel.Y = 2
         $instructionLabel.Width = [Math]::Min(60, $this.Width - 4)
@@ -1135,7 +847,7 @@ class ThemePickerScreen : Screen {
             $themeLabel.Height = 1
             
             # Format display text
-            $indicator = if ($isSelected) { "▶ " } else { "  " }
+            $indicator = if ($isSelected) { "> " } else { "  " }
             $currentMarker = if ($themeName -eq $this._originalTheme) { " (current)" } else { "" }
             $themeLabel.Text = "$indicator$themeName$currentMarker"
             
@@ -1190,7 +902,7 @@ class ThemePickerScreen : Screen {
                 if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
                     $selectedTheme = $this._themes[$this._selectedIndex]
                     $this._themeManager.LoadTheme($selectedTheme)
-                    Write-Verbose "Applied theme: $selectedTheme"
+                    # Write-Verbose "Applied theme: $selectedTheme"
                     
                     # Publish theme change event
                     $eventManager = $this.ServiceContainer?.GetService("EventManager")
@@ -1239,3 +951,4 @@ class ThemePickerScreen : Screen {
 
 #endregion
 #<!-- END_PAGE: ASC.003 -->
+

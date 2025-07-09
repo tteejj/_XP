@@ -402,8 +402,37 @@ function Write-Log {
         # Combine message and data into a single log entry for better correlation
         $finalMessage = $Message
         if ($Data) {
-            $dataJson = $Data | ConvertTo-Json -Compress -Depth 5
-            $finalMessage = "$Message | Data: $dataJson"
+            try {
+                # Handle UIElement objects specially to avoid circular reference issues
+                if ($Data -is [UIElement]) {
+                    $finalMessage = "$Message | Data: [UIElement: Name=$($Data.Name), Type=$($Data.GetType().Name)]"
+                }
+                elseif ($Data -is [System.Collections.IEnumerable] -and -not ($Data -is [string])) {
+                    # Handle collections
+                    $count = 0
+                    try { $count = @($Data).Count } catch { }
+                    $finalMessage = "$Message | Data: [Collection with $count items]"
+                }
+                else {
+                    # For other objects, try to serialize but catch any errors
+                    $dataJson = $null
+                    try {
+                        $dataJson = $Data | ConvertTo-Json -Compress -Depth 10 -ErrorAction Stop
+                    } catch {
+                        # Serialization failed, use simple representation
+                    }
+                    
+                    if ($dataJson) {
+                        $finalMessage = "$Message | Data: $dataJson"
+                    } else {
+                        $finalMessage = "$Message | Data: $($Data.ToString())"
+                    }
+                }
+            }
+            catch {
+                # If all else fails, just use type name
+                $finalMessage = "$Message | Data: [Object of type $($Data.GetType().Name)]"
+            }
         }
         # Logger.Log method signature is: Log([string]$message, [string]$level = "Info")
         $logger.Log($finalMessage, $Level)
@@ -470,7 +499,7 @@ function Publish-Event {
     if ($global:TuiState.Services.EventManager) {
         $global:TuiState.Services.EventManager.Publish($EventName, $EventData)
     }
-    Write-Verbose "Published event '$EventName' with data: $($EventData | ConvertTo-Json -Compress)"
+    Write-Verbose "Published event '$EventName'"
 }
 
 #endregion

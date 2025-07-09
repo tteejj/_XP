@@ -312,7 +312,7 @@ try {
         $task.Priority = [TaskPriority]::$($taskData.Priority)
         $task.SetProgress($taskData.Progress)
         $task.ProjectKey = "PHOENIX"
-        $dataManager.AddTask($task) | Out-Null
+        [void]$dataManager.AddTask($task)
     }
     
     Write-Host "Sample data created!" -ForegroundColor Green

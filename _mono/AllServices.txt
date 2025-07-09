@@ -1349,7 +1349,11 @@ class Logger {
             }
         }
         
-        $detailsJson = $exceptionDetails | ConvertTo-Json -Compress
+        $detailsJson = $exceptionDetails | ConvertTo-Json -Compress -Depth 10 -ErrorAction SilentlyContinue
+        if (-not $detailsJson) {
+            # If serialization fails, create a simple string representation
+            $detailsJson = "ExceptionType: $($exceptionDetails.ExceptionType), Message: $($exceptionDetails.ExceptionMessage)"
+        }
         $this.Log($detailsJson, "Error")
     }
     
@@ -1709,7 +1713,7 @@ class FocusManager {
             $component.RequestRedraw()
             # Write-Log -Level Debug -Message "FocusManager: Focused '$($component.Name)'."
             if ($this.EventManager) {
-                $this.EventManager.Publish("Focus.Changed", @{ ComponentName = $component.Name; Component = $component })
+                $this.EventManager.Publish("Focus.Changed", @{ ComponentName = $component.Name; ComponentType = $component.GetType().Name })
             }
         } else {
             # Write-Log -Level Debug -Message "FocusManager: Attempted to focus non-focusable, disabled, invisible, or null component."

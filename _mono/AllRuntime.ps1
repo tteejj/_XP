@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
 # TUI engine, screen management, and main application loop
 # ==============================================================================
@@ -269,7 +269,7 @@ function Stop-TuiEngine {
     )
     
     try {
-        Write-Verbose "Stopping TUI Engine..."
+        # Write-Verbose "Stopping TUI Engine..."
         
         $global:TuiState.Running = $false
         
@@ -281,7 +281,7 @@ function Stop-TuiEngine {
                 $navService.CurrentScreen.Cleanup()
             }
             catch {
-                Write-Verbose "Error cleaning up current screen: $_"
+                # Write-Verbose "Error cleaning up current screen: $_"
             }
         }
         
@@ -293,7 +293,7 @@ function Stop-TuiEngine {
                     $service.Cleanup()
                 }
                 catch {
-                    Write-Verbose "Error cleaning up service: $_"
+                    # Write-Verbose "Error cleaning up service: $_"
                 }
             }
         }
@@ -303,7 +303,7 @@ function Stop-TuiEngine {
         [Console]::Clear()
         [Console]::SetCursorPosition(0, 0)
         
-        Write-Verbose "TUI Engine stopped and cleaned up"
+        # Write-Verbose "TUI Engine stopped and cleaned up"
     }
     catch {
         Write-Error "Error stopping TUI engine: $_"
@@ -318,7 +318,7 @@ function Update-TuiEngineSize {
         $newWidth = [Console]::WindowWidth
         $newHeight = [Console]::WindowHeight
         
-        Write-Verbose "Console resized from $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight) to ${newWidth}x${newHeight}"
+        # Write-Verbose "Console resized from $($global:TuiState.BufferWidth)x$($global:TuiState.BufferHeight) to ${newWidth}x${newHeight}"
         
         # Update state
         $global:TuiState.BufferWidth = $newWidth
@@ -364,14 +364,14 @@ function Invoke-TuiRender {
         
         # Ensure compositor buffer exists
         if ($null -eq $global:TuiState.CompositorBuffer) {
-            Write-Verbose "Compositor buffer is null, skipping render"
+            # Write-Verbose "Compositor buffer is null, skipping render"
             return
         }
         
         # Clear compositor buffer
         $global:TuiState.CompositorBuffer.Clear()
         
-        Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
+        # Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
         # Get the current screen from global state (NavigationService updates this)
         $currentScreenToRender = $global:TuiState.CurrentScreen
@@ -390,7 +390,7 @@ function Invoke-TuiRender {
                     $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
                 }
                 else {
-                    Write-Verbose "Screen buffer is null for $($currentScreenToRender.Name)"
+                    # Write-Verbose "Screen buffer is null for $($currentScreenToRender.Name)"
                 }
             }
             catch {
@@ -412,7 +412,7 @@ function Invoke-TuiRender {
                     }
                 }
                 catch {
-                    Write-Verbose "Error rendering command palette: $_"
+                    # Write-Verbose "Error rendering command palette: $_"
                 }
             }
             
@@ -432,7 +432,7 @@ function Invoke-TuiRender {
         
         # Force full redraw on first frame by making previous buffer different
         if ($global:TuiState.FrameCount -eq 0) {
-            Write-Verbose "First frame - initializing previous buffer for differential rendering"
+            # Write-Verbose "First frame - initializing previous buffer for differential rendering"
             # Fill previous buffer with different content to force full redraw
             for ($y = 0; $y -lt $global:TuiState.PreviousCompositorBuffer.Height; $y++) {
                 for ($x = 0; $x -lt $global:TuiState.PreviousCompositorBuffer.Width; $x++) {
@@ -456,7 +456,7 @@ function Invoke-TuiRender {
         $renderTimer.Stop()
         
         if ($renderTimer.ElapsedMilliseconds -gt 16) {
-            Write-Verbose "Slow frame: $($renderTimer.ElapsedMilliseconds)ms"
+            # Write-Verbose "Slow frame: $($renderTimer.ElapsedMilliseconds)ms"
         }
     }
     catch {
@@ -475,7 +475,7 @@ function Render-DifferentialBuffer {
         
         # Ensure both buffers exist
         if ($null -eq $current -or $null -eq $previous) {
-            Write-Verbose "Compositor buffers not initialized, skipping differential render"
+            # Write-Verbose "Compositor buffers not initialized, skipping differential render"
             return
         }
         
@@ -511,7 +511,7 @@ function Render-DifferentialBuffer {
         
         # Log changes on first few frames
         if ($global:TuiState.FrameCount -lt 5) {
-            Write-Verbose "Frame $($global:TuiState.FrameCount): $changeCount cells changed"
+            # Write-Verbose "Frame $($global:TuiState.FrameCount): $changeCount cells changed"
         }
         
         # Reset styling at end
@@ -838,3 +838,4 @@ function Start-AxiomPhoenix {
 
 #endregion
 #<!-- END_PAGE: ART.006 -->
+

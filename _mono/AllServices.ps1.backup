@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # Axiom-Phoenix v4.0 - All Services (Load After Components)
 # Core application services: action, navigation, data, theming, logging, events
 # ==============================================================================
@@ -24,12 +24,12 @@ class ActionService {
     [object]$EventManager = $null
     
     ActionService() {
-        # Write-Verbose "ActionService: Initialized with empty registry"
+        Write-Verbose "ActionService: Initialized with empty registry"
     }
     
     ActionService([object]$eventManager) {
         $this.EventManager = $eventManager
-        # Write-Verbose "ActionService: Initialized with EventManager integration"
+        Write-Verbose "ActionService: Initialized with EventManager integration"
     }
     
     [void] RegisterAction([string]$actionName, [scriptblock]$action, [hashtable]$metadata = @{}) {
@@ -63,7 +63,7 @@ class ActionService {
                 })
             }
             
-            # Write-Verbose "ActionService: Registered action '$actionName' in category '$($actionData.Category)'"
+            Write-Verbose "ActionService: Registered action '$actionName' in category '$($actionData.Category)'"
         }
         catch {
             Write-Error "Failed to register action '$actionName': $_"
@@ -81,7 +81,7 @@ class ActionService {
                 })
             }
             
-            # Write-Verbose "ActionService: Unregistered action '$actionName'"
+            Write-Verbose "ActionService: Unregistered action '$actionName'"
         }
     }
     
@@ -97,7 +97,7 @@ class ActionService {
             $actionData.ExecutionCount++
             $actionData.LastExecuted = [datetime]::Now
             
-            # Write-Verbose "ActionService: Executing action '$actionName' with $($parameters.Count) parameters"
+            Write-Verbose "ActionService: Executing action '$actionName' with $($parameters.Count) parameters"
             
             # Execute the action
             $result = & $actionData.Action @parameters
@@ -144,7 +144,7 @@ class ActionService {
     [void] RegisterDefaultActions() {
         # Register built-in actions
         $this.RegisterAction("app.exit", {
-            # Write-Verbose "Executing app.exit action"
+            Write-Verbose "Executing app.exit action"
             $global:TuiState.Running = $false
         }, @{
             Category = "Application"
@@ -153,7 +153,7 @@ class ActionService {
         })
         
         $this.RegisterAction("app.help", {
-            # Write-Verbose "Executing app.help action"
+            Write-Verbose "Executing app.help action"
             # Would show help screen
         }, @{
             Category = "Application"
@@ -162,7 +162,7 @@ class ActionService {
         })
         
         $this.RegisterAction("app.commandPalette", {
-            # Write-Verbose "Executing app.commandPalette action"
+            Write-Verbose "Executing app.commandPalette action"
             if ($global:TuiState.CommandPalette) {
                 $global:TuiState.CommandPalette.Show()
                 $global:TuiState.IsDirty = $true
@@ -220,7 +220,7 @@ class ActionService {
             Description = "Go to Task List"
         })
         
-        # Write-Verbose "ActionService: Registered default actions"
+        Write-Verbose "ActionService: Registered default actions"
     }
 }
 
@@ -268,7 +268,7 @@ class KeybindingService {
         $this.SetBinding("LeftArrow", "navigation.left", "Global")
         $this.SetBinding("RightArrow", "navigation.right", "Global")
         
-        # Write-Verbose "KeybindingService: Initialized default keybindings"
+        Write-Verbose "KeybindingService: Initialized default keybindings"
     }
     
     [void] SetBinding([string]$keyPattern, [string]$actionName, [string]$context = "Global") {
@@ -277,13 +277,13 @@ class KeybindingService {
         }
         
         $this.KeyMap[$context][$keyPattern] = $actionName
-        # Write-Verbose "KeybindingService: Bound '$keyPattern' to '$actionName' in context '$context'"
+        Write-Verbose "KeybindingService: Bound '$keyPattern' to '$actionName' in context '$context'"
     }
     
     [void] RemoveBinding([string]$keyPattern, [string]$context = "Global") {
         if ($this.KeyMap.ContainsKey($context)) {
             $this.KeyMap[$context].Remove($keyPattern)
-            # Write-Verbose "KeybindingService: Removed binding for '$keyPattern' in context '$context'"
+            Write-Verbose "KeybindingService: Removed binding for '$keyPattern' in context '$context'"
         }
     }
     
@@ -356,24 +356,24 @@ class KeybindingService {
     
     [void] PushContext([hashtable]$contextBindings) {
         $this.ContextStack.Push($contextBindings)
-        # Write-Verbose "KeybindingService: Pushed new context with $($contextBindings.Count) bindings"
+        Write-Verbose "KeybindingService: Pushed new context with $($contextBindings.Count) bindings"
     }
     
     [void] PopContext() {
         if ($this.ContextStack.Count -gt 0) {
             $removed = $this.ContextStack.Pop()
-            # Write-Verbose "KeybindingService: Popped context with $($removed.Count) bindings"
+            Write-Verbose "KeybindingService: Popped context with $($removed.Count) bindings"
         }
     }
     
     [void] RegisterGlobalHandler([string]$handlerId, [scriptblock]$handler) {
         $this.GlobalHandlers[$handlerId] = $handler
-        # Write-Verbose "KeybindingService: Registered global handler '$handlerId'"
+        Write-Verbose "KeybindingService: Registered global handler '$handlerId'"
     }
     
     [void] UnregisterGlobalHandler([string]$handlerId) {
         $this.GlobalHandlers.Remove($handlerId)
-        # Write-Verbose "KeybindingService: Unregistered global handler '$handlerId'"
+        Write-Verbose "KeybindingService: Unregistered global handler '$handlerId'"
     }
     
     [void] SetDefaultBindings() {
@@ -467,19 +467,19 @@ class DataManager : System.IDisposable {
             New-Item -ItemType Directory -Path $this._backupPath -Force | Out-Null
         }
         
-        # Write-Verbose "DataManager: Initialized with path '$($this._dataFilePath)'"
+        Write-Verbose "DataManager: Initialized with path '$($this._dataFilePath)'"
     }
     
     [void] LoadData() {
         try {
             if (-not (Test-Path $this._dataFilePath)) {
-                # Write-Verbose "DataManager: No existing data file found at '$($this._dataFilePath)'"
+                Write-Verbose "DataManager: No existing data file found at '$($this._dataFilePath)'"
                 return
             }
             
             $jsonContent = Get-Content -Path $this._dataFilePath -Raw -Encoding UTF8
             if ([string]::IsNullOrWhiteSpace($jsonContent)) {
-                # Write-Verbose "DataManager: Data file is empty"
+                Write-Verbose "DataManager: Data file is empty"
                 return
             }
             
@@ -523,7 +523,7 @@ class DataManager : System.IDisposable {
             $this._lastSaveTime = [datetime]::Now
             $this._dataModified = $false
             
-            # Write-Verbose "DataManager: Loaded $($this._taskIndex.Count) tasks and $($this._projectIndex.Count) projects"
+            Write-Verbose "DataManager: Loaded $($this._taskIndex.Count) tasks and $($this._projectIndex.Count) projects"
             
             # Publish event
             if ($this.EventManager) {
@@ -542,7 +542,7 @@ class DataManager : System.IDisposable {
     
     [void] SaveData() {
         if ($this._updateTransactionCount -gt 0) {
-            # Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this._updateTransactionCount))"
+            Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this._updateTransactionCount))"
             return
         }
         
@@ -571,7 +571,7 @@ class DataManager : System.IDisposable {
             $this._lastSaveTime = [datetime]::Now
             $this._dataModified = $false
             
-            # Write-Verbose "DataManager: Data saved to '$($this._dataFilePath)'"
+            Write-Verbose "DataManager: Data saved to '$($this._dataFilePath)'"
             
             # Publish event
             if ($this.EventManager) {
@@ -606,12 +606,12 @@ class DataManager : System.IDisposable {
                         $backupsToDelete = $backups | Select-Object -Skip $this.BackupCount
                         foreach ($backup in $backupsToDelete) {
                             Remove-Item -Path $backup.FullName -Force
-                            # Write-Verbose "DataManager: Removed old backup '$($backup.Name)'"
+                            Write-Verbose "DataManager: Removed old backup '$($backup.Name)'"
                         }
                     }
                 }
                 
-                # Write-Verbose "DataManager: Created backup '$backupFileName'"
+                Write-Verbose "DataManager: Created backup '$backupFileName'"
             }
         }
         catch {
@@ -622,7 +622,7 @@ class DataManager : System.IDisposable {
     # Transactional update methods
     [void] BeginUpdate() {
         $this._updateTransactionCount++
-        # Write-Verbose "DataManager: Began update transaction. Depth: $($this._updateTransactionCount)"
+        Write-Verbose "DataManager: Began update transaction. Depth: $($this._updateTransactionCount)"
     }
     
     [void] EndUpdate() {
@@ -634,7 +634,7 @@ class DataManager : System.IDisposable {
             $this._updateTransactionCount--
         }
         
-        # Write-Verbose "DataManager: Ended update transaction. Depth: $($this._updateTransactionCount)"
+        Write-Verbose "DataManager: Ended update transaction. Depth: $($this._updateTransactionCount)"
         
         if ($this._updateTransactionCount -eq 0 -and ($this._dataModified -or $forceSave)) {
             if ($this.AutoSave -or $forceSave) {
@@ -683,7 +683,7 @@ class DataManager : System.IDisposable {
             $this.EventManager.Publish("Tasks.Changed", @{ Action = "Created"; Task = $task })
         }
         
-        # Write-Verbose "DataManager: Added task '$($task.Title)' with ID '$($task.Id)'"
+        Write-Verbose "DataManager: Added task '$($task.Title)' with ID '$($task.Id)'"
         return $task
     }
     
@@ -708,13 +708,13 @@ class DataManager : System.IDisposable {
             $this.EventManager.Publish("Tasks.Changed", @{ Action = "Updated"; Task = $task })
         }
         
-        # Write-Verbose "DataManager: Updated task '$($task.Title)' with ID '$($task.Id)'"
+        Write-Verbose "DataManager: Updated task '$($task.Title)' with ID '$($task.Id)'"
         return $task
     }
     
     [bool] DeleteTask([string]$taskId) {
         if (-not $this._taskIndex.ContainsKey($taskId)) {
-            # Write-Verbose "DataManager: Task '$taskId' not found for deletion"
+            Write-Verbose "DataManager: Task '$taskId' not found for deletion"
             return $false
         }
         
@@ -730,7 +730,7 @@ class DataManager : System.IDisposable {
             $this.EventManager.Publish("Tasks.Changed", @{ Action = "Deleted"; TaskId = $taskId })
         }
         
-        # Write-Verbose "DataManager: Deleted task with ID '$taskId'"
+        Write-Verbose "DataManager: Deleted task with ID '$taskId'"
         return $true
     }
     
@@ -770,7 +770,7 @@ class DataManager : System.IDisposable {
             $this.EventManager.Publish("Projects.Changed", @{ Action = "Created"; Project = $project })
         }
         
-        # Write-Verbose "DataManager: Added project '$($project.Name)' with Key '$($project.Key)'"
+        Write-Verbose "DataManager: Added project '$($project.Name)' with Key '$($project.Key)'"
         return $project
     }
     
@@ -795,13 +795,13 @@ class DataManager : System.IDisposable {
             $this.EventManager.Publish("Projects.Changed", @{ Action = "Updated"; Project = $project })
         }
         
-        # Write-Verbose "DataManager: Updated project '$($project.Name)' with Key '$($project.Key)'"
+        Write-Verbose "DataManager: Updated project '$($project.Name)' with Key '$($project.Key)'"
         return $project
     }
     
     [bool] DeleteProject([string]$projectKey) {
         if (-not $this._projectIndex.ContainsKey($projectKey)) {
-            # Write-Verbose "DataManager: Project '$projectKey' not found for deletion"
+            Write-Verbose "DataManager: Project '$projectKey' not found for deletion"
             return $false
         }
         
@@ -827,7 +827,7 @@ class DataManager : System.IDisposable {
             })
         }
         
-        # Write-Verbose "DataManager: Deleted project '$projectKey' and $($tasksToDelete.Count) associated tasks"
+        Write-Verbose "DataManager: Deleted project '$projectKey' and $($tasksToDelete.Count) associated tasks"
         return $true
     }
     
@@ -849,14 +849,14 @@ class DataManager : System.IDisposable {
     
     # IDisposable implementation
     [void] Dispose() {
-        # Write-Verbose "DataManager: Disposing - checking for unsaved data"
+        Write-Verbose "DataManager: Disposing - checking for unsaved data"
         
         if ($this._dataModified) {
             $originalTransactionCount = $this._updateTransactionCount
             $this._updateTransactionCount = 0
             try {
                 $this.SaveData()
-                # Write-Verbose "DataManager: Performed final save during dispose"
+                Write-Verbose "DataManager: Performed final save during dispose"
             }
             catch {
                 Write-Warning "DataManager: Failed to save data during dispose: $($_.Exception.Message)"
@@ -1306,7 +1306,7 @@ class Logger {
             New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         }
         
-        # Write-Verbose "Logger: Initialized with log path: $($this.LogPath)"
+        Write-Verbose "Logger: Initialized with log path: $($this.LogPath)"
     }
     
     [void] Log([string]$message, [string]$level = "Info") {
@@ -1400,7 +1400,7 @@ class Logger {
     
     [void] Cleanup() {
         $this.Flush()
-        # Write-Verbose "Logger: Cleanup complete"
+        Write-Verbose "Logger: Cleanup complete"
     }
 }
 
@@ -1423,7 +1423,7 @@ class EventManager {
     
     EventManager() {
         $this.EventHistory = [System.Collections.Generic.List[hashtable]]::new()
-        # Write-Verbose "EventManager: Initialized"
+        Write-Verbose "EventManager: Initialized"
     }
     
     [string] Subscribe([string]$eventName, [scriptblock]$handler) {
@@ -1447,7 +1447,7 @@ class EventManager {
             ExecutionCount = 0
         }
         
-        # Write-Verbose "EventManager: Subscribed handler '$handlerId' to event '$eventName'"
+        Write-Verbose "EventManager: Subscribed handler '$handlerId' to event '$eventName'"
         return $handlerId
     }
     
@@ -1455,7 +1455,7 @@ class EventManager {
         if ($this.EventHandlers.ContainsKey($eventName)) {
             if ($this.EventHandlers[$eventName].ContainsKey($handlerId)) {
                 $this.EventHandlers[$eventName].Remove($handlerId)
-                # Write-Verbose "EventManager: Unsubscribed handler '$handlerId' from event '$eventName'"
+                Write-Verbose "EventManager: Unsubscribed handler '$handlerId' from event '$eventName'"
                 
                 # Clean up empty event entries
                 if ($this.EventHandlers[$eventName].Count -eq 0) {
@@ -1469,7 +1469,7 @@ class EventManager {
         if ($this.EventHandlers.ContainsKey($eventName)) {
             $handlerCount = $this.EventHandlers[$eventName].Count
             $this.EventHandlers.Remove($eventName)
-            # Write-Verbose "EventManager: Unsubscribed all $handlerCount handlers from event '$eventName'"
+            Write-Verbose "EventManager: Unsubscribed all $handlerCount handlers from event '$eventName'"
         }
     }
     
@@ -1545,7 +1545,7 @@ class EventManager {
     
     [void] ClearHistory() {
         $this.EventHistory.Clear()
-        # Write-Verbose "EventManager: Cleared event history"
+        Write-Verbose "EventManager: Cleared event history"
     }
     
     [hashtable] GetEventInfo() {
@@ -1583,7 +1583,7 @@ class AsyncJobService {
     [bool]$IsRunning = $false
     
     AsyncJobService() {
-        # Write-Verbose "AsyncJobService: Initialized"
+        Write-Verbose "AsyncJobService: Initialized"
     }
     
     [hashtable] StartAsync([scriptblock]$work, [string]$name = "") {
@@ -1604,7 +1604,7 @@ class AsyncJobService {
             
             $this.AsyncJobs[$jobId] = $jobInfo
             
-            # Write-Verbose "AsyncJobService: Started async job '$jobName' with ID $jobId"
+            Write-Verbose "AsyncJobService: Started async job '$jobName' with ID $jobId"
             return $jobInfo
         }
         catch {
@@ -1622,7 +1622,7 @@ class AsyncJobService {
         $job = $jobInfo.Job
         
         if ($wait) {
-            # Write-Verbose "AsyncJobService: Waiting for job $jobId to complete"
+            Write-Verbose "AsyncJobService: Waiting for job $jobId to complete"
             Wait-Job -Job $job | Out-Null
         }
         
@@ -1642,7 +1642,7 @@ class AsyncJobService {
     }
     
     [void] StopAllAsyncJobs() {
-        # Write-Verbose "AsyncJobService: Stopping all async jobs"
+        Write-Verbose "AsyncJobService: Stopping all async jobs"
         
         foreach ($jobInfo in $this.AsyncJobs.Values) {
             try {
@@ -1673,13 +1673,13 @@ class AsyncJobService {
     
     [void] Start() {
         $this.IsRunning = $true
-        # Write-Verbose "AsyncJobService: Started"
+        Write-Verbose "AsyncJobService: Started"
     }
     
     [void] Stop() {
         $this.StopAllAsyncJobs()
         $this.IsRunning = $false
-        # Write-Verbose "AsyncJobService: Stopped"
+        Write-Verbose "AsyncJobService: Stopped"
     }
     
     [void] Cleanup() {
@@ -2011,4 +2011,3 @@ class TuiFrameworkService {
 
 #endregion
 #<!-- END_PAGE: ASE.010 -->
-

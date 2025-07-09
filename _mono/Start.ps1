@@ -12,6 +12,15 @@ param(
 # Set error action preference
 $ErrorActionPreference = 'Stop'
 
+# Disable verbose output to prevent JSON serialization warnings
+$VerbosePreference = 'SilentlyContinue'
+$DebugPreference = 'SilentlyContinue'
+
+# Only enable verbose output if explicitly requested
+if ($env:AXIOM_VERBOSE -eq '1') {
+    $VerbosePreference = 'Continue'
+}
+
 # Function to display animated splash screen
 function Show-SplashScreen {
     param([int]$Duration = 3000)
@@ -211,8 +220,17 @@ try {
         Write-Host "  • Initializing $($service.Name)... " -NoNewline -ForegroundColor Gray
         
         $instance = switch ($service.Type) {
-            "Logger" { [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")) }
-            "EventManager" { [EventManager]::new() }
+            "Logger" { 
+                $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
+                $logger.MinimumLevel = "Info"  # Only log Info, Warning, Error, Fatal
+                $logger.EnableConsoleLogging = $false  # Disable console logging by default
+                $logger
+            }
+            "EventManager" { 
+                $eventManager = [EventManager]::new()
+                $eventManager.EnableHistory = $false  # Disable event history to prevent any serialization
+                $eventManager
+            }
             "ThemeManager" { [ThemeManager]::new() }
             "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
             "ActionService" { [ActionService]::new() }

@@ -73,14 +73,13 @@ function Invoke-WithErrorHandling {
         $logger = $global:TuiState.Services.Logger
         if ($logger) {
             $logger.Log("Error", "Error in $Component during $Context : $($_.Exception.Message)")
-            $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress)")
+            $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress -Depth 10)")
         }
         
         # Re-throw for caller to handle if needed
         throw
     }
 }
-
 #endregion
 #<!-- END_PAGE: ART.001 -->
 
@@ -533,40 +532,58 @@ function Render-DifferentialBuffer {
 #<!-- PAGE: ART.004 - Input Processing -->
 #region Input Processing
 
+# PURPOSE:
+#   Re-architects the input loop to be "focus-first," establishing a clear and correct
+#   input processing hierarchy. This is the definitive fix for the UI lockup.
+#
+# LOGIC:
+#   1. PRIORITY 1: FOCUSED COMPONENT - The component currently tracked by the FocusManager
+#      (e.g., the CommandPalette's text box) ALWAYS gets the first chance to handle the key.
+#      If it returns $true, the input cycle for that key is complete.
+#   2. PRIORITY 2: BUBBLE TO OVERLAY - If the focused component returns $false, and an
+#      overlay is active, the overlay container itself gets a chance to handle the key.
+#      This is for container-level actions like 'Escape' to close. The input cycle stops
+#      here to enforce modality.
+#   3. PRIORITY 3 & 4: GLOBALS & SCREEN - If no overlay is active, the event continues
+#      to global keybindings and finally to the base screen.
+#
 function Process-TuiInput {
     [CmdletBinding()]
     param()
     try {
         while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
-            
-            # --- Input Priority Chain ---
+            $focusManager = $global:TuiState.Services.FocusManager
+            $keybindingService = $global:TuiState.Services.KeybindingService
 
-            # 1. Dialogs / Other Modal Overlays have top priority.
+            # Priority 1: The globally focused component ALWAYS gets the first chance.
+            if ($focusManager.FocusedComponent?.HandleInput($keyInfo)) {
+                $global:TuiState.IsDirty = $true
+                continue
+            }
+
+            # Priority 2: If focus was not handled, "bubble up". Check for an active overlay.
             if ($global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
-                # The CommandPalette is now managed by this logic, so check if it's the top overlay
-                if ($topOverlay?.HandleInput($keyInfo)) { $global:TuiState.IsDirty = $true; continue }
-            }
-            
-            # --- Normal Input Flow (when no modal overlays are active) ---
-
-            # 2. The currently focused component gets the next chance.
-            $focusManager = $global:TuiState.Services.FocusManager
-            if ($focusManager.FocusedComponent?.HandleInput($keyInfo)) { $global:TuiState.IsDirty = $true; continue }
-
-            # 3. Global Keybindings are checked if no component handled the key.
-            $keybindingService = $global:TuiState.Services.KeybindingService
-            if ($keybindingService) {
-                $action = $keybindingService.GetAction($keyInfo)
-                if ($action) {
-                    $global:TuiState.Services.ActionService?.ExecuteAction($action, @{})
+                # Let the overlay container handle keys the child did not (e.g., Escape).
+                if ($topOverlay?.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
-                    continue
                 }
+                # Always 'continue' to enforce modal behavior, consuming the input.
+                continue
             }
-            
-            # 4. Current Screen gets last chance
+
+            # --- Only runs if no overlay is active ---
+
+            # Priority 3: Global Keybindings (e.g., Ctrl+Q).
+            $action = $keybindingService?.GetAction($keyInfo)
+            if ($action) {
+                $global:TuiState.Services.ActionService?.ExecuteAction($action, @{})
+                $global:TuiState.IsDirty = $true
+                continue
+            }
+
+            # Priority 4: The Current Screen gets the last chance.
             if ($global:TuiState.CurrentScreen?.HandleInput($keyInfo)) {
                 $global:TuiState.IsDirty = $true
                 continue
