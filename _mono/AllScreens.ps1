@@ -781,6 +781,7 @@ class TaskListScreen : Screen {
                 return $false
             }
         }
+        return $false
     }
 }
 
@@ -992,6 +993,7 @@ class ThemePickerScreen : Screen {
                 return $false
             }
         }
+        return $false
     }
 }
 
