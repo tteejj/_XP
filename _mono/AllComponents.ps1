@@ -2620,33 +2620,10 @@ class CommandPalette : UIElement {
 }
 
 #<!-- END_PAGE: ACO.016 -->
-                    return $this._searchBox.HandleInput($key)
-                }
-            }
-        }
-        else {
-            # Fallback for when search box isn't focused (shouldn't happen)
-            switch ($key.Key) {
-                ([ConsoleKey]::Escape) { 
-                    $this.Hide()
-                    return $true 
-                }
-                default { 
-                    return $false 
-                }
-            }
-        }
-        
-        # Failsafe return (should never reach here)
-        return $false
-    }
-}
 
 #endregion Composite Components
 
 #region Dialog Components
-
-#<!-- END_PAGE: ACO.016 -->
 
 #<!-- PAGE: ACO.017 - Dialog Class -->
 # ===== CLASS: Dialog =====
