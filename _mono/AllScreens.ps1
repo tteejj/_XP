@@ -437,18 +437,21 @@ class TaskListScreen : Screen {
             $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
             
             if ($dialogManager -and $dataManager) {
-                $dialog = [TaskDialog]::new("New Task", $null)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                $dialog = [TaskEditPanel]::new("New Task", $null)
+                $dialog.OnSave = {
                     $newTask = $dialog.GetTask()
                     $dataManager.AddTask($newTask)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "New task created: $($newTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
+                
         $this._mainPanel.AddChild($this._newButton)
         $currentX += $buttonSpacing
         
@@ -464,16 +467,18 @@ class TaskListScreen : Screen {
             $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
             
             if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
-                $dialog = [TaskDialog]::new("Edit Task", $thisScreen._selectedTask)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                $dialog = [TaskEditPanel]::new("Edit Task", $thisScreen._selectedTask)
+                $dialog.OnSave = {
                     $updatedTask = $dialog.GetTask()
                     $dataManager.UpdateTask($updatedTask)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "Task updated: $($updatedTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._editButton)
@@ -492,14 +497,16 @@ class TaskListScreen : Screen {
             
             if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
                 $dialog = [TaskDeleteDialog]::new($thisScreen._selectedTask)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::Yes) {
+                $dialog.OnConfirm = {
                     $dataManager.DeleteTask($thisScreen._selectedTask.Id)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._deleteButton)

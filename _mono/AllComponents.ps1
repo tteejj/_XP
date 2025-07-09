@@ -3628,3 +3628,328 @@ enum DialogResult {
 }
 #endregion
 
+#region Task Management Dialogs
+
+# ===== CLASS: TaskEditPanel =====
+# Module: task-dialogs
+# Dependencies: Panel, LabelComponent, TextBoxComponent, ButtonComponent
+# Purpose: Modal panel for editing task properties
+class TaskEditPanel : Panel {
+    hidden [PmcTask]$_task
+    hidden [bool]$_isNewTask = $false
+    hidden [TextBoxComponent]$_titleTextBox
+    hidden [TextBoxComponent]$_descriptionTextBox
+    hidden [RadioButtonComponent]$_lowPriorityRadio
+    hidden [RadioButtonComponent]$_mediumPriorityRadio
+    hidden [RadioButtonComponent]$_highPriorityRadio
+    hidden [ButtonComponent]$_saveButton
+    hidden [ButtonComponent]$_cancelButton
+    [DialogResult]$DialogResult = [DialogResult]::None
+    [scriptblock]$OnSave
+    [scriptblock]$OnCancel
+    
+    TaskEditPanel([string]$title, [PmcTask]$task) : base("TaskEditPanel") {
+        $this._task = $task
+        $this._isNewTask = ($null -eq $task)
+        $this.Title = $title
+        $this.Width = 60
+        $this.Height = 16
+        $this.HasBorder = $true
+        $this.IsFocusable = $true
+        
+        $this._CreateControls()
+        $this._PopulateData()
+    }
+    
+    hidden [void] _CreateControls() {
+        $y = 2
+        
+        # Title label and textbox
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = $y
+        $titleLabel.Width = 10
+        $this.AddChild($titleLabel)
+        
+        $this._titleTextBox = [TextBoxComponent]::new("TitleTextBox")
+        $this._titleTextBox.X = 2
+        $this._titleTextBox.Y = $y + 1
+        $this._titleTextBox.Width = $this.Width - 6
+        $this._titleTextBox.Height = 1
+        $this.AddChild($this._titleTextBox)
+        $y += 3
+        
+        # Description label and textbox
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = $y
+        $descLabel.Width = 15
+        $this.AddChild($descLabel)
+        
+        $this._descriptionTextBox = [TextBoxComponent]::new("DescriptionTextBox")
+        $this._descriptionTextBox.X = 2
+        $this._descriptionTextBox.Y = $y + 1
+        $this._descriptionTextBox.Width = $this.Width - 6
+        $this._descriptionTextBox.Height = 3
+        $this.AddChild($this._descriptionTextBox)
+        $y += 5
+        
+        # Priority label and radio buttons
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 2
+        $priorityLabel.Y = $y
+        $priorityLabel.Width = 10
+        $this.AddChild($priorityLabel)
+        $y += 1
+        
+        $this._lowPriorityRadio = [RadioButtonComponent]::new("LowPriorityRadio")
+        $this._lowPriorityRadio.Text = "Low"
+        $this._lowPriorityRadio.GroupName = "Priority"
+        $this._lowPriorityRadio.X = 4
+        $this._lowPriorityRadio.Y = $y
+        $this.AddChild($this._lowPriorityRadio)
+        
+        $this._mediumPriorityRadio = [RadioButtonComponent]::new("MediumPriorityRadio")
+        $this._mediumPriorityRadio.Text = "Medium"
+        $this._mediumPriorityRadio.GroupName = "Priority"
+        $this._mediumPriorityRadio.X = 14
+        $this._mediumPriorityRadio.Y = $y
+        $this.AddChild($this._mediumPriorityRadio)
+        
+        $this._highPriorityRadio = [RadioButtonComponent]::new("HighPriorityRadio")
+        $this._highPriorityRadio.Text = "High"
+        $this._highPriorityRadio.GroupName = "Priority"
+        $this._highPriorityRadio.X = 28
+        $this._highPriorityRadio.Y = $y
+        $this.AddChild($this._highPriorityRadio)
+        $y += 3
+        
+        # Buttons
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save"
+        $this._saveButton.X = $this.Width - 24
+        $this._saveButton.Y = $this.Height - 4
+        $this._saveButton.Width = 8
+        $this._saveButton.Height = 1
+        $thisPanel = $this
+        $this._saveButton.OnClick = {
+            if ($thisPanel._ValidateInput()) {
+                $thisPanel.DialogResult = [DialogResult]::OK
+                if ($thisPanel.OnSave) {
+                    & $thisPanel.OnSave
+                }
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel"
+        $this._cancelButton.X = $this.Width - 14
+        $this._cancelButton.Y = $this.Height - 4
+        $this._cancelButton.Width = 8
+        $this._cancelButton.Height = 1
+        $this._cancelButton.OnClick = {
+            $thisPanel.DialogResult = [DialogResult]::Cancel
+            if ($thisPanel.OnCancel) {
+                & $thisPanel.OnCancel
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._cancelButton)
+    }
+    
+    hidden [void] _PopulateData() {
+        if ($this._task) {
+            $this._titleTextBox.Text = $this._task.Title
+            $this._descriptionTextBox.Text = if ($this._task.Description) { $this._task.Description } else { "" }
+            
+            switch ($this._task.Priority) {
+                ([TaskPriority]::Low) { $this._lowPriorityRadio.Selected = $true }
+                ([TaskPriority]::High) { $this._highPriorityRadio.Selected = $true }
+                default { $this._mediumPriorityRadio.Selected = $true }
+            }
+        } else {
+            $this._mediumPriorityRadio.Selected = $true
+        }
+    }
+    
+    hidden [bool] _ValidateInput() {
+        if ([string]::IsNullOrWhiteSpace($this._titleTextBox.Text)) {
+            return $false
+        }
+        return $true
+    }
+    
+    [PmcTask] GetTask() {
+        $task = if ($this._task) { $this._task } else { [PmcTask]::new() }
+        
+        $task.Title = $this._titleTextBox.Text.Trim()
+        $task.Description = $this._descriptionTextBox.Text.Trim()
+        
+        if ($this._lowPriorityRadio.Selected) {
+            $task.Priority = [TaskPriority]::Low
+        } elseif ($this._highPriorityRadio.Selected) {
+            $task.Priority = [TaskPriority]::High
+        } else {
+            $task.Priority = [TaskPriority]::Medium
+        }
+        
+        if ($this._isNewTask) {
+            $task.Status = [TaskStatus]::Pending
+            $task.Progress = 0
+            $task.CreatedAt = [datetime]::Now
+        }
+        $task.UpdatedAt = [datetime]::Now
+        
+        return $task
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                $this.DialogResult = [DialogResult]::Cancel
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true
+            }
+            ([ConsoleKey]::Enter) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control) {
+                    if ($this._ValidateInput()) {
+                        $this.DialogResult = [DialogResult]::OK
+                        if ($this.OnSave) {
+                            & $this.OnSave
+                        }
+                    }
+                    return $true
+                }
+            }
+        }
+        return ([Panel]$this).HandleInput($keyInfo)
+    }
+    
+    [void] SetInitialFocus() {
+        # Focus the title textbox first
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._titleTextBox)
+        }
+    }
+}
+
+# ===== CLASS: TaskDeleteDialog =====
+# Module: task-dialogs  
+# Dependencies: Panel, LabelComponent, ButtonComponent
+# Purpose: Confirmation dialog for task deletion
+class TaskDeleteDialog : Panel {
+    hidden [PmcTask]$_task
+    hidden [ButtonComponent]$_yesButton
+    hidden [ButtonComponent]$_noButton
+    [DialogResult]$DialogResult = [DialogResult]::None
+    [scriptblock]$OnConfirm
+    [scriptblock]$OnCancel
+    
+    TaskDeleteDialog([PmcTask]$task) : base("TaskDeleteDialog") {
+        $this._task = $task
+        $this.Title = "Delete Task"
+        $this.Width = 50
+        $this.Height = 8
+        $this.HasBorder = $true
+        $this.IsFocusable = $true
+        
+        $this._CreateControls()
+    }
+    
+    hidden [void] _CreateControls() {
+        # Confirmation message
+        $messageLabel = [LabelComponent]::new("MessageLabel")
+        $messageLabel.Text = "Are you sure you want to delete this task?"
+        $messageLabel.X = 2
+        $messageLabel.Y = 2
+        $messageLabel.Width = $this.Width - 4
+        $this.AddChild($messageLabel)
+        
+        $taskLabel = [LabelComponent]::new("TaskLabel")
+        $taskLabel.Text = "Task: $($this._task.Title)"
+        $taskLabel.X = 2
+        $taskLabel.Y = 3
+        $taskLabel.Width = $this.Width - 4
+        $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+        $this.AddChild($taskLabel)
+        
+        # Buttons
+        $thisDialog = $this
+        $this._yesButton = [ButtonComponent]::new("YesButton")
+        $this._yesButton.Text = "Yes"
+        $this._yesButton.X = $this.Width - 24
+        $this._yesButton.Y = $this.Height - 3
+        $this._yesButton.Width = 8
+        $this._yesButton.Height = 1
+        $this._yesButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::Yes
+            if ($thisDialog.OnConfirm) {
+                & $thisDialog.OnConfirm
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._yesButton)
+        
+        $this._noButton = [ButtonComponent]::new("NoButton")
+        $this._noButton.Text = "No"
+        $this._noButton.X = $this.Width - 14
+        $this._noButton.Y = $this.Height - 3
+        $this._noButton.Width = 8
+        $this._noButton.Height = 1
+        $this._noButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::No
+            if ($thisDialog.OnCancel) {
+                & $thisDialog.OnCancel
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._noButton)
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                $this.DialogResult = [DialogResult]::No
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true
+            }
+            ([ConsoleKey]::Y) {
+                $this.DialogResult = [DialogResult]::Yes
+                if ($this.OnConfirm) {
+                    & $this.OnConfirm
+                }
+                return $true
+            }
+            ([ConsoleKey]::N) {
+                $this.DialogResult = [DialogResult]::No
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true
+            }
+        }
+        return ([Panel]$this).HandleInput($keyInfo)
+    }
+    
+    [void] SetInitialFocus() {
+        # Focus the No button by default (safer)
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._noButton)
+        }
+    }
+}
+
+# Alias for compatibility
+class TaskDialog : TaskEditPanel {
+    TaskDialog([string]$title, [PmcTask]$task) : base($title, $task) {}
+}
+
+#endregion
+
