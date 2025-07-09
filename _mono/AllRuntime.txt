@@ -1,4 +1,5 @@
-﻿# ==============================================================================
+﻿####\AllRuntime.ps1
+# ==============================================================================
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
 # TUI engine, screen management, and main application loop
 # ==============================================================================
@@ -557,7 +558,7 @@ function Process-TuiInput {
                 return
             }
             
-            # Get services from global state (the working pattern used throughout the codebase)
+            # Get services from global state
             $focusManager = $global:TuiState.Services.FocusManager
             $keybindingService = $global:TuiState.Services.KeybindingService
             $actionService = $global:TuiState.Services.ActionService
@@ -566,41 +567,27 @@ function Process-TuiInput {
             
             # Priority 1: Focused component gets first chance
             $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
-            $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'None' }
-            $focusedType = if ($null -ne $focusedComponent) { $focusedComponent.GetType().Name } else { 'N/A' }
-            $focusedIsFocused = if ($null -ne $focusedComponent) { $focusedComponent.IsFocused } else { 'N/A' }
-            $focusedEnabled = if ($null -ne $focusedComponent) { $focusedComponent.Enabled } else { 'N/A' }
             
-            Write-Log -Level Debug -Message "Process-TuiInput: Key pressed: $($keyInfo.Key), Modifiers: $($keyInfo.Modifiers)"
-            Write-Log -Level Debug -Message "  - FocusedComponent: $focusedName"
-            Write-Log -Level Debug -Message "  - FocusedComponent Type: $focusedType"
-            Write-Log -Level Debug -Message "  - IsFocused: $focusedIsFocused"
-            Write-Log -Level Debug -Message "  - Enabled: $focusedEnabled"
             if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
+                Write-Log -Level Debug -Message "Process-TuiInput: Trying focused component: $($focusedComponent.Name)"
                 if ($focusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
-                    $inputHandled = $true
                     Write-Log -Level Debug -Message "  - Input handled by focused component"
-                } else {
-                    Write-Log -Level Debug -Message "  - Input NOT handled by focused component"
+                    continue  # Input was handled, move to next key
                 }
             }
             
-            # Priority 2: If focused component didn't handle it AND overlay is active, 
-            # give overlay container a chance (for container actions like Escape)
-            # Then enforce modality - no further processing
-            if (-not $inputHandled -and $global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
+            # Priority 2: If overlay is active, give overlay container a chance
+            # This is for container-level actions like Escape to close
+            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
+                Write-Log -Level Debug -Message "  - Checking overlay: $($topOverlay.Name)"
                 if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
+                    Write-Log -Level Debug -Message "  - Input handled by overlay"
                 }
                 # Enforce modality - no other input processing when overlays are active
                 continue  
-            }
-            
-            # Skip to next key if input was handled
-            if ($inputHandled) {
-                continue
             }
             
             # Priority 3: Global keybindings (only if no overlay is active)
@@ -886,4 +873,3 @@ function Start-AxiomPhoenix {
 
 #endregion
 #<!-- END_PAGE: ART.006 -->
-

@@ -23,14 +23,16 @@ class CommandPalette : UIElement {
     [scriptblock]$OnCancel
 
     CommandPalette([string]$name) : base($name) {
-        $this.IsFocusable = $true
+        # The palette is a container; it should not be focusable.
+        # Focus will be managed for the search box and list box inside it.
+        $this.IsFocusable = $false # <<< FIX
         $this.Visible = $false
         $this.IsOverlay = $true
         $this.Width = 60
         $this.Height = 20
         
         $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[int]]::new()
+        $this._filteredActions = [List[object]]::new() # Corrected from [List[int]]
         
         $this.Initialize()
     }
@@ -38,6 +40,7 @@ class CommandPalette : UIElement {
     hidden [void] Initialize() {
         # Create main panel with border
         $this._panel = [Panel]::new("CommandPalette_Panel")
+        $this._panel.IsFocusable = $false # Ensure panel is not focusable
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
         $this._panel.Title = " Command Palette "
@@ -54,6 +57,9 @@ class CommandPalette : UIElement {
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
         $this._searchBox.Placeholder = "Type to search commands..."
+        $this._searchBox.IsFocusable = $true # Explicitly ensure it's focusable
+        $this._searchBox.Enabled = $true
+        $this._searchBox.Visible = $true
         
         # Connect search box to filtering
         $paletteRef = $this
@@ -69,18 +75,22 @@ class CommandPalette : UIElement {
         $this._listBox.Y = 4
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 6
+        $this._listBox.IsFocusable = $true # Explicitly ensure it's focusable
+        $this._listBox.Enabled = $true
+        $this._listBox.Visible = $true
         $this._panel.AddChild($this._listBox)
     }
 
     [void] SetActions([object[]]$actionList) {
+        Write-Log -Level Debug -Message "CommandPalette.SetActions: Received $($actionList.Count) actions"
         $this._allActions.Clear()
         foreach ($action in $actionList) {
             $this._allActions.Add($action)
         }
         $this.FilterActions("")  # Show all actions initially
         
-        # Set initial focus to search box
-        $this._searchBox.IsFocused = $true
+        # Don't set focus here - let SetInitialFocus handle it
+        Write-Log -Level Debug -Message "CommandPalette.SetActions: Actions set, list should be populated"
     }
 
     [void] FilterActions([string]$searchText) {
@@ -115,31 +125,46 @@ class CommandPalette : UIElement {
     }
 
     [void] SetInitialFocus() {
+        Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: Starting"
+        
         if ($this._searchBox) {
             # Clear any previous search text
             $this._searchBox.Text = ""
             $this._searchBox.CursorPosition = 0
             
-            # Make sure the search box is focusable and enabled
+            # Make absolutely sure the search box is ready
             $this._searchBox.IsFocusable = $true
             $this._searchBox.Enabled = $true
             $this._searchBox.Visible = $true
             
-            # Use FocusManager to properly set focus
+            # Force a render to ensure the component is ready
+            $this._searchBox.RequestRedraw()
+            
+            # Use FocusManager to set focus
             $focusManager = $global:TuiState.Services.FocusManager
             if ($focusManager) {
-                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: Setting focus to search box"
+                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: FocusManager found, setting focus to search box"
+                Write-Log -Level Debug -Message "  SearchBox properties - Name: $($this._searchBox.Name), IsFocusable: $($this._searchBox.IsFocusable), Enabled: $($this._searchBox.Enabled), Visible: $($this._searchBox.Visible)"
                 $focusManager.SetFocus($this._searchBox)
+                
+                # Double-check that focus was set
+                if ($focusManager.FocusedComponent -eq $this._searchBox) {
+                    Write-Log -Level Debug -Message "  Focus successfully set to search box"
+                } else {
+                    Write-Log -Level Warning -Message "  Focus was NOT set to search box! Current focus: $($focusManager.FocusedComponent?.Name)"
+                }
+            } else {
+                Write-Log -Level Error -Message "CommandPalette.SetInitialFocus: FocusManager not found!"
             }
-            $this._searchBox.RequestRedraw()
+        } else {
+            Write-Log -Level Error -Message "CommandPalette.SetInitialFocus: _searchBox is null!"
         }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        $handled = $false
-        
+        # This container handles Escape, Enter, Tab, and delegates arrow keys
         switch ($key.Key) {
             ([ConsoleKey]::Escape) { 
                 if ($this.OnCancel) {
@@ -148,46 +173,44 @@ class CommandPalette : UIElement {
                 return $true 
             }
             ([ConsoleKey]::Enter) {
+                # If focus is on search box, move to list
+                if ($global:TuiState.Services.FocusManager.FocusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
+                    $global:TuiState.Services.FocusManager.SetFocus($this._listBox)
+                    return $true
+                }
+                # If focus is on list, execute selection
                 if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
                     $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
                     if ($selectedAction -and $this.OnExecute) {
                         & $this.OnExecute $this $selectedAction
-                        return $true
                     }
                 }
                 return $true
             }
             ([ConsoleKey]::Tab) {
                 # Switch focus between search box and list
-                if ($this._searchBox.IsFocused) {
-                    $focusManager = $global:TuiState.Services.FocusManager
-                    if ($focusManager) {
-                        $focusManager.SetFocus($this._listBox)
-                    }
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager.FocusedComponent -eq $this._searchBox) {
+                    $focusManager.SetFocus($this._listBox)
                 } else {
-                    $focusManager = $global:TuiState.Services.FocusManager
-                    if ($focusManager) {
-                        $focusManager.SetFocus($this._searchBox)
-                    }
+                    $focusManager.SetFocus($this._searchBox)
                 }
-                $this.RequestRedraw()
                 return $true
             }
-            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                # Navigation keys go to the list if it's focused
-                if ($this._listBox.IsFocused) {
+            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow)} {
+                # If focus is on search box and there are items, move focus to list
+                if ($global:TuiState.Services.FocusManager.FocusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
+                    $global:TuiState.Services.FocusManager.SetFocus($this._listBox)
+                    # Let the list handle the actual arrow key
                     return $this._listBox.HandleInput($key)
                 }
-                # Otherwise let the list handle it anyway for convenience
-                return $this._listBox.HandleInput($key)
-            }
-            default {
-                # Don't handle other keys here - let the focused component handle them
+                # Otherwise return false to let the focused component handle it
                 return $false
             }
         }
         
-        return $handled
+        # For any other key, return false to let the focused component handle it
+        return $false
     }
 
     [void] OnFocus() {
@@ -250,7 +273,9 @@ class Dialog : UIElement {
     [DialogResult]$DialogResult = [DialogResult]::None
 
     Dialog([string]$name) : base($name) {
-        $this.IsFocusable = $true
+        # This component is a container, it should not be focusable itself.
+        # Focus will be managed for its children (buttons, input boxes).
+        $this.IsFocusable = $false # <<< FIX
         $this.Visible = $false
         $this.IsOverlay = $true
         $this.Width = 50
@@ -607,15 +632,10 @@ class InputDialog : Dialog {
         $this._cancelButton.X = $startX + $this._okButton.Width + 4
         $this._cancelButton.Y = $buttonY
         
-        # Set initial focus
-        $this._focusIndex = 0
-        $this.UpdateFocus()
-    }
-
-    hidden [void] UpdateFocus() {
-        $this._inputBox.IsFocused = ($this._focusIndex -eq 0)
-        $this._okButton.IsFocused = ($this._focusIndex -eq 1)
-        $this._cancelButton.IsFocused = ($this._focusIndex -eq 2)
+        # Set initial focus using FocusManager
+        if ($global:TuiState.Services.FocusManager) {
+            $global:TuiState.Services.FocusManager.SetFocus($this._inputBox)
+        }
     }
 
     [void] OnRender() {
@@ -634,20 +654,16 @@ class InputDialog : Dialog {
             return $true
         }
         
-        if ($key.Key -eq [ConsoleKey]::Tab) {
-            $this._focusIndex = ($this._focusIndex + 1) % 3
-            $this.UpdateFocus()
-            $this.RequestRedraw()
-            return $true
-        }
-        
-        switch ($this._focusIndex) {
-            0 { return $this._inputBox.HandleInput($key) }
-            1 { return $this._okButton.HandleInput($key) }
-            2 { return $this._cancelButton.HandleInput($key) }
-        }
-        
+        # Tab navigation is handled by the main input loop and FocusManager
+        # No need to manually handle Tab or manage focus here
         return $false
+    }
+    
+    [void] SetInitialFocus() {
+        # Set focus to the input box when dialog appears
+        if ($this._inputBox -and $global:TuiState.Services.FocusManager) {
+            $global:TuiState.Services.FocusManager.SetFocus($this._inputBox)
+        }
     }
 }
 
@@ -810,6 +826,13 @@ class TaskDialog : Dialog {
         }
         return $this._task
     }
+    
+    [void] SetInitialFocus() {
+        # Set focus to the title box when dialog appears
+        if ($this._titleBox -and $global:TuiState.Services.FocusManager) {
+            $global:TuiState.Services.FocusManager.SetFocus($this._titleBox)
+        }
+    }
 }
 
 # Task Delete Confirmation Dialog
@@ -864,7 +887,8 @@ class TaskEditPanel : Panel {
         $this.Width = 60
         $this.Height = 16
         $this.HasBorder = $true
-        $this.IsFocusable = $true
+        # This is a container panel, focus should be on its children
+        $this.IsFocusable = $false # <<< FIX
         
         $this._CreateControls()
         $this._PopulateData()

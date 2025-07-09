@@ -7750,6 +7750,7 @@ class NavigationItem {
 
 
 ####\AllRuntime.ps1
+####\AllRuntime.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
 # TUI engine, screen management, and main application loop
@@ -8309,7 +8310,7 @@ function Process-TuiInput {
                 return
             }
             
-            # Get services from global state (the working pattern used throughout the codebase)
+            # Get services from global state
             $focusManager = $global:TuiState.Services.FocusManager
             $keybindingService = $global:TuiState.Services.KeybindingService
             $actionService = $global:TuiState.Services.ActionService
@@ -8318,41 +8319,27 @@ function Process-TuiInput {
             
             # Priority 1: Focused component gets first chance
             $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
-            $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'None' }
-            $focusedType = if ($null -ne $focusedComponent) { $focusedComponent.GetType().Name } else { 'N/A' }
-            $focusedIsFocused = if ($null -ne $focusedComponent) { $focusedComponent.IsFocused } else { 'N/A' }
-            $focusedEnabled = if ($null -ne $focusedComponent) { $focusedComponent.Enabled } else { 'N/A' }
             
-            Write-Log -Level Debug -Message "Process-TuiInput: Key pressed: $($keyInfo.Key), Modifiers: $($keyInfo.Modifiers)"
-            Write-Log -Level Debug -Message "  - FocusedComponent: $focusedName"
-            Write-Log -Level Debug -Message "  - FocusedComponent Type: $focusedType"
-            Write-Log -Level Debug -Message "  - IsFocused: $focusedIsFocused"
-            Write-Log -Level Debug -Message "  - Enabled: $focusedEnabled"
             if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
+                Write-Log -Level Debug -Message "Process-TuiInput: Trying focused component: $($focusedComponent.Name)"
                 if ($focusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
-                    $inputHandled = $true
                     Write-Log -Level Debug -Message "  - Input handled by focused component"
-                } else {
-                    Write-Log -Level Debug -Message "  - Input NOT handled by focused component"
+                    continue  # Input was handled, move to next key
                 }
             }
             
-            # Priority 2: If focused component didn't handle it AND overlay is active, 
-            # give overlay container a chance (for container actions like Escape)
-            # Then enforce modality - no further processing
-            if (-not $inputHandled -and $global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
+            # Priority 2: If overlay is active, give overlay container a chance
+            # This is for container-level actions like Escape to close
+            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
+                Write-Log -Level Debug -Message "  - Checking overlay: $($topOverlay.Name)"
                 if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
+                    Write-Log -Level Debug -Message "  - Input handled by overlay"
                 }
                 # Enforce modality - no other input processing when overlays are active
                 continue  
-            }
-            
-            # Skip to next key if input was handled
-            if ($inputHandled) {
-                continue
             }
             
             # Priority 3: Global keybindings (only if no overlay is active)
@@ -8638,8 +8625,6 @@ function Start-AxiomPhoenix {
 
 #endregion
 #<!-- END_PAGE: ART.006 -->
-
-
 
 
 ####\AllScreens.ps1
@@ -16608,6 +16593,7 @@ class TextBox : UIElement {
 
 
 ####\DialogComponents.ps1
+####\DialogComponents.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Dialog and Popup Components (CORRECTED)
 # Contains the CommandPalette, the DialogResult enum, the base Dialog class,
@@ -16639,7 +16625,7 @@ class CommandPalette : UIElement {
         $this.Height = 20
         
         $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[object]]::new()
+        $this._filteredActions = [List[int]]::new()
         
         $this.Initialize()
     }
@@ -16728,7 +16714,18 @@ class CommandPalette : UIElement {
             # Clear any previous search text
             $this._searchBox.Text = ""
             $this._searchBox.CursorPosition = 0
-            $this._searchBox.IsFocused = $true
+            
+            # Make sure the search box is focusable and enabled
+            $this._searchBox.IsFocusable = $true
+            $this._searchBox.Enabled = $true
+            $this._searchBox.Visible = $true
+            
+            # Use FocusManager to properly set focus
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: Setting focus to search box"
+                $focusManager.SetFocus($this._searchBox)
+            }
             $this._searchBox.RequestRedraw()
         }
     }
@@ -16736,7 +16733,7 @@ class CommandPalette : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        $handled = $true
+        $handled = $false
         
         switch ($key.Key) {
             ([ConsoleKey]::Escape) { 
@@ -16758,32 +16755,31 @@ class CommandPalette : UIElement {
             ([ConsoleKey]::Tab) {
                 # Switch focus between search box and list
                 if ($this._searchBox.IsFocused) {
-                    $this._searchBox.IsFocused = $false
-                    $this._listBox.IsFocusable = $true
-                    # Focus would be set by parent focus manager
+                    $focusManager = $global:TuiState.Services.FocusManager
+                    if ($focusManager) {
+                        $focusManager.SetFocus($this._listBox)
+                    }
                 } else {
-                    $this._searchBox.IsFocused = $true
-                    $this._listBox.IsFocusable = $false
+                    $focusManager = $global:TuiState.Services.FocusManager
+                    if ($focusManager) {
+                        $focusManager.SetFocus($this._searchBox)
+                    }
                 }
                 $this.RequestRedraw()
                 return $true
             }
             {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                # Navigation keys go to the list
+                # Navigation keys go to the list if it's focused
+                if ($this._listBox.IsFocused) {
+                    return $this._listBox.HandleInput($key)
+                }
+                # Otherwise let the list handle it anyway for convenience
                 return $this._listBox.HandleInput($key)
             }
             default {
-                # All other input goes to search box if it's focused
-                if ($this._searchBox.IsFocused) {
-                    return $this._searchBox.HandleInput($key)
-                } else {
-                    $handled = $false
-                }
+                # Don't handle other keys here - let the focused component handle them
+                return $false
             }
-        }
-        
-        if ($handled) {
-            $this.RequestRedraw()
         }
         
         return $handled
@@ -17434,7 +17430,7 @@ class TaskDeleteDialog : ConfirmDialog {
     }
 }
 
-#<!-- END_PAGE: ACO.020 -->
+#endregion Dialog Components
 
 #region Task Management Dialogs
 
@@ -17646,10 +17642,6 @@ class TaskEditPanel : Panel {
         }
     }
 }
-
-#
-# REMOVED DUPLICATE DEFINITIONS FOR TaskDeleteDialog and TaskDialog
-#
 
 #endregion
 

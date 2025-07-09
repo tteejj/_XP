@@ -1,3 +1,4 @@
+####\DialogComponents.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Dialog and Popup Components (CORRECTED)
 # Contains the CommandPalette, the DialogResult enum, the base Dialog class,
@@ -29,7 +30,7 @@ class CommandPalette : UIElement {
         $this.Height = 20
         
         $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[object]]::new()
+        $this._filteredActions = [List[int]]::new()
         
         $this.Initialize()
     }
@@ -118,7 +119,18 @@ class CommandPalette : UIElement {
             # Clear any previous search text
             $this._searchBox.Text = ""
             $this._searchBox.CursorPosition = 0
-            $this._searchBox.IsFocused = $true
+            
+            # Make sure the search box is focusable and enabled
+            $this._searchBox.IsFocusable = $true
+            $this._searchBox.Enabled = $true
+            $this._searchBox.Visible = $true
+            
+            # Use FocusManager to properly set focus
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: Setting focus to search box"
+                $focusManager.SetFocus($this._searchBox)
+            }
             $this._searchBox.RequestRedraw()
         }
     }
@@ -126,7 +138,7 @@ class CommandPalette : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        $handled = $true
+        $handled = $false
         
         switch ($key.Key) {
             ([ConsoleKey]::Escape) { 
@@ -148,32 +160,31 @@ class CommandPalette : UIElement {
             ([ConsoleKey]::Tab) {
                 # Switch focus between search box and list
                 if ($this._searchBox.IsFocused) {
-                    $this._searchBox.IsFocused = $false
-                    $this._listBox.IsFocusable = $true
-                    # Focus would be set by parent focus manager
+                    $focusManager = $global:TuiState.Services.FocusManager
+                    if ($focusManager) {
+                        $focusManager.SetFocus($this._listBox)
+                    }
                 } else {
-                    $this._searchBox.IsFocused = $true
-                    $this._listBox.IsFocusable = $false
+                    $focusManager = $global:TuiState.Services.FocusManager
+                    if ($focusManager) {
+                        $focusManager.SetFocus($this._searchBox)
+                    }
                 }
                 $this.RequestRedraw()
                 return $true
             }
             {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                # Navigation keys go to the list
+                # Navigation keys go to the list if it's focused
+                if ($this._listBox.IsFocused) {
+                    return $this._listBox.HandleInput($key)
+                }
+                # Otherwise let the list handle it anyway for convenience
                 return $this._listBox.HandleInput($key)
             }
             default {
-                # All other input goes to search box if it's focused
-                if ($this._searchBox.IsFocused) {
-                    return $this._searchBox.HandleInput($key)
-                } else {
-                    $handled = $false
-                }
+                # Don't handle other keys here - let the focused component handle them
+                return $false
             }
-        }
-        
-        if ($handled) {
-            $this.RequestRedraw()
         }
         
         return $handled
@@ -824,7 +835,7 @@ class TaskDeleteDialog : ConfirmDialog {
     }
 }
 
-#<!-- END_PAGE: ACO.020 -->
+#endregion Dialog Components
 
 #region Task Management Dialogs
 
@@ -1036,9 +1047,5 @@ class TaskEditPanel : Panel {
         }
     }
 }
-
-#
-# REMOVED DUPLICATE DEFINITIONS FOR TaskDeleteDialog and TaskDialog
-#
 
 #endregion
