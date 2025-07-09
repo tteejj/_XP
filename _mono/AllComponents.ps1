@@ -2573,6 +2573,9 @@ class CommandPalette : UIElement {
                 }
             }
         }
+        
+        # Failsafe return (should never reach here)
+        return $false
     }
 }
 
@@ -3179,7 +3182,6 @@ class TaskDeleteDialog : ConfirmDialog {
             $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
             $this._panel.AddChild($detailsLabel)
         }
-        #return $false
     }
 }
 
