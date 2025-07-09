@@ -218,6 +218,25 @@ class ActionService {
             # Show the palette using the standard overlay mechanism
             $dialogManager.ShowDialog($palette)
             
+            # Set initial focus directly without sleep
+            if ($palette._searchBox) {
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    # Make sure the search box is ready
+                    $palette._searchBox.IsFocusable = $true
+                    $palette._searchBox.Enabled = $true
+                    $palette._searchBox.Visible = $true
+                    
+                    # Set focus and update global state
+                    $focusManager.SetFocus($palette._searchBox)
+                    $global:TuiState.FocusedComponent = $palette._searchBox
+                    
+                    # Force a redraw
+                    $palette._searchBox.RequestRedraw()
+                    $global:TuiState.IsDirty = $true
+                }
+            }
+            
         }, @{
             Category = "Application"
             Description = "Show command palette"
@@ -1960,6 +1979,11 @@ class DialogManager {
         if ($this.FocusManager) {
             # Let the dialog class handle finding its first internal focusable
             if ($dialog.PSObject.Methods['SetInitialFocus']) {
+                # Force a redraw first to ensure components are ready
+                $dialog.RequestRedraw()
+                $global:TuiState.IsDirty = $true
+                
+                # Now set initial focus
                 $dialog.SetInitialFocus()
             } else {
                 $this.FocusManager.SetFocus($dialog) # Fallback to focusing the dialog container

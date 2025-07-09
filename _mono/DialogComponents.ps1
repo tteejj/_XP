@@ -32,7 +32,7 @@ class CommandPalette : UIElement {
         $this.Height = 20
         
         $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[object]]::new() # Corrected from [List[int]]
+        $this._filteredActions = [List[object]]::new() # FIXED: Was [List[int]]
         
         $this.Initialize()
     }
@@ -147,6 +147,9 @@ class CommandPalette : UIElement {
                 Write-Log -Level Debug -Message "  SearchBox properties - Name: $($this._searchBox.Name), IsFocusable: $($this._searchBox.IsFocusable), Enabled: $($this._searchBox.Enabled), Visible: $($this._searchBox.Visible)"
                 $focusManager.SetFocus($this._searchBox)
                 
+                # Force the global focused component to be updated
+                $global:TuiState.FocusedComponent = $this._searchBox
+                
                 # Double-check that focus was set
                 if ($focusManager.FocusedComponent -eq $this._searchBox) {
                     Write-Log -Level Debug -Message "  Focus successfully set to search box"
@@ -164,7 +167,7 @@ class CommandPalette : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        # This container handles Escape, Enter, Tab, and delegates arrow keys
+        # This container handles Escape, Enter, Tab, and helps with arrow key navigation
         switch ($key.Key) {
             ([ConsoleKey]::Escape) { 
                 if ($this.OnCancel) {
@@ -173,7 +176,7 @@ class CommandPalette : UIElement {
                 return $true 
             }
             ([ConsoleKey]::Enter) {
-                # If focus is on search box, move to list
+                # If focus is on search box and there are results, move to list
                 if ($global:TuiState.Services.FocusManager.FocusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
                     $global:TuiState.Services.FocusManager.SetFocus($this._listBox)
                     return $true
@@ -217,8 +220,10 @@ class CommandPalette : UIElement {
         ([UIElement]$this).OnFocus()
         # Set initial focus to search box
         if ($this._searchBox) {
-            $this._searchBox.IsFocused = $true
-            $this._searchBox.RequestRedraw()
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                $focusManager.SetFocus($this._searchBox)
+            }
         }
     }
 
@@ -662,7 +667,20 @@ class InputDialog : Dialog {
     [void] SetInitialFocus() {
         # Set focus to the input box when dialog appears
         if ($this._inputBox -and $global:TuiState.Services.FocusManager) {
+            # Make sure the input box is ready
+            $this._inputBox.IsFocusable = $true
+            $this._inputBox.Enabled = $true
+            $this._inputBox.Visible = $true
+            
+            # Set focus
             $global:TuiState.Services.FocusManager.SetFocus($this._inputBox)
+            
+            # Force update of global state
+            $global:TuiState.FocusedComponent = $this._inputBox
+            
+            # Request redraw
+            $this._inputBox.RequestRedraw()
+            $global:TuiState.IsDirty = $true
         }
     }
 }
@@ -1066,8 +1084,21 @@ class TaskEditPanel : Panel {
     [void] SetInitialFocus() {
         # Focus the title textbox first
         $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
+        if ($focusManager -and $this._titleTextBox) {
+            # Make sure the textbox is ready
+            $this._titleTextBox.IsFocusable = $true
+            $this._titleTextBox.Enabled = $true
+            $this._titleTextBox.Visible = $true
+            
+            # Set focus
             $focusManager.SetFocus($this._titleTextBox)
+            
+            # Force update of global state
+            $global:TuiState.FocusedComponent = $this._titleTextBox
+            
+            # Request redraw
+            $this._titleTextBox.RequestRedraw()
+            $global:TuiState.IsDirty = $true
         }
     }
 }
