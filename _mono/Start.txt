@@ -1,140 +1,30 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Enhanced Application Startup
-# Beautiful splash screen and smooth initialization
+# Axiom-Phoenix v4.0 - Application Startup
 # ==============================================================================
 
 param(
     [string]$Theme = "Synthwave",
-    [switch]$NoSplash,
     [switch]$Debug
 )
 
 # Set error action preference
 $ErrorActionPreference = 'Stop'
 
-# Function to display animated splash screen
-function Show-SplashScreen {
-    param([int]$Duration = 3000)
-    
-    Clear-Host
-    $host.UI.RawUI.CursorSize = 0  # Hide cursor
-    
-    $width = $host.UI.RawUI.WindowSize.Width
-    $height = $host.UI.RawUI.WindowSize.Height
-    
-    # ASCII Art Logo
-    $logo = @"
-    ╔═══════════════════════════════════════════════════════════════════╗
-    ║                                                                   ║
-    ║      ___   _  _  _  ___  __  __     ___  _  _  ___  ___  _  _  _ ║
-    ║     / _ \ | \/ || |/ _ \|  \/  |   | _ \| || |/ _ \| __|| \| || |║
-    ║    | |_| | >  < | | (_) | |\/| |   |  _/| __ | (_) | _| | .  || |║
-    ║    |_| |_|/_/\_\|_|\___/|_|  |_|   |_|  |_||_|\___/|___||_|\_||_|║
-    ║                                                                   ║
-    ║                        v4.0 ENHANCED EDITION                      ║
-    ║                                                                   ║
-    ╚═══════════════════════════════════════════════════════════════════╝
-"@
-    
-    $tagline = "The Future of Terminal User Interfaces"
-    $credits = "Powered by PowerShell 7+ | Built with ❤️"
-    
-    # Calculate positions
-    $logoLines = $logo -split "`n"
-    $logoWidth = ($logoLines | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum
-    $startX = [Math]::Max(0, [Math]::Floor(($width - $logoWidth) / 2))
-    $startY = [Math]::Max(0, [Math]::Floor(($height - $logoLines.Count - 4) / 2))
-    
-    # Synthwave colors for animation
-    $colors = @(
-        [ConsoleColor]::Magenta,
-        [ConsoleColor]::Cyan,
-        [ConsoleColor]::Yellow,
-        [ConsoleColor]::Green,
-        [ConsoleColor]::Blue
-    )
-    
-    # Animate logo appearance
-    $steps = 20
-    $stepDelay = $Duration / $steps
-    
-    for ($i = 0; $i -lt $steps; $i++) {
-        $colorIndex = $i % $colors.Count
-        $host.UI.RawUI.ForegroundColor = $colors[$colorIndex]
-        
-        # Clear and redraw
-        Clear-Host
-        
-        # Draw logo with fade-in effect
-        $y = $startY
-        foreach ($line in $logoLines) {
-            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($startX, $y)
-            if ($i -ge $steps / 2 -or $y -eq $startY -or $y -eq ($startY + $logoLines.Count - 1)) {
-                Write-Host $line -NoNewline
-            }
-            $y++
-        }
-        
-        # Draw tagline
-        if ($i -ge $steps * 0.6) {
-            $taglineX = [Math]::Floor(($width - $tagline.Length) / 2)
-            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($taglineX, $startY + $logoLines.Count + 1)
-            Write-Host $tagline -ForegroundColor Cyan -NoNewline
-        }
-        
-        # Draw credits
-        if ($i -ge $steps * 0.8) {
-            $creditsX = [Math]::Floor(($width - $credits.Length) / 2)
-            $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($creditsX, $startY + $logoLines.Count + 3)
-            Write-Host $credits -ForegroundColor DarkGray -NoNewline
-        }
-        
-        # Progress bar
-        $progressY = $height - 3
-        $progressWidth = 60
-        $progressX = [Math]::Floor(($width - $progressWidth) / 2)
-        $progress = [Math]::Floor(($i / $steps) * $progressWidth)
-        
-        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($progressX, $progressY)
-        Write-Host "[" -NoNewline -ForegroundColor DarkGray
-        Write-Host ("█" * $progress) -NoNewline -ForegroundColor Green
-        Write-Host ("░" * ($progressWidth - $progress)) -NoNewline -ForegroundColor DarkGray
-        Write-Host "]" -NoNewline -ForegroundColor DarkGray
-        
-        # Loading message
-        $messages = @(
-            "Initializing quantum cores...",
-            "Loading neural matrices...",
-            "Calibrating photon streams...",
-            "Synchronizing time crystals...",
-            "Establishing neural link..."
-        )
-        $messageIndex = [Math]::Floor(($i / $steps) * $messages.Count)
-        $message = $messages[$messageIndex]
-        $messageX = [Math]::Floor(($width - $message.Length) / 2)
-        $host.UI.RawUI.CursorPosition = [System.Management.Automation.Host.Coordinates]::new($messageX, $progressY + 1)
-        Write-Host $message -ForegroundColor Yellow
-        
-        Start-Sleep -Milliseconds $stepDelay
-    }
-    
-    # Final pause
-    Start-Sleep -Milliseconds 500
-    
-    # Reset
-    $host.UI.RawUI.ForegroundColor = [ConsoleColor]::Gray
-    $host.UI.RawUI.CursorSize = 25  # Restore cursor
-    Clear-Host
+# Disable verbose output to prevent JSON serialization warnings
+$VerbosePreference = 'SilentlyContinue'
+$DebugPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+
+# Only enable verbose output if explicitly requested
+if ($env:AXIOM_VERBOSE -eq '1') {
+    $VerbosePreference = 'Continue'
+    $WarningPreference = 'Continue'
 }
 
 # Main startup sequence
 try {
-    # Show splash screen unless disabled
-    if (-not $NoSplash) {
-        Show-SplashScreen -Duration 2000
-    }
     
-    Write-Host "Loading Axiom-Phoenix v4.0 Enhanced..." -ForegroundColor Cyan
+    Write-Host "Loading Axiom-Phoenix v4.0..." -ForegroundColor Cyan
     Write-Host ""
     
     # Verify PowerShell version
@@ -162,14 +52,7 @@ try {
         @{ File = "AllRuntime.ps1"; Description = "Runtime Engine" }
     )
     
-    $totalFiles = $files.Count
-    $currentFile = 0
-    
     foreach ($fileInfo in $files) {
-        $currentFile++
-        $percent = [Math]::Floor(($currentFile / $totalFiles) * 100)
-        
-        Write-Host "[$percent%] " -NoNewline -ForegroundColor Green
         Write-Host "Loading $($fileInfo.Description)... " -NoNewline -ForegroundColor Gray
         
         $filePath = Join-Path $scriptDir $fileInfo.File
@@ -190,29 +73,38 @@ try {
     Write-Host "Initializing services..." -ForegroundColor Cyan
     $container = [ServiceContainer]::new()
     
-    # Register services with fancy names
+    # Register services
     $services = @(
-        @{ Type = "Logger"; Name = "Neural Logger" },
-        @{ Type = "EventManager"; Name = "Quantum Event System" },
-        @{ Type = "ThemeManager"; Name = "Photon Theme Engine" },
-        @{ Type = "DataManager"; Name = "Data Matrix" },
-        @{ Type = "ActionService"; Name = "Command Nexus" },
-        @{ Type = "KeybindingService"; Name = "Neural Keybinds" },
-        @{ Type = "NavigationService"; Name = "Dimensional Navigator" },
-        @{ Type = "FocusManager"; Name = "Focus Controller" },
-        @{ Type = "DialogManager"; Name = "Dialog Orchestrator" },
-        @{ Type = "TuiFrameworkService"; Name = "Framework State Manager" }
+        @{ Type = "Logger" },
+        @{ Type = "EventManager" },
+        @{ Type = "ThemeManager" },
+        @{ Type = "DataManager" },
+        @{ Type = "ActionService" },
+        @{ Type = "KeybindingService" },
+        @{ Type = "NavigationService" },
+        @{ Type = "FocusManager" },
+        @{ Type = "DialogManager" },
+        @{ Type = "TuiFrameworkService" }
     )
     
     # Create a hashtable to store services as we register them
     $servicesHashtable = @{}
     
     foreach ($service in $services) {
-        Write-Host "  • Initializing $($service.Name)... " -NoNewline -ForegroundColor Gray
+        Write-Host "  • Initializing $($service.Type)... " -NoNewline -ForegroundColor Gray
         
         $instance = switch ($service.Type) {
-            "Logger" { [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")) }
-            "EventManager" { [EventManager]::new() }
+            "Logger" { 
+                $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
+                $logger.MinimumLevel = "Info"  # Only log Info, Warning, Error, Fatal
+                $logger.EnableConsoleLogging = $false  # Disable console logging by default
+                $logger
+            }
+            "EventManager" { 
+                $eventManager = [EventManager]::new()
+                $eventManager.EnableHistory = $false  # Disable event history to prevent any serialization
+                $eventManager
+            }
             "ThemeManager" { [ThemeManager]::new() }
             "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
             "ActionService" { [ActionService]::new() }
@@ -271,35 +163,35 @@ try {
     Write-Host "Generating sample data..." -ForegroundColor Cyan
     $dataManager = $container.GetService("DataManager")
     
-    # Enhanced sample tasks
+    # Sample tasks
     $sampleTasks = @(
         @{
-            Title = "🚀 Launch Quantum Core Module"
-            Description = "Initialize the quantum processing core for enhanced computational capabilities"
+            Title = "Implement User Authentication"
+            Description = "Add secure login functionality to the application"
             Priority = "High"
             Progress = 75
         },
         @{
-            Title = "🧬 Optimize Neural Networks"
-            Description = "Fine-tune the AI neural network parameters for improved performance"
+            Title = "Update Documentation"
+            Description = "Update API documentation with latest changes"
             Priority = "Medium"
             Progress = 45
         },
         @{
-            Title = "🌊 Calibrate Wave Functions"
-            Description = "Adjust quantum wave function parameters for stable operation"
+            Title = "Fix Memory Leak"
+            Description = "Investigate and fix memory leak in data processing module"
             Priority = "High"
             Progress = 90
         },
         @{
-            Title = "💎 Crystal Matrix Alignment"
-            Description = "Align the photonic crystal matrix for optimal light transmission"
+            Title = "Design New UI Components"
+            Description = "Create mockups for new dashboard components"
             Priority = "Low"
             Progress = 20
         },
         @{
-            Title = "⚡ Energy Field Stabilization"
-            Description = "Stabilize the plasma energy field generators"
+            Title = "Optimize Database Queries"
+            Description = "Improve performance of slow database queries"
             Priority = "Medium"
             Progress = 60
         }
@@ -317,14 +209,21 @@ try {
     
     Write-Host "Sample data created!" -ForegroundColor Green
     
+    # Test command palette before starting
+    Write-Host ""
+    Write-Host "Testing services..." -ForegroundColor Cyan
+    $actionService = $container.GetService("ActionService")
+    if ($actionService) {
+        Write-Host "✓ ActionService available with $($actionService.ActionRegistry.Count) actions" -ForegroundColor Green
+    } else {
+        Write-Host "✗ ActionService not available!" -ForegroundColor Red
+    }
+    
     # Start application
     Write-Host ""
-    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host " AXIOM-PHOENIX v4.0 ENHANCED - READY TO LAUNCH! " -ForegroundColor Yellow
-    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "Press any key to enter the matrix..." -ForegroundColor Green
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Write-Host "Starting Axiom-Phoenix v4.0..." -ForegroundColor Cyan
+    Write-Host "Press Ctrl+P to open command palette, Ctrl+Q to quit" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
     
     # Create initial screen
     $dashboardScreen = [DashboardScreen]::new($container)

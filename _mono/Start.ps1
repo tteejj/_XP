@@ -209,9 +209,21 @@ try {
     
     Write-Host "Sample data created!" -ForegroundColor Green
     
+    # Test command palette before starting
+    Write-Host ""
+    Write-Host "Testing services..." -ForegroundColor Cyan
+    $actionService = $container.GetService("ActionService")
+    if ($actionService) {
+        Write-Host "✓ ActionService available with $($actionService.ActionRegistry.Count) actions" -ForegroundColor Green
+    } else {
+        Write-Host "✗ ActionService not available!" -ForegroundColor Red
+    }
+    
     # Start application
     Write-Host ""
     Write-Host "Starting Axiom-Phoenix v4.0..." -ForegroundColor Cyan
+    Write-Host "Press Ctrl+P to open command palette, Ctrl+Q to quit" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
     
     # Create initial screen
     $dashboardScreen = [DashboardScreen]::new($container)

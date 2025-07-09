@@ -1924,7 +1924,7 @@ class ScrollablePanel : Panel {
         $this.IsFocusable = $true
         # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
         # Start with max possible height or a reasonable large value, will grow as children are added
-        $this.{_virtual_buffer} = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
+        $this._virtual_buffer = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
     }
 
     # Override OnResize to ensure virtual buffer matches actual content area needs
@@ -1934,8 +1934,8 @@ class ScrollablePanel : Panel {
 
         # Ensure the virtual buffer is wide enough for the content area
         $targetVirtualWidth = $this.ContentWidth 
-        if ($this.{_virtual_buffer}.Width -ne $targetVirtualWidth) {
-            $this.{_virtual_buffer}.Resize($targetVirtualWidth, $this.{_virtual_buffer}.Height) # Only resize width for now
+        if ($this._virtual_buffer.Width -ne $targetVirtualWidth) {
+            $this._virtual_buffer.Resize($targetVirtualWidth, $this._virtual_buffer.Height) # Only resize width for now
         }
         $this.UpdateMaxScroll() # Recalculate max scroll on resize
         $this.RequestRedraw()
@@ -1948,7 +1948,7 @@ class ScrollablePanel : Panel {
         ([Panel]$this)._RenderContent()
 
         # 2. Render all children onto the _virtual_buffer
-        $this.{_virtual_buffer}.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
+        $this._virtual_buffer.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
         
         $actualContentBottom = 0
         foreach ($child in $this.Children | Sort-Object ZIndex) {
@@ -1958,7 +1958,7 @@ class ScrollablePanel : Panel {
                 if ($null -ne $child._private_buffer) {
                     # Blend child's buffer onto our _virtual_buffer at its original coordinates
                     # (relative to the panel's content area)
-                    $this.{_virtual_buffer}.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
+                    $this._virtual_buffer.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
                 }
                 # Track the maximum vertical extent of children to determine virtual height
                 $childExtent = ($child.Y - $this.ContentY) + $child.Height
@@ -1985,17 +1985,17 @@ class ScrollablePanel : Panel {
         $sourceY = $this.ScrollOffsetY
         
         # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
-        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this.{_virtual_buffer}.Height - $sourceY)
+        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this._virtual_buffer.Height - $sourceY)
         if ($effectiveSourceHeight -le 0) {
             # No content to display in viewport
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
             return
         }
 
-        $visiblePortion = $this.{_virtual_buffer}.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
+        $visiblePortion = $this._virtual_buffer.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
         
         # Blend the visible portion onto our own _private_buffer, at the content area
-        $this.{_private_buffer}.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
+        $this._private_buffer.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
 
         # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
         if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
@@ -2010,10 +2010,10 @@ class ScrollablePanel : Panel {
         $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
         
         # Ensure virtual buffer height is at least content height
-        $currentVirtualHeight = $this.{_virtual_buffer}.Height
+        $currentVirtualHeight = $this._virtual_buffer.Height
         $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
         if ($newVirtualHeight -ne $currentVirtualHeight) {
-            $this.{_virtual_buffer}.Resize($this.{_virtual_buffer}.Width, $newVirtualHeight)
+            $this._virtual_buffer.Resize($this._virtual_buffer.Width, $newVirtualHeight)
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
         }
 
@@ -2042,7 +2042,7 @@ class ScrollablePanel : Panel {
             # If content fits, clear any previous scrollbar
             $bgColor = Get-ThemeColor "Background"
             for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
-                $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', $bgColor, $bgColor))
+                $this._private_buffer.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', $bgColor, $bgColor))
             }
             return 
         } 
@@ -2061,7 +2061,7 @@ class ScrollablePanel : Panel {
             if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) {
                 $char = '█' # Thumb character
             }
-            $this.{_private_buffer}.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
+            $this._private_buffer.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
         }
     }
 
@@ -2439,10 +2439,17 @@ class CommandPalette : UIElement {
         $this.Height = 20
         $this._actionService = $actionService
         
+        # Initialize the buffer immediately
+        $this.Resize($this.Width, $this.Height)
+        
         $this.Initialize()
+        
+        Write-Log -Level Debug -Message "CommandPalette created with size $($this.Width)x$($this.Height)"
     }
 
     hidden [void] Initialize() {
+        Write-Log -Level Debug -Message "CommandPalette.Initialize() starting"
+        
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
@@ -2450,6 +2457,7 @@ class CommandPalette : UIElement {
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
+        Write-Log -Level Debug -Message "CommandPalette: Panel created"
 
         $this._searchBox = [TextBoxComponent]::new("CommandPalette_Search")
         $this._searchBox.X = 2
@@ -2461,6 +2469,7 @@ class CommandPalette : UIElement {
         $paletteRef = $this
         $this._searchBox.OnChange = { param($sender, $text) $paletteRef.FilterActions($text) }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
+        Write-Log -Level Debug -Message "CommandPalette: SearchBox created"
 
         $this._listBox = [ListBox]::new("CommandPalette_List")
         $this._listBox.X = 2
@@ -2468,16 +2477,25 @@ class CommandPalette : UIElement {
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 6
         $this._panel.AddChild($this._listBox)
+        Write-Log -Level Debug -Message "CommandPalette: ListBox created"
 
         $this._allActions = [List[object]]::new()
         $this._filteredActions = [List[object]]::new()
+        
+        Write-Log -Level Debug -Message "CommandPalette.Initialize() completed"
     }
 
     [void] Show() {
+        Write-Log -Level Debug -Message "CommandPalette.Show() called"
         $consoleWidth = $global:TuiState.BufferWidth
         $consoleHeight = $global:TuiState.BufferHeight
         $this.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $this.Width) / 2))
         $this.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $this.Height) / 2))
+        
+        Write-Log -Level Debug -Message "CommandPalette positioned at X=$($this.X), Y=$($this.Y)"
+        
+        # Ensure the command palette buffer is properly sized
+        $this.Resize($this.Width, $this.Height)
         
         $this.RefreshActions()
         $this._searchBox.Text = ""
@@ -2487,10 +2505,19 @@ class CommandPalette : UIElement {
         
         if (-not $global:TuiState.OverlayStack.Contains($this)) {
             $global:TuiState.OverlayStack.Add($this)
+            Write-Log -Level Debug -Message "CommandPalette added to overlay stack"
         }
         
-        $global:TuiState.Services.FocusManager?.SetFocus($this._searchBox)
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._searchBox)
+            Write-Log -Level Debug -Message "Focus set to search box"
+        } else {
+            Write-Log -Level Warning -Message "FocusManager not available"
+        }
+        
         $global:TuiState.IsDirty = $true
+        Write-Log -Level Debug -Message "CommandPalette.Show() completed, IsDirty set to true"
     }
 
     [void] Hide() {
@@ -2535,24 +2562,48 @@ class CommandPalette : UIElement {
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
-        switch ($key.Key) {
-            ([ConsoleKey]::Escape) { $this.Hide(); return $true }
-            ([ConsoleKey]::Enter) {
-                if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                    if ($selectedAction) {
-                        $this.Hide()
-                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                    }
+        
+        # If search box is focused, let it handle most input first
+        if ($this._searchBox.IsFocused) {
+            # Check for special keys that the palette should handle
+            switch ($key.Key) {
+                ([ConsoleKey]::Escape) { 
+                    $this.Hide()
+                    return $true 
                 }
-                return $true # Consume enter even if no action taken
+                ([ConsoleKey]::Enter) {
+                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                        if ($selectedAction) {
+                            Write-Log -Level Debug -Message "CommandPalette: Executing action $($selectedAction.Name)"
+                            $this.Hide()
+                            $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                        }
+                    }
+                    return $true
+                }
+                {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
+                    # Navigation keys go to the list
+                    return $this._listBox.HandleInput($key)
+                }
+                default {
+                    # All other input goes to search box
+                    return $this._searchBox.HandleInput($key)
+                }
             }
-            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                return $this._listBox.HandleInput($key)
-            }
-            default { return $false }
         }
-        return $false # Ensure all code paths return a value
+        else {
+            # Fallback for when search box isn't focused (shouldn't happen)
+            switch ($key.Key) {
+                ([ConsoleKey]::Escape) { 
+                    $this.Hide()
+                    return $true 
+                }
+                default { 
+                    return $false 
+                }
+            }
+        }
     }
 }
 
@@ -3177,10 +3228,10 @@ class NavigationMenu : UIElement {
     [List[NavigationItem]]$Items
     [int]$SelectedIndex = 0
     [string]$Orientation = "Horizontal"  # Horizontal or Vertical
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::DarkBlue
-    [ConsoleColor]$SelectedForegroundColor = [ConsoleColor]::Yellow
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$SelectedBackgroundColor = "#0078D4"
+    [string]$SelectedForegroundColor = "#FFFF00"
 
     NavigationMenu([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -3220,9 +3271,9 @@ class NavigationMenu : UIElement {
             $bg = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.BackgroundColor }
             
             # Draw item
-            $text = " $($item.Text) "
-            if ($item.Hotkey) {
-                $text = " $($item.Text) ($($item.Hotkey)) "
+            $text = " $($item.Label) "
+            if ($item.Key) {
+                $text = " $($item.Label) ($($item.Key)) "
             }
             
             if ($currentX + $text.Length -le $this.Width) {
@@ -3237,7 +3288,14 @@ class NavigationMenu : UIElement {
     }
 
     hidden [void] RenderVertical() {
-        $this.Height = [Math]::Max($this.Items.Count, 1)
+        # Ensure height matches item count
+        if ($this.Height -ne $this.Items.Count -and $this.Items.Count -gt 0) {
+            $this.Height = $this.Items.Count
+            # Resize the buffer to match new height
+            if ($this._private_buffer) {
+                $this._private_buffer.Resize($this.Width, $this.Height)
+            }
+        }
         
         for ($i = 0; $i -lt $this.Items.Count; $i++) {
             $item = $this.Items[$i]
@@ -3252,16 +3310,16 @@ class NavigationMenu : UIElement {
             }
             
             # Draw item
-            $text = $item.Text
-            if ($item.Hotkey) {
-                $text = "$($item.Text) ($($item.Hotkey))"
+            $text = $item.Label
+            if ($item.Key) {
+                $text = "$($item.Label) ($($item.Key))"
             }
             
             if ($text.Length -gt $this.Width) {
                 $text = $text.Substring(0, $this.Width - 3) + "..."
             }
             
-            $this._private_buffer.WriteString(0, $i, $text, $fg, $bg)
+            $this._private_buffer.WriteString(0, $i, $text, @{ FG = $fg; BG = $bg })
         }
     }
 
@@ -3322,7 +3380,7 @@ class NavigationMenu : UIElement {
     hidden [bool] CheckHotkey([System.ConsoleKeyInfo]$key) {
         foreach ($i in 0..($this.Items.Count - 1)) {
             $item = $this.Items[$i]
-            if ($item.Hotkey -and $item.Hotkey.ToUpper() -eq $key.KeyChar.ToString().ToUpper()) {
+            if ($item.Key -and $item.Key.ToUpper() -eq $key.KeyChar.ToString().ToUpper()) {
                 $this.SelectedIndex = $i
                 $this.ExecuteItem($i)
                 return $true
@@ -3359,3 +3417,4 @@ enum DialogResult {
     Abort = 6
 }
 #endregion
+

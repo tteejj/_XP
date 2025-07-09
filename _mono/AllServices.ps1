@@ -164,8 +164,11 @@ class ActionService {
         $this.RegisterAction("app.commandPalette", {
             # Write-Verbose "Executing app.commandPalette action"
             if ($global:TuiState.CommandPalette) {
+                Write-Log -Level Debug -Message "Showing command palette"
                 $global:TuiState.CommandPalette.Show()
                 $global:TuiState.IsDirty = $true
+            } else {
+                Write-Log -Level Warning -Message "Command palette not initialized"
             }
         }, @{
             Category = "Application"
@@ -322,15 +325,22 @@ class KeybindingService {
     [string] GetAction([System.ConsoleKeyInfo]$keyInfo) {
         $keyPattern = $this._GetKeyPattern($keyInfo)
         
+        # Log key pattern for debugging
+        if ($keyPattern -match "Ctrl") {
+            Write-Log -Level Debug -Message "KeybindingService: Key pattern detected: $keyPattern"
+        }
+        
         # Check current context stack (most recent first)
         foreach ($context in $this.ContextStack) {
             if ($context.ContainsKey($keyPattern)) {
+                Write-Log -Level Debug -Message "KeybindingService: Found action in context: $($context[$keyPattern])"
                 return $context[$keyPattern]
             }
         }
         
         # Check global context
         if ($this.KeyMap.ContainsKey("Global") -and $this.KeyMap["Global"].ContainsKey($keyPattern)) {
+            Write-Log -Level Debug -Message "KeybindingService: Found action in global context: $($this.KeyMap["Global"][$keyPattern])"
             return $this.KeyMap["Global"][$keyPattern]
         }
         

@@ -2439,10 +2439,17 @@ class CommandPalette : UIElement {
         $this.Height = 20
         $this._actionService = $actionService
         
+        # Initialize the buffer immediately
+        $this.Resize($this.Width, $this.Height)
+        
         $this.Initialize()
+        
+        Write-Log -Level Debug -Message "CommandPalette created with size $($this.Width)x$($this.Height)"
     }
 
     hidden [void] Initialize() {
+        Write-Log -Level Debug -Message "CommandPalette.Initialize() starting"
+        
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
@@ -2450,6 +2457,7 @@ class CommandPalette : UIElement {
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
+        Write-Log -Level Debug -Message "CommandPalette: Panel created"
 
         $this._searchBox = [TextBoxComponent]::new("CommandPalette_Search")
         $this._searchBox.X = 2
@@ -2461,6 +2469,7 @@ class CommandPalette : UIElement {
         $paletteRef = $this
         $this._searchBox.OnChange = { param($sender, $text) $paletteRef.FilterActions($text) }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
+        Write-Log -Level Debug -Message "CommandPalette: SearchBox created"
 
         $this._listBox = [ListBox]::new("CommandPalette_List")
         $this._listBox.X = 2
@@ -2468,16 +2477,25 @@ class CommandPalette : UIElement {
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 6
         $this._panel.AddChild($this._listBox)
+        Write-Log -Level Debug -Message "CommandPalette: ListBox created"
 
         $this._allActions = [List[object]]::new()
         $this._filteredActions = [List[object]]::new()
+        
+        Write-Log -Level Debug -Message "CommandPalette.Initialize() completed"
     }
 
     [void] Show() {
+        Write-Log -Level Debug -Message "CommandPalette.Show() called"
         $consoleWidth = $global:TuiState.BufferWidth
         $consoleHeight = $global:TuiState.BufferHeight
         $this.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $this.Width) / 2))
         $this.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $this.Height) / 2))
+        
+        Write-Log -Level Debug -Message "CommandPalette positioned at X=$($this.X), Y=$($this.Y)"
+        
+        # Ensure the command palette buffer is properly sized
+        $this.Resize($this.Width, $this.Height)
         
         $this.RefreshActions()
         $this._searchBox.Text = ""
@@ -2487,10 +2505,19 @@ class CommandPalette : UIElement {
         
         if (-not $global:TuiState.OverlayStack.Contains($this)) {
             $global:TuiState.OverlayStack.Add($this)
+            Write-Log -Level Debug -Message "CommandPalette added to overlay stack"
         }
         
-        $global:TuiState.Services.FocusManager?.SetFocus($this._searchBox)
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._searchBox)
+            Write-Log -Level Debug -Message "Focus set to search box"
+        } else {
+            Write-Log -Level Warning -Message "FocusManager not available"
+        }
+        
         $global:TuiState.IsDirty = $true
+        Write-Log -Level Debug -Message "CommandPalette.Show() completed, IsDirty set to true"
     }
 
     [void] Hide() {
@@ -2535,24 +2562,50 @@ class CommandPalette : UIElement {
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
-        switch ($key.Key) {
-            ([ConsoleKey]::Escape) { $this.Hide(); return $true }
-            ([ConsoleKey]::Enter) {
-                if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                    if ($selectedAction) {
-                        $this.Hide()
-                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                    }
+        
+        # If search box is focused, let it handle most input first
+        if ($this._searchBox.IsFocused) {
+            # Check for special keys that the palette should handle
+            switch ($key.Key) {
+                ([ConsoleKey]::Escape) { 
+                    $this.Hide()
+                    return $true 
                 }
-                return $true # Consume enter even if no action taken
+                ([ConsoleKey]::Enter) {
+                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                        if ($selectedAction) {
+                            Write-Log -Level Debug -Message "CommandPalette: Executing action $($selectedAction.Name)"
+                            $this.Hide()
+                            $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                            return $true
+                        }
+                    }
+                    # If no action selected or invalid, still return true to consume the Enter key
+                    return $true
+                }
+                {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
+                    # Navigation keys go to the list
+                    return $this._listBox.HandleInput($key)
+                }
+                default {
+                    # All other input goes to search box
+                    return $this._searchBox.HandleInput($key)
+                }
             }
-            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                return $this._listBox.HandleInput($key)
-            }
-            default { return $false }
         }
-        return $false # Ensure all code paths return a value
+        else {
+            # Fallback for when search box isn't focused (shouldn't happen)
+            switch ($key.Key) {
+                ([ConsoleKey]::Escape) { 
+                    $this.Hide()
+                    return $true 
+                }
+                default { 
+                    return $false 
+                }
+            }
+        }
     }
 }
 
@@ -3140,7 +3193,7 @@ class TaskDialog : Dialog {
 }
 
 # Task Delete Confirmation Dialog
-class TaskDeleteDialog : ConfirmDialog {
+class TaskDeleteDialog : ConfirmDialog { : ConfirmDialog {
     hidden [PmcTask] $_task
     
     TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {

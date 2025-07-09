@@ -404,32 +404,22 @@ function Invoke-TuiRender {
                 throw
             }
             
-            # Render command palette if visible
-            if ($global:TuiState.CommandPalette -and $global:TuiState.CommandPalette.Visible) {
-                try {
-                    $global:TuiState.CommandPalette.Render()
-                    $paletteBuffer = $global:TuiState.CommandPalette.GetBuffer()
-                    if ($paletteBuffer) {
-                        # Command palette position was set during initialization
-                        $global:TuiState.CompositorBuffer.BlendBuffer($paletteBuffer, 
-                            $global:TuiState.CommandPalette.X,
-                            $global:TuiState.CommandPalette.Y
-                        )
-                    }
-                }
-                catch {
-                    # Write-Verbose "Error rendering command palette: $_"
-                }
-            }
-            
-            # Render overlays
+            # Render overlays (including command palette)
             if ($global:TuiState.ContainsKey('OverlayStack') -and $global:TuiState.OverlayStack -and @($global:TuiState.OverlayStack).Count -gt 0) {
+                Write-Log -Level Debug -Message "Rendering $($global:TuiState.OverlayStack.Count) overlays"
                 foreach ($overlay in $global:TuiState.OverlayStack) {
                     if ($overlay -and $overlay.Visible) {
-                        $overlay.Render()
-                        $overlayBuffer = $overlay.GetBuffer()
-                        if ($overlayBuffer) {
-                            $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
+                        try {
+                            Write-Log -Level Debug -Message "Rendering overlay: $($overlay.Name) at X=$($overlay.X), Y=$($overlay.Y)"
+                            $overlay.Render()
+                            $overlayBuffer = $overlay.GetBuffer()
+                            if ($overlayBuffer) {
+                                $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
+                            } else {
+                                Write-Log -Level Warning -Message "Overlay $($overlay.Name) has no buffer"
+                            }
+                        } catch {
+                            Write-Log -Level Error -Message "Error rendering overlay $($overlay.Name): $_"
                         }
                     }
                 }
@@ -559,18 +549,28 @@ function Process-TuiInput {
     try {
         while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
+            
+            # Log Ctrl key combinations for debugging
+            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
+                Write-Log -Level Debug -Message "Key pressed: Ctrl+$($keyInfo.Key)"
+            }
+            
             $focusManager = $global:TuiState.Services.FocusManager
             $keybindingService = $global:TuiState.Services.KeybindingService
 
             # Priority 1: The globally focused component ALWAYS gets the first chance.
-            if ($focusManager.FocusedComponent?.HandleInput($keyInfo)) {
-                $global:TuiState.IsDirty = $true
-                continue
+            if ($focusManager.FocusedComponent) {
+                Write-Log -Level Debug -Message "Offering input to focused component: $($focusManager.FocusedComponent.Name)"
+                if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
+                    $global:TuiState.IsDirty = $true
+                    continue
+                }
             }
 
             # Priority 2: If focus was not handled, "bubble up". Check for an active overlay.
             if ($global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
+                Write-Log -Level Debug -Message "Overlay active: $($topOverlay.Name)"
                 # Let the overlay container handle keys the child did not (e.g., Escape).
                 if ($topOverlay?.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
@@ -584,15 +584,24 @@ function Process-TuiInput {
             # Priority 3: Global Keybindings (e.g., Ctrl+Q).
             $action = $keybindingService?.GetAction($keyInfo)
             if ($action) {
-                $global:TuiState.Services.ActionService?.ExecuteAction($action, @{})
+                Write-Log -Level Debug -Message "Global keybinding detected: $action"
+                $actionService = $global:TuiState.Services.ActionService
+                if ($actionService) {
+                    $actionService.ExecuteAction($action, @{})
+                } else {
+                    Write-Log -Level Warning -Message "ActionService not available to execute action: $action"
+                }
                 $global:TuiState.IsDirty = $true
                 continue
             }
 
             # Priority 4: The Current Screen gets the last chance.
-            if ($global:TuiState.CurrentScreen?.HandleInput($keyInfo)) {
-                $global:TuiState.IsDirty = $true
-                continue
+            if ($global:TuiState.CurrentScreen) {
+                Write-Log -Level Debug -Message "Offering input to current screen: $($global:TuiState.CurrentScreen.Name)"
+                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
+                    $global:TuiState.IsDirty = $true
+                    continue
+                }
             }
         }
     }
@@ -825,8 +834,12 @@ function Start-AxiomPhoenix {
         # Create command palette if available
         $actionService = $global:TuiState.Services.ActionService
         if ($actionService) {
+            Write-Log -Level Debug -Message "Creating command palette with ActionService"
             $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
             $global:TuiState.CommandPalette.RefreshActions()
+            Write-Log -Level Debug -Message "Command palette created and actions refreshed"
+        } else {
+            Write-Log -Level Warning -Message "ActionService not available - command palette will not be created"
         }
         
         # Initialize engine
