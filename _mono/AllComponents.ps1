@@ -3220,9 +3220,9 @@ class NavigationMenu : UIElement {
             $bg = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.BackgroundColor }
             
             # Draw item
-            $text = " $($item.Text) "
-            if ($item.Hotkey) {
-                $text = " $($item.Text) ($($item.Hotkey)) "
+            $text = " $($item.Label) "
+            if ($item.Key) {
+                $text = " $($item.Label) ($($item.Key)) "
             }
             
             if ($currentX + $text.Length -le $this.Width) {
@@ -3259,16 +3259,16 @@ class NavigationMenu : UIElement {
             }
             
             # Draw item
-            $text = $item.Text
-            if ($item.Hotkey) {
-                $text = "$($item.Text) ($($item.Hotkey))"
+            $text = $item.Label
+            if ($item.Key) {
+                $text = "$($item.Label) ($($item.Key))"
             }
             
             if ($text.Length -gt $this.Width) {
                 $text = $text.Substring(0, $this.Width - 3) + "..."
             }
             
-            $this._private_buffer.WriteString(0, $i, $text, $fg, $bg)
+            $this._private_buffer.WriteString(0, $i, $text, @{ FG = $fg; BG = $bg })
         }
     }
 
@@ -3329,7 +3329,7 @@ class NavigationMenu : UIElement {
     hidden [bool] CheckHotkey([System.ConsoleKeyInfo]$key) {
         foreach ($i in 0..($this.Items.Count - 1)) {
             $item = $this.Items[$i]
-            if ($item.Hotkey -and $item.Hotkey.ToUpper() -eq $key.KeyChar.ToString().ToUpper()) {
+            if ($item.Key -and $item.Key.ToUpper() -eq $key.KeyChar.ToString().ToUpper()) {
                 $this.SelectedIndex = $i
                 $this.ExecuteItem($i)
                 return $true
