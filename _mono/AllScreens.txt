@@ -17,7 +17,7 @@ using namespace System.Collections.Generic
 #region Screen Classes
 
 # ==============================================================================
-# CLASS: DashboardScreen (Now serves as the Main Menu)
+# CLASS: DashboardScreen (Data-Driven Dashboard with DataGridComponent)
 #
 # INHERITS:
 #   - Screen (ABC.006)
@@ -26,129 +26,289 @@ using namespace System.Collections.Generic
 #   Services:
 #     - NavigationService (ASE.004)
 #     - FocusManager (ASE.009)
+#     - DataManager (ASE.003)
+#     - ViewDefinitionService (ASE.011)
 #   Components:
 #     - Panel (ACO.011)
-#     - NavigationMenu (ACO.021)
+#     - DataGridComponent (ACO.022)
 #     - LabelComponent (ACO.001)
 #
 # PURPOSE:
-#   Serves as the main interactive entry point for the application, allowing
-#   the user to navigate to different screens.
+#   Data-driven dashboard showing task statistics, recent tasks, and quick actions
+#   using the ViewDefinitionService pattern for consistent formatting.
 # ==============================================================================
 class DashboardScreen : Screen {
     #region UI Components
     hidden [Panel] $_mainPanel
-    hidden [NavigationMenu] $_menu
+    hidden [DataGridComponent] $_statsGrid
+    hidden [DataGridComponent] $_recentTasksGrid
+    hidden [DataGridComponent] $_navigationGrid
     #endregion
 
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
-    # The Initialize method is called once by the NavigationService when the screen is first created.
-        # The Initialize method is called once by the NavigationService when the screen is first created.
     [void] Initialize() {
         if (-not $this.ServiceContainer) { return }
 
-        # Main container panel to hold all elements
-        $this._mainPanel = [Panel]::new("MainMenuPanel")
+        # Main container panel
+        $this._mainPanel = [Panel]::new("DashboardPanel")
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
-        $this._mainPanel.Title = " Axiom-Phoenix v4.0 "
+        $this._mainPanel.Title = " Axiom-Phoenix v4.0 Dashboard "
         $this.AddChild($this._mainPanel)
 
-        # ASCII Art Title for branding
+        # ASCII Art Title (smaller)
         $titleArt = @(
-            '      ___   _  _  _  ___  __  __   ',
-            '     / _ \ | \/ || |/ _ \|  \/  |  ',
-            '    | |_| | >  < | | (_) | |\/| |  ',
-            '    |_| |_|/_/\_\|_|\___/|_|  |_|  '
+            '   ___   _  _  _  ___  __  __   ',
+            '  / _ \ | \/ || |/ _ \|  \/  |  ',
+            ' | |_| | >  < | | (_) | |\/| |  ',
+            ' |_| |_|/_/\_\|_|\___/|_|  |_|  '
         )
-        $y = 3 # Starting Y position for the title
+        $y = 2
         foreach ($line in $titleArt) {
             $label = [LabelComponent]::new("TitleLine$y")
             $label.Text = $line
-            
-            # =============================================================
-            # THE FIX: Explicitly set the width of the label to match the
-            #          length of the text it needs to display.
-            # =============================================================
             $label.Width = $line.Length
-            
             $label.ForegroundColor = Get-ThemeColor -ColorName "Primary"
-            # This positioning calculation remains correct.
             $label.X = [Math]::Floor(($this.Width - $line.Length) / 2)
             $label.Y = $y++
             $this._mainPanel.AddChild($label)
         }
-        $y++ # Add a blank line for spacing
+        $y += 1  # Add spacing
 
-        # Create the central navigation menu
-        $this._menu = [NavigationMenu]::new("MainMenu")
-        $this._menu.Orientation = "Vertical" # Stack items vertically
-        $this._menu.Width = 40
-        $this._menu.Height = 4 # Height will be determined by the number of items
-        $this._menu.X = [Math]::Floor(($this.Width - $this._menu.Width) / 2)
-        $this._menu.Y = $y
-        
-        # Set theme colors for the menu
-        $this._menu.BackgroundColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#1E1E1E"
-        $this._menu.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $this._menu.SelectedBackgroundColor = Get-ThemeColor -ColorName "ButtonFocusBackground" -DefaultColor "#0078D4"
-        $this._menu.SelectedForegroundColor = Get-ThemeColor -ColorName "ButtonFocusForeground" -DefaultColor "#FFFFFF"
+        # Calculate layout dimensions
+        $leftWidth = [Math]::Floor($this.Width * 0.35)
+        $rightWidth = $this.Width - $leftWidth - 3
+        $gridHeight = [Math]::Floor(($this.Height - $y - 2) / 2)
 
-        # Populate the menu items. Each item has a label and an action.
-        $this._menu.AddItem([NavigationItem]::new("TASKS", "Manage Tasks",   ($this._CreateNavigationAction([TaskListScreen]))))
-        $this._menu.AddItem([NavigationItem]::new("THEME", "Change Theme",   ($this._CreateNavigationAction([ThemePickerScreen]))))
-        $this._menu.AddItem([NavigationItem]::new("EXIT",  "Exit Axiom",     { $global:TuiState.Running = $false }))
+        # Task Statistics Grid (top-left)
+        $this._statsGrid = [DataGridComponent]::new("StatsGrid")
+        $this._statsGrid.X = 1
+        $this._statsGrid.Y = $y
+        $this._statsGrid.Width = $leftWidth
+        $this._statsGrid.Height = $gridHeight
+        $this._statsGrid.ShowHeaders = $true
+        $this._statsGrid.IsFocusable = $false
+        $this._mainPanel.AddChild($this._statsGrid)
 
-        $this._mainPanel.AddChild($this._menu)
+        # Recent Tasks Grid (top-right)
+        $this._recentTasksGrid = [DataGridComponent]::new("RecentTasksGrid")
+        $this._recentTasksGrid.X = $leftWidth + 2
+        $this._recentTasksGrid.Y = $y
+        $this._recentTasksGrid.Width = $rightWidth
+        $this._recentTasksGrid.Height = $gridHeight
+        $this._recentTasksGrid.ShowHeaders = $true
+        $this._recentTasksGrid.IsFocusable = $false
+        $this._mainPanel.AddChild($this._recentTasksGrid)
+
+        # Quick Actions Grid (bottom, centered)
+        $actionsY = $y + $gridHeight + 1
+        $actionsWidth = [Math]::Floor($this.Width * 0.7)
+        $this._navigationGrid = [DataGridComponent]::new("NavigationGrid")
+        $this._navigationGrid.X = [Math]::Floor(($this.Width - $actionsWidth) / 2)
+        $this._navigationGrid.Y = $actionsY
+        $this._navigationGrid.Width = $actionsWidth
+        $this._navigationGrid.Height = $this.Height - $actionsY - 2
+        $this._navigationGrid.ShowHeaders = $true
+        $thisScreen = $this
+        $this._navigationGrid.OnSelectionChanged = {
+            param($sender, $selectedIndex)
+            $item = $sender.GetSelectedItem()
+            if ($item -and $item.ContainsKey("ActionKey")) {
+                $thisScreen._ExecuteNavigationAction($item.ActionKey)
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._navigationGrid)
     }
 
-    # This lifecycle method is called every time the screen becomes the active view.
     [void] OnEnter() {
-        # Set the initial focus to our menu so the user can navigate immediately.
-        $this.Services.FocusManager?.SetFocus($this._menu)
+        # Load and display data
+        $this._RefreshDashboardData()
+        
+        # Set focus to navigation grid for user interaction
+        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+        if ($focusManager -and $this._navigationGrid) {
+            $focusManager.SetFocus($this._navigationGrid)
+        }
     }
 
-    # Handle window resizing
     [void] OnResize([int]$newWidth, [int]$newHeight) {
-        # Call base implementation
         ([Screen]$this).OnResize($newWidth, $newHeight)
         
-        # Resize main panel to fill the screen
         if ($this._mainPanel) {
             $this._mainPanel.Width = $newWidth
             $this._mainPanel.Height = $newHeight
-            $this._mainPanel.UpdateContentDimensions()
             
-            # Recenter the menu
-            if ($this._menu) {
-                $this._menu.X = [Math]::Floor(($newWidth - $this._menu.Width) / 2)
+            # Recalculate layout
+            $this.Initialize()
+        }
+    }
+
+    hidden [void] _RefreshDashboardData() {
+        $this._UpdateTaskStatistics()
+        $this._UpdateRecentTasks()
+        $this._UpdateNavigationActions()
+    }
+
+    hidden [void] _UpdateTaskStatistics() {
+        if (-not $this._statsGrid) { return }
+
+        $dataManager = $this.ServiceContainer?.GetService("DataManager")
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        
+        if (-not $dataManager -or -not $viewDefService) { return }
+
+        # Get view definition
+        $viewDef = $viewDefService.GetViewDefinition('dashboard.task.stats')
+        $this._statsGrid.SetColumns($viewDef.Columns)
+
+        # Get tasks and calculate statistics
+        $allTasks = $dataManager.GetTasks()
+        $stats = @()
+
+        # Total tasks
+        $stats += @{ Name="Total Tasks"; Count=$allTasks.Count; Type="info" }
+
+        # Tasks by status
+        $pendingCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::Pending }).Count
+        $inProgressCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::InProgress }).Count
+        $completedCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::Completed }).Count
+        $cancelledCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::Cancelled }).Count
+
+        $stats += @{ Name="Pending"; Count=$pendingCount; Type="warning" }
+        $stats += @{ Name="In Progress"; Count=$inProgressCount; Type="info" }
+        $stats += @{ Name="Completed"; Count=$completedCount; Type="success" }
+        if ($cancelledCount -gt 0) {
+            $stats += @{ Name="Cancelled"; Count=$cancelledCount; Type="error" }
+        }
+
+        # High priority tasks
+        $highPriorityCount = @($allTasks | Where-Object { $_.Priority -eq [TaskPriority]::High -and $_.Status -ne [TaskStatus]::Completed }).Count
+        if ($highPriorityCount -gt 0) {
+            $stats += @{ Name="High Priority"; Count=$highPriorityCount; Type="warning" }
+        }
+
+        # Transform stats using view definition
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        foreach ($stat in $stats) {
+            $displayItems += & $transformer $stat
+        }
+
+        $this._statsGrid.SetItems($displayItems)
+    }
+
+    hidden [void] _UpdateRecentTasks() {
+        if (-not $this._recentTasksGrid) { return }
+
+        $dataManager = $this.ServiceContainer?.GetService("DataManager")
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        
+        if (-not $dataManager -or -not $viewDefService) { return }
+
+        # Get view definition
+        $viewDef = $viewDefService.GetViewDefinition('dashboard.recent.tasks')
+        $this._recentTasksGrid.SetColumns($viewDef.Columns)
+
+        # Get recent tasks (last 8, sorted by creation date)
+        $allTasks = $dataManager.GetTasks()
+        $recentTasks = @($allTasks | Sort-Object CreatedAt -Descending | Select-Object -First 8)
+
+        if ($recentTasks.Count -eq 0) {
+            $this._recentTasksGrid.SetItems(@())
+            return
+        }
+
+        # Transform tasks using view definition
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        foreach ($task in $recentTasks) {
+            $displayItems += & $transformer $task
+        }
+
+        $this._recentTasksGrid.SetItems($displayItems)
+    }
+
+    hidden [void] _UpdateNavigationActions() {
+        if (-not $this._navigationGrid) { return }
+
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        if (-not $viewDefService) { return }
+
+        # Get view definition
+        $viewDef = $viewDefService.GetViewDefinition('dashboard.navigation')
+        $this._navigationGrid.SetColumns($viewDef.Columns)
+
+        # Define navigation actions
+        $navActions = @(
+            @{ Key="T"; Name="Task Management"; Description="View and manage tasks"; ActionKey="tasks" },
+            @{ Key="P"; Name="Projects"; Description="Manage projects"; ActionKey="projects" },
+            @{ Key="S"; Name="Settings"; Description="Change theme and settings"; ActionKey="settings" },
+            @{ Key="Q"; Name="Exit Application"; Description="Quit Axiom-Phoenix"; ActionKey="exit" }
+        )
+
+        # Transform nav actions using view definition
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        foreach ($action in $navActions) {
+            $displayItem = & $transformer $action
+            $displayItem.ActionKey = $action.ActionKey  # Add action key for execution
+            $displayItems += $displayItem
+        }
+
+        $this._navigationGrid.SetItems($displayItems)
+    }
+
+    hidden [void] _ExecuteNavigationAction([string]$actionKey) {
+        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        if (-not $navService) { return }
+
+        switch ($actionKey) {
+            "tasks" {
+                $screen = [TaskListScreen]::new($this.ServiceContainer)
+                $screen.Initialize()
+                $navService.NavigateTo($screen)
             }
-            
-            # Recenter the title labels
-            $y = 3
-            foreach ($child in $this._mainPanel.Children) {
-                if ($child -is [LabelComponent] -and $child.Name -like "TitleLine*") {
-                    $child.X = [Math]::Floor(($newWidth - $child.Width) / 2)
-                }
+            "projects" {
+                # Future: ProjectListScreen
+                Write-Host "Projects feature coming soon!" -ForegroundColor Yellow
+            }
+            "settings" {
+                $screen = [ThemePickerScreen]::new($this.ServiceContainer)
+                $screen.Initialize()
+                $navService.NavigateTo($screen)
+            }
+            "exit" {
+                $global:TuiState.Running = $false
             }
         }
     }
 
-    # A private helper method to create navigation actions, which keeps the code clean and avoids repetition.
-    # It takes a screen type (like [TaskListScreen]) and returns a scriptblock that navigates to it.
-    hidden [scriptblock] _CreateNavigationAction([type]$ScreenType) {
-        $thisScreen = $this # Capture the current screen instance for use inside the scriptblock
-        return {
-            # This scriptblock will be executed when the user presses Enter on the menu item.
-            $navService = $thisScreen.ServiceContainer.GetService('NavigationService')
-            # Create a new instance of the target screen, passing the service container to it.
-            $screenInstance = $ScreenType::new($thisScreen.ServiceContainer)
-            # It's crucial to call Initialize() on the new screen before navigating.
-            $screenInstance.Initialize()
-            # Tell the NavigationService to make the new screen active.
-            $navService.NavigateTo($screenInstance)
-        }.GetNewClosure()
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Handle hotkeys for quick navigation
+        switch ($keyInfo.KeyChar.ToString().ToUpper()) {
+            "T" {
+                $this._ExecuteNavigationAction("tasks")
+                return $true
+            }
+            "P" {
+                $this._ExecuteNavigationAction("projects")
+                return $true
+            }
+            "S" {
+                $this._ExecuteNavigationAction("settings")
+                return $true
+            }
+            "Q" {
+                $this._ExecuteNavigationAction("exit")
+                return $true
+            }
+            default {
+                # Let base class handle other keys (like arrow navigation in grid)
+                return ([Screen]$this).HandleInput($keyInfo)
+            }
+        }
+        return $false
     }
 }
 
@@ -161,7 +321,7 @@ class DashboardScreen : Screen {
 class TaskListScreen : Screen { 
     #region UI Components
     hidden [Panel] $_mainPanel
-    hidden [ScrollablePanel] $_taskListPanel
+    hidden [DataGridComponent] $_taskGrid
     hidden [Panel] $_detailPanel
     hidden [Panel] $_statusBar
     hidden [ButtonComponent] $_newButton
@@ -218,16 +378,26 @@ class TaskListScreen : Screen {
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._filterBox)
 
-        # Task list panel (left side)
+        # Task list grid (left side) - Using new DataGridComponent
         $listWidth = [Math]::Floor($this.Width * 0.6)
-        $this._taskListPanel = [ScrollablePanel]::new("Tasks")
-        $this._taskListPanel.X = 1
-        $this._taskListPanel.Y = 4  # Move down to accommodate filter
-        $this._taskListPanel.Width = $listWidth
-        $this._taskListPanel.Height = $this.Height - 8  # Adjust for buttons and filter
-        $this._taskListPanel.Title = "Tasks"
-        $this._taskListPanel.UpdateContentDimensions()
-        $this._mainPanel.AddChild($this._taskListPanel)
+        $this._taskGrid = [DataGridComponent]::new("TaskGrid")
+        $this._taskGrid.X = 1
+        $this._taskGrid.Y = 4  # Move down to accommodate filter
+        $this._taskGrid.Width = $listWidth
+        $this._taskGrid.Height = $this.Height - 8  # Adjust for buttons and filter
+        $this._taskGrid.ShowHeaders = $true
+        $this._taskGrid.OnSelectionChanged = {
+            param($sender, $selectedIndex)
+            $thisScreen._selectedIndex = $selectedIndex
+            if ($selectedIndex -ge 0 -and $selectedIndex -lt $thisScreen._tasks.Count) {
+                $thisScreen._selectedTask = $thisScreen._tasks[$selectedIndex]
+            } else {
+                $thisScreen._selectedTask = $null
+            }
+            $thisScreen._UpdateDetailPanel()
+            $thisScreen._UpdateStatusBar()
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._taskGrid)
 
         # Detail panel (right side)
         $detailX = $listWidth + 2
@@ -267,18 +437,21 @@ class TaskListScreen : Screen {
             $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
             
             if ($dialogManager -and $dataManager) {
-                $dialog = [TaskDialog]::new("New Task", $null)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                $dialog = [TaskEditPanel]::new("New Task", $null)
+                $dialog.OnSave = {
                     $newTask = $dialog.GetTask()
                     $dataManager.AddTask($newTask)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "New task created: $($newTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
+                
         $this._mainPanel.AddChild($this._newButton)
         $currentX += $buttonSpacing
         
@@ -294,16 +467,18 @@ class TaskListScreen : Screen {
             $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
             
             if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
-                $dialog = [TaskDialog]::new("Edit Task", $thisScreen._selectedTask)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                $dialog = [TaskEditPanel]::new("Edit Task", $thisScreen._selectedTask)
+                $dialog.OnSave = {
                     $updatedTask = $dialog.GetTask()
                     $dataManager.UpdateTask($updatedTask)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "Task updated: $($updatedTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._editButton)
@@ -322,14 +497,16 @@ class TaskListScreen : Screen {
             
             if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
                 $dialog = [TaskDeleteDialog]::new($thisScreen._selectedTask)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::Yes) {
+                $dialog.OnConfirm = {
                     $dataManager.DeleteTask($thisScreen._selectedTask.Id)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._deleteButton)
@@ -367,8 +544,8 @@ class TaskListScreen : Screen {
         
         # Step 2: Set initial focus via FocusManager (CRITICAL for input to work)
         $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._filterBox) {
-            $focusManager.SetFocus($this._filterBox)
+        if ($focusManager -and $this._taskGrid) {
+            $focusManager.SetFocus($this._taskGrid)
         }
         
         # Step 3: Subscribe to EventManager events
@@ -455,91 +632,45 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] _UpdateTaskList() {
-        $panel = $this._taskListPanel
-        if (-not $panel) { return }
+        if (-not $this._taskGrid) { return }
         
-        # CRITICAL: Clear the panel's CHILDREN, not its buffer directly.
-        $panel.Children.Clear()
+        # Get the ViewDefinitionService and view definition
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        if (-not $viewDefService) { return }
+        
+        $viewDef = $viewDefService.GetViewDefinition('task.summary')
+        
+        # Configure the grid columns from the view definition
+        $this._taskGrid.SetColumns($viewDef.Columns)
         
         if ($this._tasks.Count -eq 0) {
-            # Add a label to show there are no tasks
-            $noTasksLabel = [LabelComponent]::new("NoTasksLabel")
-            $noTasksLabel.X = 2
-            $noTasksLabel.Y = 2
-            $noTasksLabel.Text = "No tasks found."
-            $noTasksLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-            $panel.AddChild($noTasksLabel)
-            $panel.RequestRedraw()
+            # Clear the grid if no tasks
+            $this._taskGrid.SetItems(@())
             return
         }
         
-        for ($i = 0; $i -lt $this._tasks.Count; $i++) {
-            $task = $this._tasks[$i]
-            
-            # Create a Panel for each task item (to support background color)
-            $taskPanel = [Panel]::new("TaskItem_$($task.Id)")
-            $taskPanel.X = 0
-            $taskPanel.Y = $i # Y position is its index in the list
-            $panelContentWidth = if ($panel.ContentWidth -le 0) { [Math]::Max(30, $panel.Width - 2) } else { $panel.ContentWidth }
-            $taskPanel.Width = $panelContentWidth
-            $taskPanel.Height = 1
-            $taskPanel.HasBorder = $false
-            
-            # Set background based on selection
-            $is_selected = ($i -eq $this._selectedIndex)
-            $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF" } else { Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-            
-            # Create a Label component for the task text
-            $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
-            $taskLabel.X = 1 # Indent slightly
-            $taskLabel.Y = 0 # Relative to the task panel
-            $taskLabel.Width = [Math]::Max(20, $panelContentWidth - 2) # Set proper width
-            $taskLabel.Height = 1
-            
-            # Status indicator
-            $statusChar = switch ($task.Status) {
-                ([TaskStatus]::Pending) { "o" }
-                ([TaskStatus]::InProgress) { "*" }
-                ([TaskStatus]::Completed) { "+" }
-                ([TaskStatus]::Cancelled) { "x" }
-                default { "?" }
-            }
-            
-            # Priority indicator
-            $priorityChar = switch ($task.Priority) {
-                ([TaskPriority]::Low) { "v" }
-                ([TaskPriority]::Medium) { "-" }
-                ([TaskPriority]::High) { "^" }
-                default { "-" }
-            }
-            
-            # Truncate title if needed
-            $maxTitleLength = [Math]::Max(10, $panelContentWidth - 6) # Ensure minimum length
-            if ($task.Title.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
-                $title = $task.Title.Substring(0, [Math]::Max(1, $maxTitleLength - 3)) + "..."
-            } else {
-                $title = $task.Title
-            }
-            
-            $taskLine = "$statusChar $priorityChar $title"
-            $taskLabel.Text = $taskLine
-            
-            # Set text color based on selection
-            if ($is_selected) { 
-                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
-            } else { 
-                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" 
-            }
-            
-            # Add the label to the task panel
-            $taskPanel.AddChild($taskLabel)
-            
-            # Add the task panel as a CHILD of the scrollable panel
-            $panel.AddChild($taskPanel)
+        # Transform tasks using the view definition transformer
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        
+        foreach ($task in $this._tasks) {
+            $displayItem = & $transformer $task
+            $displayItems += $displayItem
         }
         
-        # The ScrollablePanel's own Render method will now correctly handle everything else.
-        $panel.RequestRedraw()
+        # Set the transformed data on the grid
+        $this._taskGrid.SetItems($displayItems)
+        
+        # Preserve selection if possible
+        if ($this._selectedIndex -lt $this._tasks.Count) {
+            $this._taskGrid.SelectedIndex = $this._selectedIndex
+        } else {
+            $this._selectedIndex = 0
+            $this._taskGrid.SelectedIndex = 0
+            if ($this._tasks.Count -gt 0) {
+                $this._selectedTask = $this._tasks[0]
+            }
+        }
     }
 
     hidden [void] _UpdateDetailPanel() {
@@ -658,7 +789,10 @@ class TaskListScreen : Screen {
         $panel.BackgroundColor = Get-ThemeColor -ColorName "status.bar.bg" -DefaultColor "#1E1E1E"
         
         # Status text label
-        $statusText = "Tasks: $($this._tasks.Count) | Selected: $($this._selectedIndex + 1)"
+        $statusText = "Tasks: $($this._tasks.Count)"
+        if ($this._tasks.Count -gt 0) {
+            $statusText += " | Selected: $($this._selectedIndex + 1)"
+        }
         if ($this._filterText) {
             $statusText += " | Filter: '$($this._filterText)'"
         }
@@ -671,7 +805,7 @@ class TaskListScreen : Screen {
         $panel.AddChild($statusLabel)
         
         # Keyboard hints label
-        $hints = "Up/Down: Navigate | Enter: Edit | D: Delete | N: New"
+        $hints = "Up/Down: Navigate | Enter: Edit | D: Delete | N: New | T/P/S/Q: Quick Nav"
         $hintsX = $this.Width - $hints.Length - 3
         if ($hintsX -gt $statusText.Length + 2) {
             $hintsLabel = [LabelComponent]::new("StatusHints")
@@ -686,73 +820,8 @@ class TaskListScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Override base Screen HandleInput
+        # Handle action keys (navigation is now handled by DataGridComponent)
         switch ($keyInfo.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this._selectedIndex -gt 0) {
-                    $this._selectedIndex--
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                    
-                    # Adjust scroll if needed
-                    if ($this._selectedIndex -lt $this._taskListPanel.ScrollOffsetY) {
-                        $this._taskListPanel.ScrollUp()
-                    }
-                    
-                    $this._UpdateDisplay()
-                }
-                return $true
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this._selectedIndex -lt $this._tasks.Count - 1) {
-                    $this._selectedIndex++
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                    
-                    # Adjust scroll if needed
-                    $visibleEnd = $this._taskListPanel.ScrollOffsetY + $this._taskListPanel.ContentHeight - 1
-                    if ($this._selectedIndex -gt $visibleEnd) {
-                        $this._taskListPanel.ScrollDown()
-                    }
-                    
-                    $this._UpdateDisplay()
-                }
-                return $true
-            }
-            ([ConsoleKey]::PageUp) {
-                $this._taskListPanel.ScrollUp($this._taskListPanel.ContentHeight)
-                $this._selectedIndex = [Math]::Max(0, $this._selectedIndex - $this._taskListPanel.ContentHeight)
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::PageDown) {
-                $this._taskListPanel.ScrollDown($this._taskListPanel.ContentHeight)
-                $this._selectedIndex = [Math]::Min($this._tasks.Count - 1, $this._selectedIndex + $this._taskListPanel.ContentHeight)
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::Home) {
-                $this._taskListPanel.ScrollToTop()
-                $this._selectedIndex = 0
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::End) {
-                $this._taskListPanel.ScrollToBottom()
-                $this._selectedIndex = $this._tasks.Count - 1
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
             ([ConsoleKey]::Enter) {
                 # Edit task
                 if ($this._selectedTask -and $this._editButton) {
@@ -789,8 +858,8 @@ class TaskListScreen : Screen {
                 return $true
             }
             default {
-                # Unhandled key
-                return $false
+                # Unhandled key - let base class handle it
+                return ([Screen]$this).HandleInput($keyInfo)
             }
         }
         return $false

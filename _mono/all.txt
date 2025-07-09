@@ -3530,45 +3530,42 @@ class TextBox : UIElement {
 # ===== CLASS: CommandPalette =====
 # Module: command-palette
 # Dependencies: UIElement, Panel, ListBox, TextBoxComponent
-# Purpose: Searchable command interface - FINAL FIXED VERSION
+# Purpose: Searchable command interface
 class CommandPalette : UIElement {
     hidden [ListBox]$_listBox
     hidden [TextBoxComponent]$_searchBox
     hidden [Panel]$_panel
     hidden [List[object]]$_allActions
     hidden [List[object]]$_filteredActions
-    hidden [object]$_actionService
-    hidden [scriptblock]$OnCancel
-    hidden [scriptblock]$OnSelect
+    [scriptblock]$OnExecute
+    [scriptblock]$OnCancel
 
-    CommandPalette([string]$name, [object]$actionService) : base($name) {
+    CommandPalette([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Visible = $false
         $this.IsOverlay = $true
         $this.Width = 60
         $this.Height = 20
-        $this._actionService = $actionService
         
-        # Initialize the buffer immediately
-        $this.Resize($this.Width, $this.Height)
+        $this._allActions = [List[object]]::new()
+        $this._filteredActions = [List[object]]::new()
         
         $this.Initialize()
-        
-        Write-Log -Level Debug -Message "CommandPalette created with size $($this.Width)x$($this.Height)"
     }
 
     hidden [void] Initialize() {
-        Write-Log -Level Debug -Message "CommandPalette.Initialize() starting"
-        
+        # Create main panel with border
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
         $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
+        $this._panel.X = 0
+        $this._panel.Y = 0
         $this.AddChild($this._panel)
-        Write-Log -Level Debug -Message "CommandPalette: Panel created"
 
+        # Create search box
         $this._searchBox = [TextBoxComponent]::new("CommandPalette_Search")
         $this._searchBox.X = 2
         $this._searchBox.Y = 1
@@ -3576,49 +3573,41 @@ class CommandPalette : UIElement {
         $this._searchBox.Height = 3
         $this._searchBox.Placeholder = "Type to search commands..."
         
+        # Connect search box to filtering
         $paletteRef = $this
-        $this._searchBox.OnChange = { param($sender, $text) $paletteRef.FilterActions($text) }.GetNewClosure()
+        $this._searchBox.OnChange = { 
+            param($sender, $text) 
+            $paletteRef.FilterActions($text) 
+        }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
-        Write-Log -Level Debug -Message "CommandPalette: SearchBox created"
 
+        # Create list box for results
         $this._listBox = [ListBox]::new("CommandPalette_List")
         $this._listBox.X = 2
         $this._listBox.Y = 4
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 6
         $this._panel.AddChild($this._listBox)
-        Write-Log -Level Debug -Message "CommandPalette: ListBox created"
-
-        $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[object]]::new()
-        
-        Write-Log -Level Debug -Message "CommandPalette.Initialize() completed"
     }
 
-    [void] Show() {
-        Write-Log -Level Debug -Message "CommandPalette.Show() called, setting Visible=true"
-        $this.Visible = $true
-        $this.RequestRedraw() # Let its parent (the framework) handle the rest
-    }
-
-    [void] Hide() {
-        $this.Visible = $false
-        $this.RequestRedraw()
-        if ($this.OnCancel) { & $this.OnCancel }
-    }
-
-    [void] RefreshActions() {
+    [void] SetActions([object[]]$actionList) {
         $this._allActions.Clear()
-        if ($this._actionService) {
-            $this._allActions.AddRange(($this._actionService.GetAllActions().Values | Sort-Object Category, Name))
+        foreach ($action in $actionList) {
+            $this._allActions.Add($action)
         }
+        $this.FilterActions("")  # Show all actions initially
+        
+        # Set initial focus to search box
+        $this._searchBox.IsFocused = $true
     }
 
     [void] FilterActions([string]$searchText) {
         $this._filteredActions.Clear()
         $this._listBox.ClearItems()
         
-        $actionsToDisplay = if ([string]::IsNullOrWhiteSpace($searchText)) { $this._allActions } else {
+        $actionsToDisplay = if ([string]::IsNullOrWhiteSpace($searchText)) { 
+            $this._allActions 
+        } else {
             $searchLower = $searchText.ToLower()
             @($this._allActions | Where-Object {
                 $_.Name.ToLower().Contains($searchLower) -or
@@ -3629,71 +3618,122 @@ class CommandPalette : UIElement {
 
         foreach ($action in $actionsToDisplay) {
             $this._filteredActions.Add($action)
-            $displayText = if ($action.Category) { "[$($action.Category)] $($action.Name)" } else { $action.Name }
+            $displayText = if ($action.Category) { 
+                "[$($action.Category)] $($action.Name)" 
+            } else { 
+                $action.Name 
+            }
             $this._listBox.AddItem("$displayText - $($action.Description)")
         }
         
-        if ($this._filteredActions.Count -gt 0) { $this._listBox.SelectedIndex = 0 }
+        if ($this._filteredActions.Count -gt 0) { 
+            $this._listBox.SelectedIndex = 0 
+        }
         $this.RequestRedraw()
+    }
+
+    [void] SetInitialFocus() {
+        if ($this._searchBox) {
+            # Clear any previous search text
+            $this._searchBox.Text = ""
+            $this._searchBox.CursorPosition = 0
+            $this._searchBox.IsFocused = $true
+            $this._searchBox.RequestRedraw()
+        }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        # If search box is focused, let it handle most input first
-        if ($this._searchBox.IsFocused) {
-            # Check for special keys that the palette should handle
-            switch ($key.Key) {
-                ([ConsoleKey]::Escape) { 
-                    $this.Hide()
-                    return $true 
+        $handled = $true
+        
+        switch ($key.Key) {
+            ([ConsoleKey]::Escape) { 
+                if ($this.OnCancel) {
+                    & $this.OnCancel
                 }
-                ([ConsoleKey]::Enter) {
-                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                        if ($selectedAction) {
-                            Write-Log -Level Debug -Message "CommandPalette: Executing action $($selectedAction.Name)"
-                            $this.Hide()
-                            $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                            return $true
-                        }
-                    }
-                    # If no action selected or invalid, still return true to consume the Enter key
-                    return $true
-                }
-                {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                    # Navigation keys go to the list
-                    return $this._listBox.HandleInput($key)
-                }
-                default {
-                    # All other input goes to search box
-                    return $this._searchBox.HandleInput($key)
-                }
+                return $true 
             }
-        }
-        else {
-            # Fallback for when search box isn't focused (shouldn't happen)
-            switch ($key.Key) {
-                ([ConsoleKey]::Escape) { 
-                    $this.Hide()
-                    return $true 
+            ([ConsoleKey]::Enter) {
+                if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                    if ($selectedAction -and $this.OnExecute) {
+                        & $this.OnExecute $this $selectedAction
+                        return $true
+                    }
                 }
-                default { 
-                    return $false 
+                return $true
+            }
+            ([ConsoleKey]::Tab) {
+                # Switch focus between search box and list
+                if ($this._searchBox.IsFocused) {
+                    $this._searchBox.IsFocused = $false
+                    $this._listBox.IsFocusable = $true
+                    # Focus would be set by parent focus manager
+                } else {
+                    $this._searchBox.IsFocused = $true
+                    $this._listBox.IsFocusable = $false
+                }
+                $this.RequestRedraw()
+                return $true
+            }
+            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
+                # Navigation keys go to the list
+                return $this._listBox.HandleInput($key)
+            }
+            default {
+                # All other input goes to search box if it's focused
+                if ($this._searchBox.IsFocused) {
+                    return $this._searchBox.HandleInput($key)
+                } else {
+                    $handled = $false
                 }
             }
         }
         
-        # Failsafe return (should never reach here)
-        return $false
+        if ($handled) {
+            $this.RequestRedraw()
+        }
+        
+        return $handled
+    }
+
+    [void] OnFocus() {
+        ([UIElement]$this).OnFocus()
+        # Set initial focus to search box
+        if ($this._searchBox) {
+            $this._searchBox.IsFocused = $true
+            $this._searchBox.RequestRedraw()
+        }
+    }
+
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        if ($this._searchBox) {
+            $this._searchBox.IsFocused = $false
+            $this._searchBox.RequestRedraw()
+        }
+    }
+
+    [void] Cleanup() {
+        if ($this._searchBox) {
+            $this._searchBox.Text = ""
+            $this._searchBox.CursorPosition = 0
+        }
+        if ($this._listBox) {
+            $this._listBox.ClearItems()
+            $this._listBox.SelectedIndex = -1
+        }
+        $this._allActions.Clear()
+        $this._filteredActions.Clear()
     }
 }
+
+#<!-- END_PAGE: ACO.016 -->
 
 #endregion Composite Components
 
 #region Dialog Components
-
-#<!-- END_PAGE: ACO.016 -->
 
 #<!-- PAGE: ACO.017 - Dialog Class -->
 # ===== CLASS: Dialog =====
@@ -4486,6 +4526,204 @@ class NavigationMenu : UIElement {
 
 #<!-- END_PAGE: ACO.021 -->
 
+#<!-- PAGE: ACO.022 - DataGridComponent Class -->
+# ===== CLASS: DataGridComponent =====
+# Module: data-grid-component
+# Dependencies: UIElement, TuiCell
+# Purpose: Generic data grid for displaying tabular data with scrolling and selection
+class DataGridComponent : UIElement {
+    [hashtable[]]$Columns = @()
+    [hashtable[]]$Items = @()
+    [int]$SelectedIndex = 0
+    [int]$ScrollOffset = 0
+    [bool]$ShowHeaders = $true
+    [string]$HeaderBackgroundColor = "#333333"
+    [string]$HeaderForegroundColor = "#FFFFFF"
+    [string]$SelectedBackgroundColor = "#0078D4"
+    [string]$SelectedForegroundColor = "#FFFFFF"
+    [string]$NormalBackgroundColor = "#000000"
+    [string]$NormalForegroundColor = "#C0C0C0"
+    [scriptblock]$OnSelectionChanged
+    
+    DataGridComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 60
+        $this.Height = 20
+    }
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        # Clear buffer
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        $y = 0
+        
+        # Render headers if enabled
+        if ($this.ShowHeaders -and $this.Columns.Count -gt 0) {
+            $x = 0
+            foreach ($column in $this.Columns) {
+                $header = if ($column.Header) { $column.Header } else { $column.Name }
+                $width = if ($column.Width) { $column.Width } else { 10 }
+                
+                # Truncate header if needed
+                if ($header.Length -gt $width) {
+                    $header = $header.Substring(0, [Math]::Max(1, $width - 2)) + ".."
+                }
+                
+                # Pad header to column width
+                $header = $header.PadRight($width)
+                
+                Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $header -Style @{
+                    FG = $this.HeaderForegroundColor
+                    BG = $this.HeaderBackgroundColor
+                }
+                
+                $x += $width + 1  # +1 for separator
+            }
+            $y++
+        }
+        
+        # Calculate visible items
+        $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+        $startIndex = $this.ScrollOffset
+        $endIndex = [Math]::Min($this.Items.Count - 1, $startIndex + $visibleHeight - 1)
+        
+        # Render data rows
+        for ($i = $startIndex; $i -le $endIndex; $i++) {
+            if ($i -ge $this.Items.Count) { break }
+            
+            $item = $this.Items[$i]
+            $isSelected = ($i -eq $this.SelectedIndex)
+            
+            $x = 0
+            foreach ($column in $this.Columns) {
+                $value = if ($item.ContainsKey($column.Name)) { $item[$column.Name] } else { "" }
+                $width = if ($column.Width) { $column.Width } else { 10 }
+                
+                # Convert value to string and truncate if needed
+                $text = $value.ToString()
+                if ($text.Length -gt $width) {
+                    $text = $text.Substring(0, [Math]::Max(1, $width - 2)) + ".."
+                }
+                
+                # Pad text to column width
+                $text = $text.PadRight($width)
+                
+                # Set colors based on selection
+                $fgColor = if ($isSelected) { $this.SelectedForegroundColor } else { $this.NormalForegroundColor }
+                $bgColor = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.NormalBackgroundColor }
+                
+                Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $text -Style @{
+                    FG = $fgColor
+                    BG = $bgColor
+                }
+                
+                $x += $width + 1  # +1 for separator
+            }
+            $y++
+        }
+        
+        $this._needs_redraw = $false
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if (-not $this.Enabled -or -not $this.IsFocused) { return $false }
+        
+        $handled = $false
+        $oldSelectedIndex = $this.SelectedIndex
+        
+        switch ($key.Key) {
+            "UpArrow" {
+                if ($this.SelectedIndex -gt 0) {
+                    $this.SelectedIndex--
+                    $this._EnsureVisible()
+                    $handled = $true
+                }
+            }
+            "DownArrow" {
+                if ($this.SelectedIndex -lt ($this.Items.Count - 1)) {
+                    $this.SelectedIndex++
+                    $this._EnsureVisible()
+                    $handled = $true
+                }
+            }
+            "PageUp" {
+                $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+                $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $visibleHeight)
+                $this._EnsureVisible()
+                $handled = $true
+            }
+            "PageDown" {
+                $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+                $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $visibleHeight)
+                $this._EnsureVisible()
+                $handled = $true
+            }
+            "Home" {
+                $this.SelectedIndex = 0
+                $this._EnsureVisible()
+                $handled = $true
+            }
+            "End" {
+                $this.SelectedIndex = [Math]::Max(0, $this.Items.Count - 1)
+                $this._EnsureVisible()
+                $handled = $true
+            }
+        }
+        
+        # Fire selection changed event if selection changed
+        if ($handled -and $oldSelectedIndex -ne $this.SelectedIndex -and $this.OnSelectionChanged) {
+            & $this.OnSelectionChanged $this $this.SelectedIndex
+        }
+        
+        if ($handled) {
+            $this.RequestRedraw()
+        }
+        
+        return $handled
+    }
+    
+    hidden [void] _EnsureVisible() {
+        if ($this.Items.Count -eq 0) { return }
+        
+        $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+        
+        # Scroll up if selected item is above visible area
+        if ($this.SelectedIndex -lt $this.ScrollOffset) {
+            $this.ScrollOffset = $this.SelectedIndex
+        }
+        # Scroll down if selected item is below visible area
+        elseif ($this.SelectedIndex -gt ($this.ScrollOffset + $visibleHeight - 1)) {
+            $this.ScrollOffset = $this.SelectedIndex - $visibleHeight + 1
+        }
+        
+        # Ensure scroll offset is within bounds
+        $this.ScrollOffset = [Math]::Max(0, [Math]::Min($this.ScrollOffset, $this.Items.Count - $visibleHeight))
+    }
+    
+    [object] GetSelectedItem() {
+        if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.Items.Count) {
+            return $this.Items[$this.SelectedIndex]
+        }
+        return $null
+    }
+    
+    [void] SetItems([hashtable[]]$items) {
+        $this.Items = $items
+        $this.SelectedIndex = 0
+        $this.ScrollOffset = 0
+        $this.RequestRedraw()
+    }
+    
+    [void] SetColumns([hashtable[]]$columns) {
+        $this.Columns = $columns
+        $this.RequestRedraw()
+    }
+}
+#<!-- END_PAGE: ACO.022 -->
+
 #endregion Navigation Components
 
 #region Dialog Result Enum
@@ -4498,6 +4736,331 @@ enum DialogResult {
     Retry = 5
     Abort = 6
 }
+#endregion
+
+#region Task Management Dialogs
+
+# ===== CLASS: TaskEditPanel =====
+# Module: task-dialogs
+# Dependencies: Panel, LabelComponent, TextBoxComponent, ButtonComponent
+# Purpose: Modal panel for editing task properties
+class TaskEditPanel : Panel {
+    hidden [PmcTask]$_task
+    hidden [bool]$_isNewTask = $false
+    hidden [TextBoxComponent]$_titleTextBox
+    hidden [TextBoxComponent]$_descriptionTextBox
+    hidden [RadioButtonComponent]$_lowPriorityRadio
+    hidden [RadioButtonComponent]$_mediumPriorityRadio
+    hidden [RadioButtonComponent]$_highPriorityRadio
+    hidden [ButtonComponent]$_saveButton
+    hidden [ButtonComponent]$_cancelButton
+    [DialogResult]$DialogResult = [DialogResult]::None
+    [scriptblock]$OnSave
+    [scriptblock]$OnCancel
+    
+    TaskEditPanel([string]$title, [PmcTask]$task) : base("TaskEditPanel") {
+        $this._task = $task
+        $this._isNewTask = ($null -eq $task)
+        $this.Title = $title
+        $this.Width = 60
+        $this.Height = 16
+        $this.HasBorder = $true
+        $this.IsFocusable = $true
+        
+        $this._CreateControls()
+        $this._PopulateData()
+    }
+    
+    hidden [void] _CreateControls() {
+        $y = 2
+        
+        # Title label and textbox
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = $y
+        $titleLabel.Width = 10
+        $this.AddChild($titleLabel)
+        
+        $this._titleTextBox = [TextBoxComponent]::new("TitleTextBox")
+        $this._titleTextBox.X = 2
+        $this._titleTextBox.Y = $y + 1
+        $this._titleTextBox.Width = $this.Width - 6
+        $this._titleTextBox.Height = 1
+        $this.AddChild($this._titleTextBox)
+        $y += 3
+        
+        # Description label and textbox
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = $y
+        $descLabel.Width = 15
+        $this.AddChild($descLabel)
+        
+        $this._descriptionTextBox = [TextBoxComponent]::new("DescriptionTextBox")
+        $this._descriptionTextBox.X = 2
+        $this._descriptionTextBox.Y = $y + 1
+        $this._descriptionTextBox.Width = $this.Width - 6
+        $this._descriptionTextBox.Height = 3
+        $this.AddChild($this._descriptionTextBox)
+        $y += 5
+        
+        # Priority label and radio buttons
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 2
+        $priorityLabel.Y = $y
+        $priorityLabel.Width = 10
+        $this.AddChild($priorityLabel)
+        $y += 1
+        
+        $this._lowPriorityRadio = [RadioButtonComponent]::new("LowPriorityRadio")
+        $this._lowPriorityRadio.Text = "Low"
+        $this._lowPriorityRadio.GroupName = "Priority"
+        $this._lowPriorityRadio.X = 4
+        $this._lowPriorityRadio.Y = $y
+        $this.AddChild($this._lowPriorityRadio)
+        
+        $this._mediumPriorityRadio = [RadioButtonComponent]::new("MediumPriorityRadio")
+        $this._mediumPriorityRadio.Text = "Medium"
+        $this._mediumPriorityRadio.GroupName = "Priority"
+        $this._mediumPriorityRadio.X = 14
+        $this._mediumPriorityRadio.Y = $y
+        $this.AddChild($this._mediumPriorityRadio)
+        
+        $this._highPriorityRadio = [RadioButtonComponent]::new("HighPriorityRadio")
+        $this._highPriorityRadio.Text = "High"
+        $this._highPriorityRadio.GroupName = "Priority"
+        $this._highPriorityRadio.X = 28
+        $this._highPriorityRadio.Y = $y
+        $this.AddChild($this._highPriorityRadio)
+        $y += 3
+        
+        # Buttons
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save"
+        $this._saveButton.X = $this.Width - 24
+        $this._saveButton.Y = $this.Height - 4
+        $this._saveButton.Width = 8
+        $this._saveButton.Height = 1
+        $thisPanel = $this
+        $this._saveButton.OnClick = {
+            if ($thisPanel._ValidateInput()) {
+                $thisPanel.DialogResult = [DialogResult]::OK
+                if ($thisPanel.OnSave) {
+                    & $thisPanel.OnSave
+                }
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel"
+        $this._cancelButton.X = $this.Width - 14
+        $this._cancelButton.Y = $this.Height - 4
+        $this._cancelButton.Width = 8
+        $this._cancelButton.Height = 1
+        $this._cancelButton.OnClick = {
+            $thisPanel.DialogResult = [DialogResult]::Cancel
+            if ($thisPanel.OnCancel) {
+                & $thisPanel.OnCancel
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._cancelButton)
+    }
+    
+    hidden [void] _PopulateData() {
+        if ($this._task) {
+            $this._titleTextBox.Text = $this._task.Title
+            $this._descriptionTextBox.Text = if ($this._task.Description) { $this._task.Description } else { "" }
+            
+            switch ($this._task.Priority) {
+                ([TaskPriority]::Low) { $this._lowPriorityRadio.Selected = $true }
+                ([TaskPriority]::High) { $this._highPriorityRadio.Selected = $true }
+                default { $this._mediumPriorityRadio.Selected = $true }
+            }
+        } else {
+            $this._mediumPriorityRadio.Selected = $true
+        }
+    }
+    
+    hidden [bool] _ValidateInput() {
+        if ([string]::IsNullOrWhiteSpace($this._titleTextBox.Text)) {
+            return $false
+        }
+        return $true
+    }
+    
+    [PmcTask] GetTask() {
+        $task = if ($this._task) { $this._task } else { [PmcTask]::new() }
+        
+        $task.Title = $this._titleTextBox.Text.Trim()
+        $task.Description = $this._descriptionTextBox.Text.Trim()
+        
+        if ($this._lowPriorityRadio.Selected) {
+            $task.Priority = [TaskPriority]::Low
+        } elseif ($this._highPriorityRadio.Selected) {
+            $task.Priority = [TaskPriority]::High
+        } else {
+            $task.Priority = [TaskPriority]::Medium
+        }
+        
+        if ($this._isNewTask) {
+            $task.Status = [TaskStatus]::Pending
+            $task.Progress = 0
+            $task.CreatedAt = [datetime]::Now
+        }
+        $task.UpdatedAt = [datetime]::Now
+        
+        return $task
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                $this.DialogResult = [DialogResult]::Cancel
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true
+            }
+            ([ConsoleKey]::Enter) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control) {
+                    if ($this._ValidateInput()) {
+                        $this.DialogResult = [DialogResult]::OK
+                        if ($this.OnSave) {
+                            & $this.OnSave
+                        }
+                    }
+                    return $true
+                }
+            }
+        }
+        return ([Panel]$this).HandleInput($keyInfo)
+    }
+    
+    [void] SetInitialFocus() {
+        # Focus the title textbox first
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._titleTextBox)
+        }
+    }
+}
+
+# ===== CLASS: TaskDeleteDialog =====
+# Module: task-dialogs  
+# Dependencies: Panel, LabelComponent, ButtonComponent
+# Purpose: Confirmation dialog for task deletion
+class TaskDeleteDialog : Panel {
+    hidden [PmcTask]$_task
+    hidden [ButtonComponent]$_yesButton
+    hidden [ButtonComponent]$_noButton
+    [DialogResult]$DialogResult = [DialogResult]::None
+    [scriptblock]$OnConfirm
+    [scriptblock]$OnCancel
+    
+    TaskDeleteDialog([PmcTask]$task) : base("TaskDeleteDialog") {
+        $this._task = $task
+        $this.Title = "Delete Task"
+        $this.Width = 50
+        $this.Height = 8
+        $this.HasBorder = $true
+        $this.IsFocusable = $true
+        
+        $this._CreateControls()
+    }
+    
+    hidden [void] _CreateControls() {
+        # Confirmation message
+        $messageLabel = [LabelComponent]::new("MessageLabel")
+        $messageLabel.Text = "Are you sure you want to delete this task?"
+        $messageLabel.X = 2
+        $messageLabel.Y = 2
+        $messageLabel.Width = $this.Width - 4
+        $this.AddChild($messageLabel)
+        
+        $taskLabel = [LabelComponent]::new("TaskLabel")
+        $taskLabel.Text = "Task: $($this._task.Title)"
+        $taskLabel.X = 2
+        $taskLabel.Y = 3
+        $taskLabel.Width = $this.Width - 4
+        $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+        $this.AddChild($taskLabel)
+        
+        # Buttons
+        $thisDialog = $this
+        $this._yesButton = [ButtonComponent]::new("YesButton")
+        $this._yesButton.Text = "Yes"
+        $this._yesButton.X = $this.Width - 24
+        $this._yesButton.Y = $this.Height - 3
+        $this._yesButton.Width = 8
+        $this._yesButton.Height = 1
+        $this._yesButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::Yes
+            if ($thisDialog.OnConfirm) {
+                & $thisDialog.OnConfirm
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._yesButton)
+        
+        $this._noButton = [ButtonComponent]::new("NoButton")
+        $this._noButton.Text = "No"
+        $this._noButton.X = $this.Width - 14
+        $this._noButton.Y = $this.Height - 3
+        $this._noButton.Width = 8
+        $this._noButton.Height = 1
+        $this._noButton.OnClick = {
+            $thisDialog.DialogResult = [DialogResult]::No
+            if ($thisDialog.OnCancel) {
+                & $thisDialog.OnCancel
+            }
+        }.GetNewClosure()
+        $this.AddChild($this._noButton)
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                $this.DialogResult = [DialogResult]::No
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true
+            }
+            ([ConsoleKey]::Y) {
+                $this.DialogResult = [DialogResult]::Yes
+                if ($this.OnConfirm) {
+                    & $this.OnConfirm
+                }
+                return $true
+            }
+            ([ConsoleKey]::N) {
+                $this.DialogResult = [DialogResult]::No
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true
+            }
+        }
+        return ([Panel]$this).HandleInput($keyInfo)
+    }
+    
+    [void] SetInitialFocus() {
+        # Focus the No button by default (safer)
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._noButton)
+        }
+    }
+}
+
+# Alias for compatibility
+class TaskDialog : TaskEditPanel {
+    TaskDialog([string]$title, [PmcTask]$task) : base($title, $task) {}
+}
+
 #endregion
 
 
@@ -6233,25 +6796,35 @@ function Process-TuiInput {
             $keybindingService = $global:TuiState.Services.KeybindingService
             $actionService = $global:TuiState.Services.ActionService
             
+            $inputHandled = $false
+            
             # Priority 1: Focused component gets first chance
             $focusedComponent = $focusManager?.FocusedComponent
             if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
                 if ($focusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
-                    continue
+                    $inputHandled = $true
                 }
             }
             
-            # Priority 2: Overlay modal behavior - if overlays exist, they get priority and enforce modality
-            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
+            # Priority 2: If focused component didn't handle it AND overlay is active, 
+            # give overlay container a chance (for container actions like Escape)
+            # Then enforce modality - no further processing
+            if (-not $inputHandled -and $global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
                 if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                 }
-                continue  # Enforce modality - no other input processing when overlays are active
+                # Enforce modality - no other input processing when overlays are active
+                continue  
             }
             
-            # Priority 3: Global keybindings
+            # Skip to next key if input was handled
+            if ($inputHandled) {
+                continue
+            }
+            
+            # Priority 3: Global keybindings (only if no overlay is active)
             if ($keybindingService) {
                 $action = $keybindingService.GetAction($keyInfo)
                 if ($action) {
@@ -6269,7 +6842,7 @@ function Process-TuiInput {
                 }
             }
             
-            # Priority 4: Current screen gets the final chance
+            # Priority 4: Current screen gets the final chance (only if no overlay is active)
             if ($global:TuiState.CurrentScreen) {
                 if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
@@ -6558,7 +7131,7 @@ using namespace System.Collections.Generic
 #region Screen Classes
 
 # ==============================================================================
-# CLASS: DashboardScreen (Now serves as the Main Menu)
+# CLASS: DashboardScreen (Data-Driven Dashboard with DataGridComponent)
 #
 # INHERITS:
 #   - Screen (ABC.006)
@@ -6567,129 +7140,289 @@ using namespace System.Collections.Generic
 #   Services:
 #     - NavigationService (ASE.004)
 #     - FocusManager (ASE.009)
+#     - DataManager (ASE.003)
+#     - ViewDefinitionService (ASE.011)
 #   Components:
 #     - Panel (ACO.011)
-#     - NavigationMenu (ACO.021)
+#     - DataGridComponent (ACO.022)
 #     - LabelComponent (ACO.001)
 #
 # PURPOSE:
-#   Serves as the main interactive entry point for the application, allowing
-#   the user to navigate to different screens.
+#   Data-driven dashboard showing task statistics, recent tasks, and quick actions
+#   using the ViewDefinitionService pattern for consistent formatting.
 # ==============================================================================
 class DashboardScreen : Screen {
     #region UI Components
     hidden [Panel] $_mainPanel
-    hidden [NavigationMenu] $_menu
+    hidden [DataGridComponent] $_statsGrid
+    hidden [DataGridComponent] $_recentTasksGrid
+    hidden [DataGridComponent] $_navigationGrid
     #endregion
 
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
-    # The Initialize method is called once by the NavigationService when the screen is first created.
-        # The Initialize method is called once by the NavigationService when the screen is first created.
     [void] Initialize() {
         if (-not $this.ServiceContainer) { return }
 
-        # Main container panel to hold all elements
-        $this._mainPanel = [Panel]::new("MainMenuPanel")
+        # Main container panel
+        $this._mainPanel = [Panel]::new("DashboardPanel")
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
-        $this._mainPanel.Title = " Axiom-Phoenix v4.0 "
+        $this._mainPanel.Title = " Axiom-Phoenix v4.0 Dashboard "
         $this.AddChild($this._mainPanel)
 
-        # ASCII Art Title for branding
+        # ASCII Art Title (smaller)
         $titleArt = @(
-            '      ___   _  _  _  ___  __  __   ',
-            '     / _ \ | \/ || |/ _ \|  \/  |  ',
-            '    | |_| | >  < | | (_) | |\/| |  ',
-            '    |_| |_|/_/\_\|_|\___/|_|  |_|  '
+            '   ___   _  _  _  ___  __  __   ',
+            '  / _ \ | \/ || |/ _ \|  \/  |  ',
+            ' | |_| | >  < | | (_) | |\/| |  ',
+            ' |_| |_|/_/\_\|_|\___/|_|  |_|  '
         )
-        $y = 3 # Starting Y position for the title
+        $y = 2
         foreach ($line in $titleArt) {
             $label = [LabelComponent]::new("TitleLine$y")
             $label.Text = $line
-            
-            # =============================================================
-            # THE FIX: Explicitly set the width of the label to match the
-            #          length of the text it needs to display.
-            # =============================================================
             $label.Width = $line.Length
-            
             $label.ForegroundColor = Get-ThemeColor -ColorName "Primary"
-            # This positioning calculation remains correct.
             $label.X = [Math]::Floor(($this.Width - $line.Length) / 2)
             $label.Y = $y++
             $this._mainPanel.AddChild($label)
         }
-        $y++ # Add a blank line for spacing
+        $y += 1  # Add spacing
 
-        # Create the central navigation menu
-        $this._menu = [NavigationMenu]::new("MainMenu")
-        $this._menu.Orientation = "Vertical" # Stack items vertically
-        $this._menu.Width = 40
-        $this._menu.Height = 4 # Height will be determined by the number of items
-        $this._menu.X = [Math]::Floor(($this.Width - $this._menu.Width) / 2)
-        $this._menu.Y = $y
-        
-        # Set theme colors for the menu
-        $this._menu.BackgroundColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#1E1E1E"
-        $this._menu.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
-        $this._menu.SelectedBackgroundColor = Get-ThemeColor -ColorName "ButtonFocusBackground" -DefaultColor "#0078D4"
-        $this._menu.SelectedForegroundColor = Get-ThemeColor -ColorName "ButtonFocusForeground" -DefaultColor "#FFFFFF"
+        # Calculate layout dimensions
+        $leftWidth = [Math]::Floor($this.Width * 0.35)
+        $rightWidth = $this.Width - $leftWidth - 3
+        $gridHeight = [Math]::Floor(($this.Height - $y - 2) / 2)
 
-        # Populate the menu items. Each item has a label and an action.
-        $this._menu.AddItem([NavigationItem]::new("TASKS", "Manage Tasks",   ($this._CreateNavigationAction([TaskListScreen]))))
-        $this._menu.AddItem([NavigationItem]::new("THEME", "Change Theme",   ($this._CreateNavigationAction([ThemePickerScreen]))))
-        $this._menu.AddItem([NavigationItem]::new("EXIT",  "Exit Axiom",     { $global:TuiState.Running = $false }))
+        # Task Statistics Grid (top-left)
+        $this._statsGrid = [DataGridComponent]::new("StatsGrid")
+        $this._statsGrid.X = 1
+        $this._statsGrid.Y = $y
+        $this._statsGrid.Width = $leftWidth
+        $this._statsGrid.Height = $gridHeight
+        $this._statsGrid.ShowHeaders = $true
+        $this._statsGrid.IsFocusable = $false
+        $this._mainPanel.AddChild($this._statsGrid)
 
-        $this._mainPanel.AddChild($this._menu)
+        # Recent Tasks Grid (top-right)
+        $this._recentTasksGrid = [DataGridComponent]::new("RecentTasksGrid")
+        $this._recentTasksGrid.X = $leftWidth + 2
+        $this._recentTasksGrid.Y = $y
+        $this._recentTasksGrid.Width = $rightWidth
+        $this._recentTasksGrid.Height = $gridHeight
+        $this._recentTasksGrid.ShowHeaders = $true
+        $this._recentTasksGrid.IsFocusable = $false
+        $this._mainPanel.AddChild($this._recentTasksGrid)
+
+        # Quick Actions Grid (bottom, centered)
+        $actionsY = $y + $gridHeight + 1
+        $actionsWidth = [Math]::Floor($this.Width * 0.7)
+        $this._navigationGrid = [DataGridComponent]::new("NavigationGrid")
+        $this._navigationGrid.X = [Math]::Floor(($this.Width - $actionsWidth) / 2)
+        $this._navigationGrid.Y = $actionsY
+        $this._navigationGrid.Width = $actionsWidth
+        $this._navigationGrid.Height = $this.Height - $actionsY - 2
+        $this._navigationGrid.ShowHeaders = $true
+        $thisScreen = $this
+        $this._navigationGrid.OnSelectionChanged = {
+            param($sender, $selectedIndex)
+            $item = $sender.GetSelectedItem()
+            if ($item -and $item.ContainsKey("ActionKey")) {
+                $thisScreen._ExecuteNavigationAction($item.ActionKey)
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._navigationGrid)
     }
 
-    # This lifecycle method is called every time the screen becomes the active view.
     [void] OnEnter() {
-        # Set the initial focus to our menu so the user can navigate immediately.
-        $this.Services.FocusManager?.SetFocus($this._menu)
+        # Load and display data
+        $this._RefreshDashboardData()
+        
+        # Set focus to navigation grid for user interaction
+        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+        if ($focusManager -and $this._navigationGrid) {
+            $focusManager.SetFocus($this._navigationGrid)
+        }
     }
 
-    # Handle window resizing
     [void] OnResize([int]$newWidth, [int]$newHeight) {
-        # Call base implementation
         ([Screen]$this).OnResize($newWidth, $newHeight)
         
-        # Resize main panel to fill the screen
         if ($this._mainPanel) {
             $this._mainPanel.Width = $newWidth
             $this._mainPanel.Height = $newHeight
-            $this._mainPanel.UpdateContentDimensions()
             
-            # Recenter the menu
-            if ($this._menu) {
-                $this._menu.X = [Math]::Floor(($newWidth - $this._menu.Width) / 2)
+            # Recalculate layout
+            $this.Initialize()
+        }
+    }
+
+    hidden [void] _RefreshDashboardData() {
+        $this._UpdateTaskStatistics()
+        $this._UpdateRecentTasks()
+        $this._UpdateNavigationActions()
+    }
+
+    hidden [void] _UpdateTaskStatistics() {
+        if (-not $this._statsGrid) { return }
+
+        $dataManager = $this.ServiceContainer?.GetService("DataManager")
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        
+        if (-not $dataManager -or -not $viewDefService) { return }
+
+        # Get view definition
+        $viewDef = $viewDefService.GetViewDefinition('dashboard.task.stats')
+        $this._statsGrid.SetColumns($viewDef.Columns)
+
+        # Get tasks and calculate statistics
+        $allTasks = $dataManager.GetTasks()
+        $stats = @()
+
+        # Total tasks
+        $stats += @{ Name="Total Tasks"; Count=$allTasks.Count; Type="info" }
+
+        # Tasks by status
+        $pendingCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::Pending }).Count
+        $inProgressCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::InProgress }).Count
+        $completedCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::Completed }).Count
+        $cancelledCount = @($allTasks | Where-Object { $_.Status -eq [TaskStatus]::Cancelled }).Count
+
+        $stats += @{ Name="Pending"; Count=$pendingCount; Type="warning" }
+        $stats += @{ Name="In Progress"; Count=$inProgressCount; Type="info" }
+        $stats += @{ Name="Completed"; Count=$completedCount; Type="success" }
+        if ($cancelledCount -gt 0) {
+            $stats += @{ Name="Cancelled"; Count=$cancelledCount; Type="error" }
+        }
+
+        # High priority tasks
+        $highPriorityCount = @($allTasks | Where-Object { $_.Priority -eq [TaskPriority]::High -and $_.Status -ne [TaskStatus]::Completed }).Count
+        if ($highPriorityCount -gt 0) {
+            $stats += @{ Name="High Priority"; Count=$highPriorityCount; Type="warning" }
+        }
+
+        # Transform stats using view definition
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        foreach ($stat in $stats) {
+            $displayItems += & $transformer $stat
+        }
+
+        $this._statsGrid.SetItems($displayItems)
+    }
+
+    hidden [void] _UpdateRecentTasks() {
+        if (-not $this._recentTasksGrid) { return }
+
+        $dataManager = $this.ServiceContainer?.GetService("DataManager")
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        
+        if (-not $dataManager -or -not $viewDefService) { return }
+
+        # Get view definition
+        $viewDef = $viewDefService.GetViewDefinition('dashboard.recent.tasks')
+        $this._recentTasksGrid.SetColumns($viewDef.Columns)
+
+        # Get recent tasks (last 8, sorted by creation date)
+        $allTasks = $dataManager.GetTasks()
+        $recentTasks = @($allTasks | Sort-Object CreatedAt -Descending | Select-Object -First 8)
+
+        if ($recentTasks.Count -eq 0) {
+            $this._recentTasksGrid.SetItems(@())
+            return
+        }
+
+        # Transform tasks using view definition
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        foreach ($task in $recentTasks) {
+            $displayItems += & $transformer $task
+        }
+
+        $this._recentTasksGrid.SetItems($displayItems)
+    }
+
+    hidden [void] _UpdateNavigationActions() {
+        if (-not $this._navigationGrid) { return }
+
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        if (-not $viewDefService) { return }
+
+        # Get view definition
+        $viewDef = $viewDefService.GetViewDefinition('dashboard.navigation')
+        $this._navigationGrid.SetColumns($viewDef.Columns)
+
+        # Define navigation actions
+        $navActions = @(
+            @{ Key="T"; Name="Task Management"; Description="View and manage tasks"; ActionKey="tasks" },
+            @{ Key="P"; Name="Projects"; Description="Manage projects"; ActionKey="projects" },
+            @{ Key="S"; Name="Settings"; Description="Change theme and settings"; ActionKey="settings" },
+            @{ Key="Q"; Name="Exit Application"; Description="Quit Axiom-Phoenix"; ActionKey="exit" }
+        )
+
+        # Transform nav actions using view definition
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        foreach ($action in $navActions) {
+            $displayItem = & $transformer $action
+            $displayItem.ActionKey = $action.ActionKey  # Add action key for execution
+            $displayItems += $displayItem
+        }
+
+        $this._navigationGrid.SetItems($displayItems)
+    }
+
+    hidden [void] _ExecuteNavigationAction([string]$actionKey) {
+        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        if (-not $navService) { return }
+
+        switch ($actionKey) {
+            "tasks" {
+                $screen = [TaskListScreen]::new($this.ServiceContainer)
+                $screen.Initialize()
+                $navService.NavigateTo($screen)
             }
-            
-            # Recenter the title labels
-            $y = 3
-            foreach ($child in $this._mainPanel.Children) {
-                if ($child -is [LabelComponent] -and $child.Name -like "TitleLine*") {
-                    $child.X = [Math]::Floor(($newWidth - $child.Width) / 2)
-                }
+            "projects" {
+                # Future: ProjectListScreen
+                Write-Host "Projects feature coming soon!" -ForegroundColor Yellow
+            }
+            "settings" {
+                $screen = [ThemePickerScreen]::new($this.ServiceContainer)
+                $screen.Initialize()
+                $navService.NavigateTo($screen)
+            }
+            "exit" {
+                $global:TuiState.Running = $false
             }
         }
     }
 
-    # A private helper method to create navigation actions, which keeps the code clean and avoids repetition.
-    # It takes a screen type (like [TaskListScreen]) and returns a scriptblock that navigates to it.
-    hidden [scriptblock] _CreateNavigationAction([type]$ScreenType) {
-        $thisScreen = $this # Capture the current screen instance for use inside the scriptblock
-        return {
-            # This scriptblock will be executed when the user presses Enter on the menu item.
-            $navService = $thisScreen.ServiceContainer.GetService('NavigationService')
-            # Create a new instance of the target screen, passing the service container to it.
-            $screenInstance = $ScreenType::new($thisScreen.ServiceContainer)
-            # It's crucial to call Initialize() on the new screen before navigating.
-            $screenInstance.Initialize()
-            # Tell the NavigationService to make the new screen active.
-            $navService.NavigateTo($screenInstance)
-        }.GetNewClosure()
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Handle hotkeys for quick navigation
+        switch ($keyInfo.KeyChar.ToString().ToUpper()) {
+            "T" {
+                $this._ExecuteNavigationAction("tasks")
+                return $true
+            }
+            "P" {
+                $this._ExecuteNavigationAction("projects")
+                return $true
+            }
+            "S" {
+                $this._ExecuteNavigationAction("settings")
+                return $true
+            }
+            "Q" {
+                $this._ExecuteNavigationAction("exit")
+                return $true
+            }
+            default {
+                # Let base class handle other keys (like arrow navigation in grid)
+                return ([Screen]$this).HandleInput($keyInfo)
+            }
+        }
+        return $false
     }
 }
 
@@ -6702,7 +7435,7 @@ class DashboardScreen : Screen {
 class TaskListScreen : Screen { 
     #region UI Components
     hidden [Panel] $_mainPanel
-    hidden [ScrollablePanel] $_taskListPanel
+    hidden [DataGridComponent] $_taskGrid
     hidden [Panel] $_detailPanel
     hidden [Panel] $_statusBar
     hidden [ButtonComponent] $_newButton
@@ -6759,16 +7492,26 @@ class TaskListScreen : Screen {
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._filterBox)
 
-        # Task list panel (left side)
+        # Task list grid (left side) - Using new DataGridComponent
         $listWidth = [Math]::Floor($this.Width * 0.6)
-        $this._taskListPanel = [ScrollablePanel]::new("Tasks")
-        $this._taskListPanel.X = 1
-        $this._taskListPanel.Y = 4  # Move down to accommodate filter
-        $this._taskListPanel.Width = $listWidth
-        $this._taskListPanel.Height = $this.Height - 8  # Adjust for buttons and filter
-        $this._taskListPanel.Title = "Tasks"
-        $this._taskListPanel.UpdateContentDimensions()
-        $this._mainPanel.AddChild($this._taskListPanel)
+        $this._taskGrid = [DataGridComponent]::new("TaskGrid")
+        $this._taskGrid.X = 1
+        $this._taskGrid.Y = 4  # Move down to accommodate filter
+        $this._taskGrid.Width = $listWidth
+        $this._taskGrid.Height = $this.Height - 8  # Adjust for buttons and filter
+        $this._taskGrid.ShowHeaders = $true
+        $this._taskGrid.OnSelectionChanged = {
+            param($sender, $selectedIndex)
+            $thisScreen._selectedIndex = $selectedIndex
+            if ($selectedIndex -ge 0 -and $selectedIndex -lt $thisScreen._tasks.Count) {
+                $thisScreen._selectedTask = $thisScreen._tasks[$selectedIndex]
+            } else {
+                $thisScreen._selectedTask = $null
+            }
+            $thisScreen._UpdateDetailPanel()
+            $thisScreen._UpdateStatusBar()
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._taskGrid)
 
         # Detail panel (right side)
         $detailX = $listWidth + 2
@@ -6808,18 +7551,21 @@ class TaskListScreen : Screen {
             $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
             
             if ($dialogManager -and $dataManager) {
-                $dialog = [TaskDialog]::new("New Task", $null)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                $dialog = [TaskEditPanel]::new("New Task", $null)
+                $dialog.OnSave = {
                     $newTask = $dialog.GetTask()
                     $dataManager.AddTask($newTask)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "New task created: $($newTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
+                
         $this._mainPanel.AddChild($this._newButton)
         $currentX += $buttonSpacing
         
@@ -6835,16 +7581,18 @@ class TaskListScreen : Screen {
             $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
             
             if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
-                $dialog = [TaskDialog]::new("Edit Task", $thisScreen._selectedTask)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::OK) {
+                $dialog = [TaskEditPanel]::new("Edit Task", $thisScreen._selectedTask)
+                $dialog.OnSave = {
                     $updatedTask = $dialog.GetTask()
                     $dataManager.UpdateTask($updatedTask)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "Task updated: $($updatedTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._editButton)
@@ -6863,14 +7611,16 @@ class TaskListScreen : Screen {
             
             if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
                 $dialog = [TaskDeleteDialog]::new($thisScreen._selectedTask)
-                $dialogManager.ShowDialog($dialog)
-                
-                if ($dialog.DialogResult -eq [DialogResult]::Yes) {
+                $dialog.OnConfirm = {
                     $dataManager.DeleteTask($thisScreen._selectedTask.Id)
+                    $dialogManager.HideDialog($dialog)
                     $thisScreen._RefreshTasks()
                     $thisScreen._UpdateDisplay()
-                    # Write-Verbose "Task deleted: $($thisScreen._selectedTask.Title)"
-                }
+                }.GetNewClosure()
+                $dialog.OnCancel = {
+                    $dialogManager.HideDialog($dialog)
+                }.GetNewClosure()
+                $dialogManager.ShowDialog($dialog)
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._deleteButton)
@@ -6908,8 +7658,8 @@ class TaskListScreen : Screen {
         
         # Step 2: Set initial focus via FocusManager (CRITICAL for input to work)
         $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._filterBox) {
-            $focusManager.SetFocus($this._filterBox)
+        if ($focusManager -and $this._taskGrid) {
+            $focusManager.SetFocus($this._taskGrid)
         }
         
         # Step 3: Subscribe to EventManager events
@@ -6996,91 +7746,45 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] _UpdateTaskList() {
-        $panel = $this._taskListPanel
-        if (-not $panel) { return }
+        if (-not $this._taskGrid) { return }
         
-        # CRITICAL: Clear the panel's CHILDREN, not its buffer directly.
-        $panel.Children.Clear()
+        # Get the ViewDefinitionService and view definition
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        if (-not $viewDefService) { return }
+        
+        $viewDef = $viewDefService.GetViewDefinition('task.summary')
+        
+        # Configure the grid columns from the view definition
+        $this._taskGrid.SetColumns($viewDef.Columns)
         
         if ($this._tasks.Count -eq 0) {
-            # Add a label to show there are no tasks
-            $noTasksLabel = [LabelComponent]::new("NoTasksLabel")
-            $noTasksLabel.X = 2
-            $noTasksLabel.Y = 2
-            $noTasksLabel.Text = "No tasks found."
-            $noTasksLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-            $panel.AddChild($noTasksLabel)
-            $panel.RequestRedraw()
+            # Clear the grid if no tasks
+            $this._taskGrid.SetItems(@())
             return
         }
         
-        for ($i = 0; $i -lt $this._tasks.Count; $i++) {
-            $task = $this._tasks[$i]
-            
-            # Create a Panel for each task item (to support background color)
-            $taskPanel = [Panel]::new("TaskItem_$($task.Id)")
-            $taskPanel.X = 0
-            $taskPanel.Y = $i # Y position is its index in the list
-            $panelContentWidth = if ($panel.ContentWidth -le 0) { [Math]::Max(30, $panel.Width - 2) } else { $panel.ContentWidth }
-            $taskPanel.Width = $panelContentWidth
-            $taskPanel.Height = 1
-            $taskPanel.HasBorder = $false
-            
-            # Set background based on selection
-            $is_selected = ($i -eq $this._selectedIndex)
-            $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF" } else { Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-            
-            # Create a Label component for the task text
-            $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
-            $taskLabel.X = 1 # Indent slightly
-            $taskLabel.Y = 0 # Relative to the task panel
-            $taskLabel.Width = [Math]::Max(20, $panelContentWidth - 2) # Set proper width
-            $taskLabel.Height = 1
-            
-            # Status indicator
-            $statusChar = switch ($task.Status) {
-                ([TaskStatus]::Pending) { "o" }
-                ([TaskStatus]::InProgress) { "*" }
-                ([TaskStatus]::Completed) { "+" }
-                ([TaskStatus]::Cancelled) { "x" }
-                default { "?" }
-            }
-            
-            # Priority indicator
-            $priorityChar = switch ($task.Priority) {
-                ([TaskPriority]::Low) { "v" }
-                ([TaskPriority]::Medium) { "-" }
-                ([TaskPriority]::High) { "^" }
-                default { "-" }
-            }
-            
-            # Truncate title if needed
-            $maxTitleLength = [Math]::Max(10, $panelContentWidth - 6) # Ensure minimum length
-            if ($task.Title.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
-                $title = $task.Title.Substring(0, [Math]::Max(1, $maxTitleLength - 3)) + "..."
-            } else {
-                $title = $task.Title
-            }
-            
-            $taskLine = "$statusChar $priorityChar $title"
-            $taskLabel.Text = $taskLine
-            
-            # Set text color based on selection
-            if ($is_selected) { 
-                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
-            } else { 
-                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" 
-            }
-            
-            # Add the label to the task panel
-            $taskPanel.AddChild($taskLabel)
-            
-            # Add the task panel as a CHILD of the scrollable panel
-            $panel.AddChild($taskPanel)
+        # Transform tasks using the view definition transformer
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        
+        foreach ($task in $this._tasks) {
+            $displayItem = & $transformer $task
+            $displayItems += $displayItem
         }
         
-        # The ScrollablePanel's own Render method will now correctly handle everything else.
-        $panel.RequestRedraw()
+        # Set the transformed data on the grid
+        $this._taskGrid.SetItems($displayItems)
+        
+        # Preserve selection if possible
+        if ($this._selectedIndex -lt $this._tasks.Count) {
+            $this._taskGrid.SelectedIndex = $this._selectedIndex
+        } else {
+            $this._selectedIndex = 0
+            $this._taskGrid.SelectedIndex = 0
+            if ($this._tasks.Count -gt 0) {
+                $this._selectedTask = $this._tasks[0]
+            }
+        }
     }
 
     hidden [void] _UpdateDetailPanel() {
@@ -7199,7 +7903,10 @@ class TaskListScreen : Screen {
         $panel.BackgroundColor = Get-ThemeColor -ColorName "status.bar.bg" -DefaultColor "#1E1E1E"
         
         # Status text label
-        $statusText = "Tasks: $($this._tasks.Count) | Selected: $($this._selectedIndex + 1)"
+        $statusText = "Tasks: $($this._tasks.Count)"
+        if ($this._tasks.Count -gt 0) {
+            $statusText += " | Selected: $($this._selectedIndex + 1)"
+        }
         if ($this._filterText) {
             $statusText += " | Filter: '$($this._filterText)'"
         }
@@ -7212,7 +7919,7 @@ class TaskListScreen : Screen {
         $panel.AddChild($statusLabel)
         
         # Keyboard hints label
-        $hints = "Up/Down: Navigate | Enter: Edit | D: Delete | N: New"
+        $hints = "Up/Down: Navigate | Enter: Edit | D: Delete | N: New | T/P/S/Q: Quick Nav"
         $hintsX = $this.Width - $hints.Length - 3
         if ($hintsX -gt $statusText.Length + 2) {
             $hintsLabel = [LabelComponent]::new("StatusHints")
@@ -7227,73 +7934,8 @@ class TaskListScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Override base Screen HandleInput
+        # Handle action keys (navigation is now handled by DataGridComponent)
         switch ($keyInfo.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this._selectedIndex -gt 0) {
-                    $this._selectedIndex--
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                    
-                    # Adjust scroll if needed
-                    if ($this._selectedIndex -lt $this._taskListPanel.ScrollOffsetY) {
-                        $this._taskListPanel.ScrollUp()
-                    }
-                    
-                    $this._UpdateDisplay()
-                }
-                return $true
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this._selectedIndex -lt $this._tasks.Count - 1) {
-                    $this._selectedIndex++
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                    
-                    # Adjust scroll if needed
-                    $visibleEnd = $this._taskListPanel.ScrollOffsetY + $this._taskListPanel.ContentHeight - 1
-                    if ($this._selectedIndex -gt $visibleEnd) {
-                        $this._taskListPanel.ScrollDown()
-                    }
-                    
-                    $this._UpdateDisplay()
-                }
-                return $true
-            }
-            ([ConsoleKey]::PageUp) {
-                $this._taskListPanel.ScrollUp($this._taskListPanel.ContentHeight)
-                $this._selectedIndex = [Math]::Max(0, $this._selectedIndex - $this._taskListPanel.ContentHeight)
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::PageDown) {
-                $this._taskListPanel.ScrollDown($this._taskListPanel.ContentHeight)
-                $this._selectedIndex = [Math]::Min($this._tasks.Count - 1, $this._selectedIndex + $this._taskListPanel.ContentHeight)
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::Home) {
-                $this._taskListPanel.ScrollToTop()
-                $this._selectedIndex = 0
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::End) {
-                $this._taskListPanel.ScrollToBottom()
-                $this._selectedIndex = $this._tasks.Count - 1
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
             ([ConsoleKey]::Enter) {
                 # Edit task
                 if ($this._selectedTask -and $this._editButton) {
@@ -7330,8 +7972,8 @@ class TaskListScreen : Screen {
                 return $true
             }
             default {
-                # Unhandled key
-                return $false
+                # Unhandled key - let base class handle it
+                return ([Screen]$this).HandleInput($keyInfo)
             }
         }
         return $false
@@ -7733,11 +8375,64 @@ class ActionService {
         
         $this.RegisterAction("app.commandPalette", {
             # Write-Verbose "Executing app.commandPalette action"
-            # Command palette functionality is not yet implemented in this version
-            Write-Log -Level Warning -Message "Command palette feature not available in this version. Use F1 for help or navigate with arrow keys."
+            # Get required services from global state
+            $dialogManager = $global:TuiState.Services.DialogManager
+            $actionService = $global:TuiState.Services.ActionService
+            
+            if (-not $dialogManager -or -not $actionService) {
+                Write-Log -Level Error -Message "Required services not available for command palette"
+                return
+            }
+            
+            # Create and configure the CommandPalette component
+            $palette = [CommandPalette]::new("CommandPalette")
+            $palette.Width = 60
+            $palette.Height = 20
+            
+            # Get all available actions and populate the palette
+            $allActions = $actionService.GetAllActions()
+            $actionList = @()
+            foreach ($actionEntry in $allActions.GetEnumerator()) {
+                $actionData = $actionEntry.Value
+                $actionList += [PSCustomObject]@{
+                    Name = $actionEntry.Key
+                    Description = $actionData.Description
+                    Category = $actionData.Category
+                    Hotkey = $actionData.Hotkey
+                }
+            }
+            
+            # Set the actions data (Data Down)
+            $palette.SetActions($actionList)
+            
+            # Define what happens when user selects a command (Events Up)
+            $palette.OnExecute = {
+                param($sender, $selectedAction)
+                try {
+                    # Hide the palette first
+                    $dialogManager.HideDialog($palette)
+                    
+                    # Execute the selected action
+                    if ($selectedAction -and $selectedAction.Name) {
+                        $actionService.ExecuteAction($selectedAction.Name)
+                    }
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to execute command palette action: $($_.Exception.Message)"
+                }
+            }.GetNewClosure()
+            
+            # Define cancel behavior
+            $palette.OnCancel = {
+                $dialogManager.HideDialog($palette)
+            }.GetNewClosure()
+            
+            # Show the palette using the standard overlay mechanism
+            $dialogManager.ShowDialog($palette)
+            
         }, @{
             Category = "Application"
-            Description = "Show command palette (not implemented)"
+            Description = "Show command palette"
             Hotkey = "Ctrl+P"
         })
         
@@ -9405,6 +10100,7 @@ class DialogManager {
     [System.Collections.Generic.List[UIElement]] $_activeDialogs = [System.Collections.Generic.List[UIElement]]::new()
     [EventManager]$EventManager = $null
     [FocusManager]$FocusManager = $null
+    hidden [UIElement]$_previousFocus = $null
 
     DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
         $this.EventManager = $eventManager
@@ -9417,6 +10113,11 @@ class DialogManager {
             throw [System.ArgumentException]::new("Provided element is null.", "dialog")
         }
         
+        # Store previous focus for restoration
+        if ($this.FocusManager) {
+            $this._previousFocus = $this.FocusManager.FocusedComponent
+        }
+        
         # Calculate center position based on console size
         $consoleWidth = $global:TuiState.BufferWidth
         $consoleHeight = $global:TuiState.BufferHeight
@@ -9424,10 +10125,8 @@ class DialogManager {
         $dialog.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $dialog.Width) / 2))
         $dialog.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $dialog.Height) / 2))
 
-        # If there's a currently focused component, save it
+        # If there's a currently focused component, release it
         if ($this.FocusManager) {
-            # Use metadata to store previous focus for restoration
-            $dialog.Metadata.PreviousFocus = $this.FocusManager.FocusedComponent
             $this.FocusManager.ReleaseFocus() # Release current focus
         }
 
@@ -9478,10 +10177,8 @@ class DialogManager {
             $dialog.Cleanup()
 
             # Restore previous focus
-            if ($this.FocusManager -and $dialog.Metadata.PreviousFocus -is [UIElement]) {
-                $this.FocusManager.SetFocus($dialog.Metadata.PreviousFocus)
-            } else {
-                $this.FocusManager.ReleaseFocus() # Clear focus if no previous component
+            if ($this.FocusManager) {
+                $this.FocusManager.SetFocus($this._previousFocus)
             }
 
             $dialog.RequestRedraw() # Force redraw to remove dialog from screen
@@ -9497,64 +10194,6 @@ class DialogManager {
         }
         $this._activeDialogs.Clear()
         # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
-    }
-}
-
-# ===== CLASS: CommandPaletteManager =====
-# Module: command-palette-manager (new service)
-# Dependencies: CommandPalette, FocusManager, TuiFrameworkService
-# Purpose: Centralized management of the command palette lifecycle
-class CommandPaletteManager {
-    hidden [CommandPalette] $_palette
-    hidden [FocusManager] $_focusManager
-    hidden [TuiFrameworkService] $_framework
-
-    CommandPaletteManager([CommandPalette]$palette, [FocusManager]$focusManager, [TuiFrameworkService]$framework) {
-        $this._palette = $palette
-        $this._focusManager = $focusManager
-        $this._framework = $framework
-        Write-Log -Level Debug -Message "CommandPaletteManager: Initialized"
-    }
-
-    [void] Show() {
-        # 1. Position the palette
-        $dims = $this._framework.GetDimensions()
-        $this._palette.X = [Math]::Max(0, [Math]::Floor(($dims.Width - $this._palette.Width) / 2))
-        $this._palette.Y = [Math]::Max(0, [Math]::Floor(($dims.Height - $this._palette.Height) / 2))
-
-        # 2. Refresh actions and clear state
-        $this._palette.RefreshActions()
-        if ($this._palette._searchBox) {
-            $this._palette._searchBox.Text = ""
-            $this._palette._searchBox.CursorPosition = 0
-        }
-
-        # 3. Use the framework service to manage the overlay stack
-        $this._framework.AddOverlay($this._palette)
-        $this._palette.Visible = $true
-
-        # 4. Use the focus manager to set focus
-        if ($this._palette._searchBox) {
-            $this._focusManager.SetFocus($this._palette._searchBox)
-        }
-
-        $this._framework.RequestRedraw()
-        Write-Log -Level Debug -Message "CommandPaletteManager: Showed command palette"
-    }
-
-    [void] Hide() {
-        if ($this._palette.Visible) {
-            $this._palette.Visible = $false
-            $this._framework.RemoveOverlay($this._palette)
-            $this._focusManager.ReleaseFocus() # Or restore previous focus
-            $this._framework.RequestRedraw()
-            Write-Log -Level Debug -Message "CommandPaletteManager: Hid command palette"
-        }
-    }
-    
-    [void] Cleanup() {
-        $this.Hide()
-        Write-Log -Level Debug -Message "CommandPaletteManager: Cleanup completed"
     }
 }
 
@@ -9631,14 +10270,6 @@ class TuiFrameworkService {
         return $this._globalState.FocusedComponent
     }
     
-    [void] SetFocusedComponent([object]$component) {
-        $this._globalState.FocusedComponent = $component
-    }
-    
-    [object] GetCommandPalette() {
-        return $this._globalState.CommandPalette
-    }
-    
     [System.Collections.Generic.List[UIElement]] GetOverlayStack() {
         return $this._globalState.OverlayStack
     }
@@ -9656,14 +10287,6 @@ class TuiFrameworkService {
         return $removed
     }
     
-    [hashtable] GetServices() {
-        return $this._globalState.Services
-    }
-    
-    [object] GetService([string]$serviceName) {
-        return $this._globalState.Services[$serviceName]
-    }
-    
     [void] Cleanup() {
         Write-Log -Level Debug -Message "TuiFrameworkService: Cleanup completed"
         # No cleanup needed - just reports completion
@@ -9672,6 +10295,281 @@ class TuiFrameworkService {
 
 #endregion
 #<!-- END_PAGE: ASE.010 -->
+
+#<!-- PAGE: ASE.011 - ViewDefinitionService Class -->
+# ===== CLASS: ViewDefinitionService =====  
+# Module: view-definition-service
+# Dependencies: None
+# Purpose: Centralized service for defining how data models are presented in UI components
+class ViewDefinitionService {
+    hidden [hashtable]$_definitions = @{}
+    
+    ViewDefinitionService() {
+        $this._RegisterDefaultViewDefinitions()
+    }
+    
+    [hashtable] GetViewDefinition([string]$viewName) {
+        if (-not $this._definitions.ContainsKey($viewName)) {
+            throw "View definition '$viewName' not found. Available definitions: $($this._definitions.Keys -join ', ')"
+        }
+        return $this._definitions[$viewName]
+    }
+    
+    [void] RegisterViewDefinition([string]$viewName, [hashtable]$definition) {
+        if ([string]::IsNullOrWhiteSpace($viewName)) {
+            throw "View name cannot be null or empty"
+        }
+        
+        if (-not $definition -or -not $definition.ContainsKey("Columns") -or -not $definition.ContainsKey("Transformer")) {
+            throw "View definition must contain 'Columns' and 'Transformer' keys"
+        }
+        
+        $this._definitions[$viewName] = $definition
+    }
+    
+    [string[]] GetAvailableViewNames() {
+        return $this._definitions.Keys
+    }
+    
+    hidden [void] _RegisterDefaultViewDefinitions() {
+        # Task summary view for lists and grids
+        $this.RegisterViewDefinition('task.summary', @{
+            Columns = @(
+                @{ Name="Status";   Header="S"; Width=3 },
+                @{ Name="Priority"; Header="!"; Width=3 },
+                @{ Name="Title";    Header="Task Title"; Width=40 },
+                @{ Name="Progress"; Header="Progress"; Width=8 }
+            )
+            Transformer = {
+                param($task)
+                
+                # Status indicator  
+                $statusChar = switch ($task.Status) {
+                    ([TaskStatus]::Pending) { "o" }
+                    ([TaskStatus]::InProgress) { "*" }
+                    ([TaskStatus]::Completed) { "✓" }
+                    ([TaskStatus]::Cancelled) { "✗" }
+                    default { "?" }
+                }
+                
+                # Priority indicator
+                $priorityChar = switch ($task.Priority) {
+                    ([TaskPriority]::Low) { "↓" }
+                    ([TaskPriority]::Medium) { "-" }
+                    ([TaskPriority]::High) { "↑" }
+                    default { "-" }
+                }
+                
+                # Progress display
+                $progressText = "$($task.Progress)%"
+                
+                return @{
+                    Status   = $statusChar
+                    Priority = $priorityChar  
+                    Title    = $task.Title
+                    Progress = $progressText
+                }
+            }
+        })
+        
+        # Task detail view with more information
+        $this.RegisterViewDefinition('task.detailed', @{
+            Columns = @(
+                @{ Name="Status";     Header="Status"; Width=12 },
+                @{ Name="Priority";   Header="Priority"; Width=10 },
+                @{ Name="Title";      Header="Task Title"; Width=30 },
+                @{ Name="Progress";   Header="Progress"; Width=10 },
+                @{ Name="DueDate";    Header="Due Date"; Width=12 },
+                @{ Name="Project";    Header="Project"; Width=15 }
+            )
+            Transformer = {
+                param($task)
+                
+                # Full status name
+                $statusText = switch ($task.Status) {
+                    ([TaskStatus]::Pending) { "Pending" }
+                    ([TaskStatus]::InProgress) { "In Progress" }
+                    ([TaskStatus]::Completed) { "Completed" }
+                    ([TaskStatus]::Cancelled) { "Cancelled" }
+                    default { "Unknown" }
+                }
+                
+                # Full priority name
+                $priorityText = switch ($task.Priority) {
+                    ([TaskPriority]::Low) { "Low" }
+                    ([TaskPriority]::Medium) { "Medium" }
+                    ([TaskPriority]::High) { "High" }
+                    default { "Unknown" }
+                }
+                
+                # Formatted due date
+                $dueDateText = if ($task.DueDate) {
+                    $task.DueDate.ToString("MM/dd/yyyy")
+                } else {
+                    "None"
+                }
+                
+                # Progress with bar
+                $progressText = "$($task.Progress)%"
+                
+                # Project key or default
+                $projectText = if ($task.ProjectKey) { $task.ProjectKey } else { "None" }
+                
+                return @{
+                    Status   = $statusText
+                    Priority = $priorityText
+                    Title    = $task.Title
+                    Progress = $progressText
+                    DueDate  = $dueDateText
+                    Project  = $projectText
+                }
+            }
+        })
+        
+        # Compact task view for narrow displays
+        $this.RegisterViewDefinition('task.compact', @{
+            Columns = @(
+                @{ Name="Status";   Header="S"; Width=1 },
+                @{ Name="Title";    Header="Task"; Width=30 }
+            )
+            Transformer = {
+                param($task)
+                
+                # Single character status
+                $statusChar = switch ($task.Status) {
+                    ([TaskStatus]::Pending) { "○" }
+                    ([TaskStatus]::InProgress) { "◐" }
+                    ([TaskStatus]::Completed) { "●" }
+                    ([TaskStatus]::Cancelled) { "✗" }
+                    default { "?" }
+                }
+                
+                return @{
+                    Status = $statusChar
+                    Title  = $task.Title
+                }
+            }
+        })
+        
+        # Project summary view
+        $this.RegisterViewDefinition('project.summary', @{
+            Columns = @(
+                @{ Name="Key";        Header="Key"; Width=10 },
+                @{ Name="Name";       Header="Project Name"; Width=30 },
+                @{ Name="Status";     Header="Status"; Width=10 },
+                @{ Name="Owner";      Header="Owner"; Width=15 }
+            )
+            Transformer = {
+                param($project)
+                
+                $statusText = if ($project.IsActive) { "Active" } else { "Inactive" }
+                $ownerText = if ($project.Owner) { $project.Owner } else { "Unassigned" }
+                
+                return @{
+                    Key    = $project.Key
+                    Name   = $project.Name
+                    Status = $statusText
+                    Owner  = $ownerText
+                }
+            }
+        })
+        
+        # Dashboard recent tasks view - compact for overview
+        $this.RegisterViewDefinition('dashboard.recent.tasks', @{
+            Columns = @(
+                @{ Name="Status";   Header="S"; Width=1 },
+                @{ Name="Priority"; Header="!"; Width=1 },
+                @{ Name="Title";    Header="Recent Tasks"; Width=35 },
+                @{ Name="Age";      Header="Age"; Width=8 }
+            )
+            Transformer = {
+                param($task)
+                
+                # Status indicator with unicode symbols
+                $statusChar = switch ($task.Status) {
+                    ([TaskStatus]::Pending) { "○" }
+                    ([TaskStatus]::InProgress) { "◐" }
+                    ([TaskStatus]::Completed) { "●" }
+                    ([TaskStatus]::Cancelled) { "✗" }
+                    default { "?" }
+                }
+                
+                # Priority indicator
+                $priorityChar = switch ($task.Priority) {
+                    ([TaskPriority]::Low) { "↓" }
+                    ([TaskPriority]::Medium) { "→" }
+                    ([TaskPriority]::High) { "↑" }
+                    default { "?" }
+                }
+                
+                # Calculate age in days
+                $age = [DateTime]::Now - $task.CreatedAt
+                $ageText = if ($age.Days -gt 0) {
+                    "$($age.Days)d"
+                } elseif ($age.Hours -gt 0) {
+                    "$($age.Hours)h"
+                } else {
+                    "$($age.Minutes)m"
+                }
+                
+                return @{
+                    Status   = $statusChar
+                    Priority = $priorityChar
+                    Title    = $task.Title
+                    Age      = $ageText
+                }
+            }
+        })
+        
+        # Dashboard summary statistics view
+        $this.RegisterViewDefinition('dashboard.task.stats', @{
+            Columns = @(
+                @{ Name="Metric";    Header="Task Statistics"; Width=20 },
+                @{ Name="Value";     Header="Count"; Width=8 },
+                @{ Name="Indicator"; Header=""; Width=5 }
+            )
+            Transformer = {
+                param($statsData)
+                
+                # This transformer expects a hashtable with metrics
+                # Example: @{ Name="Total Tasks"; Count=15; Type="info" }
+                
+                $indicator = switch ($statsData.Type) {
+                    "success" { "✓" }
+                    "warning" { "⚠" }
+                    "error" { "✗" }
+                    "info" { "ⓘ" }
+                    default { " " }
+                }
+                
+                return @{
+                    Metric    = $statsData.Name
+                    Value     = $statsData.Count.ToString()
+                    Indicator = $indicator
+                }
+            }
+        })
+        
+        # Dashboard navigation menu view
+        $this.RegisterViewDefinition('dashboard.navigation', @{
+            Columns = @(
+                @{ Name="Key";         Header="Key"; Width=5 },
+                @{ Name="Action";      Header="Quick Actions"; Width=25 },
+                @{ Name="Description"; Header="Description"; Width=20 }
+            )
+            Transformer = {
+                param($navItem)
+                
+                return @{
+                    Key         = "[$($navItem.Key)]"
+                    Action      = $navItem.Name
+                    Description = $navItem.Description
+                }
+            }
+        })
+    }
+}
+#<!-- END_PAGE: ASE.011 -->
 
 
 
@@ -10009,10 +10907,6 @@ try {
     Write-Host "All framework files loaded successfully!" -ForegroundColor Green
     Write-Host ""
     
-    # Create service container
-    Write-Host "Initializing services..." -ForegroundColor Cyan
-    $container = [ServiceContainer]::new()
-    
     # Create service container following Pillar 3: Centralized Service Management
     Write-Host "Initializing services..." -ForegroundColor Cyan
     $container = [ServiceContainer]::new()
@@ -10028,6 +10922,10 @@ try {
     
     Write-Host "  • Registering ThemeManager... " -NoNewline -ForegroundColor Gray
     $container.Register("ThemeManager", [ThemeManager]::new())
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering ViewDefinitionService... " -NoNewline -ForegroundColor Gray
+    $container.Register("ViewDefinitionService", [ViewDefinitionService]::new())
     Write-Host "✓" -ForegroundColor Green
     
     Write-Host "  • Registering TuiFrameworkService... " -NoNewline -ForegroundColor Gray
@@ -10060,6 +10958,7 @@ try {
         KeybindingService = $container.GetService("KeybindingService")
         DataManager = $container.GetService("DataManager")
         ThemeManager = $container.GetService("ThemeManager")
+        ViewDefinitionService = $container.GetService("ViewDefinitionService")
         Logger = $container.GetService("Logger")
     }
     $container.Register("NavigationService", [NavigationService]::new($serviceHash))
@@ -10067,13 +10966,6 @@ try {
     
     Write-Host "  • Registering DialogManager... " -NoNewline -ForegroundColor Gray
     $container.Register("DialogManager", [DialogManager]::new($container.GetService("EventManager"), $container.GetService("FocusManager")))
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering CommandPaletteManager... " -NoNewline -ForegroundColor Gray
-    # Following Rule 3.1: Components are dumb and receive data via properties
-    $commandPalette = [CommandPalette]::new("GlobalCommandPalette", $container.GetService("ActionService"))
-    $container.Register("CommandPaletteManager", [CommandPaletteManager]::new($commandPalette, $container.GetService("FocusManager"), $container.GetService("TuiFrameworkService")))
-    Write-Host "✓" -ForegroundColor Green
     Write-Host "✓" -ForegroundColor Green
     
     # Store services in global state for runtime access (following Pillar 4: Absolute Abstraction)
@@ -10089,7 +10981,6 @@ try {
         FocusManager = $container.GetService("FocusManager")
         DialogManager = $container.GetService("DialogManager")
         TuiFrameworkService = $container.GetService("TuiFrameworkService")
-        CommandPaletteManager = $container.GetService("CommandPaletteManager")
     }
     $global:TuiState.ServiceContainer = $container
     

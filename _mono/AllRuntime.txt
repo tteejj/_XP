@@ -562,25 +562,35 @@ function Process-TuiInput {
             $keybindingService = $global:TuiState.Services.KeybindingService
             $actionService = $global:TuiState.Services.ActionService
             
+            $inputHandled = $false
+            
             # Priority 1: Focused component gets first chance
             $focusedComponent = $focusManager?.FocusedComponent
             if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
                 if ($focusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
-                    continue
+                    $inputHandled = $true
                 }
             }
             
-            # Priority 2: Overlay modal behavior - if overlays exist, they get priority and enforce modality
-            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
+            # Priority 2: If focused component didn't handle it AND overlay is active, 
+            # give overlay container a chance (for container actions like Escape)
+            # Then enforce modality - no further processing
+            if (-not $inputHandled -and $global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
                 if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                 }
-                continue  # Enforce modality - no other input processing when overlays are active
+                # Enforce modality - no other input processing when overlays are active
+                continue  
             }
             
-            # Priority 3: Global keybindings
+            # Skip to next key if input was handled
+            if ($inputHandled) {
+                continue
+            }
+            
+            # Priority 3: Global keybindings (only if no overlay is active)
             if ($keybindingService) {
                 $action = $keybindingService.GetAction($keyInfo)
                 if ($action) {
@@ -598,7 +608,7 @@ function Process-TuiInput {
                 }
             }
             
-            # Priority 4: Current screen gets the final chance
+            # Priority 4: Current screen gets the final chance (only if no overlay is active)
             if ($global:TuiState.CurrentScreen) {
                 if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
