@@ -69,10 +69,6 @@ try {
     Write-Host "All framework files loaded successfully!" -ForegroundColor Green
     Write-Host ""
     
-    # Create service container
-    Write-Host "Initializing services..." -ForegroundColor Cyan
-    $container = [ServiceContainer]::new()
-    
     # Create service container following Pillar 3: Centralized Service Management
     Write-Host "Initializing services..." -ForegroundColor Cyan
     $container = [ServiceContainer]::new()
@@ -129,13 +125,6 @@ try {
     $container.Register("DialogManager", [DialogManager]::new($container.GetService("EventManager"), $container.GetService("FocusManager")))
     Write-Host "✓" -ForegroundColor Green
     
-    Write-Host "  • Registering CommandPaletteManager... " -NoNewline -ForegroundColor Gray
-    # Following Rule 3.1: Components are dumb and receive data via properties
-    $commandPalette = [CommandPalette]::new("GlobalCommandPalette", $container.GetService("ActionService"))
-    $container.Register("CommandPaletteManager", [CommandPaletteManager]::new($commandPalette, $container.GetService("FocusManager"), $container.GetService("TuiFrameworkService")))
-    Write-Host "✓" -ForegroundColor Green
-    Write-Host "✓" -ForegroundColor Green
-    
     # Store services in global state for runtime access (following Pillar 4: Absolute Abstraction)
     # Note: Only the runtime engine accesses these directly - UI components use TuiFrameworkService
     $global:TuiState.Services = @{
@@ -149,7 +138,6 @@ try {
         FocusManager = $container.GetService("FocusManager")
         DialogManager = $container.GetService("DialogManager")
         TuiFrameworkService = $container.GetService("TuiFrameworkService")
-        CommandPaletteManager = $container.GetService("CommandPaletteManager")
     }
     $global:TuiState.ServiceContainer = $container
     
