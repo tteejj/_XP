@@ -45,8 +45,11 @@ try {
     $files = @(
         @{ File = "AllBaseClasses.ps1"; Description = "Core Framework" },
         @{ File = "AllModels.ps1"; Description = "Data Models" },
-        @{ File = "AllComponents.ps1"; Description = "UI Components" },
-        @{ File = "AllScreens.ps1"; Description = "Application Screens" },
+        @{ File = "CoreComponents.ps1"; Description = "Core Components" },
+	@{ File = "PanelComponents.ps1"; Description = "Panel and Layout Components" },
+	@{ File = "AdvancedComponents.ps1"; Description = "Advanced Components" },        
+	@{ File = "DialogComponents.ps1"; Description = "Dialog Components" },
+	@{ File = "AllScreens.ps1"; Description = "Application Screens" },
         @{ File = "AllFunctions.ps1"; Description = "Utility Functions" },
         @{ File = "AllServices.ps1"; Description = "Business Services" },
         @{ File = "AllRuntime.ps1"; Description = "Runtime Engine" }

@@ -1,6 +1,6 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Components
-# UI components that extend UIElement - full implementations from axiom
+# Axiom-Phoenix v4.0 - Core UI Components
+# Basic UI components that extend UIElement - full implementations from axiom
 # ==============================================================================
 #
 # TABLE OF CONTENTS DIRECTIVE:
@@ -1924,7 +1924,7 @@ class ScrollablePanel : Panel {
         $this.IsFocusable = $true
         # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
         # Start with max possible height or a reasonable large value, will grow as children are added
-        $this.{_virtual_buffer} = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
+        $this._virtual_buffer = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
     }
 
     # Override OnResize to ensure virtual buffer matches actual content area needs
@@ -1934,8 +1934,8 @@ class ScrollablePanel : Panel {
 
         # Ensure the virtual buffer is wide enough for the content area
         $targetVirtualWidth = $this.ContentWidth 
-        if ($this.{_virtual_buffer}.Width -ne $targetVirtualWidth) {
-            $this.{_virtual_buffer}.Resize($targetVirtualWidth, $this.{_virtual_buffer}.Height) # Only resize width for now
+        if ($this._virtual_buffer.Width -ne $targetVirtualWidth) {
+            $this._virtual_buffer.Resize($targetVirtualWidth, $this._virtual_buffer.Height) # Only resize width for now
         }
         $this.UpdateMaxScroll() # Recalculate max scroll on resize
         $this.RequestRedraw()
@@ -1948,7 +1948,7 @@ class ScrollablePanel : Panel {
         ([Panel]$this)._RenderContent()
 
         # 2. Render all children onto the _virtual_buffer
-        $this.{_virtual_buffer}.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
+        $this._virtual_buffer.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
         
         $actualContentBottom = 0
         foreach ($child in $this.Children | Sort-Object ZIndex) {
@@ -1958,7 +1958,7 @@ class ScrollablePanel : Panel {
                 if ($null -ne $child._private_buffer) {
                     # Blend child's buffer onto our _virtual_buffer at its original coordinates
                     # (relative to the panel's content area)
-                    $this.{_virtual_buffer}.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
+                    $this._virtual_buffer.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
                 }
                 # Track the maximum vertical extent of children to determine virtual height
                 $childExtent = ($child.Y - $this.ContentY) + $child.Height
@@ -1985,17 +1985,17 @@ class ScrollablePanel : Panel {
         $sourceY = $this.ScrollOffsetY
         
         # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
-        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this.{_virtual_buffer}.Height - $sourceY)
+        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this._virtual_buffer.Height - $sourceY)
         if ($effectiveSourceHeight -le 0) {
             # No content to display in viewport
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
             return
         }
 
-        $visiblePortion = $this.{_virtual_buffer}.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
+        $visiblePortion = $this._virtual_buffer.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
         
         # Blend the visible portion onto our own _private_buffer, at the content area
-        $this.{_private_buffer}.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
+        $this._private_buffer.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
 
         # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
         if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
@@ -2010,10 +2010,10 @@ class ScrollablePanel : Panel {
         $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
         
         # Ensure virtual buffer height is at least content height
-        $currentVirtualHeight = $this.{_virtual_buffer}.Height
+        $currentVirtualHeight = $this._virtual_buffer.Height
         $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
         if ($newVirtualHeight -ne $currentVirtualHeight) {
-            $this.{_virtual_buffer}.Resize($this.{_virtual_buffer}.Width, $newVirtualHeight)
+            $this._virtual_buffer.Resize($this._virtual_buffer.Width, $newVirtualHeight)
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
         }
 
@@ -2042,7 +2042,7 @@ class ScrollablePanel : Panel {
             # If content fits, clear any previous scrollbar
             $bgColor = Get-ThemeColor "Background"
             for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
-                $this.{_private_buffer}.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', $bgColor, $bgColor))
+                $this._private_buffer.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', $bgColor, $bgColor))
             }
             return 
         } 
@@ -2061,7 +2061,7 @@ class ScrollablePanel : Panel {
             if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) {
                 $char = '█' # Thumb character
             }
-            $this.{_private_buffer}.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
+            $this._private_buffer.SetCell($scrollbarX, $y, [TuiCell]::new($char, $scrollFg, $scrollBg))
         }
     }
 
@@ -2352,11 +2352,14 @@ class ListBox : UIElement {
 # Module: tui-components (wrapper)
 # Dependencies: TextBoxComponent
 # Purpose: Enhanced wrapper around TextBoxComponent
+
 class TextBox : UIElement {
     hidden [TextBoxComponent]$_textBox
 
     TextBox([string]$name) : base($name) {
         $this._textBox = [TextBoxComponent]::new($name + "_inner")
+        # CRITICAL FIX: Immediately size the inner component to match the wrapper's current size.
+        $this._textBox.Resize($this.Width, $this.Height)
         $this.AddChild($this._textBox)
         $this.IsFocusable = $true
     }
@@ -2377,12 +2380,32 @@ class TextBox : UIElement {
         }
     }
 
+    [void] OnFocus() {
+        ([UIElement]$this).OnFocus()
+        if ($this._textBox) {
+            $this._textBox.IsFocused = $true
+            $this._textBox.OnFocus()
+            $this._textBox.RequestRedraw()
+        }
+    }
+
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        if ($this._textBox) {
+            $this._textBox.IsFocused = $false
+            $this._textBox.OnBlur()
+            $this._textBox.RequestRedraw()
+        }
+    }
+
     [void] OnResize() {
         if ($this._textBox) {
             $this._textBox.Width = $this.Width
             $this._textBox.Height = $this.Height
             $this._textBox.X = 0
             $this._textBox.Y = 0
+            # Ensure the inner component's buffer is also resized.
+            $this._textBox.Resize($this.Width, $this.Height)
         }
     }
 
@@ -2394,131 +2417,78 @@ class TextBox : UIElement {
 #<!-- END_PAGE: ACO.015 -->
 
 #<!-- PAGE: ACO.016 - CommandPalette Class -->
-# ==============================================================================
-# CLASS: CommandPalette
-#
-# INHERITS:
-#   - UIElement (ABC.004)
-#
-# DEPENDENCIES:
-#   Components:
-#     - ListBox (ACO.014)
-#     - TextBox (ACO.015)
-#     - Panel (ACO.011)
-#   Services:
-#     - ActionService (ASE.001)
-#
-# PURPOSE:
-#   A powerful, overlay-based command interface (like in VS Code) that allows
-#   users to search for and execute any action registered with the ActionService.
-#
-# KEY LOGIC:
-#   - Composes a Panel, TextBox, and ListBox to build its UI.
-#   - `Show()` adds the palette to the global overlay stack, making it the top
-#     priority for input.
-#   - `FilterActions` is called by the TextBox's OnChange event. It filters the
-#     full action list based on the search text and populates the ListBox.
-#   - `HandleInput` acts as a master router. It intercepts Escape, Enter, and
-#     navigation keys, and delegates all other input (typing) to its child
-#     search box.
-# ==============================================================================
+# ===== CLASS: CommandPalette =====
+# Module: command-palette
+# Dependencies: UIElement, Panel, ListBox, TextBoxComponent
+# Purpose: Searchable command interface
 class CommandPalette : UIElement {
     hidden [ListBox]$_listBox
-    hidden [TextBox]$_searchBox
+    hidden [TextBoxComponent]$_searchBox
     hidden [Panel]$_panel
     hidden [List[object]]$_allActions
     hidden [List[object]]$_filteredActions
-    hidden [object]$_actionService
-    hidden [scriptblock]$OnCancel
-    hidden [scriptblock]$OnSelect
+    [scriptblock]$OnExecute
+    [scriptblock]$OnCancel
 
-    CommandPalette([string]$name, [object]$actionService) : base($name) {
-        $this.IsFocusable = $true # The container itself is focusable to receive bubbled events
+    CommandPalette([string]$name) : base($name) {
+        $this.IsFocusable = $true
         $this.Visible = $false
-        $this.IsOverlay = $true # Ensures it is always rendered on top when visible
+        $this.IsOverlay = $true
         $this.Width = 60
         $this.Height = 20
-        $this._actionService = $actionService
+        
+        $this._allActions = [List[object]]::new()
+        $this._filteredActions = [List[object]]::new()
         
         $this.Initialize()
     }
 
     hidden [void] Initialize() {
+        # Create main panel with border
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
         $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
+        $this._panel.X = 0
+        $this._panel.Y = 0
         $this.AddChild($this._panel)
 
-        $this._searchBox = [TextBox]::new("CommandPalette_Search")
+        # Create search box
+        $this._searchBox = [TextBoxComponent]::new("CommandPalette_Search")
         $this._searchBox.X = 2
         $this._searchBox.Y = 1
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
-        $this._searchBox._textBox.Placeholder = "Type to search commands..."
+        $this._searchBox.Placeholder = "Type to search commands..."
         
-        $commandPalette = $this
-        $this._searchBox._textBox.OnChange = {
-            param($sender, $text)
-            $commandPalette.FilterActions($text)
+        # Connect search box to filtering
+        $paletteRef = $this
+        $this._searchBox.OnChange = { 
+            param($sender, $text) 
+            $paletteRef.FilterActions($text) 
         }.GetNewClosure()
-        
         $this._panel.AddChild($this._searchBox)
 
+        # Create list box for results
         $this._listBox = [ListBox]::new("CommandPalette_List")
         $this._listBox.X = 2
         $this._listBox.Y = 4
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 6
         $this._panel.AddChild($this._listBox)
-
-        $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[object]]::new()
     }
 
-    [void] Show() {
-        if ($this.Visible) { return }
-
-        $this.X = [Math]::Floor(($global:TuiState.BufferWidth - $this.Width) / 2)
-        $this.Y = [Math]::Floor(($global:TuiState.BufferHeight - $this.Height) / 2)
-        
-        $this.RefreshActions()
-        $this._searchBox.Clear()
-        $this.FilterActions("")
-        $this.Visible = $true
-        
-        # Add to global overlay stack to take input priority
-        $global:TuiState.OverlayStack.Add($this)
-        $this._searchBox.Focus() # Set focus to the internal search box
-        
-        $this.RequestRedraw()
-    }
-
-    [void] Hide() {
-        if (-not $this.Visible) { return }
-
-        $this.Visible = $false
-        # Remove from global overlay stack to release input priority
-        $global:TuiState.OverlayStack.Remove($this)
-
-        if ($this.OnCancel) { & $this.OnCancel }
-        
-        # Force a full redraw to properly clear the screen area
-        $global:TuiState.IsDirty = $true 
-    }
-
-    [void] RefreshActions() {
+    [void] SetActions([object[]]$actionList) {
         $this._allActions.Clear()
-        if ($this._actionService) {
-            $actions = $this._actionService.GetAllActions()
-            if ($actions -and $actions.Values) {
-                foreach ($action in ($actions.Values | Sort-Object Category, Name)) {
-                    if ($action) { $this._allActions.Add($action) }
-                }
-            }
+        foreach ($action in $actionList) {
+            $this._allActions.Add($action)
         }
+        $this.FilterActions("")  # Show all actions initially
+        
+        # Set initial focus to search box
+        $this._searchBox.IsFocused = $true
     }
 
     [void] FilterActions([string]$searchText) {
@@ -2538,67 +2508,122 @@ class CommandPalette : UIElement {
 
         foreach ($action in $actionsToDisplay) {
             $this._filteredActions.Add($action)
-            $displayText = if ($action.Category) { "[$($action.Category)] $($action.Name) - $($action.Description)" } else { "$($action.Name) - $($action.Description)" }
-            $this._listBox.AddItem($displayText)
+            $displayText = if ($action.Category) { 
+                "[$($action.Category)] $($action.Name)" 
+            } else { 
+                $action.Name 
+            }
+            $this._listBox.AddItem("$displayText - $($action.Description)")
         }
         
-        if ($this._filteredActions.Count -gt 0) { $this._listBox.SelectedIndex = 0 }
-        
-        $this._listBox.RequestRedraw()
+        if ($this._filteredActions.Count -gt 0) { 
+            $this._listBox.SelectedIndex = 0 
+        }
         $this.RequestRedraw()
+    }
+
+    [void] SetInitialFocus() {
+        if ($this._searchBox) {
+            # Clear any previous search text
+            $this._searchBox.Text = ""
+            $this._searchBox.CursorPosition = 0
+            $this._searchBox.IsFocused = $true
+            $this._searchBox.RequestRedraw()
+        }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
-
-        $navigationKeys = @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)
-
+        
+        $handled = $true
+        
         switch ($key.Key) {
-            ([ConsoleKey]::Escape) {
-                $this.Hide()
-                return $true
+            ([ConsoleKey]::Escape) { 
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true 
             }
-            
             ([ConsoleKey]::Enter) {
                 if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
                     $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                    if ($selectedAction) {
-                        $this.Hide() # Hide first
-                        $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                    if ($selectedAction -and $this.OnExecute) {
+                        & $this.OnExecute $this $selectedAction
+                        return $true
                     }
                 }
-                # Always consume the Enter key to prevent it from propagating.
                 return $true
             }
-            
-            { $_ -in $navigationKeys } {
-                # Delegate navigation keys to the list box component.
+            ([ConsoleKey]::Tab) {
+                # Switch focus between search box and list
+                if ($this._searchBox.IsFocused) {
+                    $this._searchBox.IsFocused = $false
+                    $this._listBox.IsFocusable = $true
+                    # Focus would be set by parent focus manager
+                } else {
+                    $this._searchBox.IsFocused = $true
+                    $this._listBox.IsFocusable = $false
+                }
+                $this.RequestRedraw()
+                return $true
+            }
+            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
+                # Navigation keys go to the list
                 return $this._listBox.HandleInput($key)
             }
-            
             default {
-                # All other input (typing, backspace, etc.) goes to the search box.
-                return $this._searchBox.HandleInput($key)
+                # All other input goes to search box if it's focused
+                if ($this._searchBox.IsFocused) {
+                    return $this._searchBox.HandleInput($key)
+                } else {
+                    $handled = $false
+                }
             }
+        }
+        
+        if ($handled) {
+            $this.RequestRedraw()
+        }
+        
+        return $handled
+    }
+
+    [void] OnFocus() {
+        ([UIElement]$this).OnFocus()
+        # Set initial focus to search box
+        if ($this._searchBox) {
+            $this._searchBox.IsFocused = $true
+            $this._searchBox.RequestRedraw()
         }
     }
 
-    [void] OnResize() {
-        if ($this._panel) {
-            $this._panel.Width = $this.Width
-            $this._panel.Height = $this.Height
-            
-            if ($this._searchBox) { $this._searchBox.Width = $this.Width - 4 }
-            if ($this._listBox) {
-                $this._listBox.Width = $this.Width - 4
-                $this._listBox.Height = $this.Height - 6
-            }
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        if ($this._searchBox) {
+            $this._searchBox.IsFocused = $false
+            $this._searchBox.RequestRedraw()
         }
+    }
+
+    [void] Cleanup() {
+        if ($this._searchBox) {
+            $this._searchBox.Text = ""
+            $this._searchBox.CursorPosition = 0
+        }
+        if ($this._listBox) {
+            $this._listBox.ClearItems()
+            $this._listBox.SelectedIndex = -1
+        }
+        $this._allActions.Clear()
+        $this._filteredActions.Clear()
     }
 }
 
-
 #<!-- END_PAGE: ACO.016 -->
+
+#endregion Composite Components
+
+#region Dialog Components
 
 #<!-- PAGE: ACO.017 - Dialog Class -->
 # ===== CLASS: Dialog =====
@@ -3178,7 +3203,7 @@ class TaskDialog : Dialog {
 }
 
 # Task Delete Confirmation Dialog
-class TaskDeleteDialog : ConfirmDialog {
+class TaskDeleteDialog : ConfirmDialog { 
     hidden [PmcTask] $_task
     
     TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
@@ -3215,10 +3240,10 @@ class NavigationMenu : UIElement {
     [List[NavigationItem]]$Items
     [int]$SelectedIndex = 0
     [string]$Orientation = "Horizontal"  # Horizontal or Vertical
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::DarkBlue
-    [ConsoleColor]$SelectedForegroundColor = [ConsoleColor]::Yellow
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$SelectedBackgroundColor = "#0078D4"
+    [string]$SelectedForegroundColor = "#FFFF00"
 
     NavigationMenu([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -3258,9 +3283,9 @@ class NavigationMenu : UIElement {
             $bg = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.BackgroundColor }
             
             # Draw item
-            $text = " $($item.Text) "
-            if ($item.Hotkey) {
-                $text = " $($item.Text) ($($item.Hotkey)) "
+            $text = " $($item.Label) "
+            if ($item.Key) {
+                $text = " $($item.Label) ($($item.Key)) "
             }
             
             if ($currentX + $text.Length -le $this.Width) {
@@ -3275,7 +3300,14 @@ class NavigationMenu : UIElement {
     }
 
     hidden [void] RenderVertical() {
-        $this.Height = [Math]::Max($this.Items.Count, 1)
+        # Ensure height matches item count
+        if ($this.Height -ne $this.Items.Count -and $this.Items.Count -gt 0) {
+            $this.Height = $this.Items.Count
+            # Resize the buffer to match new height
+            if ($this._private_buffer) {
+                $this._private_buffer.Resize($this.Width, $this.Height)
+            }
+        }
         
         for ($i = 0; $i -lt $this.Items.Count; $i++) {
             $item = $this.Items[$i]
@@ -3290,16 +3322,16 @@ class NavigationMenu : UIElement {
             }
             
             # Draw item
-            $text = $item.Text
-            if ($item.Hotkey) {
-                $text = "$($item.Text) ($($item.Hotkey))"
+            $text = $item.Label
+            if ($item.Key) {
+                $text = "$($item.Label) ($($item.Key))"
             }
             
             if ($text.Length -gt $this.Width) {
                 $text = $text.Substring(0, $this.Width - 3) + "..."
             }
             
-            $this._private_buffer.WriteString(0, $i, $text, $fg, $bg)
+            $this._private_buffer.WriteString(0, $i, $text, @{ FG = $fg; BG = $bg })
         }
     }
 
@@ -3360,7 +3392,7 @@ class NavigationMenu : UIElement {
     hidden [bool] CheckHotkey([System.ConsoleKeyInfo]$key) {
         foreach ($i in 0..($this.Items.Count - 1)) {
             $item = $this.Items[$i]
-            if ($item.Hotkey -and $item.Hotkey.ToUpper() -eq $key.KeyChar.ToString().ToUpper()) {
+            if ($item.Key -and $item.Key.ToUpper() -eq $key.KeyChar.ToString().ToUpper()) {
                 $this.SelectedIndex = $i
                 $this.ExecuteItem($i)
                 return $true
@@ -3384,16 +3416,364 @@ class NavigationMenu : UIElement {
 
 #<!-- END_PAGE: ACO.021 -->
 
+#<!-- PAGE: ACO.022 - DataGridComponent Class -->
+# ===== CLASS: DataGridComponent =====
+# Module: data-grid-component
+# Dependencies: UIElement, TuiCell
+# Purpose: Generic data grid for displaying tabular data with scrolling and selection
+class DataGridComponent : UIElement {
+    [hashtable[]]$Columns = @()
+    [hashtable[]]$Items = @()
+    [int]$SelectedIndex = 0
+    [int]$ScrollOffset = 0
+    [bool]$ShowHeaders = $true
+    [string]$HeaderBackgroundColor = "#333333"
+    [string]$HeaderForegroundColor = "#FFFFFF"
+    [string]$SelectedBackgroundColor = "#0078D4"
+    [string]$SelectedForegroundColor = "#FFFFFF"
+    [string]$NormalBackgroundColor = "#000000"
+    [string]$NormalForegroundColor = "#C0C0C0"
+    [scriptblock]$OnSelectionChanged
+    
+    DataGridComponent([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Width = 60
+        $this.Height = 20
+    }
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        # Clear buffer
+        $bgColor = Get-ThemeColor("component.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        $y = 0
+        
+        # Render headers if enabled
+        if ($this.ShowHeaders -and $this.Columns.Count -gt 0) {
+            $x = 0
+            foreach ($column in $this.Columns) {
+                $header = if ($column.Header) { $column.Header } else { $column.Name }
+                $width = if ($column.Width) { $column.Width } else { 10 }
+                
+                # Truncate header if needed
+                if ($header.Length -gt $width) {
+                    $header = $header.Substring(0, [Math]::Max(1, $width - 2)) + ".."
+                }
+                
+                # Pad header to column width
+                $header = $header.PadRight($width)
+                
+                Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $header -Style @{
+                    FG = $this.HeaderForegroundColor
+                    BG = $this.HeaderBackgroundColor
+                }
+                
+                $x += $width + 1  # +1 for separator
+            }
+            $y++
+        }
+        
+        # Calculate visible items
+        $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+        $startIndex = $this.ScrollOffset
+        $endIndex = [Math]::Min($this.Items.Count - 1, $startIndex + $visibleHeight - 1)
+        
+        # Render data rows
+        for ($i = $startIndex; $i -le $endIndex; $i++) {
+            if ($i -ge $this.Items.Count) { break }
+            
+            $item = $this.Items[$i]
+            $isSelected = ($i -eq $this.SelectedIndex)
+            
+            $x = 0
+            foreach ($column in $this.Columns) {
+                $value = if ($item.ContainsKey($column.Name)) { $item[$column.Name] } else { "" }
+                $width = if ($column.Width) { $column.Width } else { 10 }
+                
+                # Convert value to string and truncate if needed
+                $text = $value.ToString()
+                if ($text.Length -gt $width) {
+                    $text = $text.Substring(0, [Math]::Max(1, $width - 2)) + ".."
+                }
+                
+                # Pad text to column width
+                $text = $text.PadRight($width)
+                
+                # Set colors based on selection
+                $fgColor = if ($isSelected) { $this.SelectedForegroundColor } else { $this.NormalForegroundColor }
+                $bgColor = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.NormalBackgroundColor }
+                
+                Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $text -Style @{
+                    FG = $fgColor
+                    BG = $bgColor
+                }
+                
+                $x += $width + 1  # +1 for separator
+            }
+            $y++
+        }
+        
+        $this._needs_redraw = $false
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if (-not $this.Enabled -or -not $this.IsFocused) { return $false }
+        
+        $handled = $false
+        $oldSelectedIndex = $this.SelectedIndex
+        
+        switch ($key.Key) {
+            "UpArrow" {
+                if ($this.SelectedIndex -gt 0) {
+                    $this.SelectedIndex--
+                    $this._EnsureVisible()
+                    $handled = $true
+                }
+            }
+            "DownArrow" {
+                if ($this.SelectedIndex -lt ($this.Items.Count - 1)) {
+                    $this.SelectedIndex++
+                    $this._EnsureVisible()
+                    $handled = $true
+                }
+            }
+            "PageUp" {
+                $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+                $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $visibleHeight)
+                $this._EnsureVisible()
+                $handled = $true
+            }
+            "PageDown" {
+                $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+                $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $visibleHeight)
+                $this._EnsureVisible()
+                $handled = $true
+            }
+            "Home" {
+                $this.SelectedIndex = 0
+                $this._EnsureVisible()
+                $handled = $true
+            }
+            "End" {
+                $this.SelectedIndex = [Math]::Max(0, $this.Items.Count - 1)
+                $this._EnsureVisible()
+                $handled = $true
+            }
+        }
+        
+        # Fire selection changed event if selection changed
+        if ($handled -and $oldSelectedIndex -ne $this.SelectedIndex -and $this.OnSelectionChanged) {
+            & $this.OnSelectionChanged $this $this.SelectedIndex
+        }
+        
+        if ($handled) {
+            $this.RequestRedraw()
+        }
+        
+        return $handled
+    }
+    
+    hidden [void] _EnsureVisible() {
+        if ($this.Items.Count -eq 0) { return }
+        
+        $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
+        
+        # Scroll up if selected item is above visible area
+        if ($this.SelectedIndex -lt $this.ScrollOffset) {
+            $this.ScrollOffset = $this.SelectedIndex
+        }
+        # Scroll down if selected item is below visible area
+        elseif ($this.SelectedIndex -gt ($this.ScrollOffset + $visibleHeight - 1)) {
+            $this.ScrollOffset = $this.SelectedIndex - $visibleHeight + 1
+        }
+        
+        # Ensure scroll offset is within bounds
+        $this.ScrollOffset = [Math]::Max(0, [Math]::Min($this.ScrollOffset, $this.Items.Count - $visibleHeight))
+    }
+    
+    [object] GetSelectedItem() {
+        if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.Items.Count) {
+            return $this.Items[$this.SelectedIndex]
+        }
+        return $null
+    }
+    
+    [void] SetItems([hashtable[]]$items) {
+        $this.Items = $items
+        $this.SelectedIndex = 0
+        $this.ScrollOffset = 0
+        $this.RequestRedraw()
+    }
+    
+    [void] SetColumns([hashtable[]]$columns) {
+        $this.Columns = $columns
+        $this.RequestRedraw()
+    }
+}
+#<!-- END_PAGE: ACO.022 -->
+
 #endregion Navigation Components
 
-#region Dialog Result Enum
-enum DialogResult {
-    None = 0
-    OK = 1
-    Cancel = 2
-    Yes = 3
-    No = 4
-    Retry = 5
-    Abort = 6
+#region Command Palette
+
+# ===== CLASS: CommandPalette =====
+# Module: command-palette
+# Dependencies: Panel, TextBoxComponent, ListBox
+# Purpose: Searchable command interface with proper focus management
+class CommandPalette : Panel {
+    hidden [TextBoxComponent]$_searchBox
+    hidden [ListBox]$_listBox
+    hidden [List[object]]$_allActions
+    hidden [List[object]]$_filteredActions
+    [scriptblock]$OnExecute
+    [scriptblock]$OnCancel
+    
+    CommandPalette([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.Visible = $false
+        $this.IsOverlay = $true
+        $this.Width = 60
+        $this.Height = 20
+        $this.HasBorder = $true
+        $this.BorderStyle = "Double"
+        $this.Title = " Command Palette "
+        
+        $this._allActions = [List[object]]::new()
+        $this._filteredActions = [List[object]]::new()
+        
+        $this._CreateControls()
+    }
+    
+    hidden [void] _CreateControls() {
+        # Search box at top
+        $this._searchBox = [TextBoxComponent]::new("SearchBox")
+        $this._searchBox.X = 2
+        $this._searchBox.Y = 2
+        $this._searchBox.Width = $this.Width - 4
+        $this._searchBox.Height = 3
+        $this._searchBox.Placeholder = "Type to search commands..."
+        $thisCommandPalette = $this
+        $this._searchBox.OnChange = {
+            param($sender, $text)
+            $thisCommandPalette._FilterActions($text)
+        }.GetNewClosure()
+        $this.AddChild($this._searchBox)
+        
+        # Results list below search box
+        $this._listBox = [ListBox]::new("ResultsList")
+        $this._listBox.X = 2
+        $this._listBox.Y = 6
+        $this._listBox.Width = $this.Width - 4
+        $this._listBox.Height = $this.Height - 8
+        $this.AddChild($this._listBox)
+    }
+    
+    [void] SetActions([object[]]$actionList) {
+        $this._allActions.Clear()
+        foreach ($action in $actionList) {
+            $this._allActions.Add($action)
+        }
+        $this._FilterActions("")  # Show all actions initially
+    }
+    
+    hidden [void] _FilterActions([string]$searchText) {
+        $this._filteredActions.Clear()
+        $this._listBox.ClearItems()
+        
+        $actionsToDisplay = if ([string]::IsNullOrWhiteSpace($searchText)) { 
+            $this._allActions 
+        } else {
+            $searchLower = $searchText.ToLower()
+            @($this._allActions | Where-Object {
+                $_.Name.ToLower().Contains($searchLower) -or
+                ($_.Description -and $_.Description.ToLower().Contains($searchLower)) -or
+                ($_.Category -and $_.Category.ToLower().Contains($searchLower))
+            })
+        }
+
+        foreach ($action in $actionsToDisplay) {
+            $this._filteredActions.Add($action)
+            $displayText = if ($action.Category) { 
+                "[$($action.Category)] $($action.Name)" 
+            } else { 
+                $action.Name 
+            }
+            if ($action.Description) {
+                $displayText += " - $($action.Description)"
+            }
+            $this._listBox.AddItem($displayText)
+        }
+        
+        if ($this._filteredActions.Count -gt 0) { 
+            $this._listBox.SelectedIndex = 0 
+        }
+        $this.RequestRedraw()
+    }
+    
+    [void] SetInitialFocus() {
+        # Clear search text and focus search box
+        $this._searchBox.Text = ""
+        $this._searchBox.CursorPosition = 0
+        
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._searchBox)
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
+        
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                if ($this.OnCancel) {
+                    & $this.OnCancel
+                }
+                return $true
+            }
+            ([ConsoleKey]::Enter) {
+                if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                    if ($selectedAction -and $this.OnExecute) {
+                        & $this.OnExecute $this $selectedAction
+                    }
+                }
+                return $true
+            }
+            ([ConsoleKey]::Tab) {
+                # Switch focus between search box and list
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    if ($this._searchBox.IsFocused) {
+                        $focusManager.SetFocus($this._listBox)
+                    } else {
+                        $focusManager.SetFocus($this._searchBox)
+                    }
+                }
+                return $true
+            }
+            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
+                # Navigation keys go to the list
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    $focusManager.SetFocus($this._listBox)
+                }
+                return $this._listBox.HandleInput($keyInfo)
+            }
+            default {
+                # All other input goes to search box
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    $focusManager.SetFocus($this._searchBox)
+                }
+                return $this._searchBox.HandleInput($keyInfo)
+            }
+        }
+        return $false
+    }
 }
+
 #endregion
+
