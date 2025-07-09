@@ -218,16 +218,26 @@ class TaskListScreen : Screen {
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._filterBox)
 
-        # Task list panel (left side)
+        # Task list grid (left side) - Using new DataGridComponent
         $listWidth = [Math]::Floor($this.Width * 0.6)
-        $this._taskListPanel = [ScrollablePanel]::new("Tasks")
-        $this._taskListPanel.X = 1
-        $this._taskListPanel.Y = 4  # Move down to accommodate filter
-        $this._taskListPanel.Width = $listWidth
-        $this._taskListPanel.Height = $this.Height - 8  # Adjust for buttons and filter
-        $this._taskListPanel.Title = "Tasks"
-        $this._taskListPanel.UpdateContentDimensions()
-        $this._mainPanel.AddChild($this._taskListPanel)
+        $this._taskGrid = [DataGridComponent]::new("TaskGrid")
+        $this._taskGrid.X = 1
+        $this._taskGrid.Y = 4  # Move down to accommodate filter
+        $this._taskGrid.Width = $listWidth
+        $this._taskGrid.Height = $this.Height - 8  # Adjust for buttons and filter
+        $this._taskGrid.ShowHeaders = $true
+        $this._taskGrid.OnSelectionChanged = {
+            param($sender, $selectedIndex)
+            $thisScreen._selectedIndex = $selectedIndex
+            if ($selectedIndex -ge 0 -and $selectedIndex -lt $thisScreen._tasks.Count) {
+                $thisScreen._selectedTask = $thisScreen._tasks[$selectedIndex]
+            } else {
+                $thisScreen._selectedTask = $null
+            }
+            $thisScreen._UpdateDetailPanel()
+            $thisScreen._UpdateStatusBar()
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($this._taskGrid)
 
         # Detail panel (right side)
         $detailX = $listWidth + 2
@@ -367,8 +377,8 @@ class TaskListScreen : Screen {
         
         # Step 2: Set initial focus via FocusManager (CRITICAL for input to work)
         $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._filterBox) {
-            $focusManager.SetFocus($this._filterBox)
+        if ($focusManager -and $this._taskGrid) {
+            $focusManager.SetFocus($this._taskGrid)
         }
         
         # Step 3: Subscribe to EventManager events
@@ -455,91 +465,45 @@ class TaskListScreen : Screen {
     }
 
     hidden [void] _UpdateTaskList() {
-        $panel = $this._taskListPanel
-        if (-not $panel) { return }
+        if (-not $this._taskGrid) { return }
         
-        # CRITICAL: Clear the panel's CHILDREN, not its buffer directly.
-        $panel.Children.Clear()
+        # Get the ViewDefinitionService and view definition
+        $viewDefService = $this.ServiceContainer?.GetService("ViewDefinitionService")
+        if (-not $viewDefService) { return }
+        
+        $viewDef = $viewDefService.GetViewDefinition('task.summary')
+        
+        # Configure the grid columns from the view definition
+        $this._taskGrid.SetColumns($viewDef.Columns)
         
         if ($this._tasks.Count -eq 0) {
-            # Add a label to show there are no tasks
-            $noTasksLabel = [LabelComponent]::new("NoTasksLabel")
-            $noTasksLabel.X = 2
-            $noTasksLabel.Y = 2
-            $noTasksLabel.Text = "No tasks found."
-            $noTasksLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
-            $panel.AddChild($noTasksLabel)
-            $panel.RequestRedraw()
+            # Clear the grid if no tasks
+            $this._taskGrid.SetItems(@())
             return
         }
         
-        for ($i = 0; $i -lt $this._tasks.Count; $i++) {
-            $task = $this._tasks[$i]
-            
-            # Create a Panel for each task item (to support background color)
-            $taskPanel = [Panel]::new("TaskItem_$($task.Id)")
-            $taskPanel.X = 0
-            $taskPanel.Y = $i # Y position is its index in the list
-            $panelContentWidth = if ($panel.ContentWidth -le 0) { [Math]::Max(30, $panel.Width - 2) } else { $panel.ContentWidth }
-            $taskPanel.Width = $panelContentWidth
-            $taskPanel.Height = 1
-            $taskPanel.HasBorder = $false
-            
-            # Set background based on selection
-            $is_selected = ($i -eq $this._selectedIndex)
-            $taskPanel.BackgroundColor = if ($is_selected) { Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF" } else { Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" }
-            
-            # Create a Label component for the task text
-            $taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
-            $taskLabel.X = 1 # Indent slightly
-            $taskLabel.Y = 0 # Relative to the task panel
-            $taskLabel.Width = [Math]::Max(20, $panelContentWidth - 2) # Set proper width
-            $taskLabel.Height = 1
-            
-            # Status indicator
-            $statusChar = switch ($task.Status) {
-                ([TaskStatus]::Pending) { "o" }
-                ([TaskStatus]::InProgress) { "*" }
-                ([TaskStatus]::Completed) { "+" }
-                ([TaskStatus]::Cancelled) { "x" }
-                default { "?" }
-            }
-            
-            # Priority indicator
-            $priorityChar = switch ($task.Priority) {
-                ([TaskPriority]::Low) { "v" }
-                ([TaskPriority]::Medium) { "-" }
-                ([TaskPriority]::High) { "^" }
-                default { "-" }
-            }
-            
-            # Truncate title if needed
-            $maxTitleLength = [Math]::Max(10, $panelContentWidth - 6) # Ensure minimum length
-            if ($task.Title.Length -gt $maxTitleLength -and $maxTitleLength -gt 3) {
-                $title = $task.Title.Substring(0, [Math]::Max(1, $maxTitleLength - 3)) + "..."
-            } else {
-                $title = $task.Title
-            }
-            
-            $taskLine = "$statusChar $priorityChar $title"
-            $taskLabel.Text = $taskLine
-            
-            # Set text color based on selection
-            if ($is_selected) { 
-                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
-            } else { 
-                $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" 
-            }
-            
-            # Add the label to the task panel
-            $taskPanel.AddChild($taskLabel)
-            
-            # Add the task panel as a CHILD of the scrollable panel
-            $panel.AddChild($taskPanel)
+        # Transform tasks using the view definition transformer
+        $transformer = $viewDef.Transformer
+        $displayItems = @()
+        
+        foreach ($task in $this._tasks) {
+            $displayItem = & $transformer $task
+            $displayItems += $displayItem
         }
         
-        # The ScrollablePanel's own Render method will now correctly handle everything else.
-        $panel.RequestRedraw()
+        # Set the transformed data on the grid
+        $this._taskGrid.SetItems($displayItems)
+        
+        # Preserve selection if possible
+        if ($this._selectedIndex -lt $this._tasks.Count) {
+            $this._taskGrid.SelectedIndex = $this._selectedIndex
+        } else {
+            $this._selectedIndex = 0
+            $this._taskGrid.SelectedIndex = 0
+            if ($this._tasks.Count -gt 0) {
+                $this._selectedTask = $this._tasks[0]
+            }
+        }
     }
 
     hidden [void] _UpdateDetailPanel() {
@@ -686,73 +650,8 @@ class TaskListScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Override base Screen HandleInput
+        # Handle action keys (navigation is now handled by DataGridComponent)
         switch ($keyInfo.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this._selectedIndex -gt 0) {
-                    $this._selectedIndex--
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                    
-                    # Adjust scroll if needed
-                    if ($this._selectedIndex -lt $this._taskListPanel.ScrollOffsetY) {
-                        $this._taskListPanel.ScrollUp()
-                    }
-                    
-                    $this._UpdateDisplay()
-                }
-                return $true
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this._selectedIndex -lt $this._tasks.Count - 1) {
-                    $this._selectedIndex++
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                    
-                    # Adjust scroll if needed
-                    $visibleEnd = $this._taskListPanel.ScrollOffsetY + $this._taskListPanel.ContentHeight - 1
-                    if ($this._selectedIndex -gt $visibleEnd) {
-                        $this._taskListPanel.ScrollDown()
-                    }
-                    
-                    $this._UpdateDisplay()
-                }
-                return $true
-            }
-            ([ConsoleKey]::PageUp) {
-                $this._taskListPanel.ScrollUp($this._taskListPanel.ContentHeight)
-                $this._selectedIndex = [Math]::Max(0, $this._selectedIndex - $this._taskListPanel.ContentHeight)
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::PageDown) {
-                $this._taskListPanel.ScrollDown($this._taskListPanel.ContentHeight)
-                $this._selectedIndex = [Math]::Min($this._tasks.Count - 1, $this._selectedIndex + $this._taskListPanel.ContentHeight)
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::Home) {
-                $this._taskListPanel.ScrollToTop()
-                $this._selectedIndex = 0
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
-            ([ConsoleKey]::End) {
-                $this._taskListPanel.ScrollToBottom()
-                $this._selectedIndex = $this._tasks.Count - 1
-                if ($this._tasks.Count -gt 0) {
-                    $this._selectedTask = $this._tasks[$this._selectedIndex]
-                }
-                $this._UpdateDisplay()
-                return $true
-            }
             ([ConsoleKey]::Enter) {
                 # Edit task
                 if ($this._selectedTask -and $this._editButton) {
@@ -789,8 +688,8 @@ class TaskListScreen : Screen {
                 return $true
             }
             default {
-                # Unhandled key
-                return $false
+                # Unhandled key - let base class handle it
+                return ([Screen]$this).HandleInput($keyInfo)
             }
         }
         return $false

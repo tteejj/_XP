@@ -86,6 +86,10 @@ try {
     $container.Register("ThemeManager", [ThemeManager]::new())
     Write-Host "✓" -ForegroundColor Green
     
+    Write-Host "  • Registering ViewDefinitionService... " -NoNewline -ForegroundColor Gray
+    $container.Register("ViewDefinitionService", [ViewDefinitionService]::new())
+    Write-Host "✓" -ForegroundColor Green
+    
     Write-Host "  • Registering TuiFrameworkService... " -NoNewline -ForegroundColor Gray
     $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
     Write-Host "✓" -ForegroundColor Green
@@ -116,6 +120,7 @@ try {
         KeybindingService = $container.GetService("KeybindingService")
         DataManager = $container.GetService("DataManager")
         ThemeManager = $container.GetService("ThemeManager")
+        ViewDefinitionService = $container.GetService("ViewDefinitionService")
         Logger = $container.GetService("Logger")
     }
     $container.Register("NavigationService", [NavigationService]::new($serviceHash))

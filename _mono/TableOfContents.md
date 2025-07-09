@@ -45,7 +45,7 @@ This document provides a comprehensive, metadata-rich index of the framework. It
 | ACO.001-010 | Core & Advanced Components | **Inherit:** UIElement (ABC.004). **Purpose:** A library of reusable UI controls (Label, Button, TextBox, Table, etc.). They handle their own rendering and input logic. |
 | ACO.011 | Panel Class | **Inherits:** UIElement (ABC.004). **Purpose:** A container with borders, a title, and basic layout management for its children. |
 | ACO.012 | ScrollablePanel Class | **Inherits:** Panel (ACO.011). **Purpose:** A panel that provides vertical scrolling for content that exceeds its visible height. |
-| ACO.013-021 | Composite & Dialog Components | **Inherit:** UIElement or other components. **Purpose:** More complex, specialized components built by combining simpler ones (e.g., `CommandPalette`, `Dialogs`, `ListBox`). |
+| ACO.013-022 | Composite & Dialog Components | **Inherit:** UIElement or other components. **Purpose:** More complex, specialized components built by combining simpler ones (e.g., `CommandPalette`, `Dialogs`, `ListBox`, `DataGridComponent`). |
 
 ---
 
@@ -69,7 +69,7 @@ This document provides a comprehensive, metadata-rich index of the framework. It
 
 | Page ID | Section Name | Description |
 |---------|--------------|-------------|
-| ASE.001-009 | Service Classes | **Purpose:** Long-lived objects that manage a core aspect of the application (e.g., `NavigationService`, `FocusManager`, `DataManager`). They are registered with the `ServiceContainer`. |
+| ASE.001-011 | Service Classes | **Purpose:** Long-lived objects that manage a core aspect of the application (e.g., `NavigationService`, `FocusManager`, `DataManager`, `ViewDefinitionService`). They are registered with the `ServiceContainer`. |
 
 ---
 
