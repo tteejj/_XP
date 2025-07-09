@@ -565,11 +565,24 @@ function Process-TuiInput {
             $inputHandled = $false
             
             # Priority 1: Focused component gets first chance
-            $focusedComponent = $focusManager?.FocusedComponent
+            $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
+            $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'None' }
+            $focusedType = if ($null -ne $focusedComponent) { $focusedComponent.GetType().Name } else { 'N/A' }
+            $focusedIsFocused = if ($null -ne $focusedComponent) { $focusedComponent.IsFocused } else { 'N/A' }
+            $focusedEnabled = if ($null -ne $focusedComponent) { $focusedComponent.Enabled } else { 'N/A' }
+            
+            Write-Log -Level Debug -Message "Process-TuiInput: Key pressed: $($keyInfo.Key), Modifiers: $($keyInfo.Modifiers)"
+            Write-Log -Level Debug -Message "  - FocusedComponent: $focusedName"
+            Write-Log -Level Debug -Message "  - FocusedComponent Type: $focusedType"
+            Write-Log -Level Debug -Message "  - IsFocused: $focusedIsFocused"
+            Write-Log -Level Debug -Message "  - Enabled: $focusedEnabled"
             if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
                 if ($focusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                     $inputHandled = $true
+                    Write-Log -Level Debug -Message "  - Input handled by focused component"
+                } else {
+                    Write-Log -Level Debug -Message "  - Input NOT handled by focused component"
                 }
             }
             

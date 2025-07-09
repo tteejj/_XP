@@ -215,7 +215,45 @@ Every architectural decision and line of code must be justifiable by these four 
     ```
 ---
 
-### 5. Workflow Walkthrough: Implementing a New Feature
+### 5. Guide to Dialogs and Focus Management
+
+**Role:** Dialogs are modal overlays that require user interaction. They must properly manage focus to receive input.
+
+---
+
+**Rule 5.1: All Dialogs Must Use DialogManager.**
+*   Never use Show-TuiOverlay (deprecated). Always use DialogManager.ShowDialog() and HideDialog().
+*   DialogManager handles overlay stack management, focus preservation, and proper cleanup.
+
+**Rule 5.2: Dialogs Must Implement SetInitialFocus().**
+*   This method is called by DialogManager after the dialog is shown.
+*   It MUST use FocusManager.SetFocus() to set focus to the first interactive component.
+*   **✅ Correct Implementation:**
+    ```powershell
+    [void] SetInitialFocus() {
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._firstTextBox)
+        }
+    }
+    ```
+*   **❌ Anti-Pattern:**
+    ```powershell
+    [void] SetInitialFocus() {
+        # WRONG: Setting IsFocused directly bypasses FocusManager
+        $this._firstTextBox.IsFocused = $true
+    }
+    ```
+
+**Rule 5.3: Modal Input Enforcement.**
+*   When a dialog is active, Process-TuiInput enforces modality:
+    1. Focused component gets first chance at input
+    2. If not handled, dialog container gets a chance (for ESC to close)
+    3. No further input processing occurs - global hotkeys and screen input are blocked
+
+---
+
+### 6. Workflow Walkthrough: Implementing a New Feature
 
 This walkthrough demonstrates how to use the guidebook to implement a hypothetical new feature: **"Export selected tasks to CSV".**
 

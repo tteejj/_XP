@@ -2462,6 +2462,8 @@ class CommandPalette : UIElement {
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
         $this._searchBox.Placeholder = "Type to search commands..."
+        $this._searchBox.Visible = $true  # Ensure visible
+        $this._searchBox.Enabled = $true  # Ensure enabled
         
         # Connect search box to filtering
         $paletteRef = $this
@@ -2527,7 +2529,21 @@ class CommandPalette : UIElement {
             # Clear any previous search text
             $this._searchBox.Text = ""
             $this._searchBox.CursorPosition = 0
-            $this._searchBox.IsFocused = $true
+            
+            # Use FocusManager to properly set focus
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: About to set focus to search box"
+                Write-Log -Level Debug -Message "  - SearchBox Name: $($this._searchBox.Name)"
+                Write-Log -Level Debug -Message "  - SearchBox IsFocusable: $($this._searchBox.IsFocusable)"
+                Write-Log -Level Debug -Message "  - SearchBox Enabled: $($this._searchBox.Enabled)"
+                Write-Log -Level Debug -Message "  - SearchBox Visible: $($this._searchBox.Visible)"
+                $focusManager.SetFocus($this._searchBox)
+                Write-Log -Level Debug -Message "  - FocusManager.FocusedComponent: $($focusManager.FocusedComponent?.Name)"
+                Write-Log -Level Debug -Message "  - SearchBox IsFocused: $($this._searchBox.IsFocused)"
+            } else {
+                Write-Log -Level Error -Message "CommandPalette.SetInitialFocus: FocusManager is null!"
+            }
             $this._searchBox.RequestRedraw()
         }
     }
@@ -3670,6 +3686,7 @@ class TaskEditPanel : Panel {
         $titleLabel.X = 2
         $titleLabel.Y = $y
         $titleLabel.Width = 10
+        $titleLabel.Visible = $true  # Ensure visible
         $this.AddChild($titleLabel)
         
         $this._titleTextBox = [TextBoxComponent]::new("TitleTextBox")
@@ -3677,6 +3694,8 @@ class TaskEditPanel : Panel {
         $this._titleTextBox.Y = $y + 1
         $this._titleTextBox.Width = $this.Width - 6
         $this._titleTextBox.Height = 1
+        $this._titleTextBox.Visible = $true  # Ensure visible
+        $this._titleTextBox.Enabled = $true  # Ensure enabled
         $this.AddChild($this._titleTextBox)
         $y += 3
         
@@ -3834,7 +3853,16 @@ class TaskEditPanel : Panel {
         # Focus the title textbox first
         $focusManager = $global:TuiState.Services.FocusManager
         if ($focusManager) {
+            Write-Log -Level Debug -Message "TaskEditPanel.SetInitialFocus: About to set focus to title textbox"
+            Write-Log -Level Debug -Message "  - TextBox Name: $($this._titleTextBox.Name)"
+            Write-Log -Level Debug -Message "  - TextBox IsFocusable: $($this._titleTextBox.IsFocusable)"
+            Write-Log -Level Debug -Message "  - TextBox Enabled: $($this._titleTextBox.Enabled)"
+            Write-Log -Level Debug -Message "  - TextBox Visible: $($this._titleTextBox.Visible)"
             $focusManager.SetFocus($this._titleTextBox)
+            Write-Log -Level Debug -Message "  - FocusManager.FocusedComponent: $($focusManager.FocusedComponent?.Name)"
+            Write-Log -Level Debug -Message "  - TextBox IsFocused: $($this._titleTextBox.IsFocused)"
+        } else {
+            Write-Log -Level Error -Message "TaskEditPanel.SetInitialFocus: FocusManager is null!"
         }
     }
 }
