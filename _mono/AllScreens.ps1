@@ -158,7 +158,7 @@ class DashboardScreen : Screen {
 #<!-- PAGE: ASC.002 - TaskListScreen Class -->
 #region TaskListScreen Class
 
-class TaskListScreen : Screen { : Screen {
+class TaskListScreen : Screen { 
     #region UI Components
     hidden [Panel] $_mainPanel
     hidden [ScrollablePanel] $_taskListPanel

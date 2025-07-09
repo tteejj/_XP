@@ -25,7 +25,7 @@ $global:TuiState = @{
     CurrentScreen = $null
     IsDirty = $true
     FocusedComponent = $null
-    CommandPalette = $null
+    # CommandPalette removed - now managed by CommandPaletteManager service
     Services = @{}
     LastRenderTime = [datetime]::Now
     FrameCount = 0
@@ -816,7 +816,8 @@ function Start-AxiomPhoenix {
         # Extract key services for quick access
         $serviceNames = @(
             'ActionService', 'KeybindingService', 'NavigationService', 
-            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 'TuiFrameworkService' # Add new services
+            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 
+            'TuiFrameworkService', 'CommandPaletteManager' # Add new services
         )
         
         foreach ($serviceName in $serviceNames) {
@@ -831,16 +832,7 @@ function Start-AxiomPhoenix {
             }
         }
         
-        # Create command palette if available
-        $actionService = $global:TuiState.Services.ActionService
-        if ($actionService) {
-            Write-Log -Level Debug -Message "Creating command palette with ActionService"
-            $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
-            $global:TuiState.CommandPalette.RefreshActions()
-            Write-Log -Level Debug -Message "Command palette created and actions refreshed"
-        } else {
-            Write-Log -Level Warning -Message "ActionService not available - command palette will not be created"
-        }
+        # CommandPalette is now managed by the CommandPaletteManager service
         
         # Initialize engine
         Initialize-TuiEngine

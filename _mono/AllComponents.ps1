@@ -2486,47 +2486,14 @@ class CommandPalette : UIElement {
     }
 
     [void] Show() {
-        Write-Log -Level Debug -Message "CommandPalette.Show() called"
-        $consoleWidth = $global:TuiState.BufferWidth
-        $consoleHeight = $global:TuiState.BufferHeight
-        $this.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $this.Width) / 2))
-        $this.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $this.Height) / 2))
-        
-        Write-Log -Level Debug -Message "CommandPalette positioned at X=$($this.X), Y=$($this.Y)"
-        
-        # Ensure the command palette buffer is properly sized
-        $this.Resize($this.Width, $this.Height)
-        
-        $this.RefreshActions()
-        $this._searchBox.Text = ""
-        $this._searchBox.CursorPosition = 0
-        $this.FilterActions("")
+        Write-Log -Level Debug -Message "CommandPalette.Show() called, setting Visible=true"
         $this.Visible = $true
-        
-        if (-not $global:TuiState.OverlayStack.Contains($this)) {
-            $global:TuiState.OverlayStack.Add($this)
-            Write-Log -Level Debug -Message "CommandPalette added to overlay stack"
-        }
-        
-        $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
-            $focusManager.SetFocus($this._searchBox)
-            Write-Log -Level Debug -Message "Focus set to search box"
-        } else {
-            Write-Log -Level Warning -Message "FocusManager not available"
-        }
-        
-        $global:TuiState.IsDirty = $true
-        Write-Log -Level Debug -Message "CommandPalette.Show() completed, IsDirty set to true"
+        $this.RequestRedraw() # Let its parent (the framework) handle the rest
     }
 
     [void] Hide() {
         $this.Visible = $false
-        if ($global:TuiState.OverlayStack.Contains($this)) {
-            $global:TuiState.OverlayStack.Remove($this)
-        }
-        $global:TuiState.Services.FocusManager?.ReleaseFocus()
-        $global:TuiState.IsDirty = $true
+        $this.RequestRedraw()
         if ($this.OnCancel) { & $this.OnCancel }
     }
 
@@ -3193,7 +3160,7 @@ class TaskDialog : Dialog {
 }
 
 # Task Delete Confirmation Dialog
-class TaskDeleteDialog : ConfirmDialog { : ConfirmDialog {
+class TaskDeleteDialog : ConfirmDialog { 
     hidden [PmcTask] $_task
     
     TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
@@ -3212,6 +3179,7 @@ class TaskDeleteDialog : ConfirmDialog { : ConfirmDialog {
             $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
             $this._panel.AddChild($detailsLabel)
         }
+        #return $false
     }
 }
 

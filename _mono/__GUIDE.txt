@@ -1,0 +1,253 @@
+RULES:
+-Do NOT write scripts to test
+-Do not write scripts to fix
+-Do NOT write ANY powershell scripts yourself
+_ALL changes to a program are written directly to the file
+-FILES are saved as UTF-8 WITH BOM
+-Use proper POWERSHELL syntax, terms,functions, etc. 
+
+## The Axiom-Phoenix Architectural Guidebook (v2.0 - Generic)
+
+### 1. Core Principles: The Four Pillars
+
+Every architectural decision and line of code must be justifiable by these four foundational principles. They are the ultimate authority. When in doubt, defer to the principle that creates the most decoupling and clarity.
+
+1.  **Strict Separation of Concerns:** A class does one thing and does it well.
+    *   **UI (`Screen`, `Component`):** Its *only* job is to display data and capture user input. It is "dumb" and contains no business logic.
+    *   **Logic (`Service`):** Contains all business rules, workflows, calculations, and interactions with external systems. It knows nothing about how data is displayed.
+    *   **Data (`Model`, `DataManager`):** Represents the application's data structures and manages their persistence. It knows nothing about specific business logic or UI.
+
+2.  **Unidirectional Data Flow ("Data Down, Events Up"):** This is the lifeblood of the UI.
+    *   Data flows **down**: from `Services` to `Screens`, which then pass that data as simple properties to `Components`.
+    *   Events flow **up**: `Components` capture user actions (like a click) and raise `[scriptblock]` events. The parent `Screen` provides the code for that event, which in turn calls a `Service` to perform the actual work.
+
+3.  **Centralized Service Management (Dependency Injection):**
+    *   The `ServiceContainer` is the **single source of truth** for all services.
+    *   Classes **MUST NOT** create their own service dependencies (e.g., `[MyService]::new()`). They **MUST** declare them in their constructor and receive them from the container.
+
+4.  **Absolute Abstraction of External State & Systems:**
+    *   **Framework State:** The framework's internal runtime state (buffer dimensions, focus, overlay stack) is **only** accessible via the `TuiFrameworkService`. Direct access to `$global:TuiState` from UI classes is strictly forbidden.
+    *   **External Systems:** The file system, external APIs, COM Objects, or the system clipboard **MUST** be accessed through a dedicated service (e.g., `FileSystemService`, `ExcelService`, `ClipboardService`).
+
+***
+
+### 2. Guide to Screens (`Screen` class descendants)
+
+**Role:** A Screen is a top-level UI **orchestrator**. It represents a major application view (e.g., `DashboardScreen`, `TaskListScreen`).
+
+---
+
+**Rule 2.1: Screens are the Bridge to Services.**
+*   A Screen is the *only* type of UI element that should receive the `ServiceContainer` in its constructor. It uses the container to acquire the services it needs to function.
+*   **Hypothetical Scenario:** You need to build a new `UserProfileScreen`.
+*   **✅ Correct Implementation:**
+    ```powershell
+    class UserProfileScreen : Screen {
+        // CORRECT: Constructor accepts the service container.
+        UserProfileScreen([object]$serviceContainer) : base("UserProfileScreen", $serviceContainer) {}
+
+        [void] OnEnter() {
+            // CORRECT: It uses the container to get the service it needs.
+            $dataManager = $this.ServiceContainer.GetService("DataManager")
+            $user = $dataManager.GetCurrentUser() // Hypothetical method
+            // It passes the *data*, not the service, down to its child component.
+            $this._nameTextBox.Text = $user.Name
+            $this._emailTextBox.Text = $user.Email
+        }
+    }
+    ```
+*   **❌ Anti-Pattern:** A `Component` (e.g., `Button`) having a constructor that accepts the service container.
+
+---
+
+**Rule 2.2: Screens Orchestrate Layout.**
+*   A Screen's primary visual responsibility is to create and position its main child panels and components. Its `Initialize()` method is for building its UI. Its `OnRender()` method **MUST** remain empty or only call the base implementation.
+*   **Hypothetical Scenario:** The `UserProfileScreen` needs a panel for user details and another for action buttons.
+*   **✅ Correct Implementation:**
+    ```powershell
+    [void] Initialize() {
+        // CORRECT: Screen creates and positions its major child panels.
+        $this._detailsPanel = [Panel]::new("UserDetails")
+        $this.AddChild($this._detailsPanel)
+
+        $this._actionsPanel = [Panel]::new("UserActions")
+        $this.AddChild($this._actionsPanel)
+
+        // It then adds components *into* those panels.
+        $this._nameTextBox = [TextBoxComponent]::new(...)
+        $this._detailsPanel.AddChild($this._nameTextBox)
+
+        $this._saveButton = [ButtonComponent]::new(...)
+        $this._actionsPanel.AddChild($this._saveButton)
+    }
+    // The screen's OnRender() is empty. The panels handle their own drawing.
+    ```
+*   **❌ Anti-Pattern:** A Screen drawing primitives like text or boxes directly into its own `_private_buffer`. This is the job of a `Label` or `Panel` component.
+
+---
+
+**Rule 2.3: Screens Manage Lifecycle and Context.**
+*   A Screen must use its lifecycle methods (`OnEnter`, `OnExit`) to manage the application context for its view.
+*   **`OnEnter()` Checklist:**
+    1.  Fetch initial data from services.
+    2.  Set initial focus via `$this.Services.FocusManager.SetFocus(...)`.
+    3.  Subscribe to `EventManager` events (e.g., `User.DataChanged`).
+    4.  (Optional) Push a context to the `KeybindingService` (e.g., a "FormEditing" context with a hotkey for "Save").
+*   **`OnExit()` Checklist:**
+    1.  Unsubscribe from all `EventManager` events to prevent memory leaks.
+    2.  (Optional) Pop the context from the `KeybindingService`.
+
+***
+
+### 3. Guide to Components (`UIElement` descendants)
+
+**Role:** A Component is a **dumb, reusable, and isolated** UI element. Its behavior is entirely determined by the properties it is given by its parent.
+
+---
+
+**Rule 3.1: Components are "Dumb" and Receive Data via Properties.**
+*   A Component **MUST NOT** know about services or data managers. It renders itself based *only* on its public properties (e.g., `$Text`, `$Items`, `$IsChecked`).
+*   **✅ Correct Implementation:**
+    ```powershell
+    class CheckBoxComponent : UIElement {
+        // CORRECT: State is managed via simple public properties.
+        [string]$Text = "Option"
+        [bool]$Checked = $false
+
+        [void] OnRender() {
+            # CORRECT: Rendering logic only uses its own properties.
+            $checkMark = if ($this.Checked) { "[X]" } else { "[ ]" }
+            Write-TuiText -Buffer $this._private_buffer -Text "$checkMark $($this.Text)"
+        }
+    }
+    ```
+*   **❌ Anti-Pattern:**
+    ```powershell
+    class BadComponent : UIElement {
+        [void] OnRender() {
+            # VIOLATION: Component is accessing a global service.
+            # This makes it impossible to reuse or test in isolation.
+            $dataManager = $global:TuiState.Services.DataManager
+        }
+    }
+    ```
+
+---
+
+**Rule 3.2: Components Communicate "Up" via `[scriptblock]` Events.**
+*   When a user interacts with a component, it **MUST NOT** perform business logic. Instead, it **MUST** invoke a `[scriptblock]` event property (e.g., `OnClick`, `OnChange`). The parent Screen is responsible for providing the logic for this event.
+*   **✅ Correct Implementation:**
+    ```powershell
+    // In CheckBoxComponent: It just invokes the scriptblock it was given.
+    if ($key.Key -eq 'Spacebar') {
+        $this.Checked = -not $this.Checked
+        if ($this.OnChange) { & $this.OnChange $this $this.Checked }
+    }
+
+    // In a Screen's Initialize() method: The Screen provides the logic.
+    $this._myCheckBox.OnChange = {
+        param($sender, $isChecked)
+        # The Screen's handler calls a service.
+        $this.Services.ConfigService.SetNotificationsEnabled($isChecked)
+    }.GetNewClosure() // .GetNewClosure() is MANDATORY if using $this.
+    ```
+*   **Justification:** This decouples the component (the "what") from the action (the "how"), making the component universally reusable.
+
+---
+
+**Rule 3.3: Use Virtualized Rendering for All Lists.**
+*   When displaying a potentially large list of data, a component **MUST NOT** create a child `UIElement` for each data item. This is a critical performance rule.
+*   **✅ Correct Pattern (`Table` component):** The `Table` component receives an array of data (`$Items`). In its `OnRender` method, it calculates the visible rows based on its scroll offset and draws them directly into its `_private_buffer` using `Write-TuiText`. It creates **zero** child `UIElement`s for its data rows.
+*   **❌ Anti-Pattern:** A loop that does `$this.AddChild([LabelComponent]::new(...))` for every item in a list. This will be rejected in code review.
+
+***
+
+### 4. Guide to Services (`Service` classes)
+
+**Role:** A Service is a **singleton class that manages a distinct area of application logic**. If it's not about drawing things on screen, it probably belongs in a service.
+
+---
+
+**Rule 4.1: Services Encapsulate Business Logic and Workflows.**
+*   If a process involves multiple steps, interacts with external systems, or contains business rules, it **MUST** be implemented in a service.
+*   **Hypothetical Scenario:** You need to implement a feature that "Archives old projects". This involves finding projects older than a year, moving their files to an archive folder, and updating their status in the database.
+*   **✅ Correct Implementation:** This entire workflow must be managed by a new `ProjectArchivingService`. It would call other specialized services to perform each step:
+    1.  Call `$dataManager.GetProjects()` to get the data.
+    2.  Filter the projects based on the business rule (older than one year).
+    3.  For each project, call `$fileSystemService.MoveDirectory(...)`.
+    4.  For each project, call `$dataManager.UpdateProject(...)` to change its status.
+*   **❌ Anti-Pattern:** Placing this complex, multi-step logic inside a Screen's `OnClick` event handler.
+
+---
+
+**Rule 4.2: Services Abstract Volatile and External Dependencies.**
+*   Any interaction with an external system that is complex, platform-specific, or subject to change (e.g., a Web API, **COM interop**, a specific file format) **MUST** be wrapped in its own service.
+*   **Hypothetical Scenario:** The application needs to get currency exchange rates from a public API.
+*   **✅ Correct Implementation:** Create a new `ExchangeRateService`. It will contain the `Invoke-RestMethod` call and the logic for parsing the specific JSON structure of that API. The rest of the application will call a stable, high-level method like `$exchangeRateService.GetRate('USD', 'EUR')` and will have **no knowledge** that a web request is being made.
+*   **Justification:** If the API changes or you switch providers, you only have to update the `ExchangeRateService`. The rest of the application remains untouched.
+
+---
+
+**Rule 4.3: Services Declare Dependencies via Constructor Injection.**
+*   If a service needs another service, it **MUST** receive it as a parameter in its constructor. The `ServiceContainer` will resolve this dependency at startup.
+*   **✅ Correct Implementation:**
+    ```powershell
+    class ProjectArchivingService {
+        hidden [DataManager]$_dataManager
+        hidden [FileSystemService]$_fileSystem
+
+        // CORRECT: Dependencies are declared and received here.
+        ProjectArchivingService([DataManager]$dataManager, [FileSystemService]$fileSystem) {
+            $this._dataManager = $dataManager
+            $this._fileSystem = $fileSystem
+        }
+    }
+    ```
+*   **❌ Anti-Pattern:**
+    ```powershell
+    class BadService {
+        [void] SomeMethod() {
+            # VIOLATION: Lazy, global access to a dependency.
+            # This hides the dependency and makes testing impossible.
+            $dataManager = $global:TuiState.Services.DataManager
+        }
+    }
+    ```
+---
+
+### 5. Workflow Walkthrough: Implementing a New Feature
+
+This walkthrough demonstrates how to use the guidebook to implement a hypothetical new feature: **"Export selected tasks to CSV".**
+
+1.  **Action Layer:**
+    *   **Goal:** Create a user-callable command.
+    *   **Guidebook Rule:** 4.1 (Business Logic in Services). Exporting is a business process.
+    *   **Action:** Create a new `ExportService`. It will have a method `ExportTasksToCsv([PmcTask[]]$tasks)`. Inside this method will be the logic that uses `ConvertTo-Csv`.
+    *   **Action:** In `ActionService`, register a new action "task.export.selected". This action will:
+        1.  Get the `NavigationService` and `ExportService`.
+        2.  Get the current screen.
+        3.  If the screen is `TaskListScreen`, get its selected tasks.
+        4.  Call `$exportService.ExportTasksToCsv($selectedTasks)`.
+
+2.  **UI Layer:**
+    *   **Goal:** Add a button to the `TaskListScreen` to trigger the export.
+    *   **Guidebook Rule:** 3.2 (Events Up). The button just fires an event.
+    *   **Action:**
+        1.  In `TaskListScreen.Initialize()`, add a new `[ButtonComponent] $_exportButton`.
+        2.  Set its `OnClick` handler:
+            ```powershell
+            $this._exportButton.OnClick = {
+                # The Screen calls the ActionService.
+                $this.Services.ActionService.ExecuteAction("task.export.selected")
+            }.GetNewClosure()
+            ```
+
+3.  **Input Layer:**
+    *   **Goal:** Add a hotkey (`Ctrl+E`) for the export action.
+    *   **Guidebook Rule:** 2.3 (Screens Manage Context).
+    *   **Action:**
+        1.  In `KeybindingService`, add a binding: `$this.SetBinding("Ctrl+E", "task.export.selected", "TaskList")`.
+        2.  In `TaskListScreen.OnEnter()`, push the "TaskList" context.
+        3.  In `TaskListScreen.OnExit()`, pop the "TaskList" context.
+
+This demonstrates how every part of the framework has a clearly defined role. The UI is dumb, the services are smart, and the two are connected by actions and events. Following these patterns will ensure any new feature, no matter how complex, can be implemented in a clean, maintainable, and robust way.

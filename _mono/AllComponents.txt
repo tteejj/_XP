@@ -2578,8 +2578,10 @@ class CommandPalette : UIElement {
                             Write-Log -Level Debug -Message "CommandPalette: Executing action $($selectedAction.Name)"
                             $this.Hide()
                             $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                            return $true
                         }
                     }
+                    # If no action selected or invalid, still return true to consume the Enter key
                     return $true
                 }
                 {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
@@ -3191,7 +3193,7 @@ class TaskDialog : Dialog {
 }
 
 # Task Delete Confirmation Dialog
-class TaskDeleteDialog : ConfirmDialog {
+class TaskDeleteDialog : ConfirmDialog { 
     hidden [PmcTask] $_task
     
     TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
@@ -3210,6 +3212,7 @@ class TaskDeleteDialog : ConfirmDialog {
             $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
             $this._panel.AddChild($detailsLabel)
         }
+        return $false
     }
 }
 

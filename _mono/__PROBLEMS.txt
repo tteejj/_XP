@@ -1,0 +1,337 @@
+Excellent. This is the right way to approach a complex codebase: establish a baseline, then critically re-evaluate assumptions with direct code evidence. Let's dive deep.
+
+Here is a fleshed-out analysis, validating the initial points with specific code references and providing more detailed, actionable refactoring plans.
+
+I. Critical Issues & Bad Implementations (Validated)
+1. The CommandPalette Architectural Violation
+
+My initial assessment was correct, and the code confirms it is the most severe architectural problem.
+
+Code-Level Evidence:
+
+File: AllComponents.ps1 (ACO.016)
+
+Method: [void] Show()
+
+Lines:
+
+$consoleWidth = $global:TuiState.BufferWidth
+
+if (-not $global:TuiState.OverlayStack.Contains($this)) { $global:TuiState.OverlayStack.Add($this) ... }
+
+$focusManager = $global:TuiState.Services.FocusManager
+
+if ($focusManager) { $focusManager.SetFocus($this._searchBox) ... }
+
+Analysis: This is a UI component directly manipulating the global rendering stack, global state variables, and calling services. It has taken on the responsibilities of a manager, creating a tangled dependency that is hard to trace and guaranteed to cause conflicts with other modal/overlay components (like the DialogManager).
+
+Step-by-Step Refactoring Plan:
+
+Create a New Service: In AllServices.ps1, create a CommandPaletteManager service. It will be a singleton responsible for the lifecycle of the one global command palette.
+
+Generated powershell
+# In AllServices.ps1
+class CommandPaletteManager {
+    hidden [CommandPalette] $_palette
+    hidden [FocusManager] $_focusManager
+    hidden [TuiFrameworkService] $_framework
+
+    CommandPaletteManager([CommandPalette]$palette, [FocusManager]$focusManager, [TuiFrameworkService]$framework) {
+        $this._palette = $palette
+        $this._focusManager = $focusManager
+        $this._framework = $framework
+        # Write-Log ...
+    }
+
+    [void] Show() {
+        # 1. Position the palette
+        $dims = $this._framework.GetDimensions()
+        $this._palette.X = [Math]::Max(0, [Math]::Floor(($dims.Width - $this._palette.Width) / 2))
+        $this._palette.Y = [Math]::Max(0, [Math]::Floor(($dims.Height - $this._palette.Height) / 2))
+
+        # 2. Refresh actions and clear state
+        $this._palette.RefreshActions()
+        $this._palette._searchBox.Text = ""
+
+        # 3. Use the framework service to manage the overlay stack
+        $this._framework.AddOverlay($this._palette)
+        $this._palette.Visible = $true
+
+        # 4. Use the focus manager to set focus
+        $this._focusManager.SetFocus($this._palette._searchBox)
+
+        $this._framework.RequestRedraw()
+    }
+
+    [void] Hide() {
+        if ($this._palette.Visible) {
+            $this._palette.Visible = $false
+            $this._framework.RemoveOverlay($this._palette)
+            $this._focusManager.ReleaseFocus() # Or restore previous focus
+            $this._framework.RequestRedraw()
+        }
+    }
+}
+
+
+Strip CommandPalette Down: Modify CommandPalette.Show() and Hide() to be "dumb."
+
+Generated powershell
+# In AllComponents.ps1 -> CommandPalette class
+[void] Show() {
+    Write-Log -Level Debug -Message "CommandPalette.Show() called, setting Visible=true"
+    $this.Visible = $true
+    $this.RequestRedraw() // Let its parent (the framework) handle the rest
+}
+
+[void] Hide() {
+    $this.Visible = $false
+    $this.RequestRedraw()
+    if ($this.OnCancel) { & $this.OnCancel }
+}
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+Update Startup Logic: In Start.ps1, instantiate and register the new manager.
+
+Generated powershell
+# In Start.ps1
+# ... after ActionService, FocusManager, TuiFrameworkService are registered ...
+
+# Create the SINGLE command palette instance
+$actionService = $container.GetService("ActionService")
+$globalPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
+
+# Create and register the manager
+$focusManager = $container.GetService("FocusManager")
+$frameworkService = $container.GetService("TuiFrameworkService")
+$paletteManager = [CommandPaletteManager]::new($globalPalette, $focusManager, $frameworkService)
+$container.Register("CommandPaletteManager", $paletteManager)
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+Update the Action: In ActionService.RegisterDefaultActions, change the "app.commandPalette" action.
+
+Generated powershell
+# In AllServices.ps1 -> ActionService class
+$this.RegisterAction("app.commandPalette", {
+    # Write-Verbose "Executing app.commandPalette action"
+    # Get the manager service and call its Show() method
+    $paletteManager = $global:TuiState.Services.CommandPaletteManager
+    if ($paletteManager) {
+        $paletteManager.Show()
+    } else {
+        Write-Log -Level Warning -Message "CommandPaletteManager not available"
+    }
+}, @{ ... })
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+This completely decouples the component from the application's state management, making the architecture robust and predictable.
+
+2. TaskListScreen Performance and Design
+
+My assumption about the inefficient rendering loop was absolutely correct.
+
+Code-Level Evidence:
+
+File: AllScreens.ps1 (ASC.002)
+
+Method: _UpdateTaskList()
+
+Lines:
+
+$panel.Children.Clear()
+
+for ($i = 0; $i -lt $this._tasks.Count; $i++) { ... }
+
+$taskPanel = [Panel]::new("TaskItem_$($task.Id)")
+
+$taskLabel = [LabelComponent]::new("TaskLabel_$($task.Id)")
+
+$panel.AddChild($taskPanel)
+
+Analysis: This confirms the creation of two new UIElement objects for every task, every single time the list is filtered or a selection changes. For a list of 200 tasks, this is 400 object instantiations and subsequent garbage collections on every interaction, which is a major performance killer.
+
+Step-by-Step Refactoring Plan:
+
+Change the Component: In TaskListScreen, replace the [ScrollablePanel] $_taskListPanel with a [Table] $_taskTable. The Table component (ACO.010) is already designed for virtualized data display.
+
+Update Initialize(): Change the initialization logic in TaskListScreen.Initialize().
+
+Generated powershell
+# In TaskListScreen.Initialize()
+
+# ...
+# REMOVE the ScrollablePanel creation.
+# ADD the Table creation:
+$listWidth = [Math]::Floor($this.Width * 0.6)
+$this._taskTable = [Table]::new("TasksTable")
+$this._taskTable.X = 1
+$this._taskTable.Y = 4
+$this._taskTable.Width = $listWidth
+$this._taskTable.Height = $this.Height - 8
+$this._taskTable.ShowHeader = $true
+$this._taskTable.AllowSelection = $true
+$this._taskTable.SetColumns(@("Status", "P", "Title", "Progress")) # Define columns
+# You can customize widths:
+$this._taskTable.ColumnWidths["Status"] = 8
+$this._taskTable.ColumnWidths["P"] = 3
+$this._taskTable.ColumnWidths["Title"] = 40
+$this._taskTable.ColumnWidths["Progress"] = 10
+
+$thisScreen = $this
+$this._taskTable.OnSelectionChanged = {
+    param($sender, $newIndex)
+    $thisScreen._selectedIndex = $newIndex
+    if ($thisScreen._tasks.Count -gt 0) {
+        $thisScreen._selectedTask = $thisScreen._tasks[$newIndex]
+    }
+    $thisScreen._UpdateDetailPanel() # Only need to update the details
+    $thisScreen.RequestRedraw()
+}.GetNewClosure()
+
+$this._mainPanel.AddChild($this._taskTable)
+# ...
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+Rewrite _UpdateTaskList(): This method becomes incredibly simple. Instead of building UI, you just format data.
+
+Generated powershell
+# In TaskListScreen
+hidden [void] _UpdateTaskList() {
+    if (-not $this._taskTable) { return }
+
+    # Format the PmcTask objects into PSCustomObjects that the Table can display
+    $displayItems = [System.Collections.Generic.List[PSObject]]::new()
+    foreach($task in $this._tasks) {
+        $displayItems.Add([PSCustomObject]@{
+            Status = $task.Status.ToString()
+            P = switch ($task.Priority) {
+                ([TaskPriority]::Low) { "v" }
+                ([TaskPriority]::Medium) { "-" }
+                ([TaskPriority]::High) { "^" }
+            }
+            Title = $task.Title
+            Progress = "$($task.Progress)%"
+            # Add a hidden property to link back to the original object if needed
+            __TaskObject = $task
+        })
+    }
+
+    # Just update the table's data source. The table handles the rest.
+    $this._taskTable.Items = $displayItems
+    $this._taskTable.SelectedIndex = $this._selectedIndex
+    $this._taskTable.RequestRedraw()
+}
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+Adapt HandleInput(): The Table component has its own built-in navigation (UpArrow, DownArrow, etc.). You can remove this logic from TaskListScreen.HandleInput and let the focused Table component manage its own selection. The OnSelectionChanged scriptblock will keep the screen's state in sync.
+
+3. Hardcoded Hotkeys vs. Action Service
+
+The initial assessment was correct. The screen handles input that should be managed globally.
+
+Code-Level Evidence:
+
+File: AllScreens.ps1 (ASC.002)
+
+Method: HandleInput()
+
+Lines: Cases for [ConsoleKey]::N, [ConsoleKey]::E, [ConsoleKey]::D, [ConsoleKey]::C directly call button OnClick handlers.
+
+Analysis: This prevents remapping keys and makes it impossible to trigger these actions from the CommandPalette.
+
+Step-by-Step Refactoring Plan:
+
+Remove Hotkey Logic from Screen: Delete the N, E, D, C cases from TaskListScreen.HandleInput(). The screen should only handle contextual input like Up/Down arrow for list navigation if it's not using a component that handles it already (like the Table).
+
+Ensure Actions Exist: Verify the actions are registered in ActionService.RegisterDefaultActions() (ASE.001). The existing "task.new" is a good example. Add new ones for edit and delete.
+
+Generated powershell
+# In ActionService.RegisterDefaultActions()
+$this.RegisterAction("task.edit.selected", {
+    $navService = $global:TuiState.Services.NavigationService
+    if ($navService.CurrentScreen -is [TaskListScreen]) {
+        # This is a safe way to call a method on the screen
+        $navService.CurrentScreen._editButton.OnClick.Invoke()
+    }
+}, @{ Category = "Tasks"; Description = "Edit selected task" })
+
+# ... similar action for "task.delete.selected" ...
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+Map Keys in KeybindingService: In KeybindingService._InitializeDefaultBindings() (ASE.002), map the keys to the actions.
+
+Generated powershell
+# In KeybindingService._InitializeDefaultBindings()
+# Create a new context for the TaskList screen
+$this.SetBinding("N", "task.new", "TaskList")
+$this.SetBinding("E", "task.edit.selected", "TaskList")
+$this.SetBinding("D", "task.delete.selected", "TaskList")
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+Use the Context: In TaskListScreen, you would push/pop this context.
+
+Generated powershell
+# In TaskListScreen.OnEnter()
+$keybindingService = $this.ServiceContainer.GetService("KeybindingService")
+$keybindingService.PushContext($keybindingService.KeyMap["TaskList"])
+
+# In TaskListScreen.OnExit()
+$keybindingService = $this.ServiceContainer.GetService("KeybindingService")
+$keybindingService.PopContext()
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+
+This creates a clean, context-aware input system that is configurable and decoupled.
+
+Final Assessment and Path Forward
+
+You have a powerful, well-structured rendering engine and service layer. The primary task now is enforcing your own architecture. The "Now" problems are all instances where components or screens have broken the established rules.
+
+By implementing the detailed refactoring plans above, you will:
+
+Fix Critical Bugs: The CommandPalette refactoring will eliminate a major source of focus and rendering conflicts.
+
+Boost Performance: The TaskListScreen refactoring will make the UI dramatically more responsive with large data sets.
+
+Improve Maintainability: Decoupling hotkeys and enforcing service-based state management will make the code easier to understand, test, and extend.
+
+Your base is more than just salvageable; it's excellent. The next step is disciplined adherence to the patterns you've already established. Complete these refactoring steps, and you will have the stable, professional-grade foundation you're looking for.

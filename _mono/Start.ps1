@@ -84,7 +84,8 @@ try {
         @{ Type = "NavigationService" },
         @{ Type = "FocusManager" },
         @{ Type = "DialogManager" },
-        @{ Type = "TuiFrameworkService" }
+        @{ Type = "TuiFrameworkService" },
+        @{ Type = "CommandPaletteManager" }
     )
     
     # Create a hashtable to store services as we register them
@@ -134,6 +135,22 @@ try {
                 }
             }
             "TuiFrameworkService" { [TuiFrameworkService]::new() }
+            "CommandPaletteManager" { 
+                # Create the SINGLE command palette instance
+                $actionService = $servicesHashtable.ActionService
+                if (-not $actionService) {
+                    throw "CommandPaletteManager requires ActionService to be registered first"
+                }
+                $globalPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
+                
+                # Create and return the manager
+                $focusManager = $servicesHashtable.FocusManager
+                $frameworkService = $servicesHashtable.TuiFrameworkService
+                if (-not $focusManager -or -not $frameworkService) {
+                    throw "CommandPaletteManager requires FocusManager and TuiFrameworkService to be registered first"
+                }
+                [CommandPaletteManager]::new($globalPalette, $focusManager, $frameworkService)
+            }
         }
         
         # Store service in hashtable for dependencies

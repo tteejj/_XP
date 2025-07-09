@@ -3688,8 +3688,10 @@ class CommandPalette : UIElement {
                             Write-Log -Level Debug -Message "CommandPalette: Executing action $($selectedAction.Name)"
                             $this.Hide()
                             $this._actionService.ExecuteAction($selectedAction.Name, @{})
+                            return $true
                         }
                     }
+                    # If no action selected or invalid, still return true to consume the Enter key
                     return $true
                 }
                 {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
@@ -4301,7 +4303,7 @@ class TaskDialog : Dialog {
 }
 
 # Task Delete Confirmation Dialog
-class TaskDeleteDialog : ConfirmDialog {
+class TaskDeleteDialog : ConfirmDialog { 
     hidden [PmcTask] $_task
     
     TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
@@ -4320,6 +4322,7 @@ class TaskDeleteDialog : ConfirmDialog {
             $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
             $this._panel.AddChild($detailsLabel)
         }
+        return $false
     }
 }
 
@@ -6734,7 +6737,7 @@ class DashboardScreen : Screen {
 #<!-- PAGE: ASC.002 - TaskListScreen Class -->
 #region TaskListScreen Class
 
-class TaskListScreen : Screen {
+class TaskListScreen : Screen { 
     #region UI Components
     hidden [Panel] $_mainPanel
     hidden [ScrollablePanel] $_taskListPanel
@@ -7249,7 +7252,7 @@ class TaskListScreen : Screen {
         $panel.RequestRedraw()
     }
 
-    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         # Override base Screen HandleInput
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
@@ -7264,6 +7267,7 @@ class TaskListScreen : Screen {
                     
                     $this._UpdateDisplay()
                 }
+                return $true
             }
             ([ConsoleKey]::DownArrow) {
                 if ($this._selectedIndex -lt $this._tasks.Count - 1) {
@@ -7278,6 +7282,7 @@ class TaskListScreen : Screen {
                     
                     $this._UpdateDisplay()
                 }
+                return $true
             }
             ([ConsoleKey]::PageUp) {
                 $this._taskListPanel.ScrollUp($this._taskListPanel.ContentHeight)
@@ -7286,6 +7291,7 @@ class TaskListScreen : Screen {
                     $this._selectedTask = $this._tasks[$this._selectedIndex]
                 }
                 $this._UpdateDisplay()
+                return $true
             }
             ([ConsoleKey]::PageDown) {
                 $this._taskListPanel.ScrollDown($this._taskListPanel.ContentHeight)
@@ -7294,6 +7300,7 @@ class TaskListScreen : Screen {
                     $this._selectedTask = $this._tasks[$this._selectedIndex]
                 }
                 $this._UpdateDisplay()
+                return $true
             }
             ([ConsoleKey]::Home) {
                 $this._taskListPanel.ScrollToTop()
@@ -7302,6 +7309,7 @@ class TaskListScreen : Screen {
                     $this._selectedTask = $this._tasks[$this._selectedIndex]
                 }
                 $this._UpdateDisplay()
+                return $true
             }
             ([ConsoleKey]::End) {
                 $this._taskListPanel.ScrollToBottom()
@@ -7310,39 +7318,46 @@ class TaskListScreen : Screen {
                     $this._selectedTask = $this._tasks[$this._selectedIndex]
                 }
                 $this._UpdateDisplay()
+                return $true
             }
             ([ConsoleKey]::Enter) {
                 # Edit task
                 if ($this._selectedTask -and $this._editButton) {
                     $this._editButton.OnClick.Invoke()
                 }
+                return $true
             }
             ([ConsoleKey]::N) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     # New task
                     $this._newButton.OnClick.Invoke()
                 }
+                return $true
             }
             ([ConsoleKey]::E) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
                     # Edit task
                     $this._editButton.OnClick.Invoke()
                 }
+                return $true
             }
             ([ConsoleKey]::D) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
                     # Delete task
                     $this._deleteButton.OnClick.Invoke()
                 }
+                return $true
             }
             ([ConsoleKey]::C) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
                     # Complete task
                     $this._completeButton.OnClick.Invoke()
                 }
+                return $true
             }
             default {
                 # Unhandled key
+                return $false
             }
         }
     }
@@ -7485,7 +7500,7 @@ class ThemePickerScreen : Screen {
         $this.RequestRedraw()
     }
     
-    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
                 if ($this._selectedIndex -gt 0) {
@@ -7495,6 +7510,7 @@ class ThemePickerScreen : Screen {
                     }
                     $this._UpdateThemeList()
                 }
+                return $true
             }
             ([ConsoleKey]::DownArrow) {
                 if ($this._selectedIndex -lt $this._themes.Count - 1) {
@@ -7505,6 +7521,7 @@ class ThemePickerScreen : Screen {
                     }
                     $this._UpdateThemeList()
                 }
+                return $true
             }
             ([ConsoleKey]::Enter) {
                 # Apply selected theme
@@ -7525,6 +7542,7 @@ class ThemePickerScreen : Screen {
                         $navService.GoBack()
                     }
                 }
+                return $true
             }
             ([ConsoleKey]::Escape) {
                 # Restore original theme and cancel
@@ -7534,19 +7552,23 @@ class ThemePickerScreen : Screen {
                 if ($navService -and $navService.CanGoBack()) {
                     $navService.GoBack()
                 }
+                return $true
             }
             ([ConsoleKey]::Home) {
                 $this._selectedIndex = 0
                 $this._themePanel.ScrollToTop()
                 $this._UpdateThemeList()
+                return $true
             }
             ([ConsoleKey]::End) {
                 $this._selectedIndex = $this._themes.Count - 1
                 $this._themePanel.ScrollToBottom()
                 $this._UpdateThemeList()
+                return $true
             }
             default {
                 # Unhandled key
+                return $false
             }
         }
     }

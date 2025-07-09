@@ -217,3 +217,67 @@ The robust framework enables a suite of other integrated tools, all launchable f
 *   **Pomodoro Timer (`PomodoroScreen` & `PomodoroService`):** A time management utility combining a background `PomodoroService` and a UI `PomodoroScreen`. The service manages the work/break countdowns in the background, publishing "tick" events via the `EventManager`. The UI screen subscribes to these events to update a visual timer. The user can navigate away and return, and the screen will reflect the current state from the persistent background service.
 
 *   **CSV Editor:** Opening a `.csv` file launches a screen where the data is loaded into a `Table` component. The user can navigate cells like a spreadsheet, and pressing `Enter` on a cell opens an `InputDialog` to edit its value.
+
+
+-------------------------------------------------------------------
+clarifications
+--------------------------------------------------------------------
+This is an excellent question. It's the final "readiness review" before committing to a significant block of work. Let's critique the guide (v2.1) based on your specific criteria.
+
+### **Overall Verdict**
+
+**This guide is excellent and can be considered "good enough" to proceed.** It is a massive improvement over a simple feature list. It provides sufficient detail, correctness, and architectural soundness to successfully guide an LLM (or a human developer) through the implementation of the new features. The plan is robust, and the risk of significant architectural rework later is very low if this guide is followed.
+
+The following is a breakdown of *why* it is sufficient and where minor clarifications can be made during the implementation process.
+
+---
+
+### **Critique by Section**
+
+#### **1. Sufficiency for LLM Implementation**
+
+**Is there enough detail for an LLM to create the additions? Yes.**
+
+The guide succeeds because it has moved from high-level concepts to concrete, actionable instructions.
+
+*   **Models:** The instructions for the `PmcProject` model are atomic and precise. An LLM can be told, "In `AllModels.ps1`, add these specific properties to the `PmcProject` class." This is unambiguous.
+*   **Services:** This is the strongest section.
+    *   **Scaffolding:** It calls for creating specific new service classes (`ExcelService`, `FileSystemService`, etc.) with defined constructor dependencies. This is a clear, step-by-step task.
+    *   **Configuration Schema:** The inclusion of a JSON schema example for the `ExcelMappingService` is a **critical detail**. It transforms a vague idea ("load from a file") into a concrete task ("load a JSON file with this specific structure").
+    *   **Logic Definition:** The requirement for `ProjectOrchestrationService` to be "transactional with rollback" and for the `Logger` to "rotate files based on a size threshold" are clear functional requirements that an LLM can be prompted to implement.
+*   **Theming:** The logic for the `Get-ThemeValue` resolver (checking for `'$Palette.'` and implementing a fallback chain) is specific enough to be translated directly into code. This is a huge win for clarity.
+*   **Workflows:** The narrative walkthroughs are crucial. They provide the *sequence* of operations. For example, an LLM can be prompted: "Now, implement the `StartNewProjectWorkflow` method. Step 1 is to use the injected `DialogManager` to show the `FileExplorerScreen`..." This provides the necessary context for each step.
+
+#### **2. Correctness of Information**
+
+**Is the information architecturally correct and sound? Yes.**
+
+The plan consistently reinforces and adheres to the core principles of the Axiom-Phoenix architecture.
+
+*   **Separation of Concerns:** The plan correctly places file I/O logic into a `FileSystemService`, COM interop into an `ExcelService`, and complex business workflows into an `OrchestrationService`. This is a textbook example of correct separation.
+*   **Dependency Injection:** By specifying constructor dependencies for all new services (e.g., `ProjectOrchestrationService` receiving the `DataManager` and `ExcelService`), the plan enforces the "Centralized Service Management" principle.
+*   **Data Flow:** The project creation workflow correctly illustrates the "Data Down, Events Up" pattern, even across services. The `OrchestrationService` gets data, processes it, and then publishes a final `Project.Creation.Success` event, which the UI listens for. This is a robust, decoupled communication pattern.
+*   **Identifier Strategy:** The clarification on `ID2` (system key) versus `Name` (user-facing identifier) is architecturally sound and resolves a critical ambiguity.
+
+#### **3. Potential Improvements & Remaining Questions**
+
+**Can it be improved in any meaningful way, or are there remaining gaps? The guide is 95% of the way there. The remaining 5% are minor "implementation-level" details, not architectural flaws.**
+
+These are not things you need to rewrite the guide for, but rather points to be aware of and specify during the actual prompting/implementation phase:
+
+1.  **UI Layout for New Dialogs:** The guide correctly calls for the creation of a `ProjectEditorDialog`. The *next* step, when implementing it, will be to define its layout. An LLM will need to be told: "Create the `ProjectEditorDialog`. It should contain a `LabelComponent` and `TextBoxComponent` for the 'Name', another set for 'ID1', a `DateInputComponent` for 'BFDate', etc." The guide correctly identifies the *need* for the dialog; the layout is a natural follow-on implementation detail.
+
+2.  **Configuration Management:** The guide mentions the `Logger` will rotate files based on a size threshold. A minor missing detail is *where this threshold is configured*. Is it a hardcoded property in the `Logger` class? Or should a new `ConfigService` be introduced to load such settings from a central `config.json`? For V1, hardcoding it in the class is acceptable, but this is a point of potential future improvement.
+
+3.  **Error Handling Specifics:** The guide excellently specifies the need for rollback logic in the `ProjectOrchestrationService`. When implementing, the LLM will need to be prompted to wrap each major step (file selection, data extraction, file creation) in a `try/catch` block. The `catch` block would be responsible for calling the private `_cleanupPartialProject` method before re-throwing the exception.
+
+4.  **Feature Complexity Flag:** The "Advanced Code Editor" is, by far, the most technically complex single component. The guide correctly identifies it as such. During implementation, this feature should be broken down into the most granular steps:
+    *   *Prompt 1:* "Modify `MultilineTextBoxComponent` to have a child `Panel` for a line number gutter."
+    *   *Prompt 2:* "In the `OnRender` method, calculate the line numbers based on `ScrollOffsetY` and draw them into the gutter's buffer."
+    *   *Prompt 3:* "Now, let's add basic syntax highlighting. Create a new private method `_HighlightLine` that takes a string. Inside, use a regex to find PowerShell keywords and return an array of styled text segments."
+
+This iterative approach will be necessary for a feature of that complexity, and your guide already provides the high-level vision for it.
+
+### **Final Recommendation**
+
+**This guide is approved for implementation.** It is a high-quality architectural document that is clear, correct, and sufficient. You have successfully planned the evolution of the framework. Proceed with confidence, using this guide as the source of truth to generate the necessary implementation prompts.
