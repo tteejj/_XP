@@ -546,74 +546,62 @@ function Render-DifferentialBuffer {
 function Process-TuiInput {
     [CmdletBinding()]
     param()
+    
     try {
         while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # Emergency exit - this is the ONLY acceptable global access
+            # Emergency exit - Ctrl+C always works
             if ($keyInfo.Key -eq [ConsoleKey]::C -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
                 $global:TuiState.Running = $false
                 return
             }
             
-            # Get framework service (following Pillar 4: Absolute Abstraction)
-            $frameworkService = $global:TuiState.Services.TuiFrameworkService
-            if (-not $frameworkService) {
-                Write-Log -Level Error -Message "TuiFrameworkService not available - input system broken"
-                return
-            }
+            # Get services from global state (the working pattern used throughout the codebase)
+            $focusManager = $global:TuiState.Services.FocusManager
+            $keybindingService = $global:TuiState.Services.KeybindingService
+            $actionService = $global:TuiState.Services.ActionService
             
-            # Get services through framework service (proper abstraction)
-            $focusManager = $frameworkService.GetService("FocusManager")
-            $keybindingService = $frameworkService.GetService("KeybindingService") 
-            $actionService = $frameworkService.GetService("ActionService")
-
-            # Priority 1: Focused component gets first chance (following Pillar 2: Data Down, Events Up)
+            # Priority 1: Focused component gets first chance
             $focusedComponent = $focusManager?.FocusedComponent
             if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
                 if ($focusedComponent.HandleInput($keyInfo)) {
-                    $frameworkService.RequestRedraw()
-                    continue
-                }
-            }
-
-            # Priority 2: Overlay modal behavior
-            $overlayStack = $frameworkService.GetOverlayStack()
-            if ($overlayStack.Count -gt 0) {
-                $topOverlay = $overlayStack[-1]
-                if ($topOverlay?.HandleInput($keyInfo)) {
-                    $frameworkService.RequestRedraw()
-                }
-                continue # Enforce modality
-            }
-
-            # Priority 3: Global keybindings (following Pillar 3: Centralized Service Management)
-            $action = $keybindingService?.GetAction($keyInfo)
-            if ($action) {
-                $actionService?.ExecuteAction($action, @{})
-                $frameworkService.RequestRedraw()
-                continue
-            }
-
-            # Priority 4: Current screen
-            $currentScreen = $frameworkService.GetCurrentScreen()
-            if ($currentScreen?.HandleInput($keyInfo)) {
-                $frameworkService.RequestRedraw()
-            }
-        }
-    }
-    catch {
-        Write-Log -Level Error -Message "Input processing error: $($_.Exception.Message)"
-    }
-}
-            }
-
-            # Priority 4: The Current Screen gets the last chance.
-            if ($global:TuiState.CurrentScreen) {
-                Write-Log -Level Debug -Message "Offering input to current screen: $($global:TuiState.CurrentScreen.Name)"
-                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                     continue
+                }
+            }
+            
+            # Priority 2: Overlay modal behavior - if overlays exist, they get priority and enforce modality
+            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
+                $topOverlay = $global:TuiState.OverlayStack[-1]
+                if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
+                    $global:TuiState.IsDirty = $true
+                }
+                continue  # Enforce modality - no other input processing when overlays are active
+            }
+            
+            # Priority 3: Global keybindings
+            if ($keybindingService) {
+                $action = $keybindingService.GetAction($keyInfo)
+                if ($action) {
+                    Write-Log -Level Debug -Message "Process-TuiInput: Executing global action: $action"
+                    if ($actionService) {
+                        try {
+                            $actionService.ExecuteAction($action, @{})
+                            $global:TuiState.IsDirty = $true
+                        }
+                        catch {
+                            Write-Log -Level Error -Message "Process-TuiInput: Failed to execute action '$action': $($_.Exception.Message)"
+                        }
+                    }
+                    continue
+                }
+            }
+            
+            # Priority 4: Current screen gets the final chance
+            if ($global:TuiState.CurrentScreen) {
+                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
+                    $global:TuiState.IsDirty = $true
                 }
             }
         }

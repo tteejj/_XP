@@ -2420,45 +2420,42 @@ class TextBox : UIElement {
 # ===== CLASS: CommandPalette =====
 # Module: command-palette
 # Dependencies: UIElement, Panel, ListBox, TextBoxComponent
-# Purpose: Searchable command interface - FINAL FIXED VERSION
+# Purpose: Searchable command interface
 class CommandPalette : UIElement {
     hidden [ListBox]$_listBox
     hidden [TextBoxComponent]$_searchBox
     hidden [Panel]$_panel
     hidden [List[object]]$_allActions
     hidden [List[object]]$_filteredActions
-    hidden [object]$_actionService
-    hidden [scriptblock]$OnCancel
-    hidden [scriptblock]$OnSelect
+    [scriptblock]$OnExecute
+    [scriptblock]$OnCancel
 
-    CommandPalette([string]$name, [object]$actionService) : base($name) {
+    CommandPalette([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Visible = $false
         $this.IsOverlay = $true
         $this.Width = 60
         $this.Height = 20
-        $this._actionService = $actionService
         
-        # Initialize the buffer immediately
-        $this.Resize($this.Width, $this.Height)
+        $this._allActions = [List[object]]::new()
+        $this._filteredActions = [List[object]]::new()
         
         $this.Initialize()
-        
-        Write-Log -Level Debug -Message "CommandPalette created with size $($this.Width)x$($this.Height)"
     }
 
     hidden [void] Initialize() {
-        Write-Log -Level Debug -Message "CommandPalette.Initialize() starting"
-        
+        # Create main panel with border
         $this._panel = [Panel]::new("CommandPalette_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
         $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
+        $this._panel.X = 0
+        $this._panel.Y = 0
         $this.AddChild($this._panel)
-        Write-Log -Level Debug -Message "CommandPalette: Panel created"
 
+        # Create search box
         $this._searchBox = [TextBoxComponent]::new("CommandPalette_Search")
         $this._searchBox.X = 2
         $this._searchBox.Y = 1
@@ -2466,49 +2463,41 @@ class CommandPalette : UIElement {
         $this._searchBox.Height = 3
         $this._searchBox.Placeholder = "Type to search commands..."
         
+        # Connect search box to filtering
         $paletteRef = $this
-        $this._searchBox.OnChange = { param($sender, $text) $paletteRef.FilterActions($text) }.GetNewClosure()
+        $this._searchBox.OnChange = { 
+            param($sender, $text) 
+            $paletteRef.FilterActions($text) 
+        }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
-        Write-Log -Level Debug -Message "CommandPalette: SearchBox created"
 
+        # Create list box for results
         $this._listBox = [ListBox]::new("CommandPalette_List")
         $this._listBox.X = 2
         $this._listBox.Y = 4
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 6
         $this._panel.AddChild($this._listBox)
-        Write-Log -Level Debug -Message "CommandPalette: ListBox created"
-
-        $this._allActions = [List[object]]::new()
-        $this._filteredActions = [List[object]]::new()
-        
-        Write-Log -Level Debug -Message "CommandPalette.Initialize() completed"
     }
 
-    [void] Show() {
-        Write-Log -Level Debug -Message "CommandPalette.Show() called, setting Visible=true"
-        $this.Visible = $true
-        $this.RequestRedraw() # Let its parent (the framework) handle the rest
-    }
-
-    [void] Hide() {
-        $this.Visible = $false
-        $this.RequestRedraw()
-        if ($this.OnCancel) { & $this.OnCancel }
-    }
-
-    [void] RefreshActions() {
+    [void] SetActions([object[]]$actionList) {
         $this._allActions.Clear()
-        if ($this._actionService) {
-            $this._allActions.AddRange(($this._actionService.GetAllActions().Values | Sort-Object Category, Name))
+        foreach ($action in $actionList) {
+            $this._allActions.Add($action)
         }
+        $this.FilterActions("")  # Show all actions initially
+        
+        # Set initial focus to search box
+        $this._searchBox.IsFocused = $true
     }
 
     [void] FilterActions([string]$searchText) {
         $this._filteredActions.Clear()
         $this._listBox.ClearItems()
         
-        $actionsToDisplay = if ([string]::IsNullOrWhiteSpace($searchText)) { $this._allActions } else {
+        $actionsToDisplay = if ([string]::IsNullOrWhiteSpace($searchText)) { 
+            $this._allActions 
+        } else {
             $searchLower = $searchText.ToLower()
             @($this._allActions | Where-Object {
                 $_.Name.ToLower().Contains($searchLower) -or
@@ -2519,44 +2508,118 @@ class CommandPalette : UIElement {
 
         foreach ($action in $actionsToDisplay) {
             $this._filteredActions.Add($action)
-            $displayText = if ($action.Category) { "[$($action.Category)] $($action.Name)" } else { $action.Name }
+            $displayText = if ($action.Category) { 
+                "[$($action.Category)] $($action.Name)" 
+            } else { 
+                $action.Name 
+            }
             $this._listBox.AddItem("$displayText - $($action.Description)")
         }
         
-        if ($this._filteredActions.Count -gt 0) { $this._listBox.SelectedIndex = 0 }
+        if ($this._filteredActions.Count -gt 0) { 
+            $this._listBox.SelectedIndex = 0 
+        }
         $this.RequestRedraw()
+    }
+
+    [void] SetInitialFocus() {
+        if ($this._searchBox) {
+            # Clear any previous search text
+            $this._searchBox.Text = ""
+            $this._searchBox.CursorPosition = 0
+            $this._searchBox.IsFocused = $true
+            $this._searchBox.RequestRedraw()
+        }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        # If search box is focused, let it handle most input first
-        if ($this._searchBox.IsFocused) {
-            # Check for special keys that the palette should handle
-            switch ($key.Key) {
-                ([ConsoleKey]::Escape) { 
-                    $this.Hide()
-                    return $true 
+        $handled = $true
+        
+        switch ($key.Key) {
+            ([ConsoleKey]::Escape) { 
+                if ($this.OnCancel) {
+                    & $this.OnCancel
                 }
-                ([ConsoleKey]::Enter) {
-                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                        if ($selectedAction) {
-                            Write-Log -Level Debug -Message "CommandPalette: Executing action $($selectedAction.Name)"
-                            $this.Hide()
-                            $this._actionService.ExecuteAction($selectedAction.Name, @{})
-                            return $true
-                        }
+                return $true 
+            }
+            ([ConsoleKey]::Enter) {
+                if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                    if ($selectedAction -and $this.OnExecute) {
+                        & $this.OnExecute $this $selectedAction
+                        return $true
                     }
-                    # If no action selected or invalid, still return true to consume the Enter key
-                    return $true
                 }
-                {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                    # Navigation keys go to the list
-                    return $this._listBox.HandleInput($key)
+                return $true
+            }
+            ([ConsoleKey]::Tab) {
+                # Switch focus between search box and list
+                if ($this._searchBox.IsFocused) {
+                    $this._searchBox.IsFocused = $false
+                    $this._listBox.IsFocusable = $true
+                    # Focus would be set by parent focus manager
+                } else {
+                    $this._searchBox.IsFocused = $true
+                    $this._listBox.IsFocusable = $false
                 }
-                default {
-                    # All other input goes to search box
+                $this.RequestRedraw()
+                return $true
+            }
+            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
+                # Navigation keys go to the list
+                return $this._listBox.HandleInput($key)
+            }
+            default {
+                # All other input goes to search box if it's focused
+                if ($this._searchBox.IsFocused) {
+                    return $this._searchBox.HandleInput($key)
+                } else {
+                    $handled = $false
+                }
+            }
+        }
+        
+        if ($handled) {
+            $this.RequestRedraw()
+        }
+        
+        return $handled
+    }
+
+    [void] OnFocus() {
+        ([UIElement]$this).OnFocus()
+        # Set initial focus to search box
+        if ($this._searchBox) {
+            $this._searchBox.IsFocused = $true
+            $this._searchBox.RequestRedraw()
+        }
+    }
+
+    [void] OnBlur() {
+        ([UIElement]$this).OnBlur()
+        if ($this._searchBox) {
+            $this._searchBox.IsFocused = $false
+            $this._searchBox.RequestRedraw()
+        }
+    }
+
+    [void] Cleanup() {
+        if ($this._searchBox) {
+            $this._searchBox.Text = ""
+            $this._searchBox.CursorPosition = 0
+        }
+        if ($this._listBox) {
+            $this._listBox.ClearItems()
+            $this._listBox.SelectedIndex = -1
+        }
+        $this._allActions.Clear()
+        $this._filteredActions.Clear()
+    }
+}
+
+#<!-- END_PAGE: ACO.016 -->
                     return $this._searchBox.HandleInput($key)
                 }
             }

@@ -163,13 +163,61 @@ class ActionService {
         
         $this.RegisterAction("app.commandPalette", {
             # Write-Verbose "Executing app.commandPalette action"
-            # Get the CommandPaletteManager service and call its Show() method
-            $paletteManager = $global:TuiState.Services.CommandPaletteManager
-            if ($paletteManager) {
-                $paletteManager.Show()
-            } else {
-                Write-Log -Level Warning -Message "CommandPaletteManager not available"
+            # Get required services from global state
+            $dialogManager = $global:TuiState.Services.DialogManager
+            $actionService = $global:TuiState.Services.ActionService
+            
+            if (-not $dialogManager -or -not $actionService) {
+                Write-Log -Level Error -Message "Required services not available for command palette"
+                return
             }
+            
+            # Create and configure the CommandPalette component
+            $palette = [CommandPalette]::new("CommandPalette")
+            $palette.Width = 60
+            $palette.Height = 20
+            
+            # Get all available actions and populate the palette
+            $allActions = $actionService.GetAllActions()
+            $actionList = @()
+            foreach ($actionEntry in $allActions.GetEnumerator()) {
+                $actionData = $actionEntry.Value
+                $actionList += [PSCustomObject]@{
+                    Name = $actionEntry.Key
+                    Description = $actionData.Description
+                    Category = $actionData.Category
+                    Hotkey = $actionData.Hotkey
+                }
+            }
+            
+            # Set the actions data (Data Down)
+            $palette.SetActions($actionList)
+            
+            # Define what happens when user selects a command (Events Up)
+            $palette.OnExecute = {
+                param($sender, $selectedAction)
+                try {
+                    # Hide the palette first
+                    $dialogManager.HideDialog($palette)
+                    
+                    # Execute the selected action
+                    if ($selectedAction -and $selectedAction.Name) {
+                        $actionService.ExecuteAction($selectedAction.Name)
+                    }
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to execute command palette action: $($_.Exception.Message)"
+                }
+            }.GetNewClosure()
+            
+            # Define cancel behavior
+            $palette.OnCancel = {
+                $dialogManager.HideDialog($palette)
+            }.GetNewClosure()
+            
+            # Show the palette using the standard overlay mechanism
+            $dialogManager.ShowDialog($palette)
+            
         }, @{
             Category = "Application"
             Description = "Show command palette"
@@ -1840,6 +1888,7 @@ class DialogManager {
     [System.Collections.Generic.List[UIElement]] $_activeDialogs = [System.Collections.Generic.List[UIElement]]::new()
     [EventManager]$EventManager = $null
     [FocusManager]$FocusManager = $null
+    hidden [UIElement]$_previousFocus = $null
 
     DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
         $this.EventManager = $eventManager
@@ -1852,6 +1901,11 @@ class DialogManager {
             throw [System.ArgumentException]::new("Provided element is null.", "dialog")
         }
         
+        # Store previous focus for restoration
+        if ($this.FocusManager) {
+            $this._previousFocus = $this.FocusManager.FocusedComponent
+        }
+        
         # Calculate center position based on console size
         $consoleWidth = $global:TuiState.BufferWidth
         $consoleHeight = $global:TuiState.BufferHeight
@@ -1859,10 +1913,8 @@ class DialogManager {
         $dialog.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $dialog.Width) / 2))
         $dialog.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $dialog.Height) / 2))
 
-        # If there's a currently focused component, save it
+        # If there's a currently focused component, release it
         if ($this.FocusManager) {
-            # Use metadata to store previous focus for restoration
-            $dialog.Metadata.PreviousFocus = $this.FocusManager.FocusedComponent
             $this.FocusManager.ReleaseFocus() # Release current focus
         }
 
@@ -1913,10 +1965,8 @@ class DialogManager {
             $dialog.Cleanup()
 
             # Restore previous focus
-            if ($this.FocusManager -and $dialog.Metadata.PreviousFocus -is [UIElement]) {
-                $this.FocusManager.SetFocus($dialog.Metadata.PreviousFocus)
-            } else {
-                $this.FocusManager.ReleaseFocus() # Clear focus if no previous component
+            if ($this.FocusManager) {
+                $this.FocusManager.SetFocus($this._previousFocus)
             }
 
             $dialog.RequestRedraw() # Force redraw to remove dialog from screen
@@ -1932,64 +1982,6 @@ class DialogManager {
         }
         $this._activeDialogs.Clear()
         # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
-    }
-}
-
-# ===== CLASS: CommandPaletteManager =====
-# Module: command-palette-manager (new service)
-# Dependencies: CommandPalette, FocusManager, TuiFrameworkService
-# Purpose: Centralized management of the command palette lifecycle
-class CommandPaletteManager {
-    hidden [CommandPalette] $_palette
-    hidden [FocusManager] $_focusManager
-    hidden [TuiFrameworkService] $_framework
-
-    CommandPaletteManager([CommandPalette]$palette, [FocusManager]$focusManager, [TuiFrameworkService]$framework) {
-        $this._palette = $palette
-        $this._focusManager = $focusManager
-        $this._framework = $framework
-        Write-Log -Level Debug -Message "CommandPaletteManager: Initialized"
-    }
-
-    [void] Show() {
-        # 1. Position the palette
-        $dims = $this._framework.GetDimensions()
-        $this._palette.X = [Math]::Max(0, [Math]::Floor(($dims.Width - $this._palette.Width) / 2))
-        $this._palette.Y = [Math]::Max(0, [Math]::Floor(($dims.Height - $this._palette.Height) / 2))
-
-        # 2. Refresh actions and clear state
-        $this._palette.RefreshActions()
-        if ($this._palette._searchBox) {
-            $this._palette._searchBox.Text = ""
-            $this._palette._searchBox.CursorPosition = 0
-        }
-
-        # 3. Use the framework service to manage the overlay stack
-        $this._framework.AddOverlay($this._palette)
-        $this._palette.Visible = $true
-
-        # 4. Use the focus manager to set focus
-        if ($this._palette._searchBox) {
-            $this._focusManager.SetFocus($this._palette._searchBox)
-        }
-
-        $this._framework.RequestRedraw()
-        Write-Log -Level Debug -Message "CommandPaletteManager: Showed command palette"
-    }
-
-    [void] Hide() {
-        if ($this._palette.Visible) {
-            $this._palette.Visible = $false
-            $this._framework.RemoveOverlay($this._palette)
-            $this._focusManager.ReleaseFocus() # Or restore previous focus
-            $this._framework.RequestRedraw()
-            Write-Log -Level Debug -Message "CommandPaletteManager: Hid command palette"
-        }
-    }
-    
-    [void] Cleanup() {
-        $this.Hide()
-        Write-Log -Level Debug -Message "CommandPaletteManager: Cleanup completed"
     }
 }
 
@@ -2066,14 +2058,6 @@ class TuiFrameworkService {
         return $this._globalState.FocusedComponent
     }
     
-    [void] SetFocusedComponent([object]$component) {
-        $this._globalState.FocusedComponent = $component
-    }
-    
-    [object] GetCommandPalette() {
-        return $this._globalState.CommandPalette
-    }
-    
     [System.Collections.Generic.List[UIElement]] GetOverlayStack() {
         return $this._globalState.OverlayStack
     }
@@ -2089,14 +2073,6 @@ class TuiFrameworkService {
             $this.RequestRedraw()
         }
         return $removed
-    }
-    
-    [hashtable] GetServices() {
-        return $this._globalState.Services
-    }
-    
-    [object] GetService([string]$serviceName) {
-        return $this._globalState.Services[$serviceName]
     }
     
     [void] Cleanup() {

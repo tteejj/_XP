@@ -359,7 +359,19 @@ class TaskListScreen : Screen {
     }
 
     [void] OnEnter() {
-        # Subscribe to data change events for reactive updates
+        # Following Rule 2.3: OnEnter() Checklist
+        
+        # Step 1: Fetch initial data from services  
+        $this._RefreshTasks()
+        $this._UpdateDisplay()
+        
+        # Step 2: Set initial focus via FocusManager (CRITICAL for input to work)
+        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+        if ($focusManager -and $this._filterBox) {
+            $focusManager.SetFocus($this._filterBox)
+        }
+        
+        # Step 3: Subscribe to EventManager events
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager) {
             # Create handler that properly captures $this
@@ -781,6 +793,7 @@ class TaskListScreen : Screen {
                 return $false
             }
         }
+        return $false
     }
 }
 
@@ -918,6 +931,11 @@ class ThemePickerScreen : Screen {
     }
     
     [void] OnEnter() {
+        # Following Rule 2.3: Set initial focus for input to work
+        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+        if ($focusManager) {
+            $focusManager.SetFocus($this) # Focus the screen itself since it handles input
+        }
         $this.RequestRedraw()
     }
     
@@ -992,6 +1010,7 @@ class ThemePickerScreen : Screen {
                 return $false
             }
         }
+        return $false
     }
 }
 

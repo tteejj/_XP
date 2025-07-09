@@ -163,16 +163,11 @@ class ActionService {
         
         $this.RegisterAction("app.commandPalette", {
             # Write-Verbose "Executing app.commandPalette action"
-            if ($global:TuiState.CommandPalette) {
-                Write-Log -Level Debug -Message "Showing command palette"
-                $global:TuiState.CommandPalette.Show()
-                $global:TuiState.IsDirty = $true
-            } else {
-                Write-Log -Level Warning -Message "Command palette not initialized"
-            }
+            # Command palette functionality is not yet implemented in this version
+            Write-Log -Level Warning -Message "Command palette feature not available in this version. Use F1 for help or navigate with arrow keys."
         }, @{
             Category = "Application"
-            Description = "Show command palette"
+            Description = "Show command palette (not implemented)"
             Hotkey = "Ctrl+P"
         })
         
@@ -1932,6 +1927,64 @@ class DialogManager {
         }
         $this._activeDialogs.Clear()
         # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
+    }
+}
+
+# ===== CLASS: CommandPaletteManager =====
+# Module: command-palette-manager (new service)
+# Dependencies: CommandPalette, FocusManager, TuiFrameworkService
+# Purpose: Centralized management of the command palette lifecycle
+class CommandPaletteManager {
+    hidden [CommandPalette] $_palette
+    hidden [FocusManager] $_focusManager
+    hidden [TuiFrameworkService] $_framework
+
+    CommandPaletteManager([CommandPalette]$palette, [FocusManager]$focusManager, [TuiFrameworkService]$framework) {
+        $this._palette = $palette
+        $this._focusManager = $focusManager
+        $this._framework = $framework
+        Write-Log -Level Debug -Message "CommandPaletteManager: Initialized"
+    }
+
+    [void] Show() {
+        # 1. Position the palette
+        $dims = $this._framework.GetDimensions()
+        $this._palette.X = [Math]::Max(0, [Math]::Floor(($dims.Width - $this._palette.Width) / 2))
+        $this._palette.Y = [Math]::Max(0, [Math]::Floor(($dims.Height - $this._palette.Height) / 2))
+
+        # 2. Refresh actions and clear state
+        $this._palette.RefreshActions()
+        if ($this._palette._searchBox) {
+            $this._palette._searchBox.Text = ""
+            $this._palette._searchBox.CursorPosition = 0
+        }
+
+        # 3. Use the framework service to manage the overlay stack
+        $this._framework.AddOverlay($this._palette)
+        $this._palette.Visible = $true
+
+        # 4. Use the focus manager to set focus
+        if ($this._palette._searchBox) {
+            $this._focusManager.SetFocus($this._palette._searchBox)
+        }
+
+        $this._framework.RequestRedraw()
+        Write-Log -Level Debug -Message "CommandPaletteManager: Showed command palette"
+    }
+
+    [void] Hide() {
+        if ($this._palette.Visible) {
+            $this._palette.Visible = $false
+            $this._framework.RemoveOverlay($this._palette)
+            $this._focusManager.ReleaseFocus() # Or restore previous focus
+            $this._framework.RequestRedraw()
+            Write-Log -Level Debug -Message "CommandPaletteManager: Hid command palette"
+        }
+    }
+    
+    [void] Cleanup() {
+        $this.Hide()
+        Write-Log -Level Debug -Message "CommandPaletteManager: Cleanup completed"
     }
 }
 

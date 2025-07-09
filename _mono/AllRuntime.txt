@@ -25,7 +25,7 @@ $global:TuiState = @{
     CurrentScreen = $null
     IsDirty = $true
     FocusedComponent = $null
-    CommandPalette = $null
+    # CommandPalette removed - now managed by CommandPaletteManager service
     Services = @{}
     LastRenderTime = [datetime]::Now
     FrameCount = 0
@@ -546,61 +546,62 @@ function Render-DifferentialBuffer {
 function Process-TuiInput {
     [CmdletBinding()]
     param()
+    
     try {
         while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # Log Ctrl key combinations for debugging
-            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
-                Write-Log -Level Debug -Message "Key pressed: Ctrl+$($keyInfo.Key)"
+            # Emergency exit - Ctrl+C always works
+            if ($keyInfo.Key -eq [ConsoleKey]::C -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+                $global:TuiState.Running = $false
+                return
             }
             
+            # Get services from global state (the working pattern used throughout the codebase)
             $focusManager = $global:TuiState.Services.FocusManager
             $keybindingService = $global:TuiState.Services.KeybindingService
-
-            # Priority 1: The globally focused component ALWAYS gets the first chance.
-            if ($focusManager.FocusedComponent) {
-                Write-Log -Level Debug -Message "Offering input to focused component: $($focusManager.FocusedComponent.Name)"
-                if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
+            $actionService = $global:TuiState.Services.ActionService
+            
+            # Priority 1: Focused component gets first chance
+            $focusedComponent = $focusManager?.FocusedComponent
+            if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
+                if ($focusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                     continue
                 }
             }
-
-            # Priority 2: If focus was not handled, "bubble up". Check for an active overlay.
-            if ($global:TuiState.OverlayStack.Count -gt 0) {
+            
+            # Priority 2: Overlay modal behavior - if overlays exist, they get priority and enforce modality
+            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
-                Write-Log -Level Debug -Message "Overlay active: $($topOverlay.Name)"
-                # Let the overlay container handle keys the child did not (e.g., Escape).
-                if ($topOverlay?.HandleInput($keyInfo)) {
+                if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                 }
-                # Always 'continue' to enforce modal behavior, consuming the input.
-                continue
+                continue  # Enforce modality - no other input processing when overlays are active
             }
-
-            # --- Only runs if no overlay is active ---
-
-            # Priority 3: Global Keybindings (e.g., Ctrl+Q).
-            $action = $keybindingService?.GetAction($keyInfo)
-            if ($action) {
-                Write-Log -Level Debug -Message "Global keybinding detected: $action"
-                $actionService = $global:TuiState.Services.ActionService
-                if ($actionService) {
-                    $actionService.ExecuteAction($action, @{})
-                } else {
-                    Write-Log -Level Warning -Message "ActionService not available to execute action: $action"
+            
+            # Priority 3: Global keybindings
+            if ($keybindingService) {
+                $action = $keybindingService.GetAction($keyInfo)
+                if ($action) {
+                    Write-Log -Level Debug -Message "Process-TuiInput: Executing global action: $action"
+                    if ($actionService) {
+                        try {
+                            $actionService.ExecuteAction($action, @{})
+                            $global:TuiState.IsDirty = $true
+                        }
+                        catch {
+                            Write-Log -Level Error -Message "Process-TuiInput: Failed to execute action '$action': $($_.Exception.Message)"
+                        }
+                    }
+                    continue
                 }
-                $global:TuiState.IsDirty = $true
-                continue
             }
-
-            # Priority 4: The Current Screen gets the last chance.
+            
+            # Priority 4: Current screen gets the final chance
             if ($global:TuiState.CurrentScreen) {
-                Write-Log -Level Debug -Message "Offering input to current screen: $($global:TuiState.CurrentScreen.Name)"
                 if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
-                    continue
                 }
             }
         }
@@ -816,7 +817,8 @@ function Start-AxiomPhoenix {
         # Extract key services for quick access
         $serviceNames = @(
             'ActionService', 'KeybindingService', 'NavigationService', 
-            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 'TuiFrameworkService' # Add new services
+            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 
+            'TuiFrameworkService', 'CommandPaletteManager' # Add new services
         )
         
         foreach ($serviceName in $serviceNames) {
@@ -831,16 +833,7 @@ function Start-AxiomPhoenix {
             }
         }
         
-        # Create command palette if available
-        $actionService = $global:TuiState.Services.ActionService
-        if ($actionService) {
-            Write-Log -Level Debug -Message "Creating command palette with ActionService"
-            $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
-            $global:TuiState.CommandPalette.RefreshActions()
-            Write-Log -Level Debug -Message "Command palette created and actions refreshed"
-        } else {
-            Write-Log -Level Warning -Message "ActionService not available - command palette will not be created"
-        }
+        # CommandPalette is now managed by the CommandPaletteManager service
         
         # Initialize engine
         Initialize-TuiEngine

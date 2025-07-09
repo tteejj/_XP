@@ -3596,14 +3596,47 @@ class CommandPalette : UIElement {
     }
 
     [void] Show() {
-        Write-Log -Level Debug -Message "CommandPalette.Show() called, setting Visible=true"
+        Write-Log -Level Debug -Message "CommandPalette.Show() called"
+        $consoleWidth = $global:TuiState.BufferWidth
+        $consoleHeight = $global:TuiState.BufferHeight
+        $this.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $this.Width) / 2))
+        $this.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $this.Height) / 2))
+        
+        Write-Log -Level Debug -Message "CommandPalette positioned at X=$($this.X), Y=$($this.Y)"
+        
+        # Ensure the command palette buffer is properly sized
+        $this.Resize($this.Width, $this.Height)
+        
+        $this.RefreshActions()
+        $this._searchBox.Text = ""
+        $this._searchBox.CursorPosition = 0
+        $this.FilterActions("")
         $this.Visible = $true
-        $this.RequestRedraw() # Let its parent (the framework) handle the rest
+        
+        if (-not $global:TuiState.OverlayStack.Contains($this)) {
+            $global:TuiState.OverlayStack.Add($this)
+            Write-Log -Level Debug -Message "CommandPalette added to overlay stack"
+        }
+        
+        $focusManager = $global:TuiState.Services.FocusManager
+        if ($focusManager) {
+            $focusManager.SetFocus($this._searchBox)
+            Write-Log -Level Debug -Message "Focus set to search box"
+        } else {
+            Write-Log -Level Warning -Message "FocusManager not available"
+        }
+        
+        $global:TuiState.IsDirty = $true
+        Write-Log -Level Debug -Message "CommandPalette.Show() completed, IsDirty set to true"
     }
 
     [void] Hide() {
         $this.Visible = $false
-        $this.RequestRedraw()
+        if ($global:TuiState.OverlayStack.Contains($this)) {
+            $global:TuiState.OverlayStack.Remove($this)
+        }
+        $global:TuiState.Services.FocusManager?.ReleaseFocus()
+        $global:TuiState.IsDirty = $true
         if ($this.OnCancel) { & $this.OnCancel }
     }
 
@@ -3683,9 +3716,6 @@ class CommandPalette : UIElement {
                 }
             }
         }
-        
-        # Failsafe return (should never reach here)
-        return $false
     }
 }
 
@@ -4292,6 +4322,7 @@ class TaskDeleteDialog : ConfirmDialog {
             $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
             $this._panel.AddChild($detailsLabel)
         }
+        return $false
     }
 }
 
@@ -5696,7 +5727,7 @@ $global:TuiState = @{
     CurrentScreen = $null
     IsDirty = $true
     FocusedComponent = $null
-    # CommandPalette removed - now managed by CommandPaletteManager service
+    CommandPalette = $null
     Services = @{}
     LastRenderTime = [datetime]::Now
     FrameCount = 0
@@ -6217,62 +6248,61 @@ function Render-DifferentialBuffer {
 function Process-TuiInput {
     [CmdletBinding()]
     param()
-    
     try {
         while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # Emergency exit - Ctrl+C always works
-            if ($keyInfo.Key -eq [ConsoleKey]::C -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
-                $global:TuiState.Running = $false
-                return
+            # Log Ctrl key combinations for debugging
+            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
+                Write-Log -Level Debug -Message "Key pressed: Ctrl+$($keyInfo.Key)"
             }
             
-            # Get services from global state (the working pattern used throughout the codebase)
             $focusManager = $global:TuiState.Services.FocusManager
             $keybindingService = $global:TuiState.Services.KeybindingService
-            $actionService = $global:TuiState.Services.ActionService
-            
-            # Priority 1: Focused component gets first chance
-            $focusedComponent = $focusManager?.FocusedComponent
-            if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
-                if ($focusedComponent.HandleInput($keyInfo)) {
+
+            # Priority 1: The globally focused component ALWAYS gets the first chance.
+            if ($focusManager.FocusedComponent) {
+                Write-Log -Level Debug -Message "Offering input to focused component: $($focusManager.FocusedComponent.Name)"
+                if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                     continue
                 }
             }
-            
-            # Priority 2: Overlay modal behavior - if overlays exist, they get priority and enforce modality
-            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
+
+            # Priority 2: If focus was not handled, "bubble up". Check for an active overlay.
+            if ($global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
-                if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
+                Write-Log -Level Debug -Message "Overlay active: $($topOverlay.Name)"
+                # Let the overlay container handle keys the child did not (e.g., Escape).
+                if ($topOverlay?.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                 }
-                continue  # Enforce modality - no other input processing when overlays are active
+                # Always 'continue' to enforce modal behavior, consuming the input.
+                continue
             }
-            
-            # Priority 3: Global keybindings
-            if ($keybindingService) {
-                $action = $keybindingService.GetAction($keyInfo)
-                if ($action) {
-                    Write-Log -Level Debug -Message "Process-TuiInput: Executing global action: $action"
-                    if ($actionService) {
-                        try {
-                            $actionService.ExecuteAction($action, @{})
-                            $global:TuiState.IsDirty = $true
-                        }
-                        catch {
-                            Write-Log -Level Error -Message "Process-TuiInput: Failed to execute action '$action': $($_.Exception.Message)"
-                        }
-                    }
-                    continue
+
+            # --- Only runs if no overlay is active ---
+
+            # Priority 3: Global Keybindings (e.g., Ctrl+Q).
+            $action = $keybindingService?.GetAction($keyInfo)
+            if ($action) {
+                Write-Log -Level Debug -Message "Global keybinding detected: $action"
+                $actionService = $global:TuiState.Services.ActionService
+                if ($actionService) {
+                    $actionService.ExecuteAction($action, @{})
+                } else {
+                    Write-Log -Level Warning -Message "ActionService not available to execute action: $action"
                 }
+                $global:TuiState.IsDirty = $true
+                continue
             }
-            
-            # Priority 4: Current screen gets the final chance
+
+            # Priority 4: The Current Screen gets the last chance.
             if ($global:TuiState.CurrentScreen) {
+                Write-Log -Level Debug -Message "Offering input to current screen: $($global:TuiState.CurrentScreen.Name)"
                 if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
+                    continue
                 }
             }
         }
@@ -6488,8 +6518,7 @@ function Start-AxiomPhoenix {
         # Extract key services for quick access
         $serviceNames = @(
             'ActionService', 'KeybindingService', 'NavigationService', 
-            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 
-            'TuiFrameworkService', 'CommandPaletteManager' # Add new services
+            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 'TuiFrameworkService' # Add new services
         )
         
         foreach ($serviceName in $serviceNames) {
@@ -6504,7 +6533,16 @@ function Start-AxiomPhoenix {
             }
         }
         
-        # CommandPalette is now managed by the CommandPaletteManager service
+        # Create command palette if available
+        $actionService = $global:TuiState.Services.ActionService
+        if ($actionService) {
+            Write-Log -Level Debug -Message "Creating command palette with ActionService"
+            $global:TuiState.CommandPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
+            $global:TuiState.CommandPalette.RefreshActions()
+            Write-Log -Level Debug -Message "Command palette created and actions refreshed"
+        } else {
+            Write-Log -Level Warning -Message "ActionService not available - command palette will not be created"
+        }
         
         # Initialize engine
         Initialize-TuiEngine
@@ -6900,19 +6938,7 @@ class TaskListScreen : Screen {
     }
 
     [void] OnEnter() {
-        # Following Rule 2.3: OnEnter() Checklist
-        
-        # Step 1: Fetch initial data from services  
-        $this._RefreshTasks()
-        $this._UpdateDisplay()
-        
-        # Step 2: Set initial focus via FocusManager (CRITICAL for input to work)
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._filterBox) {
-            $focusManager.SetFocus($this._filterBox)
-        }
-        
-        # Step 3: Subscribe to EventManager events
+        # Subscribe to data change events for reactive updates
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager) {
             # Create handler that properly captures $this
@@ -7334,7 +7360,6 @@ class TaskListScreen : Screen {
                 return $false
             }
         }
-        return $false
     }
 }
 
@@ -7472,11 +7497,6 @@ class ThemePickerScreen : Screen {
     }
     
     [void] OnEnter() {
-        # Following Rule 2.3: Set initial focus for input to work
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager) {
-            $focusManager.SetFocus($this) # Focus the screen itself since it handles input
-        }
         $this.RequestRedraw()
     }
     
@@ -7551,7 +7571,6 @@ class ThemePickerScreen : Screen {
                 return $false
             }
         }
-        return $false
     }
 }
 
@@ -7733,11 +7752,16 @@ class ActionService {
         
         $this.RegisterAction("app.commandPalette", {
             # Write-Verbose "Executing app.commandPalette action"
-            # Command palette functionality is not yet implemented in this version
-            Write-Log -Level Warning -Message "Command palette feature not available in this version. Use F1 for help or navigate with arrow keys."
+            if ($global:TuiState.CommandPalette) {
+                Write-Log -Level Debug -Message "Showing command palette"
+                $global:TuiState.CommandPalette.Show()
+                $global:TuiState.IsDirty = $true
+            } else {
+                Write-Log -Level Warning -Message "Command palette not initialized"
+            }
         }, @{
             Category = "Application"
-            Description = "Show command palette (not implemented)"
+            Description = "Show command palette"
             Hotkey = "Ctrl+P"
         })
         
@@ -9500,64 +9524,6 @@ class DialogManager {
     }
 }
 
-# ===== CLASS: CommandPaletteManager =====
-# Module: command-palette-manager (new service)
-# Dependencies: CommandPalette, FocusManager, TuiFrameworkService
-# Purpose: Centralized management of the command palette lifecycle
-class CommandPaletteManager {
-    hidden [CommandPalette] $_palette
-    hidden [FocusManager] $_focusManager
-    hidden [TuiFrameworkService] $_framework
-
-    CommandPaletteManager([CommandPalette]$palette, [FocusManager]$focusManager, [TuiFrameworkService]$framework) {
-        $this._palette = $palette
-        $this._focusManager = $focusManager
-        $this._framework = $framework
-        Write-Log -Level Debug -Message "CommandPaletteManager: Initialized"
-    }
-
-    [void] Show() {
-        # 1. Position the palette
-        $dims = $this._framework.GetDimensions()
-        $this._palette.X = [Math]::Max(0, [Math]::Floor(($dims.Width - $this._palette.Width) / 2))
-        $this._palette.Y = [Math]::Max(0, [Math]::Floor(($dims.Height - $this._palette.Height) / 2))
-
-        # 2. Refresh actions and clear state
-        $this._palette.RefreshActions()
-        if ($this._palette._searchBox) {
-            $this._palette._searchBox.Text = ""
-            $this._palette._searchBox.CursorPosition = 0
-        }
-
-        # 3. Use the framework service to manage the overlay stack
-        $this._framework.AddOverlay($this._palette)
-        $this._palette.Visible = $true
-
-        # 4. Use the focus manager to set focus
-        if ($this._palette._searchBox) {
-            $this._focusManager.SetFocus($this._palette._searchBox)
-        }
-
-        $this._framework.RequestRedraw()
-        Write-Log -Level Debug -Message "CommandPaletteManager: Showed command palette"
-    }
-
-    [void] Hide() {
-        if ($this._palette.Visible) {
-            $this._palette.Visible = $false
-            $this._framework.RemoveOverlay($this._palette)
-            $this._focusManager.ReleaseFocus() # Or restore previous focus
-            $this._framework.RequestRedraw()
-            Write-Log -Level Debug -Message "CommandPaletteManager: Hid command palette"
-        }
-    }
-    
-    [void] Cleanup() {
-        $this.Hide()
-        Write-Log -Level Debug -Message "CommandPaletteManager: Cleanup completed"
-    }
-}
-
 #endregion
 #<!-- END_PAGE: ASE.009 -->
 
@@ -10013,85 +9979,75 @@ try {
     Write-Host "Initializing services..." -ForegroundColor Cyan
     $container = [ServiceContainer]::new()
     
-    # Create service container following Pillar 3: Centralized Service Management
-    Write-Host "Initializing services..." -ForegroundColor Cyan
-    $container = [ServiceContainer]::new()
+    # Register services
+    $services = @(
+        @{ Type = "Logger" },
+        @{ Type = "EventManager" },
+        @{ Type = "ThemeManager" },
+        @{ Type = "DataManager" },
+        @{ Type = "ActionService" },
+        @{ Type = "KeybindingService" },
+        @{ Type = "NavigationService" },
+        @{ Type = "FocusManager" },
+        @{ Type = "DialogManager" },
+        @{ Type = "TuiFrameworkService" }
+    )
     
-    # Register services in dependency order (following Rule 4.3: Constructor Injection)
-    Write-Host "  • Registering Logger... " -NoNewline -ForegroundColor Gray
-    $container.Register("Logger", [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")))
-    Write-Host "✓" -ForegroundColor Green
+    # Create a hashtable to store services as we register them
+    $servicesHashtable = @{}
     
-    Write-Host "  • Registering EventManager... " -NoNewline -ForegroundColor Gray  
-    $container.Register("EventManager", [EventManager]::new())
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering ThemeManager... " -NoNewline -ForegroundColor Gray
-    $container.Register("ThemeManager", [ThemeManager]::new())
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering TuiFrameworkService... " -NoNewline -ForegroundColor Gray
-    $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering DataManager... " -NoNewline -ForegroundColor Gray
-    $container.Register("DataManager", [DataManager]::new((Join-Path $env:TEMP "axiom-data.json"), $container.GetService("EventManager")))
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering ActionService... " -NoNewline -ForegroundColor Gray
-    $container.Register("ActionService", [ActionService]::new($container.GetService("EventManager")))
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering KeybindingService... " -NoNewline -ForegroundColor Gray
-    $container.Register("KeybindingService", [KeybindingService]::new($container.GetService("ActionService")))
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering FocusManager... " -NoNewline -ForegroundColor Gray
-    $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering NavigationService... " -NoNewline -ForegroundColor Gray
-    # NavigationService gets the full service hashtable per its constructor
-    $serviceHash = @{
-        EventManager = $container.GetService("EventManager")
-        FocusManager = $container.GetService("FocusManager")
-        TuiFrameworkService = $container.GetService("TuiFrameworkService")
-        ActionService = $container.GetService("ActionService")
-        KeybindingService = $container.GetService("KeybindingService")
-        DataManager = $container.GetService("DataManager")
-        ThemeManager = $container.GetService("ThemeManager")
-        Logger = $container.GetService("Logger")
+    foreach ($service in $services) {
+        Write-Host "  • Initializing $($service.Type)... " -NoNewline -ForegroundColor Gray
+        
+        $instance = switch ($service.Type) {
+            "Logger" { 
+                $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
+                $logger.MinimumLevel = "Info"  # Only log Info, Warning, Error, Fatal
+                $logger.EnableConsoleLogging = $false  # Disable console logging by default
+                $logger
+            }
+            "EventManager" { 
+                $eventManager = [EventManager]::new()
+                $eventManager.EnableHistory = $false  # Disable event history to prevent any serialization
+                $eventManager
+            }
+            "ThemeManager" { [ThemeManager]::new() }
+            "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
+            "ActionService" { [ActionService]::new() }
+            "KeybindingService" { [KeybindingService]::new() }
+            "NavigationService" { 
+                # NavigationService requires a hashtable of services
+                [NavigationService]::new($servicesHashtable) 
+            }
+            "FocusManager" { 
+                # FocusManager requires EventManager
+                $eventManager = $servicesHashtable.EventManager
+                if ($eventManager) {
+                    [FocusManager]::new($eventManager)
+                } else {
+                    [FocusManager]::new($null)
+                }
+            }
+            "DialogManager" { 
+                # DialogManager requires EventManager and FocusManager
+                $eventManager = $servicesHashtable.EventManager
+                $focusManager = $servicesHashtable.FocusManager
+                if ($eventManager -and $focusManager) {
+                    [DialogManager]::new($eventManager, $focusManager)
+                } else {
+                    # Create with nulls if dependencies not available
+                    [DialogManager]::new($null, $null)
+                }
+            }
+            "TuiFrameworkService" { [TuiFrameworkService]::new() }
+        }
+        
+        # Store service in hashtable for dependencies
+        $servicesHashtable[$service.Type] = $instance
+        
+        $container.Register($service.Type, $instance)
+        Write-Host "✓" -ForegroundColor Green
     }
-    $container.Register("NavigationService", [NavigationService]::new($serviceHash))
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering DialogManager... " -NoNewline -ForegroundColor Gray
-    $container.Register("DialogManager", [DialogManager]::new($container.GetService("EventManager"), $container.GetService("FocusManager")))
-    Write-Host "✓" -ForegroundColor Green
-    
-    Write-Host "  • Registering CommandPaletteManager... " -NoNewline -ForegroundColor Gray
-    # Following Rule 3.1: Components are dumb and receive data via properties
-    $commandPalette = [CommandPalette]::new("GlobalCommandPalette", $container.GetService("ActionService"))
-    $container.Register("CommandPaletteManager", [CommandPaletteManager]::new($commandPalette, $container.GetService("FocusManager"), $container.GetService("TuiFrameworkService")))
-    Write-Host "✓" -ForegroundColor Green
-    Write-Host "✓" -ForegroundColor Green
-    
-    # Store services in global state for runtime access (following Pillar 4: Absolute Abstraction)
-    # Note: Only the runtime engine accesses these directly - UI components use TuiFrameworkService
-    $global:TuiState.Services = @{
-        Logger = $container.GetService("Logger")
-        EventManager = $container.GetService("EventManager") 
-        ThemeManager = $container.GetService("ThemeManager")
-        DataManager = $container.GetService("DataManager")
-        ActionService = $container.GetService("ActionService")
-        KeybindingService = $container.GetService("KeybindingService")
-        NavigationService = $container.GetService("NavigationService")
-        FocusManager = $container.GetService("FocusManager")
-        DialogManager = $container.GetService("DialogManager")
-        TuiFrameworkService = $container.GetService("TuiFrameworkService")
-        CommandPaletteManager = $container.GetService("CommandPaletteManager")
-    }
-    $global:TuiState.ServiceContainer = $container
     
     # Set the selected theme
     $themeManager = $container.GetService("ThemeManager")

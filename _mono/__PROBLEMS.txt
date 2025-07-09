@@ -1,145 +1,99 @@
-Excellent. This is the right way to approach a complex codebase: establish a baseline, then critically re-evaluate assumptions with direct code evidence. Let's dive deep.
+1.Of course. You are correct. A concise overview of the code-level changes is more effective. Here is the summary of the required implementation, broken down by file and the logic behind each change.
 
-Here is a fleshed-out analysis, validating the initial points with specific code references and providing more detailed, actionable refactoring plans.
+This is the implementation plan to fix the architecture and make the command palette functional.
 
-I. Critical Issues & Bad Implementations (Validated)
-1. The CommandPalette Architectural Violation
+Step 1: Refactor Core Services (AllServices.ps1)
 
-My initial assessment was correct, and the code confirms it is the most severe architectural problem.
+The goal here is to eliminate redundancy, fix the architectural pattern for overlays, and update the action that triggers the command palette.
 
-Code-Level Evidence:
+CommandPaletteManager Class:
 
-File: AllComponents.ps1 (ACO.016)
+Change: Delete the entire class CommandPaletteManager.
 
-Method: [void] Show()
+Logic: This service is an unnecessary layer. The DialogManager is the single, correct service for managing all overlays, including the command palette. Removing this simplifies the architecture and eliminates a source of confusion.
 
-Lines:
+DialogManager Class:
 
-$consoleWidth = $global:TuiState.BufferWidth
+Change: Add a new hidden property: hidden [UIElement]$_previousFocus = $null.
 
-if (-not $global:TuiState.OverlayStack.Contains($this)) { $global:TuiState.OverlayStack.Add($this) ... }
+Logic: This allows the DialogManager to remember what the user was doing before an overlay appeared.
 
-$focusManager = $global:TuiState.Services.FocusManager
+Change: Modify ShowDialog(). Before showing a dialog, it will execute: $this._previousFocus = $this.FocusManager.FocusedComponent.
 
-if ($focusManager) { $focusManager.SetFocus($this._searchBox) ... }
+Change: Modify HideDialog(). Before exiting, it will execute: $this.FocusManager.SetFocus($this._previousFocus).
 
-Analysis: This is a UI component directly manipulating the global rendering stack, global state variables, and calling services. It has taken on the responsibilities of a manager, creating a tangled dependency that is hard to trace and guaranteed to cause conflicts with other modal/overlay components (like the DialogManager).
+Logic: This implements seamless focus restoration, a critical user experience improvement. The application will now feel intuitive, returning the user's cursor to where it was.
 
-Step-by-Step Refactoring Plan:
+TuiFrameworkService Class:
 
-Create a New Service: In AllServices.ps1, create a CommandPaletteManager service. It will be a singleton responsible for the lifecycle of the one global command palette.
+Change: Delete the methods GetService, GetServices, GetCommandPalette, and SetFocusedComponent.
 
-Generated powershell
-# In AllServices.ps1
-class CommandPaletteManager {
-    hidden [CommandPalette] $_palette
-    hidden [FocusManager] $_focusManager
-    hidden [TuiFrameworkService] $_framework
+Logic (Pillar 4): This enforces the architectural guide. The TuiFrameworkService's sole purpose is to provide a safe API to the TUI's runtime state (like buffer dimensions and the overlay stack), not to act as a second, competing service container.
 
-    CommandPaletteManager([CommandPalette]$palette, [FocusManager]$focusManager, [TuiFrameworkService]$framework) {
-        $this._palette = $palette
-        $this._focusManager = $focusManager
-        $this._framework = $framework
-        # Write-Log ...
-    }
+ActionService Class:
 
-    [void] Show() {
-        # 1. Position the palette
-        $dims = $this._framework.GetDimensions()
-        $this._palette.X = [Math]::Max(0, [Math]::Floor(($dims.Width - $this._palette.Width) / 2))
-        $this._palette.Y = [Math]::Max(0, [Math]::Floor(($dims.Height - $this._palette.Height) / 2))
+Change: Rewrite the scriptblock for the "app.commandPalette" action.
 
-        # 2. Refresh actions and clear state
-        $this._palette.RefreshActions()
-        $this._palette._searchBox.Text = ""
+Logic (Pillar 1 & 2): Instead of calling a manager, the action now correctly orchestrates the creation and display of the palette UI, following the "Data Down, Events Up" pattern.
 
-        # 3. Use the framework service to manage the overlay stack
-        $this._framework.AddOverlay($this._palette)
-        $this._palette.Visible = $true
+It will get the DialogManager and ActionService from $global:TuiState.Services.
 
-        # 4. Use the focus manager to set focus
-        $this._focusManager.SetFocus($this._palette._searchBox)
+It will instantiate the CommandPalette component: $palette = [CommandPalette]::new(...).
 
-        $this._framework.RequestRedraw()
-    }
+It will populate the palette with data: $palette.SetActions(...).
 
-    [void] Hide() {
-        if ($this._palette.Visible) {
-            $this._palette.Visible = $false
-            $this._framework.RemoveOverlay($this._palette)
-            $this._focusManager.ReleaseFocus() # Or restore previous focus
-            $this._framework.RequestRedraw()
-        }
-    }
-}
+It will define what happens when the user selects a command: $palette.OnExecute = { ... }.
 
+It will use the standard overlay mechanism: $dialogManager.ShowDialog($palette).
 
-Strip CommandPalette Down: Modify CommandPalette.Show() and Hide() to be "dumb."
+Step 2: Implement the CommandPalette Component (AllComponents.ps1)
 
-Generated powershell
-# In AllComponents.ps1 -> CommandPalette class
-[void] Show() {
-    Write-Log -Level Debug -Message "CommandPalette.Show() called, setting Visible=true"
-    $this.Visible = $true
-    $this.RequestRedraw() // Let its parent (the framework) handle the rest
-}
+The goal is to create the missing UI component that was causing the crash, following the guide's rules for components.
 
-[void] Hide() {
-    $this.Visible = $false
-    $this.RequestRedraw()
-    if ($this.OnCancel) { & $this.OnCancel }
-}
-IGNORE_WHEN_COPYING_START
-content_copy
-download
-Use code with caution.
-Powershell
-IGNORE_WHEN_COPYING_END
+CommandPalette Class:
 
-Update Startup Logic: In Start.ps1, instantiate and register the new manager.
+Change: Add a new class CommandPalette : UIElement.
 
-Generated powershell
-# In Start.ps1
-# ... after ActionService, FocusManager, TuiFrameworkService are registered ...
+Logic (Pillar 1): This class will be a "dumb" UI container.
 
-# Create the SINGLE command palette instance
-$actionService = $container.GetService("ActionService")
-$globalPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
+Internal Components: It will contain a hidden [TextBoxComponent]$_searchBox and a hidden [ListBox]$_listBox.
 
-# Create and register the manager
-$focusManager = $container.GetService("FocusManager")
-$frameworkService = $container.GetService("TuiFrameworkService")
-$paletteManager = [CommandPaletteManager]::new($globalPalette, $focusManager, $frameworkService)
-$container.Register("CommandPaletteManager", $paletteManager)
-IGNORE_WHEN_COPYING_START
-content_copy
-download
-Use code with caution.
-Powershell
-IGNORE_WHEN_COPYING_END
+Data Handling: It will have a public method SetActions([object[]]$actions) to receive the list of commands to display. It will contain the logic to filter the ListBox based on text entered into its _searchBox.
 
-Update the Action: In ActionService.RegisterDefaultActions, change the "app.commandPalette" action.
+Event Handling: It will have a public event property [scriptblock]$OnExecute. When the user presses Enter on a ListBox item, it will invoke this scriptblock, passing the selected action's name back up.
 
-Generated powershell
-# In AllServices.ps1 -> ActionService class
-$this.RegisterAction("app.commandPalette", {
-    # Write-Verbose "Executing app.commandPalette action"
-    # Get the manager service and call its Show() method
-    $paletteManager = $global:TuiState.Services.CommandPaletteManager
-    if ($paletteManager) {
-        $paletteManager.Show()
-    } else {
-        Write-Log -Level Warning -Message "CommandPaletteManager not available"
-    }
-}, @{ ... })
-IGNORE_WHEN_COPYING_START
-content_copy
-download
-Use code with caution.
-Powershell
-IGNORE_WHEN_COPYING_END
+Input Handling: Its HandleInput method will manage user interaction within the component—switching focus between the textbox and listbox, handling up/down arrows for selection, etc.
 
-This completely decouples the component from the application's state management, making the architecture robust and predictable.
+Step 3: Correct Application Startup (Start.ps1)
+
+The goal is to fix the fatal dependency crash and make the startup sequence logical and robust.
+
+Service Registration:
+
+Change: Delete the entire registration block for CommandPaletteManager. It no longer exists.
+
+Change: Re-order all service registrations to follow an explicit dependency hierarchy. Services with no dependencies (Logger, EventManager) are registered first, and services that depend on them (ActionService, FocusManager) are registered next, and so on.
+
+Logic: This makes the startup process resilient and easy to understand, preventing future dependency-related crashes.
+
+Step 4: Fix the Runtime Input Loop (AllRuntime.ps1)
+
+The goal is to replace the broken, over-engineered input function with a simple, correct, and debuggable one.
+
+Process-TuiInput Function:
+
+Change: Replace the entire body of the function Process-TuiInput.
+
+Logic: The new implementation will be clean and follow a strict, non-negotiable priority order for input handling:
+
+Focused Component First: The component that FocusManager says has focus gets the first chance to handle the key. If it does, the cycle ends.
+
+Active Overlay (Modality): If there is an overlay on screen (like the command palette), it gets the next chance. If it handles the key, the cycle ends. Input is not passed to the screen underneath, enforcing modal behavior.
+
+Global Keybindings: If the key was not handled, KeybindingService checks if it matches a global hotkey (like Ctrl+P).
+
+Current Screen: If all else fails, the base screen gets a final chance to process the input.
+
 
 2. TaskListScreen Performance and Design
 
