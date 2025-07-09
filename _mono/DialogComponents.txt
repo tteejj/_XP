@@ -1,5 +1,5 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Dialog and Popup Components
+# Axiom-Phoenix v4.0 - Dialog and Popup Components (CORRECTED)
 # Contains the CommandPalette, the DialogResult enum, the base Dialog class,
 # standard dialogs (Alert, Confirm, Input), and application-specific dialogs.
 # ==============================================================================
@@ -1037,116 +1037,8 @@ class TaskEditPanel : Panel {
     }
 }
 
-# ===== CLASS: TaskDeleteDialog =====
-# Module: task-dialogs  
-# Dependencies: Panel, LabelComponent, ButtonComponent
-# Purpose: Confirmation dialog for task deletion
-class TaskDeleteDialog : Panel {
-    hidden [PmcTask]$_task
-    hidden [ButtonComponent]$_yesButton
-    hidden [ButtonComponent]$_noButton
-    [DialogResult]$DialogResult = [DialogResult]::None
-    [scriptblock]$OnConfirm
-    [scriptblock]$OnCancel
-    
-    TaskDeleteDialog([PmcTask]$task) : base("TaskDeleteDialog") {
-        $this._task = $task
-        $this.Title = "Delete Task"
-        $this.Width = 50
-        $this.Height = 8
-        $this.HasBorder = $true
-        $this.IsFocusable = $true
-        
-        $this._CreateControls()
-    }
-    
-    hidden [void] _CreateControls() {
-        # Confirmation message
-        $messageLabel = [LabelComponent]::new("MessageLabel")
-        $messageLabel.Text = "Are you sure you want to delete this task?"
-        $messageLabel.X = 2
-        $messageLabel.Y = 2
-        $messageLabel.Width = $this.Width - 4
-        $this.AddChild($messageLabel)
-        
-        $taskLabel = [LabelComponent]::new("TaskLabel")
-        $taskLabel.Text = "Task: $($this._task.Title)"
-        $taskLabel.X = 2
-        $taskLabel.Y = 3
-        $taskLabel.Width = $this.Width - 4
-        $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
-        $this.AddChild($taskLabel)
-        
-        # Buttons
-        $thisDialog = $this
-        $this._yesButton = [ButtonComponent]::new("YesButton")
-        $this._yesButton.Text = "Yes"
-        $this._yesButton.X = $this.Width - 24
-        $this._yesButton.Y = $this.Height - 3
-        $this._yesButton.Width = 8
-        $this._yesButton.Height = 1
-        $this._yesButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::Yes
-            if ($thisDialog.OnConfirm) {
-                & $thisDialog.OnConfirm
-            }
-        }.GetNewClosure()
-        $this.AddChild($this._yesButton)
-        
-        $this._noButton = [ButtonComponent]::new("NoButton")
-        $this._noButton.Text = "No"
-        $this._noButton.X = $this.Width - 14
-        $this._noButton.Y = $this.Height - 3
-        $this._noButton.Width = 8
-        $this._noButton.Height = 1
-        $this._noButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::No
-            if ($thisDialog.OnCancel) {
-                & $thisDialog.OnCancel
-            }
-        }.GetNewClosure()
-        $this.AddChild($this._noButton)
-    }
-    
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        switch ($keyInfo.Key) {
-            ([ConsoleKey]::Escape) {
-                $this.DialogResult = [DialogResult]::No
-                if ($this.OnCancel) {
-                    & $this.OnCancel
-                }
-                return $true
-            }
-            ([ConsoleKey]::Y) {
-                $this.DialogResult = [DialogResult]::Yes
-                if ($this.OnConfirm) {
-                    & $this.OnConfirm
-                }
-                return $true
-            }
-            ([ConsoleKey]::N) {
-                $this.DialogResult = [DialogResult]::No
-                if ($this.OnCancel) {
-                    & $this.OnCancel
-                }
-                return $true
-            }
-        }
-        return ([Panel]$this).HandleInput($keyInfo)
-    }
-    
-    [void] SetInitialFocus() {
-        # Focus the No button by default (safer)
-        $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
-            $focusManager.SetFocus($this._noButton)
-        }
-    }
-}
-
-# Alias for compatibility
-class TaskDialog : TaskEditPanel {
-    TaskDialog([string]$title, [PmcTask]$task) : base($title, $task) {}
-}
+#
+# REMOVED DUPLICATE DEFINITIONS FOR TaskDeleteDialog and TaskDialog
+#
 
 #endregion

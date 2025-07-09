@@ -5062,6 +5062,8 @@ class CommandPalette : UIElement {
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
         $this._searchBox.Placeholder = "Type to search commands..."
+        $this._searchBox.Visible = $true  # Ensure visible
+        $this._searchBox.Enabled = $true  # Ensure enabled
         
         # Connect search box to filtering
         $paletteRef = $this
@@ -5127,7 +5129,21 @@ class CommandPalette : UIElement {
             # Clear any previous search text
             $this._searchBox.Text = ""
             $this._searchBox.CursorPosition = 0
-            $this._searchBox.IsFocused = $true
+            
+            # Use FocusManager to properly set focus
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: About to set focus to search box"
+                Write-Log -Level Debug -Message "  - SearchBox Name: $($this._searchBox.Name)"
+                Write-Log -Level Debug -Message "  - SearchBox IsFocusable: $($this._searchBox.IsFocusable)"
+                Write-Log -Level Debug -Message "  - SearchBox Enabled: $($this._searchBox.Enabled)"
+                Write-Log -Level Debug -Message "  - SearchBox Visible: $($this._searchBox.Visible)"
+                $focusManager.SetFocus($this._searchBox)
+                Write-Log -Level Debug -Message "  - FocusManager.FocusedComponent: $($focusManager.FocusedComponent?.Name)"
+                Write-Log -Level Debug -Message "  - SearchBox IsFocused: $($this._searchBox.IsFocused)"
+            } else {
+                Write-Log -Level Error -Message "CommandPalette.SetInitialFocus: FocusManager is null!"
+            }
             $this._searchBox.RequestRedraw()
         }
     }
@@ -6270,6 +6286,7 @@ class TaskEditPanel : Panel {
         $titleLabel.X = 2
         $titleLabel.Y = $y
         $titleLabel.Width = 10
+        $titleLabel.Visible = $true  # Ensure visible
         $this.AddChild($titleLabel)
         
         $this._titleTextBox = [TextBoxComponent]::new("TitleTextBox")
@@ -6277,6 +6294,8 @@ class TaskEditPanel : Panel {
         $this._titleTextBox.Y = $y + 1
         $this._titleTextBox.Width = $this.Width - 6
         $this._titleTextBox.Height = 1
+        $this._titleTextBox.Visible = $true  # Ensure visible
+        $this._titleTextBox.Enabled = $true  # Ensure enabled
         $this.AddChild($this._titleTextBox)
         $y += 3
         
@@ -6434,7 +6453,16 @@ class TaskEditPanel : Panel {
         # Focus the title textbox first
         $focusManager = $global:TuiState.Services.FocusManager
         if ($focusManager) {
+            Write-Log -Level Debug -Message "TaskEditPanel.SetInitialFocus: About to set focus to title textbox"
+            Write-Log -Level Debug -Message "  - TextBox Name: $($this._titleTextBox.Name)"
+            Write-Log -Level Debug -Message "  - TextBox IsFocusable: $($this._titleTextBox.IsFocusable)"
+            Write-Log -Level Debug -Message "  - TextBox Enabled: $($this._titleTextBox.Enabled)"
+            Write-Log -Level Debug -Message "  - TextBox Visible: $($this._titleTextBox.Visible)"
             $focusManager.SetFocus($this._titleTextBox)
+            Write-Log -Level Debug -Message "  - FocusManager.FocusedComponent: $($focusManager.FocusedComponent?.Name)"
+            Write-Log -Level Debug -Message "  - TextBox IsFocused: $($this._titleTextBox.IsFocused)"
+        } else {
+            Write-Log -Level Error -Message "TaskEditPanel.SetInitialFocus: FocusManager is null!"
         }
     }
 }
@@ -8289,11 +8317,24 @@ function Process-TuiInput {
             $inputHandled = $false
             
             # Priority 1: Focused component gets first chance
-            $focusedComponent = $focusManager?.FocusedComponent
+            $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
+            $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'None' }
+            $focusedType = if ($null -ne $focusedComponent) { $focusedComponent.GetType().Name } else { 'N/A' }
+            $focusedIsFocused = if ($null -ne $focusedComponent) { $focusedComponent.IsFocused } else { 'N/A' }
+            $focusedEnabled = if ($null -ne $focusedComponent) { $focusedComponent.Enabled } else { 'N/A' }
+            
+            Write-Log -Level Debug -Message "Process-TuiInput: Key pressed: $($keyInfo.Key), Modifiers: $($keyInfo.Modifiers)"
+            Write-Log -Level Debug -Message "  - FocusedComponent: $focusedName"
+            Write-Log -Level Debug -Message "  - FocusedComponent Type: $focusedType"
+            Write-Log -Level Debug -Message "  - IsFocused: $focusedIsFocused"
+            Write-Log -Level Debug -Message "  - Enabled: $focusedEnabled"
             if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
                 if ($focusedComponent.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                     $inputHandled = $true
+                    Write-Log -Level Debug -Message "  - Input handled by focused component"
+                } else {
+                    Write-Log -Level Debug -Message "  - Input NOT handled by focused component"
                 }
             }
             
@@ -11495,11 +11536,16 @@ class FocusManager {
     }
 
     [void] SetFocus([UIElement]$component) {
+        $componentName = if ($null -ne $component) { $component.Name } else { 'null' }
+        Write-Log -Level Debug -Message "FocusManager.SetFocus called with: $componentName"
+        
         if ($this.FocusedComponent -eq $component) {
+            Write-Log -Level Debug -Message "  - Already focused, returning"
             return
         }
         
         if ($null -ne $this.FocusedComponent) {
+            Write-Log -Level Debug -Message "  - Removing focus from: $($this.FocusedComponent.Name)"
             $this.FocusedComponent.IsFocused = $false
             $this.FocusedComponent.OnBlur()
             $this.FocusedComponent.RequestRedraw()
@@ -11507,6 +11553,10 @@ class FocusManager {
 
         $this.FocusedComponent = $null
         if ($null -ne $component -and $component.IsFocusable -and $component.Enabled -and $component.Visible) {
+            Write-Log -Level Debug -Message "  - Setting focus to: $($component.Name)"
+            Write-Log -Level Debug -Message "    - IsFocusable: $($component.IsFocusable)"
+            Write-Log -Level Debug -Message "    - Enabled: $($component.Enabled)"
+            Write-Log -Level Debug -Message "    - Visible: $($component.Visible)"
             $this.FocusedComponent = $component
             $component.IsFocused = $true
             $component.OnFocus()
@@ -11518,6 +11568,15 @@ class FocusManager {
                     ComponentName = if ($component.Name) { $component.Name } else { "Unnamed" }
                     ComponentType = $component.GetType().Name 
                 })
+            }
+            Write-Log -Level Debug -Message "  - Focus set successfully"
+        } else {
+            Write-Log -Level Debug -Message "  - Focus NOT set. Component check failed:"
+            Write-Log -Level Debug -Message "    - Component null: $($null -eq $component)"
+            if ($null -ne $component) {
+                Write-Log -Level Debug -Message "    - IsFocusable: $($component.IsFocusable)"
+                Write-Log -Level Debug -Message "    - Enabled: $($component.Enabled)"
+                Write-Log -Level Debug -Message "    - Visible: $($component.Visible)"
             }
         }
         $global:TuiState.IsDirty = $true
@@ -16550,7 +16609,7 @@ class TextBox : UIElement {
 
 ####\DialogComponents.ps1
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Dialog and Popup Components
+# Axiom-Phoenix v4.0 - Dialog and Popup Components (CORRECTED)
 # Contains the CommandPalette, the DialogResult enum, the base Dialog class,
 # standard dialogs (Alert, Confirm, Input), and application-specific dialogs.
 # ==============================================================================
@@ -17588,117 +17647,9 @@ class TaskEditPanel : Panel {
     }
 }
 
-# ===== CLASS: TaskDeleteDialog =====
-# Module: task-dialogs  
-# Dependencies: Panel, LabelComponent, ButtonComponent
-# Purpose: Confirmation dialog for task deletion
-class TaskDeleteDialog : Panel {
-    hidden [PmcTask]$_task
-    hidden [ButtonComponent]$_yesButton
-    hidden [ButtonComponent]$_noButton
-    [DialogResult]$DialogResult = [DialogResult]::None
-    [scriptblock]$OnConfirm
-    [scriptblock]$OnCancel
-    
-    TaskDeleteDialog([PmcTask]$task) : base("TaskDeleteDialog") {
-        $this._task = $task
-        $this.Title = "Delete Task"
-        $this.Width = 50
-        $this.Height = 8
-        $this.HasBorder = $true
-        $this.IsFocusable = $true
-        
-        $this._CreateControls()
-    }
-    
-    hidden [void] _CreateControls() {
-        # Confirmation message
-        $messageLabel = [LabelComponent]::new("MessageLabel")
-        $messageLabel.Text = "Are you sure you want to delete this task?"
-        $messageLabel.X = 2
-        $messageLabel.Y = 2
-        $messageLabel.Width = $this.Width - 4
-        $this.AddChild($messageLabel)
-        
-        $taskLabel = [LabelComponent]::new("TaskLabel")
-        $taskLabel.Text = "Task: $($this._task.Title)"
-        $taskLabel.X = 2
-        $taskLabel.Y = 3
-        $taskLabel.Width = $this.Width - 4
-        $taskLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
-        $this.AddChild($taskLabel)
-        
-        # Buttons
-        $thisDialog = $this
-        $this._yesButton = [ButtonComponent]::new("YesButton")
-        $this._yesButton.Text = "Yes"
-        $this._yesButton.X = $this.Width - 24
-        $this._yesButton.Y = $this.Height - 3
-        $this._yesButton.Width = 8
-        $this._yesButton.Height = 1
-        $this._yesButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::Yes
-            if ($thisDialog.OnConfirm) {
-                & $thisDialog.OnConfirm
-            }
-        }.GetNewClosure()
-        $this.AddChild($this._yesButton)
-        
-        $this._noButton = [ButtonComponent]::new("NoButton")
-        $this._noButton.Text = "No"
-        $this._noButton.X = $this.Width - 14
-        $this._noButton.Y = $this.Height - 3
-        $this._noButton.Width = 8
-        $this._noButton.Height = 1
-        $this._noButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::No
-            if ($thisDialog.OnCancel) {
-                & $thisDialog.OnCancel
-            }
-        }.GetNewClosure()
-        $this.AddChild($this._noButton)
-    }
-    
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        switch ($keyInfo.Key) {
-            ([ConsoleKey]::Escape) {
-                $this.DialogResult = [DialogResult]::No
-                if ($this.OnCancel) {
-                    & $this.OnCancel
-                }
-                return $true
-            }
-            ([ConsoleKey]::Y) {
-                $this.DialogResult = [DialogResult]::Yes
-                if ($this.OnConfirm) {
-                    & $this.OnConfirm
-                }
-                return $true
-            }
-            ([ConsoleKey]::N) {
-                $this.DialogResult = [DialogResult]::No
-                if ($this.OnCancel) {
-                    & $this.OnCancel
-                }
-                return $true
-            }
-        }
-        return ([Panel]$this).HandleInput($keyInfo)
-    }
-    
-    [void] SetInitialFocus() {
-        # Focus the No button by default (safer)
-        $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
-            $focusManager.SetFocus($this._noButton)
-        }
-    }
-}
-
-# Alias for compatibility
-class TaskDialog : TaskEditPanel {
-    TaskDialog([string]$title, [PmcTask]$task) : base($title, $task) {}
-}
+#
+# REMOVED DUPLICATE DEFINITIONS FOR TaskDeleteDialog and TaskDialog
+#
 
 #endregion
 
@@ -18628,10 +18579,10 @@ try {
         @{ File = "AllBaseClasses.ps1"; Description = "Core Framework" },
         @{ File = "AllModels.ps1"; Description = "Data Models" },
         @{ File = "CoreComponents.ps1"; Description = "Core Components" },
-        @{ File = "DialogComponents.ps1"; Description = "Dialog Components" },
 	@{ File = "PanelComponents.ps1"; Description = "Panel and Layout Components" },
-	@{ File = "AdvancedComponents.ps1"; Description = "Advanced Components" },
-        @{ File = "AllScreens.ps1"; Description = "Application Screens" },
+	@{ File = "AdvancedComponents.ps1"; Description = "Advanced Components" },        
+	@{ File = "DialogComponents.ps1"; Description = "Dialog Components" },
+	@{ File = "AllScreens.ps1"; Description = "Application Screens" },
         @{ File = "AllFunctions.ps1"; Description = "Utility Functions" },
         @{ File = "AllServices.ps1"; Description = "Business Services" },
         @{ File = "AllRuntime.ps1"; Description = "Runtime Engine" }

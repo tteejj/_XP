@@ -1793,11 +1793,16 @@ class FocusManager {
     }
 
     [void] SetFocus([UIElement]$component) {
+        $componentName = if ($null -ne $component) { $component.Name } else { 'null' }
+        Write-Log -Level Debug -Message "FocusManager.SetFocus called with: $componentName"
+        
         if ($this.FocusedComponent -eq $component) {
+            Write-Log -Level Debug -Message "  - Already focused, returning"
             return
         }
         
         if ($null -ne $this.FocusedComponent) {
+            Write-Log -Level Debug -Message "  - Removing focus from: $($this.FocusedComponent.Name)"
             $this.FocusedComponent.IsFocused = $false
             $this.FocusedComponent.OnBlur()
             $this.FocusedComponent.RequestRedraw()
@@ -1805,6 +1810,10 @@ class FocusManager {
 
         $this.FocusedComponent = $null
         if ($null -ne $component -and $component.IsFocusable -and $component.Enabled -and $component.Visible) {
+            Write-Log -Level Debug -Message "  - Setting focus to: $($component.Name)"
+            Write-Log -Level Debug -Message "    - IsFocusable: $($component.IsFocusable)"
+            Write-Log -Level Debug -Message "    - Enabled: $($component.Enabled)"
+            Write-Log -Level Debug -Message "    - Visible: $($component.Visible)"
             $this.FocusedComponent = $component
             $component.IsFocused = $true
             $component.OnFocus()
@@ -1816,6 +1825,15 @@ class FocusManager {
                     ComponentName = if ($component.Name) { $component.Name } else { "Unnamed" }
                     ComponentType = $component.GetType().Name 
                 })
+            }
+            Write-Log -Level Debug -Message "  - Focus set successfully"
+        } else {
+            Write-Log -Level Debug -Message "  - Focus NOT set. Component check failed:"
+            Write-Log -Level Debug -Message "    - Component null: $($null -eq $component)"
+            if ($null -ne $component) {
+                Write-Log -Level Debug -Message "    - IsFocusable: $($component.IsFocusable)"
+                Write-Log -Level Debug -Message "    - Enabled: $($component.Enabled)"
+                Write-Log -Level Debug -Message "    - Visible: $($component.Visible)"
             }
         }
         $global:TuiState.IsDirty = $true
