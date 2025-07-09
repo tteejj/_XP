@@ -220,6 +220,18 @@ class ActionService {
             Description = "Go to Task List"
         })
         
+        # Add navigation.dashboard action
+        $this.RegisterAction("navigation.dashboard", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $dashboardScreen = [DashboardScreen]::new($container)
+            $dashboardScreen.Initialize()
+            $navService.NavigateTo($dashboardScreen)
+        }, @{
+            Category = "Navigation"
+            Description = "Go to Dashboard"
+        })
+        
         # Write-Verbose "ActionService: Registered default actions"
     }
 }

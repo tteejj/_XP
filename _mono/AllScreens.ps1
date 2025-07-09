@@ -674,6 +674,7 @@ class TaskListScreen : Screen {
     }
 
     [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Override base Screen HandleInput
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
                 if ($this._selectedIndex -gt 0) {
