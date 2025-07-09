@@ -3177,10 +3177,10 @@ class NavigationMenu : UIElement {
     [List[NavigationItem]]$Items
     [int]$SelectedIndex = 0
     [string]$Orientation = "Horizontal"  # Horizontal or Vertical
-    [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black
-    [ConsoleColor]$ForegroundColor = [ConsoleColor]::White
-    [ConsoleColor]$SelectedBackgroundColor = [ConsoleColor]::DarkBlue
-    [ConsoleColor]$SelectedForegroundColor = [ConsoleColor]::Yellow
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$SelectedBackgroundColor = "#0078D4"
+    [string]$SelectedForegroundColor = "#FFFF00"
 
     NavigationMenu([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -3237,7 +3237,14 @@ class NavigationMenu : UIElement {
     }
 
     hidden [void] RenderVertical() {
-        $this.Height = [Math]::Max($this.Items.Count, 1)
+        # Ensure height matches item count
+        if ($this.Height -ne $this.Items.Count -and $this.Items.Count -gt 0) {
+            $this.Height = $this.Items.Count
+            # Resize the buffer to match new height
+            if ($this._private_buffer) {
+                $this._private_buffer.Resize($this.Width, $this.Height)
+            }
+        }
         
         for ($i = 0; $i -lt $this.Items.Count; $i++) {
             $item = $this.Items[$i]

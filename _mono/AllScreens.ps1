@@ -88,6 +88,12 @@ class DashboardScreen : Screen {
         $this._menu.Height = 4 # Height will be determined by the number of items
         $this._menu.X = [Math]::Floor(($this.Width - $this._menu.Width) / 2)
         $this._menu.Y = $y
+        
+        # Set theme colors for the menu
+        $this._menu.BackgroundColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#1E1E1E"
+        $this._menu.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $this._menu.SelectedBackgroundColor = Get-ThemeColor -ColorName "ButtonFocusBackground" -DefaultColor "#0078D4"
+        $this._menu.SelectedForegroundColor = Get-ThemeColor -ColorName "ButtonFocusForeground" -DefaultColor "#FFFFFF"
 
         # Populate the menu items. Each item has a label and an action.
         $this._menu.AddItem([NavigationItem]::new("TASKS", "Manage Tasks",   ($this._CreateNavigationAction([TaskListScreen]))))
@@ -101,6 +107,32 @@ class DashboardScreen : Screen {
     [void] OnEnter() {
         # Set the initial focus to our menu so the user can navigate immediately.
         $this.Services.FocusManager?.SetFocus($this._menu)
+    }
+
+    # Handle window resizing
+    [void] OnResize([int]$newWidth, [int]$newHeight) {
+        # Call base implementation
+        ([Screen]$this).OnResize($newWidth, $newHeight)
+        
+        # Resize main panel to fill the screen
+        if ($this._mainPanel) {
+            $this._mainPanel.Width = $newWidth
+            $this._mainPanel.Height = $newHeight
+            $this._mainPanel.UpdateContentDimensions()
+            
+            # Recenter the menu
+            if ($this._menu) {
+                $this._menu.X = [Math]::Floor(($newWidth - $this._menu.Width) / 2)
+            }
+            
+            # Recenter the title labels
+            $y = 3
+            foreach ($child in $this._mainPanel.Children) {
+                if ($child -is [LabelComponent] -and $child.Name -like "TitleLine*") {
+                    $child.X = [Math]::Floor(($newWidth - $child.Width) / 2)
+                }
+            }
+        }
     }
 
     # A private helper method to create navigation actions, which keeps the code clean and avoids repetition.

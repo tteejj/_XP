@@ -806,6 +806,9 @@ class Screen : UIElement {
         $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
         $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
         $this.ServiceContainer = $null
+        # Set initial screen dimensions to console size
+        $this.Width = [Math]::Max(80, [Console]::WindowWidth)
+        $this.Height = [Math]::Max(24, [Console]::WindowHeight)
         # Write-Verbose "Screen '$($this.Name)' created with hashtable services."
     }
 
@@ -832,6 +835,9 @@ class Screen : UIElement {
         $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
         $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
         $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+        # Set initial screen dimensions to console size
+        $this.Width = [Math]::Max(80, [Console]::WindowWidth)
+        $this.Height = [Math]::Max(24, [Console]::WindowHeight)
         # Write-Verbose "Screen '$($this.Name)' created with ServiceContainer."
     }
 

@@ -567,7 +567,7 @@ class DataManager : System.IDisposable {
                 $saveData.Projects += $project.ToLegacyFormat()
             }
             
-            $saveData | ConvertTo-Json -Depth 10 | Set-Content -Path $this._dataFilePath -Encoding UTF8 -Force
+            $saveData | ConvertTo-Json -Depth 10 -WarningAction SilentlyContinue | Set-Content -Path $this._dataFilePath -Encoding UTF8 -Force
             $this._lastSaveTime = [datetime]::Now
             $this._dataModified = $false
             
@@ -1349,7 +1349,7 @@ class Logger {
             }
         }
         
-        $detailsJson = $exceptionDetails | ConvertTo-Json -Compress -Depth 10 -ErrorAction SilentlyContinue
+        $detailsJson = $exceptionDetails | ConvertTo-Json -Compress -Depth 10 -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
         if (-not $detailsJson) {
             # If serialization fails, create a simple string representation
             $detailsJson = "ExceptionType: $($exceptionDetails.ExceptionType), Message: $($exceptionDetails.ExceptionMessage)"
@@ -1484,8 +1484,24 @@ class EventManager {
                 $sanitizedData[$key] = $value
             }
             elseif ($value -is [UIElement]) {
-                # Never store UIElement objects
+                # Never store UIElement objects - just store identifying info
                 $sanitizedData[$key] = "[UIElement: $($value.Name)]"
+            }
+            elseif ($value.GetType().Name -match 'Task|Project') {
+                # For task/project objects, only store essential data
+                try {
+                    if ($value.PSObject.Properties['Id']) {
+                        $sanitizedData[$key] = @{
+                            Type = $value.GetType().Name
+                            Id = $value.Id
+                            Title = if ($value.PSObject.Properties['Title']) { $value.Title } else { $null }
+                        }
+                    } else {
+                        $sanitizedData[$key] = "[Object: $($value.GetType().Name)]"
+                    }
+                } catch {
+                    $sanitizedData[$key] = "[Object: $($value.GetType().Name)]"
+                }
             }
             else {
                 # For other complex types, just store the type name

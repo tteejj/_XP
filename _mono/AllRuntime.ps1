@@ -17,8 +17,8 @@
 # Initialize global TUI state
 $global:TuiState = @{
     Running = $false
-    BufferWidth = 0
-    BufferHeight = 0
+    BufferWidth = [Math]::Max(80, [Console]::WindowWidth)
+    BufferHeight = [Math]::Max(24, [Console]::WindowHeight)
     CompositorBuffer = $null
     PreviousCompositorBuffer = $null
     ScreenStack = [System.Collections.Generic.Stack[Screen]]::new() # CHANGED TO GENERIC STACK
@@ -73,7 +73,13 @@ function Invoke-WithErrorHandling {
         $logger = $global:TuiState.Services.Logger
         if ($logger) {
             $logger.Log("Error", "Error in $Component during $Context : $($_.Exception.Message)")
-            $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress -Depth 10)")
+            # Log error details with minimal depth to avoid circular references
+            try {
+                $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress -Depth 3 -ErrorAction SilentlyContinue)")
+            } catch {
+                # If serialization fails, just log the error type
+                $logger.Log("Debug", "Error type: $($_.Exception.GetType().FullName)")
+            }
         }
         
         # Re-throw for caller to handle if needed
@@ -591,7 +597,7 @@ function Process-TuiInput {
         }
     }
     catch {
-        Write-Log -Level Error -Message "Input processing error: $($_.Exception.Message)" -Data $_
+        Write-Log -Level Error -Message "Input processing error: $($_.Exception.Message)"
     }
 }
 
@@ -750,7 +756,20 @@ function Invoke-PanicHandler {
     }
     
     try {
-        $crashReport | ConvertTo-Json -Depth 10 | Out-File -FilePath $crashFile -Encoding UTF8
+        # Sanitize crash report data to avoid circular references
+        $sanitizedReport = @{
+            Timestamp = $crashReport.Timestamp
+            ErrorMessage = $crashReport.ErrorMessage
+            ErrorType = $crashReport.ErrorType
+            ScriptStackTrace = $crashReport.ScriptStackTrace
+            GlobalState = @{
+                Running = $crashReport.GlobalState.Running
+                BufferSize = $crashReport.GlobalState.BufferSize
+                CurrentScreen = $crashReport.GlobalState.CurrentScreen
+                OverlayCount = $crashReport.GlobalState.OverlayCount
+            }
+        }
+        $sanitizedReport | ConvertTo-Json -Depth 5 | Out-File -FilePath $crashFile -Encoding UTF8
         Write-Host "Crash report saved to: $crashFile" -ForegroundColor Green
     } catch {
         Write-Host "Failed to save crash report: $($_.Exception.Message)" -ForegroundColor Red
