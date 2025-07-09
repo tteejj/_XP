@@ -2261,6 +2261,100 @@ class ViewDefinitionService {
                 }
             }
         })
+        
+        # Dashboard recent tasks view - compact for overview
+        $this.RegisterViewDefinition('dashboard.recent.tasks', @{
+            Columns = @(
+                @{ Name="Status";   Header="S"; Width=1 },
+                @{ Name="Priority"; Header="!"; Width=1 },
+                @{ Name="Title";    Header="Recent Tasks"; Width=35 },
+                @{ Name="Age";      Header="Age"; Width=8 }
+            )
+            Transformer = {
+                param($task)
+                
+                # Status indicator with unicode symbols
+                $statusChar = switch ($task.Status) {
+                    ([TaskStatus]::Pending) { "○" }
+                    ([TaskStatus]::InProgress) { "◐" }
+                    ([TaskStatus]::Completed) { "●" }
+                    ([TaskStatus]::Cancelled) { "✗" }
+                    default { "?" }
+                }
+                
+                # Priority indicator
+                $priorityChar = switch ($task.Priority) {
+                    ([TaskPriority]::Low) { "↓" }
+                    ([TaskPriority]::Medium) { "→" }
+                    ([TaskPriority]::High) { "↑" }
+                    default { "?" }
+                }
+                
+                # Calculate age in days
+                $age = [DateTime]::Now - $task.CreatedAt
+                $ageText = if ($age.Days -gt 0) {
+                    "$($age.Days)d"
+                } elseif ($age.Hours -gt 0) {
+                    "$($age.Hours)h"
+                } else {
+                    "$($age.Minutes)m"
+                }
+                
+                return @{
+                    Status   = $statusChar
+                    Priority = $priorityChar
+                    Title    = $task.Title
+                    Age      = $ageText
+                }
+            }
+        })
+        
+        # Dashboard summary statistics view
+        $this.RegisterViewDefinition('dashboard.task.stats', @{
+            Columns = @(
+                @{ Name="Metric";    Header="Task Statistics"; Width=20 },
+                @{ Name="Value";     Header="Count"; Width=8 },
+                @{ Name="Indicator"; Header=""; Width=5 }
+            )
+            Transformer = {
+                param($statsData)
+                
+                # This transformer expects a hashtable with metrics
+                # Example: @{ Name="Total Tasks"; Count=15; Type="info" }
+                
+                $indicator = switch ($statsData.Type) {
+                    "success" { "✓" }
+                    "warning" { "⚠" }
+                    "error" { "✗" }
+                    "info" { "ⓘ" }
+                    default { " " }
+                }
+                
+                return @{
+                    Metric    = $statsData.Name
+                    Value     = $statsData.Count.ToString()
+                    Indicator = $indicator
+                }
+            }
+        })
+        
+        # Dashboard navigation menu view
+        $this.RegisterViewDefinition('dashboard.navigation', @{
+            Columns = @(
+                @{ Name="Key";         Header="Key"; Width=5 },
+                @{ Name="Action";      Header="Quick Actions"; Width=25 },
+                @{ Name="Description"; Header="Description"; Width=20 }
+            )
+            Transformer = {
+                param($navItem)
+                
+                return @{
+                    Key         = "[$($navItem.Key)]"
+                    Action      = $navItem.Name
+                    Description = $navItem.Description
+                }
+            }
+        })
     }
 }
 #<!-- END_PAGE: ASE.011 -->
