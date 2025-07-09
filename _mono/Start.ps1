@@ -73,92 +73,85 @@ try {
     Write-Host "Initializing services..." -ForegroundColor Cyan
     $container = [ServiceContainer]::new()
     
-    # Register services
-    $services = @(
-        @{ Type = "Logger" },
-        @{ Type = "EventManager" },
-        @{ Type = "ThemeManager" },
-        @{ Type = "DataManager" },
-        @{ Type = "ActionService" },
-        @{ Type = "KeybindingService" },
-        @{ Type = "NavigationService" },
-        @{ Type = "FocusManager" },
-        @{ Type = "DialogManager" },
-        @{ Type = "TuiFrameworkService" },
-        @{ Type = "CommandPaletteManager" }
-    )
+    # Create service container following Pillar 3: Centralized Service Management
+    Write-Host "Initializing services..." -ForegroundColor Cyan
+    $container = [ServiceContainer]::new()
     
-    # Create a hashtable to store services as we register them
-    $servicesHashtable = @{}
+    # Register services in dependency order (following Rule 4.3: Constructor Injection)
+    Write-Host "  • Registering Logger... " -NoNewline -ForegroundColor Gray
+    $container.Register("Logger", [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")))
+    Write-Host "✓" -ForegroundColor Green
     
-    foreach ($service in $services) {
-        Write-Host "  • Initializing $($service.Type)... " -NoNewline -ForegroundColor Gray
-        
-        $instance = switch ($service.Type) {
-            "Logger" { 
-                $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
-                $logger.MinimumLevel = "Info"  # Only log Info, Warning, Error, Fatal
-                $logger.EnableConsoleLogging = $false  # Disable console logging by default
-                $logger
-            }
-            "EventManager" { 
-                $eventManager = [EventManager]::new()
-                $eventManager.EnableHistory = $false  # Disable event history to prevent any serialization
-                $eventManager
-            }
-            "ThemeManager" { [ThemeManager]::new() }
-            "DataManager" { [DataManager]::new((Join-Path $env:TEMP "axiom-data.json")) }
-            "ActionService" { [ActionService]::new() }
-            "KeybindingService" { [KeybindingService]::new() }
-            "NavigationService" { 
-                # NavigationService requires a hashtable of services
-                [NavigationService]::new($servicesHashtable) 
-            }
-            "FocusManager" { 
-                # FocusManager requires EventManager
-                $eventManager = $servicesHashtable.EventManager
-                if ($eventManager) {
-                    [FocusManager]::new($eventManager)
-                } else {
-                    [FocusManager]::new($null)
-                }
-            }
-            "DialogManager" { 
-                # DialogManager requires EventManager and FocusManager
-                $eventManager = $servicesHashtable.EventManager
-                $focusManager = $servicesHashtable.FocusManager
-                if ($eventManager -and $focusManager) {
-                    [DialogManager]::new($eventManager, $focusManager)
-                } else {
-                    # Create with nulls if dependencies not available
-                    [DialogManager]::new($null, $null)
-                }
-            }
-            "TuiFrameworkService" { [TuiFrameworkService]::new() }
-            "CommandPaletteManager" { 
-                # Create the SINGLE command palette instance
-                $actionService = $servicesHashtable.ActionService
-                if (-not $actionService) {
-                    throw "CommandPaletteManager requires ActionService to be registered first"
-                }
-                $globalPalette = [CommandPalette]::new("GlobalCommandPalette", $actionService)
-                
-                # Create and return the manager
-                $focusManager = $servicesHashtable.FocusManager
-                $frameworkService = $servicesHashtable.TuiFrameworkService
-                if (-not $focusManager -or -not $frameworkService) {
-                    throw "CommandPaletteManager requires FocusManager and TuiFrameworkService to be registered first"
-                }
-                [CommandPaletteManager]::new($globalPalette, $focusManager, $frameworkService)
-            }
-        }
-        
-        # Store service in hashtable for dependencies
-        $servicesHashtable[$service.Type] = $instance
-        
-        $container.Register($service.Type, $instance)
-        Write-Host "✓" -ForegroundColor Green
+    Write-Host "  • Registering EventManager... " -NoNewline -ForegroundColor Gray  
+    $container.Register("EventManager", [EventManager]::new())
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering ThemeManager... " -NoNewline -ForegroundColor Gray
+    $container.Register("ThemeManager", [ThemeManager]::new())
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering TuiFrameworkService... " -NoNewline -ForegroundColor Gray
+    $container.Register("TuiFrameworkService", [TuiFrameworkService]::new())
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering DataManager... " -NoNewline -ForegroundColor Gray
+    $container.Register("DataManager", [DataManager]::new((Join-Path $env:TEMP "axiom-data.json"), $container.GetService("EventManager")))
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering ActionService... " -NoNewline -ForegroundColor Gray
+    $container.Register("ActionService", [ActionService]::new($container.GetService("EventManager")))
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering KeybindingService... " -NoNewline -ForegroundColor Gray
+    $container.Register("KeybindingService", [KeybindingService]::new($container.GetService("ActionService")))
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering FocusManager... " -NoNewline -ForegroundColor Gray
+    $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering NavigationService... " -NoNewline -ForegroundColor Gray
+    # NavigationService gets the full service hashtable per its constructor
+    $serviceHash = @{
+        EventManager = $container.GetService("EventManager")
+        FocusManager = $container.GetService("FocusManager")
+        TuiFrameworkService = $container.GetService("TuiFrameworkService")
+        ActionService = $container.GetService("ActionService")
+        KeybindingService = $container.GetService("KeybindingService")
+        DataManager = $container.GetService("DataManager")
+        ThemeManager = $container.GetService("ThemeManager")
+        Logger = $container.GetService("Logger")
     }
+    $container.Register("NavigationService", [NavigationService]::new($serviceHash))
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering DialogManager... " -NoNewline -ForegroundColor Gray
+    $container.Register("DialogManager", [DialogManager]::new($container.GetService("EventManager"), $container.GetService("FocusManager")))
+    Write-Host "✓" -ForegroundColor Green
+    
+    Write-Host "  • Registering CommandPaletteManager... " -NoNewline -ForegroundColor Gray
+    # Following Rule 3.1: Components are dumb and receive data via properties
+    $commandPalette = [CommandPalette]::new("GlobalCommandPalette", $container.GetService("ActionService"))
+    $container.Register("CommandPaletteManager", [CommandPaletteManager]::new($commandPalette, $container.GetService("FocusManager"), $container.GetService("TuiFrameworkService")))
+    Write-Host "✓" -ForegroundColor Green
+    Write-Host "✓" -ForegroundColor Green
+    
+    # Store services in global state for runtime access (following Pillar 4: Absolute Abstraction)
+    # Note: Only the runtime engine accesses these directly - UI components use TuiFrameworkService
+    $global:TuiState.Services = @{
+        Logger = $container.GetService("Logger")
+        EventManager = $container.GetService("EventManager") 
+        ThemeManager = $container.GetService("ThemeManager")
+        DataManager = $container.GetService("DataManager")
+        ActionService = $container.GetService("ActionService")
+        KeybindingService = $container.GetService("KeybindingService")
+        NavigationService = $container.GetService("NavigationService")
+        FocusManager = $container.GetService("FocusManager")
+        DialogManager = $container.GetService("DialogManager")
+        TuiFrameworkService = $container.GetService("TuiFrameworkService")
+        CommandPaletteManager = $container.GetService("CommandPaletteManager")
+    }
+    $global:TuiState.ServiceContainer = $container
     
     # Set the selected theme
     $themeManager = $container.GetService("ThemeManager")

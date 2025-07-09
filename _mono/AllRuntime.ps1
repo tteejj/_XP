@@ -550,49 +550,62 @@ function Process-TuiInput {
         while ([Console]::KeyAvailable) {
             $keyInfo = [Console]::ReadKey($true)
             
-            # Log Ctrl key combinations for debugging
-            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
-                Write-Log -Level Debug -Message "Key pressed: Ctrl+$($keyInfo.Key)"
+            # Emergency exit - this is the ONLY acceptable global access
+            if ($keyInfo.Key -eq [ConsoleKey]::C -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+                $global:TuiState.Running = $false
+                return
             }
             
-            $focusManager = $global:TuiState.Services.FocusManager
-            $keybindingService = $global:TuiState.Services.KeybindingService
+            # Get framework service (following Pillar 4: Absolute Abstraction)
+            $frameworkService = $global:TuiState.Services.TuiFrameworkService
+            if (-not $frameworkService) {
+                Write-Log -Level Error -Message "TuiFrameworkService not available - input system broken"
+                return
+            }
+            
+            # Get services through framework service (proper abstraction)
+            $focusManager = $frameworkService.GetService("FocusManager")
+            $keybindingService = $frameworkService.GetService("KeybindingService") 
+            $actionService = $frameworkService.GetService("ActionService")
 
-            # Priority 1: The globally focused component ALWAYS gets the first chance.
-            if ($focusManager.FocusedComponent) {
-                Write-Log -Level Debug -Message "Offering input to focused component: $($focusManager.FocusedComponent.Name)"
-                if ($focusManager.FocusedComponent.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
+            # Priority 1: Focused component gets first chance (following Pillar 2: Data Down, Events Up)
+            $focusedComponent = $focusManager?.FocusedComponent
+            if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
+                if ($focusedComponent.HandleInput($keyInfo)) {
+                    $frameworkService.RequestRedraw()
                     continue
                 }
             }
 
-            # Priority 2: If focus was not handled, "bubble up". Check for an active overlay.
-            if ($global:TuiState.OverlayStack.Count -gt 0) {
-                $topOverlay = $global:TuiState.OverlayStack[-1]
-                Write-Log -Level Debug -Message "Overlay active: $($topOverlay.Name)"
-                # Let the overlay container handle keys the child did not (e.g., Escape).
+            # Priority 2: Overlay modal behavior
+            $overlayStack = $frameworkService.GetOverlayStack()
+            if ($overlayStack.Count -gt 0) {
+                $topOverlay = $overlayStack[-1]
                 if ($topOverlay?.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
+                    $frameworkService.RequestRedraw()
                 }
-                # Always 'continue' to enforce modal behavior, consuming the input.
+                continue # Enforce modality
+            }
+
+            # Priority 3: Global keybindings (following Pillar 3: Centralized Service Management)
+            $action = $keybindingService?.GetAction($keyInfo)
+            if ($action) {
+                $actionService?.ExecuteAction($action, @{})
+                $frameworkService.RequestRedraw()
                 continue
             }
 
-            # --- Only runs if no overlay is active ---
-
-            # Priority 3: Global Keybindings (e.g., Ctrl+Q).
-            $action = $keybindingService?.GetAction($keyInfo)
-            if ($action) {
-                Write-Log -Level Debug -Message "Global keybinding detected: $action"
-                $actionService = $global:TuiState.Services.ActionService
-                if ($actionService) {
-                    $actionService.ExecuteAction($action, @{})
-                } else {
-                    Write-Log -Level Warning -Message "ActionService not available to execute action: $action"
-                }
-                $global:TuiState.IsDirty = $true
-                continue
+            # Priority 4: Current screen
+            $currentScreen = $frameworkService.GetCurrentScreen()
+            if ($currentScreen?.HandleInput($keyInfo)) {
+                $frameworkService.RequestRedraw()
+            }
+        }
+    }
+    catch {
+        Write-Log -Level Error -Message "Input processing error: $($_.Exception.Message)"
+    }
+}
             }
 
             # Priority 4: The Current Screen gets the last chance.
