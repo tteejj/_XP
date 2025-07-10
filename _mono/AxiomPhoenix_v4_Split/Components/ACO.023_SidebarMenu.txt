@@ -35,7 +35,7 @@ class SidebarMenu : UIElement {
         
         # Draw title
         if ($this.Title) {
-            Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $this.Title -ForegroundColor (Get-ThemeColor "component.title")
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $this.Title -Style @{FG = Get-ThemeColor "component.title"}
             $y += 2
         }
         
@@ -43,21 +43,21 @@ class SidebarMenu : UIElement {
         foreach ($item in $this.MenuItems) {
             if ($item.Key -eq "-") {
                 # Separator
-                Write-TuiText -Buffer $this._private_buffer -X 0 -Y $y -Text ("─" * ($this.Width - 2)) -ForegroundColor (Get-ThemeColor "component.border")
+                Write-TuiText -Buffer $this._private_buffer -X 0 -Y $y -Text ("─" * ($this.Width - 2)) -Style @{FG = Get-ThemeColor "component.border"}
             } else {
                 # Menu item
                 $keyDisplay = "[$($item.Key)]"
                 $label = $item.Label
                 
-                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $keyDisplay -ForegroundColor (Get-ThemeColor "Accent")
-                Write-TuiText -Buffer $this._private_buffer -X 5 -Y $y -Text $label -ForegroundColor (Get-ThemeColor "Foreground")
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $keyDisplay -Style @{FG = Get-ThemeColor "Accent"}
+                Write-TuiText -Buffer $this._private_buffer -X 5 -Y $y -Text $label -Style @{FG = Get-ThemeColor "Foreground"}
             }
             $y++
         }
         
         # Draw border if enabled
         if ($this.ShowBorder) {
-            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor (Get-ThemeColor "component.border")
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style @{BorderStyle = "Single"; BorderFG = Get-ThemeColor "component.border"}
         }
     }
     

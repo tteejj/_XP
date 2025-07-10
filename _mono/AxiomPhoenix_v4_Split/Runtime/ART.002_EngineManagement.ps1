@@ -264,11 +264,11 @@ function Update-TuiEngineSize {
         # Method 3: Mode command (Windows)
         if ($null -eq $newWidth -or $newWidth -le 0) {
             try {
-                $modeOutput = mode con | Select-String "Columns:"
+                $modeOutput = cmd /c "mode con" 2>$null | Select-String "Columns:"
                 if ($modeOutput) {
                     $newWidth = [int]($modeOutput -replace '.*Columns:\s*', '')
                 }
-                $modeOutput = mode con | Select-String "Lines:"
+                $modeOutput = cmd /c "mode con" 2>$null | Select-String "Lines:"
                 if ($modeOutput) {
                     $newHeight = [int]($modeOutput -replace '.*Lines:\s*', '')
                 }
