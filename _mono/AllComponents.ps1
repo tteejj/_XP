@@ -2530,39 +2530,55 @@ class CommandPalette : UIElement {
             $this._searchBox.Text = ""
             $this._searchBox.CursorPosition = 0
             
+            # Make sure search box is ready
+            $this._searchBox.IsFocusable = $true
+            $this._searchBox.Enabled = $true
+            $this._searchBox.Visible = $true
+            $this._searchBox.IsFocused = $true
+            
             # Use FocusManager to properly set focus
             $focusManager = $global:TuiState.Services.FocusManager
             if ($focusManager) {
-                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: About to set focus to search box"
-                Write-Log -Level Debug -Message "  - SearchBox Name: $($this._searchBox.Name)"
-                Write-Log -Level Debug -Message "  - SearchBox IsFocusable: $($this._searchBox.IsFocusable)"
-                Write-Log -Level Debug -Message "  - SearchBox Enabled: $($this._searchBox.Enabled)"
-                Write-Log -Level Debug -Message "  - SearchBox Visible: $($this._searchBox.Visible)"
+                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: Setting focus to search box"
                 $focusManager.SetFocus($this._searchBox)
-                Write-Log -Level Debug -Message "  - FocusManager.FocusedComponent: $($focusManager.FocusedComponent?.Name)"
-                Write-Log -Level Debug -Message "  - SearchBox IsFocused: $($this._searchBox.IsFocused)"
-            } else {
-                Write-Log -Level Error -Message "CommandPalette.SetInitialFocus: FocusManager is null!"
+                # Also update global state directly to ensure focus is set
+                $global:TuiState.FocusedComponent = $this._searchBox
             }
+            
+            # Request redraw of the search box
             $this._searchBox.RequestRedraw()
+            $this.RequestRedraw()
+            $global:TuiState.IsDirty = $true
         }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
+        Write-Log -Level Debug -Message "CommandPalette.HandleInput: Key=$($key.Key), SearchBox.IsFocused=$($this._searchBox.IsFocused)"
+        
         $handled = $true
         
         switch ($key.Key) {
             ([ConsoleKey]::Escape) { 
+                Write-Log -Level Debug -Message "CommandPalette: Escape pressed, calling OnCancel"
                 if ($this.OnCancel) {
                     & $this.OnCancel
                 }
                 return $true 
             }
             ([ConsoleKey]::Enter) {
+                # If search box is focused and empty, switch to list
+                if ($this._searchBox.IsFocused -and [string]::IsNullOrWhiteSpace($this._searchBox.Text)) {
+                    $this._searchBox.IsFocused = $false
+                    Write-Log -Level Debug -Message "CommandPalette: Enter on empty search, switching to list"
+                    return $true
+                }
+                
+                # Otherwise execute selected action
                 if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
                     $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                    Write-Log -Level Debug -Message "CommandPalette: Executing action: $($selectedAction.Name)"
                     if ($selectedAction -and $this.OnExecute) {
                         & $this.OnExecute $this $selectedAction
                         return $true
@@ -2574,22 +2590,29 @@ class CommandPalette : UIElement {
                 # Switch focus between search box and list
                 if ($this._searchBox.IsFocused) {
                     $this._searchBox.IsFocused = $false
-                    $this._listBox.IsFocusable = $true
-                    # Focus would be set by parent focus manager
+                    Write-Log -Level Debug -Message "CommandPalette: Tab - switching focus to list"
                 } else {
                     $this._searchBox.IsFocused = $true
-                    $this._listBox.IsFocusable = $false
+                    Write-Log -Level Debug -Message "CommandPalette: Tab - switching focus to search"
                 }
                 $this.RequestRedraw()
                 return $true
             }
             {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
                 # Navigation keys go to the list
-                return $this._listBox.HandleInput($key)
+                Write-Log -Level Debug -Message "CommandPalette: Navigation key, passing to list"
+                $result = $this._listBox.HandleInput($key)
+                # If we're navigating in the list, ensure search box loses focus
+                if ($result -and $this._searchBox.IsFocused) {
+                    $this._searchBox.IsFocused = $false
+                    $this.RequestRedraw()
+                }
+                return $result
             }
             default {
                 # All other input goes to search box if it's focused
                 if ($this._searchBox.IsFocused) {
+                    Write-Log -Level Debug -Message "CommandPalette: Passing key to search box"
                     return $this._searchBox.HandleInput($key)
                 } else {
                     $handled = $false

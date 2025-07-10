@@ -1,6 +1,14 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Components (DIAGNOSTIC VERSION)
+# Axiom-Phoenix v4.0 - All Components
 # UI components that extend UIElement - full implementations from axiom
+# ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ACO.###" to find specific sections.
+# Each section ends with "END_PAGE: ACO.###"
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -51,7 +59,6 @@ class CommandPalette : Dialog {
         $paletteRef = $this
         $this._searchBox.OnChange = { 
             param($sender, $text) 
-            Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Search text changed to '$text'"
             $paletteRef.FilterActions($text) 
         }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
@@ -74,7 +81,6 @@ class CommandPalette : Dialog {
     }
 
     [void] FilterActions([string]$searchText) {
-        Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: FilterActions called with '$searchText'"
         $this._filteredActions.Clear()
         $this._listBox.ClearItems()
         
@@ -99,8 +105,6 @@ class CommandPalette : Dialog {
             $this._listBox.AddItem("$displayText - $($action.Description)")
         }
         
-        Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Filtered to $($this._filteredActions.Count) actions"
-        
         if ($this._filteredActions.Count -gt 0) { 
             $this._listBox.SelectedIndex = 0 
         }
@@ -116,10 +120,7 @@ class CommandPalette : Dialog {
             # Use FocusManager to properly set focus
             $focusManager = $global:TuiState.Services.FocusManager
             if ($focusManager) {
-                Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette.SetInitialFocus: Setting focus via FocusManager"
                 $focusManager.SetFocus($this._searchBox)
-            } else {
-                Write-Log -Level Error -Message "DIAGNOSTIC CommandPalette.SetInitialFocus: FocusManager is null!"
             }
             $this.RequestRedraw()
         }
@@ -128,28 +129,20 @@ class CommandPalette : Dialog {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette.HandleInput: Key=$($key.Key) KeyChar='$($key.KeyChar)'"
-        
         $focusManager = $global:TuiState.Services.FocusManager
         $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
-        
-        Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Focused component = $(if($focusedComponent) { $focusedComponent.Name } else { 'null' })"
         
         # Only handle container-level actions
         switch ($key.Key) {
             ([ConsoleKey]::Escape) { 
-                Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Escape pressed - closing"
                 $this.Complete($null)  # Signal cancellation
                 return $true 
             }
             ([ConsoleKey]::Enter) {
-                Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Enter pressed"
                 # Only handle Enter if the list has focus and a selection
-                if ($focusedComponent -eq $this._listBox -or $focusedComponent -eq $this._searchBox) {
-                    Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Selected index = $($this._listBox.SelectedIndex)"
+                if ($focusedComponent -eq $this._listBox) {
                     if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
                         $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                        Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Selected action = $($selectedAction.Name)"
                         if ($selectedAction) {
                             $this.Complete($selectedAction)  # Signal completion with result
                             return $true
@@ -159,7 +152,6 @@ class CommandPalette : Dialog {
                 return $false  # Let the focused component handle Enter
             }
             ([ConsoleKey]::Tab) {
-                Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Tab pressed - toggling focus"
                 # Toggle focus between search box and list
                 if ($focusManager) {
                     if ($focusedComponent -eq $this._searchBox) {
@@ -173,7 +165,6 @@ class CommandPalette : Dialog {
             ([ConsoleKey]::UpArrow) {
                 # If search box has focus and user presses arrow keys, move focus to list
                 if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Up arrow in search - moving to list"
                     $focusManager.SetFocus($this._listBox)
                     # Let the list handle the actual arrow key
                     return $this._listBox.HandleInput($key)
@@ -183,7 +174,6 @@ class CommandPalette : Dialog {
             ([ConsoleKey]::DownArrow) {
                 # If search box has focus and user presses arrow keys, move focus to list
                 if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    Write-Log -Level Info -Message "DIAGNOSTIC CommandPalette: Down arrow in search - moving to list"
                     $focusManager.SetFocus($this._listBox)
                     # Let the list handle the actual arrow key
                     return $this._listBox.HandleInput($key)
