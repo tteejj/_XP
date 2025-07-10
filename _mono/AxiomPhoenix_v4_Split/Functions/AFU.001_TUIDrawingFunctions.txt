@@ -75,7 +75,7 @@ function Write-TuiBox {
     
     # Top border - handle edge cases for small dimensions
     if ($Height -gt 0) {
-        if ($Width > 2) {
+        if ($Width -gt 2) {
             # Normal case: Width >= 3
             $middlePart = $borders.Horizontal * ($Width - 2)
             Write-TuiText -Buffer $Buffer -X $X -Y $Y -Text "$($borders.TopLeft)$middlePart$($borders.TopRight)" -Style $generalStyle
@@ -98,7 +98,7 @@ function Write-TuiBox {
     
     # Bottom border - handle edge cases for small dimensions
     if ($Height -gt 1) {
-        if ($Width > 2) {
+        if ($Width -gt 2) {
             # Normal case: Width >= 3
             $middlePart = $borders.Horizontal * ($Width - 2)
             Write-TuiText -Buffer $Buffer -X $X -Y ($Y + $Height - 1) -Text "$($borders.BottomLeft)$middlePart$($borders.BottomRight)" -Style $generalStyle

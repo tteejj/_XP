@@ -15,19 +15,9 @@
 #region Input Processing
 
 # PURPOSE:
-#   Re-architects the input loop to be "focus-first," establishing a clear and correct
-#   input processing hierarchy. This is the definitive fix for the UI lockup.
-#
-# LOGIC:
-#   1. PRIORITY 1: FOCUSED COMPONENT - The component currently tracked by the FocusManager
-#      (e.g., the CommandPalette's text box) ALWAYS gets the first chance to handle the key.
-#      If it returns $true, the input cycle for that key is complete.
-#   2. PRIORITY 2: BUBBLE TO OVERLAY - If the focused component returns $false, and an
-#      overlay is active, the overlay container itself gets a chance to handle the key.
-#      This is for container-level actions like 'Escape' to close. The input cycle stops
-#      here to enforce modality.
-#   3. PRIORITY 3 & 4: GLOBALS & SCREEN - If no overlay is active, the event continues
-#      to global keybindings and finally to the base screen.
+#   SIMPLIFIED WINDOW-BASED INPUT MODEL
+#   Only the active window (screen) gets input. Period.
+#   No complex routing, no overlays, no confusion.
 #
 function Process-TuiInput {
     [CmdletBinding()]
@@ -43,61 +33,83 @@ function Process-TuiInput {
                 return
             }
             
-            # Get services from global state
-            $focusManager = $global:TuiState.Services.FocusManager
-            $keybindingService = $global:TuiState.Services.KeybindingService
-            $actionService = $global:TuiState.Services.ActionService
-            
-            $inputHandled = $false
-            
-            # Priority 1: Focused component gets first chance
-            $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
-            
-            if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
-                Write-Log -Level Debug -Message "Process-TuiInput: Trying focused component: $($focusedComponent.Name)"
-                if ($focusedComponent.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
-                    Write-Log -Level Debug -Message "  - Input handled by focused component"
-                    continue  # Input was handled, move to next key
-                }
+            # Log the key for debugging
+            if ($keyInfo.Key -or $keyInfo.KeyChar) {
+                Write-Log -Level Debug -Message "Process-TuiInput: Key pressed - Key: $($keyInfo.Key), KeyChar: '$($keyInfo.KeyChar)', Modifiers: $($keyInfo.Modifiers)"
             }
             
-            # Priority 2: Active Overlay (The Modal Gatekeeper)
-            if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
-                $topOverlay = $global:TuiState.OverlayStack[-1]
-                Write-Log -Level Debug -Message "  - Checking overlay: $($topOverlay.Name)"
-                if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
-                    Write-Log -Level Debug -Message "  - Input handled by overlay"
-                }
-                # CRITICAL FIX: The loop cycle for this key ends HERE.
-                # Do not proceed to global keybindings or the screen.
+            # Get the active window from NavigationService
+            $navService = $global:TuiState.Services.NavigationService
+            $activeWindow = if ($navService) { $navService.CurrentScreen } else { $null }
+            
+            if (-not $activeWindow) {
+                Write-Log -Level Warning -Message "Process-TuiInput: No active window"
                 continue
             }
             
-            # Priority 3: Global keybindings (only if no overlay is active)
-            if ($keybindingService) {
-                $action = $keybindingService.GetAction($keyInfo)
-                if ($action) {
-                    Write-Log -Level Debug -Message "Process-TuiInput: Executing global action: $action"
-                    if ($actionService) {
-                        try {
-                            $actionService.ExecuteAction($action, @{})
-                            $global:TuiState.IsDirty = $true
-                        }
-                        catch {
-                            Write-Log -Level Error -Message "Process-TuiInput: Failed to execute action '$action': $($_.Exception.Message)"
-                        }
+            Write-Log -Level Debug -Message "Process-TuiInput: Routing to active window: $($activeWindow.Name)"
+            
+            # WINDOW-BASED MODEL: Active window handles ALL input
+            # Step 1: Let focused component within the window handle it first
+            $focusManager = $global:TuiState.Services.FocusManager
+            $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
+            
+            $handled = $false
+            
+            # If there's a focused component IN THIS WINDOW, let it try first
+            if ($focusedComponent -and $focusedComponent.IsFocused -and $focusedComponent.Enabled) {
+                # Verify the focused component belongs to the active window
+                $parent = $focusedComponent.Parent
+                while ($parent -and $parent -ne $activeWindow) {
+                    $parent = $parent.Parent
+                }
+                
+                if ($parent -eq $activeWindow) {
+                    Write-Log -Level Debug -Message "  - Trying focused component: $($focusedComponent.Name)"
+                    $handled = $focusedComponent.HandleInput($keyInfo)
+                    if ($handled) {
+                        Write-Log -Level Debug -Message "  - Handled by focused component"
+                        $global:TuiState.IsDirty = $true
+                        continue
                     }
+                }
+            }
+            
+            # Step 2: Let the window handle it (includes global keybindings, window-level actions)
+            if (-not $handled) {
+                Write-Log -Level Debug -Message "  - Trying window: $($activeWindow.Name)"
+                $handled = $activeWindow.HandleInput($keyInfo)
+                if ($handled) {
+                    Write-Log -Level Debug -Message "  - Handled by window"
+                    $global:TuiState.IsDirty = $true
                     continue
                 }
             }
             
-            # Priority 4: Current screen gets the final chance (only if no overlay is active)
-            if ($global:TuiState.CurrentScreen) {
-                if ($global:TuiState.CurrentScreen.HandleInput($keyInfo)) {
-                    $global:TuiState.IsDirty = $true
+            # Step 3: Check global keybindings as fallback
+            if (-not $handled) {
+                $keybindingService = $global:TuiState.Services.KeybindingService
+                if ($keybindingService) {
+                    $action = $keybindingService.GetAction($keyInfo)
+                    if ($action) {
+                        Write-Log -Level Debug -Message "  - Executing global action: $action"
+                        $actionService = $global:TuiState.Services.ActionService
+                        if ($actionService) {
+                            try {
+                                $actionService.ExecuteAction($action, @{})
+                                $global:TuiState.IsDirty = $true
+                                $handled = $true
+                            }
+                            catch {
+                                Write-Log -Level Error -Message "  - Failed to execute action '$action': $($_.Exception.Message)"
+                            }
+                        }
+                    }
                 }
+            }
+            
+            if (-not $handled) {
+                Write-Log -Level Debug -Message "  - Key not handled by any component"
             }
         }
     }

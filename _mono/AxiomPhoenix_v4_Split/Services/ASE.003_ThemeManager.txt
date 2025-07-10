@@ -46,6 +46,7 @@ class ThemeManager {
             "component.background" = "#0a0e27"
             "component.border" = "#f92aad"
             "component.title" = "#ffcc00"
+            "component.text" = "#f92aad"  # ADDED
             
             # Input
             "input.background" = "#1a1e3a"
@@ -69,6 +70,9 @@ class ThemeManager {
             "list.item.selected" = "#0a0e27"
             "list.item.selected.background" = "#ff6ac1"
             "list.scrollbar" = "#72f1b8"
+            
+            # Overlay
+            "overlay.background" = "#0a0e27"  # ADDED
         }
         
         # Aurora Theme - Northern lights inspired

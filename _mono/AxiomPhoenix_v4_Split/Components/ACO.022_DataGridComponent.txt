@@ -124,38 +124,38 @@ class DataGridComponent : UIElement {
         $oldSelectedIndex = $this.SelectedIndex
         
         switch ($key.Key) {
-            "UpArrow" {
+            ([ConsoleKey]::UpArrow) {
                 if ($this.SelectedIndex -gt 0) {
                     $this.SelectedIndex--
                     $this._EnsureVisible()
                     $handled = $true
                 }
             }
-            "DownArrow" {
+            ([ConsoleKey]::DownArrow) {
                 if ($this.SelectedIndex -lt ($this.Items.Count - 1)) {
                     $this.SelectedIndex++
                     $this._EnsureVisible()
                     $handled = $true
                 }
             }
-            "PageUp" {
+            ([ConsoleKey]::PageUp) {
                 $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
                 $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $visibleHeight)
                 $this._EnsureVisible()
                 $handled = $true
             }
-            "PageDown" {
+            ([ConsoleKey]::PageDown) {
                 $visibleHeight = $this.Height - $(if ($this.ShowHeaders) { 1 } else { 0 })
                 $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $visibleHeight)
                 $this._EnsureVisible()
                 $handled = $true
             }
-            "Home" {
+            ([ConsoleKey]::Home) {
                 $this.SelectedIndex = 0
                 $this._EnsureVisible()
                 $handled = $true
             }
-            "End" {
+            ([ConsoleKey]::End) {
                 $this.SelectedIndex = [Math]::Max(0, $this.Items.Count - 1)
                 $this._EnsureVisible()
                 $handled = $true

@@ -28,7 +28,7 @@ class CommandPalette : Dialog {
     [scriptblock]$OnExecute
     [scriptblock]$OnCancel
 
-    CommandPalette([string]$name) : base($name) {
+    CommandPalette([string]$name, [object]$serviceContainer) : base($name, $serviceContainer) {
         $this.Width = 60
         $this.Height = 20
         
@@ -51,15 +51,14 @@ class CommandPalette : Dialog {
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 3
         $this._searchBox.Placeholder = "Type to search commands..."
-        $this._searchBox.Visible = $true  # Ensure visible
-        $this._searchBox.Enabled = $true  # Ensure enabled
-        $this._searchBox.IsFocusable = $true  # Ensure focusable
+        $this._searchBox.Visible = $true
+        $this._searchBox.Enabled = $true
+        $this._searchBox.IsFocusable = $true
         
         # Connect search box to filtering
         $paletteRef = $this
         $this._searchBox.OnChange = { 
             param($sender, $text) 
-            Write-Log -Level Debug -Message "CommandPalette: Search text changed to '$text'"
             $paletteRef.FilterActions($text) 
         }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
@@ -79,9 +78,6 @@ class CommandPalette : Dialog {
             $this._allActions.Add($action)
         }
         $this.FilterActions("")  # Show all actions initially
-        
-        # Set initial focus to search box
-        $this._searchBox.IsFocused = $true
     }
 
     [void] FilterActions([string]$searchText) {
@@ -124,19 +120,9 @@ class CommandPalette : Dialog {
             # Use FocusManager to properly set focus
             $focusManager = $global:TuiState.Services.FocusManager
             if ($focusManager) {
-                Write-Log -Level Debug -Message "CommandPalette.SetInitialFocus: About to set focus to search box"
-                Write-Log -Level Debug -Message "  - SearchBox Name: $($this._searchBox.Name)"
-                Write-Log -Level Debug -Message "  - SearchBox IsFocusable: $($this._searchBox.IsFocusable)"
-                Write-Log -Level Debug -Message "  - SearchBox Enabled: $($this._searchBox.Enabled)"
-                Write-Log -Level Debug -Message "  - SearchBox Visible: $($this._searchBox.Visible)"
                 $focusManager.SetFocus($this._searchBox)
-                Write-Log -Level Debug -Message "  - FocusManager.FocusedComponent: $($focusManager.FocusedComponent?.Name)"
-                Write-Log -Level Debug -Message "  - SearchBox IsFocused: $($this._searchBox.IsFocused)"
-            } else {
-                Write-Log -Level Error -Message "CommandPalette.SetInitialFocus: FocusManager is null!"
             }
-            $this._searchBox.RequestRedraw()
-            $this.RequestRedraw()  # Also redraw the palette to ensure everything is visible
+            $this.RequestRedraw()
         }
     }
 
@@ -200,25 +186,8 @@ class CommandPalette : Dialog {
             }
         }
         
-        # This should never be reached due to the switch statement, but added for safety
+        # Add explicit return false at end to satisfy all code paths
         return $false
-    }
-
-    [void] OnFocus() {
-        ([UIElement]$this).OnFocus()
-        # Set initial focus to search box
-        if ($this._searchBox) {
-            $this._searchBox.IsFocused = $true
-            $this._searchBox.RequestRedraw()
-        }
-    }
-
-    [void] OnBlur() {
-        ([UIElement]$this).OnBlur()
-        if ($this._searchBox) {
-            $this._searchBox.IsFocused = $false
-            $this._searchBox.RequestRedraw()
-        }
     }
 
     [void] Cleanup() {

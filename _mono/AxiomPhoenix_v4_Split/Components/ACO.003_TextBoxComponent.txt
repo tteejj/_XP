@@ -27,10 +27,10 @@ class TextBoxComponent : UIElement {
     [int]$CursorPosition = 0
     [scriptblock]$OnChange
     hidden [int]$_scrollOffset = 0
-    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
-    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
-    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
-    [string]$PlaceholderColor = "#808080" # Changed from ConsoleColor to hex string
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
+    [string]$PlaceholderColor = "#808080"
 
     TextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -43,7 +43,7 @@ class TextBoxComponent : UIElement {
         
         # Clear buffer with theme background
         $bgColor = Get-ThemeColor("input.background")
-        if (-not $bgColor) { $bgColor = "#1E1E1E" }  # Dark gray fallback
+        if (-not $bgColor) { $bgColor = "#1E1E1E" }
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Determine colors
@@ -51,7 +51,7 @@ class TextBoxComponent : UIElement {
         $bgColor = Get-ThemeColor("input.background")
         $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
         
-        # FIXED: Ensure we have valid colors, fallback to white on black if theme is missing
+        # Ensure we have valid colors
         if (-not $fgColor) { $fgColor = "#FFFFFF" }
         if (-not $bgColor) { $bgColor = "#000000" }
         if (-not $borderColorValue) { $borderColorValue = "#808080" }
@@ -60,69 +60,66 @@ class TextBoxComponent : UIElement {
         Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
             -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
-            # Draw text or placeholder
-            $contentY = 1
-            $contentStartX = 1
-            $contentWidth = $this.Width - 2
+        # Draw text or placeholder
+        $contentY = 1
+        $contentStartX = 1
+        $contentWidth = $this.Width - 2
+        
+        if ($this.Text.Length -eq 0 -and $this.Placeholder) {
+            # Draw placeholder
+            $placeholderText = if ($this.Placeholder.Length -gt $contentWidth) {
+                $this.Placeholder.Substring(0, $contentWidth)
+            } else { $this.Placeholder }
             
-            if ($this.Text.Length -eq 0 -and $this.Placeholder) {
-                # Draw placeholder
-                $placeholderText = if ($this.Placeholder.Length -gt $contentWidth) {
-                    $this.Placeholder.Substring(0, $contentWidth)
-                } else { $this.Placeholder }
-                
-                $textStyle = @{ FG = Get-ThemeColor("input.placeholder"); BG = $bgColor }
-                Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $placeholderText -Style $textStyle
+            $textStyle = @{ FG = Get-ThemeColor("input.placeholder"); BG = $bgColor }
+            Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $placeholderText -Style $textStyle
+        }
+        else {
+            # Calculate scroll offset
+            if ($this.CursorPosition -lt $this._scrollOffset) {
+                $this._scrollOffset = $this.CursorPosition
             }
-            else {
-                # Calculate scroll offset
-                if ($this.CursorPosition -lt $this._scrollOffset) {
-                    $this._scrollOffset = $this.CursorPosition
-                }
-                elseif ($this.CursorPosition -ge ($this._scrollOffset + $contentWidth)) {
-                    $this._scrollOffset = $this.CursorPosition - $contentWidth + 1
-                }
-                
-                # Draw visible portion of text
-                $visibleText = ""
-                if ($this.Text.Length -gt 0) {
-                    $endPos = [Math]::Min($this._scrollOffset + $contentWidth, $this.Text.Length)
-                    if ($this._scrollOffset -lt $this.Text.Length) {
-                        $visibleText = $this.Text.Substring($this._scrollOffset, $endPos - $this._scrollOffset)
-                    }
-                }
-                
-                if ($visibleText) {
-                    $textStyle = @{ FG = $fgColor; BG = $bgColor }
-                    Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
-                    Write-Log -Level Debug -Message "TextBox '$($this.Name)': Rendered text '$visibleText' at X=$contentStartX Y=$contentY with FG=$fgColor BG=$bgColor"
-                }
-                
-                # Draw cursor if focused (non-destructive - inverts colors)
-                if ($this.IsFocused) {
-                    $cursorScreenPos = $this.CursorPosition - $this._scrollOffset
-                    if ($cursorScreenPos -ge 0 -and $cursorScreenPos -lt $contentWidth) {
-                        $cursorX = $contentStartX + $cursorScreenPos
-                        
-                        # Get the cell that is ALREADY at the cursor's position
-                        $cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
-                        
-                        # Invert its colors to represent the cursor (non-destructive)
-                        $cursorFg = $cellUnderCursor.BackgroundColor
-                        $cursorBg = $cellUnderCursor.ForegroundColor
-                        $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true) # Make it bold
-                        $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
-                    }
+            elseif ($this.CursorPosition -ge ($this._scrollOffset + $contentWidth)) {
+                $this._scrollOffset = $this.CursorPosition - $contentWidth + 1
+            }
+            
+            # Draw visible portion of text
+            $visibleText = ""
+            if ($this.Text.Length -gt 0) {
+                $endPos = [Math]::Min($this._scrollOffset + $contentWidth, $this.Text.Length)
+                if ($this._scrollOffset -lt $this.Text.Length) {
+                    $visibleText = $this.Text.Substring($this._scrollOffset, $endPos - $this._scrollOffset)
                 }
             }
             
+            if ($visibleText) {
+                $textStyle = @{ FG = $fgColor; BG = $bgColor }
+                Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
+            }
+            
+            # Draw cursor if focused (non-destructive - inverts colors)
+            if ($this.IsFocused) {
+                $cursorScreenPos = $this.CursorPosition - $this._scrollOffset
+                if ($cursorScreenPos -ge 0 -and $cursorScreenPos -lt $contentWidth) {
+                    $cursorX = $contentStartX + $cursorScreenPos
+                    
+                    # Get the cell at cursor position
+                    $cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
+                    
+                    # Invert its colors to represent the cursor
+                    $cursorFg = $cellUnderCursor.BackgroundColor
+                    $cursorBg = $cellUnderCursor.ForegroundColor
+                    $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true)
+                    $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
+                }
+            }
+        }
+        
         $this._needs_redraw = $false
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
-        
-        Write-Log -Level Debug -Message "TextBox '$($this.Name)': HandleInput called with key=$($key.Key) char='$($key.KeyChar)'"
         
         $handled = $true
         $oldText = $this.Text
@@ -170,7 +167,6 @@ class TextBoxComponent : UIElement {
         
         if ($handled) {
             if ($oldText -ne $this.Text) {
-                Write-Log -Level Debug -Message "TextBox '$($this.Name)': Text changed from '$oldText' to '$($this.Text)'"
                 if ($this.OnChange) {
                     try { 
                         & $this.OnChange $this $this.Text 
@@ -180,7 +176,7 @@ class TextBoxComponent : UIElement {
                 }
             }
             $this.RequestRedraw()
-            $global:TuiState.IsDirty = $true  # Force immediate redraw
+            $global:TuiState.IsDirty = $true
         }
         
         return $handled
