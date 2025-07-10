@@ -1,0 +1,90 @@
+####\AllRuntime.ps1
+# ==============================================================================
+# Axiom-Phoenix v4.0 - All Runtime (Load Last)
+# TUI engine, screen management, and main application loop
+# ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ART.###" to find specific sections.
+# Each section ends with "END_PAGE: ART.###"
+# ==============================================================================
+
+#region Global State
+
+# Initialize global TUI state
+$global:TuiState = @{
+    Running = $false
+    BufferWidth = [Math]::Max(80, [Console]::WindowWidth)
+    BufferHeight = [Math]::Max(24, [Console]::WindowHeight)
+    CompositorBuffer = $null
+    PreviousCompositorBuffer = $null
+    ScreenStack = [System.Collections.Generic.Stack[Screen]]::new() # CHANGED TO GENERIC STACK
+    CurrentScreen = $null
+    IsDirty = $true
+    FocusedComponent = $null
+    # CommandPalette removed - now managed by CommandPaletteManager service
+    Services = @{}
+    LastRenderTime = [datetime]::Now
+    FrameCount = 0
+    InputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]'
+    OverlayStack = [System.Collections.Generic.List[UIElement]]::new() # CHANGED TO GENERIC LIST
+    # Added for input thread management
+    CancellationTokenSource = $null
+    InputRunspace = $null
+    InputPowerShell = $null
+    InputAsyncResult = $null
+}
+
+function Invoke-WithErrorHandling {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Component,
+        
+        [Parameter(Mandatory)]
+        [string]$Context,
+        
+        [Parameter(Mandatory)]
+        [scriptblock]$ScriptBlock,
+        
+        [hashtable]$AdditionalData = @{}
+    )
+    
+    try {
+        & $ScriptBlock
+    }
+    catch {
+        $errorDetails = @{
+            Component = $Component
+            Context = $Context
+            ErrorMessage = $_.Exception.Message
+            ErrorType = $_.Exception.GetType().FullName
+            StackTrace = $_.ScriptStackTrace
+            Timestamp = [datetime]::Now
+        }
+        
+        foreach ($key in $AdditionalData.Keys) {
+            $errorDetails[$key] = $AdditionalData[$key]
+        }
+        
+        $logger = $global:TuiState.Services.Logger
+        if ($logger) {
+            $logger.Log("Error", "Error in $Component during $Context : $($_.Exception.Message)")
+            # Log error details with minimal depth to avoid circular references
+            try {
+                $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress -Depth 3 -ErrorAction SilentlyContinue)")
+            } catch {
+                # If serialization fails, just log the error type
+                $logger.Log("Debug", "Error type: $($_.Exception.GetType().FullName)")
+            }
+        }
+        
+        # Re-throw for caller to handle if needed
+        throw
+    }
+}
+#endregion
+#<!-- END_PAGE: ART.001 -->
