@@ -50,9 +50,29 @@ class DashboardScreen : Screen {
     [void] Initialize() {
         if (-not $this.ServiceContainer) { return }
 
-        # Main container panel
+        # Create sidebar menu
+        $menu = [SidebarMenu]::new("MainMenu")
+        $menu.X = 0
+        $menu.Y = 0
+        $menu.Height = $this.Height
+        $menu.Width = 22
+        $menu.Title = "Navigation"
+        
+        $menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
+        $menu.AddMenuItem("2", "Task List", "navigation.taskList")
+        $menu.AddMenuItem("N", "New Task", "navigation.newTask")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("T", "Theme", "ui.theme.picker")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("Q", "Quit", "app.exit")
+        
+        $this.AddChild($menu)
+
+        # Main container panel (adjusted for menu)
         $this._mainPanel = [Panel]::new("DashboardPanel")
-        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.X = 23
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width - 24
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Axiom-Phoenix v4.0 Dashboard "
         $this.AddChild($this._mainPanel)
@@ -70,16 +90,16 @@ class DashboardScreen : Screen {
             $label.Text = $line
             $label.Width = $line.Length
             $label.ForegroundColor = Get-ThemeColor -ColorName "Primary"
-            $label.X = [Math]::Floor(($this.Width - $line.Length) / 2)
+            $label.X = [Math]::Floor(($this._mainPanel.Width - $line.Length) / 2)
             $label.Y = $y++
             $this._mainPanel.AddChild($label)
         }
         $y += 1  # Add spacing
 
         # Calculate layout dimensions
-        $leftWidth = [Math]::Floor($this.Width * 0.35)
-        $rightWidth = $this.Width - $leftWidth - 3
-        $gridHeight = [Math]::Floor(($this.Height - $y - 2) / 2)
+        $leftWidth = [Math]::Floor($this._mainPanel.Width * 0.35)
+        $rightWidth = $this._mainPanel.Width - $leftWidth - 3
+        $gridHeight = [Math]::Floor(($this._mainPanel.Height - $y - 2) / 2)
 
         # Task Statistics Grid (top-left)
         $this._statsGrid = [DataGridComponent]::new("StatsGrid")
@@ -285,19 +305,41 @@ class DashboardScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Handle hotkeys for quick navigation
-        switch ($keyInfo.KeyChar.ToString().ToUpper()) {
-            "T" {
-                $this._ExecuteNavigationAction("tasks")
-                return $true
+        # Let menu handle its keys first
+        $menu = $this.Children | Where-Object { $_ -is [SidebarMenu] } | Select-Object -First 1
+        if ($menu -and $menu.HandleKey($keyInfo)) {
+            return $true
+        }
+        
+        # Handle navigation grid selection if focused
+        if ($this._navigationGrid -and $this._navigationGrid.IsFocused) {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Enter) {
+                    $selectedItem = $this._navigationGrid.GetSelectedItem()
+                    if ($selectedItem -and $selectedItem.ActionKey) {
+                        $this._ExecuteNavigationAction($selectedItem.ActionKey)
+                    }
+                    return $true
+                }
             }
-            "P" {
-                $this._ExecuteNavigationAction("projects")
-                return $true
+        }
+        
+        # Tab navigation between grids
+        if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+            $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+            if ($focusManager) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
+                    $focusManager.MoveFocus($true)  # Reverse
+                } else {
+                    $focusManager.MoveFocus($false) # Forward
+                }
             }
-            "S" {
-                $this._ExecuteNavigationAction("settings")
-                return $true
+            return $true
+        }
+        
+        # Pass to base for standard navigation
+        return ([Screen]$this).HandleInput($keyInfo)
+    }
             }
             "Q" {
                 $this._ExecuteNavigationAction("exit")
@@ -353,14 +395,25 @@ class TaskListScreen : Screen {
         if ($this.Width -lt 80) { $this.Width = 80 }
         if ($this.Height -lt 24) { $this.Height = 24 }
         
-        $this._mainPanel = [Panel]::new("Task List")
-        $this._mainPanel.X = 0
-        $this._mainPanel.Y = 0
-        $this._mainPanel.Width = $this.Width
-        $this._mainPanel.Height = $this.Height
-        $this._mainPanel.Title = "Task List"
-        $this._mainPanel.UpdateContentDimensions()
-        $this.AddChild($this._mainPanel)
+        # Create sidebar menu
+        $menu = [SidebarMenu]::new("MainMenu")
+        $menu.X = 0
+        $menu.Y = 0
+        $menu.Height = $this.Height
+        $menu.Width = 22
+        $menu.Title = "Navigation"
+        
+        $menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
+        $menu.AddMenuItem("2", "Task List", "navigation.taskList")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("N", "New Task", "navigation.newTask")
+        $menu.AddMenuItem("E", "Edit Task", "task.edit.selected")
+        $menu.AddMenuItem("D", "Delete Task", "task.delete.selected")
+        $menu.AddMenuItem("C", "Complete", "task.complete.selected")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("Q", "Quit", "app.exit")
+        
+        $this.
 
         # Add filter textbox at the top
         $this._filterBox = [TextBoxComponent]::new("FilterBox")
@@ -1083,12 +1136,566 @@ class ThemePickerScreen : Screen {
     }
 }
 
-#<!-- PAGE: ASC.003 - Screen Utilities -->
+#<!-- PAGE: ASC.003 - CRUD Screens -->
+#region CRUD Screens
+
+# ===== CLASS: NewTaskScreen =====
+# Purpose: Full screen for creating new tasks
+class NewTaskScreen : Screen {
+    hidden [Panel]$_formPanel
+    hidden [SidebarMenu]$_menu
+    hidden [TextBoxComponent]$_titleBox
+    hidden [TextBoxComponent]$_descriptionBox
+    hidden [ListBox]$_priorityList
+    hidden [ListBox]$_projectList
+    hidden [ButtonComponent]$_saveButton
+    hidden [ButtonComponent]$_cancelButton
+    hidden [LabelComponent]$_statusLabel
+    
+    NewTaskScreen([object]$serviceContainer) : base("NewTaskScreen", $serviceContainer) {}
+    
+    [void] Initialize() {
+        # Create menu
+        $this._menu = [SidebarMenu]::new("MainMenu")
+        $this._menu.X = 0
+        $this._menu.Y = 0
+        $this._menu.Height = $this.Height
+        $this._menu.Width = 22
+        $this._menu.Title = "Navigation"
+        
+        $this._menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
+        $this._menu.AddMenuItem("2", "Task List", "navigation.taskList")
+        $this._menu.AddMenuItem("-", "", "")
+        $this._menu.AddMenuItem("S", "Save Task", "task.save.current")
+        $this._menu.AddMenuItem("C", "Cancel", "navigation.back")
+        $this._menu.AddMenuItem("-", "", "")
+        $this._menu.AddMenuItem("Q", "Quit", "app.exit")
+        
+        $this.AddChild($this._menu)
+        
+        # Create form panel
+        $this._formPanel = [Panel]::new("NewTaskForm")
+        $this._formPanel.X = 23
+        $this._formPanel.Y = 0
+        $this._formPanel.Width = $this.Width - 24
+        $this._formPanel.Height = $this.Height
+        $this._formPanel.Title = "Create New Task"
+        $this._formPanel.BorderStyle = "Double"
+        $this.AddChild($this._formPanel)
+        
+        # Title input
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Task Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = 2
+        $this._formPanel.AddChild($titleLabel)
+        
+        $this._titleBox = [TextBoxComponent]::new("TitleInput")
+        $this._titleBox.X = 2
+        $this._titleBox.Y = 3
+        $this._titleBox.Width = $this._formPanel.Width - 6
+        $this._titleBox.Placeholder = "Enter task title..."
+        $this._titleBox.IsFocusable = $true
+        $this._formPanel.AddChild($this._titleBox)
+        
+        # Description input
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = 5
+        $this._formPanel.AddChild($descLabel)
+        
+        $this._descriptionBox = [TextBoxComponent]::new("DescInput")
+        $this._descriptionBox.X = 2
+        $this._descriptionBox.Y = 6
+        $this._descriptionBox.Width = $this._formPanel.Width - 6
+        $this._descriptionBox.Placeholder = "Enter description..."
+        $this._descriptionBox.IsFocusable = $true
+        $this._formPanel.AddChild($this._descriptionBox)
+        
+        # Priority selection
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 2
+        $priorityLabel.Y = 8
+        $this._formPanel.AddChild($priorityLabel)
+        
+        $this._priorityList = [ListBox]::new("PriorityList")
+        $this._priorityList.X = 2
+        $this._priorityList.Y = 9
+        $this._priorityList.Width = 20
+        $this._priorityList.Height = 5
+        $this._priorityList.AddItem("Low")
+        $this._priorityList.AddItem("Medium")
+        $this._priorityList.AddItem("High")
+        $this._priorityList.SelectedIndex = 1  # Default to Medium
+        $this._priorityList.IsFocusable = $true
+        $this._formPanel.AddChild($this._priorityList)
+        
+        # Project selection
+        $projectLabel = [LabelComponent]::new("ProjectLabel")
+        $projectLabel.Text = "Project:"
+        $projectLabel.X = 25
+        $projectLabel.Y = 8
+        $this._formPanel.AddChild($projectLabel)
+        
+        $this._projectList = [ListBox]::new("ProjectList")
+        $this._projectList.X = 25
+        $this._projectList.Y = 9
+        $this._projectList.Width = 20
+        $this._projectList.Height = 5
+        $this._projectList.AddItem("None")
+        $this._projectList.SelectedIndex = 0
+        $this._projectList.IsFocusable = $true
+        $this._formPanel.AddChild($this._projectList)
+        
+        # Status label
+        $this._statusLabel = [LabelComponent]::new("StatusLabel")
+        $this._statusLabel.X = 2
+        $this._statusLabel.Y = 15
+        $this._statusLabel.Text = "Ready to create task"
+        $this._statusLabel.ForegroundColor = (Get-ThemeColor "Info")
+        $this._formPanel.AddChild($this._statusLabel)
+        
+        # Buttons
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save (S)"
+        $this._saveButton.X = 2
+        $this._saveButton.Y = 17
+        $this._saveButton.IsFocusable = $true
+        $this._saveButton.OnClick = {
+            $this.SaveTask()
+        }.GetNewClosure()
+        $this._formPanel.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel (C)"
+        $this._cancelButton.X = 15
+        $this._cancelButton.Y = 17
+        $this._cancelButton.IsFocusable = $true
+        $this._cancelButton.OnClick = {
+            $navService = $this.Services.NavigationService
+            $navService.GoBack()
+        }.GetNewClosure()
+        $this._formPanel.AddChild($this._cancelButton)
+    }
+    
+    [void] OnEnter() {
+        # Load projects
+        $dataManager = $this.Services.DataManager
+        $projects = $dataManager.GetProjects()
+        
+        $this._projectList.ClearItems()
+        $this._projectList.AddItem("None")
+        foreach ($project in $projects) {
+            $this._projectList.AddItem($project.Name)
+        }
+        $this._projectList.SelectedIndex = 0
+        
+        # Set initial focus
+        $focusManager = $this.Services.FocusManager
+        $focusManager.SetFocus($this._titleBox)
+        
+        # Register save action
+        $actionService = $this.Services.ActionService
+        $actionService.RegisterAction("task.save.current", {
+            $currentScreen = $global:TuiState.CurrentScreen
+            if ($currentScreen -is [NewTaskScreen]) {
+                $currentScreen.SaveTask()
+            }
+        }, @{ Category = "Tasks"; Description = "Save current task" })
+    }
+    
+    [void] OnExit() {
+        # Unregister temporary action
+        $actionService = $this.Services.ActionService
+        $actionService.UnregisterAction("task.save.current")
+    }
+    
+    [void] SaveTask() {
+        # Validate input
+        if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
+            $this._statusLabel.Text = "Error: Title is required"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Error")
+            return
+        }
+        
+        # Create new task
+        $task = [PmcTask]::new()
+        $task.Title = $this._titleBox.Text
+        $task.Description = $this._descriptionBox.Text
+        
+        # Set priority
+        $priorityMap = @{
+            0 = [TaskPriority]::Low
+            1 = [TaskPriority]::Medium  
+            2 = [TaskPriority]::High
+        }
+        $task.Priority = $priorityMap[$this._priorityList.SelectedIndex]
+        
+        # Set project
+        if ($this._projectList.SelectedIndex -gt 0) {
+            $dataManager = $this.Services.DataManager
+            $projects = $dataManager.GetProjects()
+            if ($this._projectList.SelectedIndex -le $projects.Count) {
+                $task.ProjectKey = $projects[$this._projectList.SelectedIndex - 1].Key
+            }
+        }
+        
+        # Save task
+        try {
+            $dataManager = $this.Services.DataManager
+            $dataManager.AddTask($task)
+            
+            $this._statusLabel.Text = "Task created successfully!"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Success")
+            
+            # Navigate back after short delay
+            Start-Sleep -Milliseconds 500
+            $navService = $this.Services.NavigationService
+            $navService.GoBack()
+        }
+        catch {
+            $this._statusLabel.Text = "Error: $($_.Exception.Message)"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Error")
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Let menu handle its keys first
+        if ($this._menu.HandleKey($keyInfo)) {
+            return $true
+        }
+        
+        # Handle form-specific keys
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::S) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control) {
+                    $this.SaveTask()
+                    return $true
+                }
+                break
+            }
+            ([ConsoleKey]::Escape) {
+                $navService = $this.Services.NavigationService
+                $navService.GoBack()
+                return $true
+            }
+        }
+        
+        # Let base handle focus navigation
+        return ([Screen]$this).HandleInput($keyInfo)
+    }
+}
+
+# ===== CLASS: EditTaskScreen =====
+# Purpose: Full screen for editing existing tasks
+class EditTaskScreen : Screen {
+    hidden [Panel]$_formPanel
+    hidden [SidebarMenu]$_menu
+    hidden [TextBoxComponent]$_titleBox
+    hidden [TextBoxComponent]$_descriptionBox
+    hidden [ListBox]$_priorityList
+    hidden [ListBox]$_statusList
+    hidden [ListBox]$_projectList
+    hidden [TextBoxComponent]$_progressBox
+    hidden [ButtonComponent]$_saveButton
+    hidden [ButtonComponent]$_cancelButton
+    hidden [LabelComponent]$_statusLabel
+    hidden [PmcTask]$_task
+    
+    EditTaskScreen([object]$serviceContainer, [PmcTask]$task) : base("EditTaskScreen", $serviceContainer) {
+        $this._task = $task
+    }
+    
+    [void] Initialize() {
+        # Create menu
+        $this._menu = [SidebarMenu]::new("MainMenu")
+        $this._menu.X = 0
+        $this._menu.Y = 0
+        $this._menu.Height = $this.Height
+        $this._menu.Width = 22
+        $this._menu.Title = "Navigation"
+        
+        $this._menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
+        $this._menu.AddMenuItem("2", "Task List", "navigation.taskList")
+        $this._menu.AddMenuItem("-", "", "")
+        $this._menu.AddMenuItem("S", "Save Changes", "task.save.current")
+        $this._menu.AddMenuItem("C", "Cancel", "navigation.back")
+        $this._menu.AddMenuItem("-", "", "")
+        $this._menu.AddMenuItem("Q", "Quit", "app.exit")
+        
+        $this.AddChild($this._menu)
+        
+        # Create form panel
+        $this._formPanel = [Panel]::new("EditTaskForm")
+        $this._formPanel.X = 23
+        $this._formPanel.Y = 0
+        $this._formPanel.Width = $this.Width - 24
+        $this._formPanel.Height = $this.Height
+        $this._formPanel.Title = "Edit Task"
+        $this._formPanel.BorderStyle = "Double"
+        $this.AddChild($this._formPanel)
+        
+        # Title input
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Task Title:"
+        $titleLabel.X = 2
+        $titleLabel.Y = 2
+        $this._formPanel.AddChild($titleLabel)
+        
+        $this._titleBox = [TextBoxComponent]::new("TitleInput")
+        $this._titleBox.X = 2
+        $this._titleBox.Y = 3
+        $this._titleBox.Width = $this._formPanel.Width - 6
+        $this._titleBox.Text = $this._task.Title
+        $this._titleBox.IsFocusable = $true
+        $this._formPanel.AddChild($this._titleBox)
+        
+        # Description input
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = 2
+        $descLabel.Y = 5
+        $this._formPanel.AddChild($descLabel)
+        
+        $this._descriptionBox = [TextBoxComponent]::new("DescInput")
+        $this._descriptionBox.X = 2
+        $this._descriptionBox.Y = 6
+        $this._descriptionBox.Width = $this._formPanel.Width - 6
+        $this._descriptionBox.Text = $this._task.Description
+        $this._descriptionBox.IsFocusable = $true
+        $this._formPanel.AddChild($this._descriptionBox)
+        
+        # Status selection
+        $statusLabel = [LabelComponent]::new("StatusLabel")
+        $statusLabel.Text = "Status:"
+        $statusLabel.X = 2
+        $statusLabel.Y = 8
+        $this._formPanel.AddChild($statusLabel)
+        
+        $this._statusList = [ListBox]::new("StatusList")
+        $this._statusList.X = 2
+        $this._statusList.Y = 9
+        $this._statusList.Width = 15
+        $this._statusList.Height = 6
+        $this._statusList.AddItem("Pending")
+        $this._statusList.AddItem("InProgress")
+        $this._statusList.AddItem("Completed")
+        $this._statusList.AddItem("Cancelled")
+        $this._statusList.SelectedIndex = [int]$this._task.Status
+        $this._statusList.IsFocusable = $true
+        $this._formPanel.AddChild($this._statusList)
+        
+        # Priority selection
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = 20
+        $priorityLabel.Y = 8
+        $this._formPanel.AddChild($priorityLabel)
+        
+        $this._priorityList = [ListBox]::new("PriorityList")
+        $this._priorityList.X = 20
+        $this._priorityList.Y = 9
+        $this._priorityList.Width = 12
+        $this._priorityList.Height = 5
+        $this._priorityList.AddItem("Low")
+        $this._priorityList.AddItem("Medium")
+        $this._priorityList.AddItem("High")
+        $this._priorityList.SelectedIndex = [int]$this._task.Priority
+        $this._priorityList.IsFocusable = $true
+        $this._formPanel.AddChild($this._priorityList)
+        
+        # Progress input
+        $progressLabel = [LabelComponent]::new("ProgressLabel")
+        $progressLabel.Text = "Progress (%):"
+        $progressLabel.X = 35
+        $progressLabel.Y = 8
+        $this._formPanel.AddChild($progressLabel)
+        
+        $this._progressBox = [TextBoxComponent]::new("ProgressInput")
+        $this._progressBox.X = 35
+        $this._progressBox.Y = 9
+        $this._progressBox.Width = 10
+        $this._progressBox.Text = $this._task.Progress.ToString()
+        $this._progressBox.MaxLength = 3
+        $this._progressBox.IsFocusable = $true
+        $this._formPanel.AddChild($this._progressBox)
+        
+        # Project selection
+        $projectLabel = [LabelComponent]::new("ProjectLabel")
+        $projectLabel.Text = "Project:"
+        $projectLabel.X = 2
+        $projectLabel.Y = 15
+        $this._formPanel.AddChild($projectLabel)
+        
+        $this._projectList = [ListBox]::new("ProjectList")
+        $this._projectList.X = 2
+        $this._projectList.Y = 16
+        $this._projectList.Width = 30
+        $this._projectList.Height = 4
+        $this._projectList.AddItem("None")
+        $this._projectList.IsFocusable = $true
+        $this._formPanel.AddChild($this._projectList)
+        
+        # Status label
+        $this._statusLabel = [LabelComponent]::new("StatusMessageLabel")
+        $this._statusLabel.X = 2
+        $this._statusLabel.Y = 21
+        $this._statusLabel.Text = "Ready to save changes"
+        $this._statusLabel.ForegroundColor = (Get-ThemeColor "Info")
+        $this._formPanel.AddChild($this._statusLabel)
+        
+        # Buttons
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save (S)"
+        $this._saveButton.X = 2
+        $this._saveButton.Y = 23
+        $this._saveButton.IsFocusable = $true
+        $this._saveButton.OnClick = {
+            $this.SaveTask()
+        }.GetNewClosure()
+        $this._formPanel.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel (C)"
+        $this._cancelButton.X = 15
+        $this._cancelButton.Y = 23
+        $this._cancelButton.IsFocusable = $true
+        $this._cancelButton.OnClick = {
+            $navService = $this.Services.NavigationService
+            $navService.GoBack()
+        }.GetNewClosure()
+        $this._formPanel.AddChild($this._cancelButton)
+    }
+    
+    [void] OnEnter() {
+        # Load projects
+        $dataManager = $this.Services.DataManager
+        $projects = $dataManager.GetProjects()
+        
+        $this._projectList.ClearItems()
+        $this._projectList.AddItem("None")
+        $selectedIndex = 0
+        $i = 1
+        foreach ($project in $projects) {
+            $this._projectList.AddItem($project.Name)
+            if ($project.Key -eq $this._task.ProjectKey) {
+                $selectedIndex = $i
+            }
+            $i++
+        }
+        $this._projectList.SelectedIndex = $selectedIndex
+        
+        # Set initial focus
+        $focusManager = $this.Services.FocusManager
+        $focusManager.SetFocus($this._titleBox)
+        
+        # Register save action
+        $actionService = $this.Services.ActionService
+        $actionService.RegisterAction("task.save.current", {
+            $currentScreen = $global:TuiState.CurrentScreen
+            if ($currentScreen -is [EditTaskScreen]) {
+                $currentScreen.SaveTask()
+            }
+        }, @{ Category = "Tasks"; Description = "Save current task" })
+    }
+    
+    [void] OnExit() {
+        # Unregister temporary action
+        $actionService = $this.Services.ActionService
+        $actionService.UnregisterAction("task.save.current")
+    }
+    
+    [void] SaveTask() {
+        # Validate input
+        if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
+            $this._statusLabel.Text = "Error: Title is required"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Error")
+            return
+        }
+        
+        # Validate progress
+        $progress = 0
+        if (-not [int]::TryParse($this._progressBox.Text, [ref]$progress) -or $progress -lt 0 -or $progress -gt 100) {
+            $this._statusLabel.Text = "Error: Progress must be 0-100"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Error")
+            return
+        }
+        
+        # Update task
+        $this._task.Title = $this._titleBox.Text
+        $this._task.Description = $this._descriptionBox.Text
+        $this._task.Status = [TaskStatus]$this._statusList.SelectedIndex
+        $this._task.Priority = [TaskPriority]$this._priorityList.SelectedIndex
+        $this._task.SetProgress($progress)
+        
+        # Set project
+        if ($this._projectList.SelectedIndex -eq 0) {
+            $this._task.ProjectKey = $null
+        } else {
+            $dataManager = $this.Services.DataManager
+            $projects = $dataManager.GetProjects()
+            if ($this._projectList.SelectedIndex -le $projects.Count) {
+                $this._task.ProjectKey = $projects[$this._projectList.SelectedIndex - 1].Key
+            }
+        }
+        
+        # Save task
+        try {
+            $dataManager = $this.Services.DataManager
+            $dataManager.UpdateTask($this._task)
+            
+            $this._statusLabel.Text = "Task updated successfully!"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Success")
+            
+            # Navigate back after short delay
+            Start-Sleep -Milliseconds 500
+            $navService = $this.Services.NavigationService
+            $navService.GoBack()
+        }
+        catch {
+            $this._statusLabel.Text = "Error: $($_.Exception.Message)"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Error")
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Let menu handle its keys first
+        if ($this._menu.HandleKey($keyInfo)) {
+            return $true
+        }
+        
+        # Handle form-specific keys
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::S) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control) {
+                    $this.SaveTask()
+                    return $true
+                }
+                break
+            }
+            ([ConsoleKey]::Escape) {
+                $navService = $this.Services.NavigationService
+                $navService.GoBack()
+                return $true
+            }
+        }
+        
+        # Let base handle focus navigation
+        return ([Screen]$this).HandleInput($keyInfo)
+    }
+}
+
+#endregion
+#<!-- END_PAGE: ASC.003 -->
+
+#<!-- PAGE: ASC.004 - Screen Utilities -->
 #region Screen Utilities
 
 # No specific screen utility functions currently implemented
 # This section reserved for future screen helper functions
 
 #endregion
-#<!-- END_PAGE: ASC.003 -->
+#<!-- END_PAGE: ASC.004 -->
 

@@ -49,9 +49,29 @@ class DashboardScreen : Screen {
     [void] Initialize() {
         if (-not $this.ServiceContainer) { return }
 
-        # Main container panel
+        # Create sidebar menu
+        $menu = [SidebarMenu]::new("MainMenu")
+        $menu.X = 0
+        $menu.Y = 0
+        $menu.Height = $this.Height
+        $menu.Width = 22
+        $menu.Title = "Navigation"
+        
+        $menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
+        $menu.AddMenuItem("2", "Task List", "navigation.taskList")
+        $menu.AddMenuItem("N", "New Task", "navigation.newTask")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("T", "Theme", "ui.theme.picker")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("Q", "Quit", "app.exit")
+        
+        $this.AddChild($menu)
+
+        # Main container panel (adjusted for menu)
         $this._mainPanel = [Panel]::new("DashboardPanel")
-        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.X = 23
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width - 24
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Axiom-Phoenix v4.0 Dashboard "
         $this.AddChild($this._mainPanel)
@@ -69,16 +89,16 @@ class DashboardScreen : Screen {
             $label.Text = $line
             $label.Width = $line.Length
             $label.ForegroundColor = Get-ThemeColor -ColorName "Primary"
-            $label.X = [Math]::Floor(($this.Width - $line.Length) / 2)
+            $label.X = [Math]::Floor(($this._mainPanel.Width - $line.Length) / 2)
             $label.Y = $y++
             $this._mainPanel.AddChild($label)
         }
         $y += 1  # Add spacing
 
         # Calculate layout dimensions
-        $leftWidth = [Math]::Floor($this.Width * 0.35)
-        $rightWidth = $this.Width - $leftWidth - 3
-        $gridHeight = [Math]::Floor(($this.Height - $y - 2) / 2)
+        $leftWidth = [Math]::Floor($this._mainPanel.Width * 0.35)
+        $rightWidth = $this._mainPanel.Width - $leftWidth - 3
+        $gridHeight = [Math]::Floor(($this._mainPanel.Height - $y - 2) / 2)
 
         # Task Statistics Grid (top-left)
         $this._statsGrid = [DataGridComponent]::new("StatsGrid")
@@ -285,31 +305,40 @@ class DashboardScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Handle hotkeys for quick navigation (case-insensitive)
-        $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
-        switch ($keyChar) {
-            "T" {
-                $this._ExecuteNavigationAction("tasks")
-                return $true
-            }
-            "P" {
-                $this._ExecuteNavigationAction("projects")
-                return $true
-            }
-            "S" {
-                $this._ExecuteNavigationAction("settings")
-                return $true
-            }
-            "Q" {
-                $this._ExecuteNavigationAction("exit")
-                return $true
-            }
-            default {
-                # Let base class handle other keys (like arrow navigation in grid)
-                return ([Screen]$this).HandleInput($keyInfo)
+        # Let menu handle its keys first
+        $menu = $this.Children | Where-Object { $_ -is [SidebarMenu] } | Select-Object -First 1
+        if ($menu -and $menu.HandleKey($keyInfo)) {
+            return $true
+        }
+        
+        # Handle navigation grid selection if focused
+        if ($this._navigationGrid -and $this._navigationGrid.IsFocused) {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Enter) {
+                    $selectedItem = $this._navigationGrid.GetSelectedItem()
+                    if ($selectedItem -and $selectedItem.ActionKey) {
+                        $this._ExecuteNavigationAction($selectedItem.ActionKey)
+                    }
+                    return $true
+                }
             }
         }
-        return $false
+        
+        # Tab navigation between grids
+        if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+            $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+            if ($focusManager) {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
+                    $focusManager.MoveFocus($true)  # Reverse
+                } else {
+                    $focusManager.MoveFocus($false) # Forward
+                }
+            }
+            return $true
+        }
+        
+        # Pass to base for standard navigation
+        return ([Screen]$this).HandleInput($keyInfo)
     }
 }
 

@@ -1,0 +1,91 @@
+# ===== CLASS: SidebarMenu =====
+# Purpose: Simple vertical menu for navigation
+class SidebarMenu : UIElement {
+    [System.Collections.ArrayList]$MenuItems = [System.Collections.ArrayList]::new()
+    [hashtable]$KeyMap = @{}
+    [string]$Title = "Menu"
+    [bool]$ShowBorder = $true
+    
+    SidebarMenu([string]$name) : base($name) {
+        $this.IsFocusable = $false  # Menu is not focusable, responds to keys directly
+        $this.Width = 20
+    }
+    
+    [void] AddMenuItem([string]$key, [string]$label, [string]$action) {
+        $menuItem = @{
+            Key = $key
+            Label = $label  
+            Action = $action
+        }
+        $this.MenuItems.Add($menuItem) | Out-Null
+        $this.KeyMap[$key.ToUpper()] = $action
+    }
+    
+    [void] ClearItems() {
+        $this.MenuItems.Clear()
+        $this.KeyMap.Clear()
+    }
+    
+    [void] OnRender() {
+        if (-not $this._private_buffer) { return }
+        
+        $this._private_buffer.Clear()
+        
+        $y = 0
+        
+        # Draw title
+        if ($this.Title) {
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $this.Title -ForegroundColor (Get-ThemeColor "component.title")
+            $y += 2
+        }
+        
+        # Draw menu items
+        foreach ($item in $this.MenuItems) {
+            if ($item.Key -eq "-") {
+                # Separator
+                Write-TuiText -Buffer $this._private_buffer -X 0 -Y $y -Text ("─" * ($this.Width - 2)) -ForegroundColor (Get-ThemeColor "component.border")
+            } else {
+                # Menu item
+                $keyDisplay = "[$($item.Key)]"
+                $label = $item.Label
+                
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $keyDisplay -ForegroundColor (Get-ThemeColor "Accent")
+                Write-TuiText -Buffer $this._private_buffer -X 5 -Y $y -Text $label -ForegroundColor (Get-ThemeColor "Foreground")
+            }
+            $y++
+        }
+        
+        # Draw border if enabled
+        if ($this.ShowBorder) {
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -BorderStyle "Single" -BorderColor (Get-ThemeColor "component.border")
+        }
+    }
+    
+    [string] GetAction([string]$key) {
+        $upperKey = $key.ToUpper()
+        if ($this.KeyMap.ContainsKey($upperKey)) {
+            return $this.KeyMap[$upperKey]
+        }
+        return $null
+    }
+    
+    [bool] HandleKey([System.ConsoleKeyInfo]$keyInfo) {
+        # Handle direct key presses for menu navigation
+        $key = $keyInfo.KeyChar.ToString().ToUpper()
+        $action = $this.GetAction($key)
+        
+        if ($action) {
+            $actionService = $global:TuiState.Services.ActionService
+            if ($actionService) {
+                try {
+                    $actionService.ExecuteAction($action)
+                    return $true
+                } catch {
+                    Write-Log -Level Error -Message "Failed to execute menu action '$action': $_"
+                }
+            }
+        }
+        
+        return $false
+    }
+}

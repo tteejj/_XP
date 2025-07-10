@@ -274,6 +274,73 @@ class ActionService {
             Description = "Go to Dashboard"
         })
         
+        # Add navigation.newTask action
+        $this.RegisterAction("navigation.newTask", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $newTaskScreen = [NewTaskScreen]::new($container)
+            $newTaskScreen.Initialize()
+            $navService.NavigateTo($newTaskScreen)
+        }, @{
+            Category = "Navigation"
+            Description = "Create New Task"
+        })
+        
+        # Add navigation.back action
+        $this.RegisterAction("navigation.back", {
+            $navService = $global:TuiState.Services.NavigationService
+            if ($navService.CanGoBack()) {
+                $navService.GoBack()
+            }
+        }, @{
+            Category = "Navigation"
+            Description = "Go Back"
+        })
+        
+        # Task CRUD actions
+        $this.RegisterAction("task.edit.selected", {
+            $navService = $global:TuiState.Services.NavigationService
+            $currentScreen = $navService?.CurrentScreen
+            if ($currentScreen -is [TaskListScreen] -and $currentScreen._selectedTask) {
+                $container = $global:TuiState.ServiceContainer
+                $editScreen = [EditTaskScreen]::new($container, $currentScreen._selectedTask)
+                $editScreen.Initialize()
+                $navService.NavigateTo($editScreen)
+            }
+        }, @{
+            Category = "Tasks"
+            Description = "Edit Selected Task"
+        })
+        
+        $this.RegisterAction("task.delete.selected", {
+            $navService = $global:TuiState.Services.NavigationService
+            $currentScreen = $navService?.CurrentScreen
+            if ($currentScreen -is [TaskListScreen] -and $currentScreen._selectedTask) {
+                $dataManager = $global:TuiState.Services.DataManager
+                $dataManager.DeleteTask($currentScreen._selectedTask.Id)
+                $currentScreen._RefreshTasks()
+                $currentScreen._UpdateDisplay()
+            }
+        }, @{
+            Category = "Tasks"
+            Description = "Delete Selected Task"
+        })
+        
+        $this.RegisterAction("task.complete.selected", {
+            $navService = $global:TuiState.Services.NavigationService
+            $currentScreen = $navService?.CurrentScreen
+            if ($currentScreen -is [TaskListScreen] -and $currentScreen._selectedTask) {
+                $currentScreen._selectedTask.Complete()
+                $dataManager = $global:TuiState.Services.DataManager
+                $dataManager.UpdateTask($currentScreen._selectedTask)
+                $currentScreen._RefreshTasks()
+                $currentScreen._UpdateDisplay()
+            }
+        }, @{
+            Category = "Tasks"
+            Description = "Complete Selected Task"
+        })
+        
         # Write-Verbose "ActionService: Registered default actions"
     }
 }

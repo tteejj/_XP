@@ -50,6 +50,37 @@ class TaskListScreen : Screen {
         if ($this.Width -lt 80) { $this.Width = 80 }
         if ($this.Height -lt 24) { $this.Height = 24 }
         
+        # Create sidebar menu
+        $menu = [SidebarMenu]::new("MainMenu")
+        $menu.X = 0
+        $menu.Y = 0
+        $menu.Height = $this.Height
+        $menu.Width = 22
+        $menu.Title = "Navigation"
+        
+        $menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
+        $menu.AddMenuItem("2", "Task List", "navigation.taskList")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("N", "New Task", "navigation.newTask")
+        $menu.AddMenuItem("E", "Edit Task", "task.edit.selected")
+        $menu.AddMenuItem("D", "Delete Task", "task.delete.selected")
+        $menu.AddMenuItem("C", "Complete", "task.complete.selected")
+        $menu.AddMenuItem("-", "", "")
+        $menu.AddMenuItem("Q", "Quit", "app.exit")
+        
+        $this.AddChild($menu)
+        
+        # Main panel (adjusted for menu)
+        $this._mainPanel = [Panel]::new("Task List")
+        $this._mainPanel.X = 23
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width - 24
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = "Task List"
+        $this._mainPanel.UpdateContentDimensions()
+        $this.AddChild($this._mainPanel)
+        if ($this.Height -lt 24) { $this.Height = 24 }
+        
         $this._mainPanel = [Panel]::new("Task List")
         $this._mainPanel.X = 0
         $this._mainPanel.Y = 0

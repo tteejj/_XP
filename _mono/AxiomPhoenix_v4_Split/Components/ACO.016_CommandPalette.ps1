@@ -176,7 +176,16 @@ class CommandPalette : Dialog {
                 }
                 return $true
             }
-            ([ConsoleKey]::UpArrow) -or ([ConsoleKey]::DownArrow) {
+            ([ConsoleKey]::UpArrow) {
+                # If search box has focus and user presses arrow keys, move focus to list
+                if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
+                    $focusManager.SetFocus($this._listBox)
+                    # Let the list handle the actual arrow key
+                    return $this._listBox.HandleInput($key)
+                }
+                return $false  # Let the focused component handle it
+            }
+            ([ConsoleKey]::DownArrow) {
                 # If search box has focus and user presses arrow keys, move focus to list
                 if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
                     $focusManager.SetFocus($this._listBox)
