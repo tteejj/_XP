@@ -152,12 +152,17 @@ function Start-TuiEngine {
                         Start-Sleep -Milliseconds $sleepTime.TotalMilliseconds
                     }
                 }
-                elseif ($elapsedTime.TotalMilliseconds -gt $targetFrameTime.TotalMilliseconds * 2) {
-                    # Frame took more than twice the target time - we're falling behind
-                    $skippedFrameCount++
+                else {
+                    # Frame took longer than target - log but continue
+                    # Never skip input processing or rendering
+                    $slowFrameCount++
                     
-                    if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
-                        Write-Log -Level Warning -Message "TUI Engine: Frame $($global:TuiState.FrameCount) took $([Math]::Round($elapsedTime.TotalMilliseconds, 1))ms (target: $([Math]::Round($targetFrameTime.TotalMilliseconds, 1))ms)"
+                    if ($EnablePerformanceMonitoring -and $elapsedTime.TotalMilliseconds -gt ($targetFrameTime.TotalMilliseconds * 2)) {
+                        if (Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                            $targetMs = [Math]::Round($targetFrameTime.TotalMilliseconds, 1)
+                            $actualMs = [Math]::Round($elapsedTime.TotalMilliseconds, 1)
+                            Write-Log -Level Warning -Message "TUI Engine: Frame $($global:TuiState.FrameCount) took ${actualMs}ms (target: ${targetMs}ms)"
+                        }
                     }
                 }
             }

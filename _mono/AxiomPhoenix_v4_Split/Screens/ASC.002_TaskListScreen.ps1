@@ -89,7 +89,7 @@ class TaskListScreen : Screen {
         $this._filterBox.Height = 1
         $thisScreen = $this
         $this._filterBox.OnChange = {
-            param($newText)
+            param($sender, $newText)
             $thisScreen._filterText = $newText
             $thisScreen._RefreshTasks()
             $thisScreen._UpdateDisplay()
@@ -494,6 +494,12 @@ class TaskListScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # First, let the sidebar menu handle its keys
+        $menu = $this.Children | Where-Object { $_ -is [SidebarMenu] } | Select-Object -First 1
+        if ($menu -and $menu.HandleKey($keyInfo)) {
+            return $true
+        }
+        
         # Handle action keys (navigation is now handled by DataGridComponent)
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Enter) {

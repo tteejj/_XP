@@ -31,7 +31,12 @@ class SidebarMenu : UIElement {
         
         $this._private_buffer.Clear()
         
-        $y = 0
+        # Draw border FIRST if enabled
+        if ($this.ShowBorder) {
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style @{BorderStyle = "Single"; BorderFG = Get-ThemeColor "component.border"; FillBackground = $false}
+        }
+        
+        $y = 1  # Start at 1 to avoid border
         
         # Draw title
         if ($this.Title) {
@@ -43,7 +48,7 @@ class SidebarMenu : UIElement {
         foreach ($item in $this.MenuItems) {
             if ($item.Key -eq "-") {
                 # Separator
-                Write-TuiText -Buffer $this._private_buffer -X 0 -Y $y -Text ("─" * ($this.Width - 2)) -Style @{FG = Get-ThemeColor "component.border"}
+                Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text ("─" * ($this.Width - 2)) -Style @{FG = Get-ThemeColor "component.border"}
             } else {
                 # Menu item
                 $keyDisplay = "[$($item.Key)]"
@@ -53,11 +58,6 @@ class SidebarMenu : UIElement {
                 Write-TuiText -Buffer $this._private_buffer -X 5 -Y $y -Text $label -Style @{FG = Get-ThemeColor "Foreground"}
             }
             $y++
-        }
-        
-        # Draw border if enabled
-        if ($this.ShowBorder) {
-            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style @{BorderStyle = "Single"; BorderFG = Get-ThemeColor "component.border"}
         }
     }
     
