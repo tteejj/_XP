@@ -1,0 +1,74 @@
+# ==============================================================================
+# Axiom-Phoenix v4.0 - CommandPaletteScreen
+# A dedicated screen for the command palette
+# ==============================================================================
+
+using namespace System.Collections.Generic
+
+class CommandPaletteScreen : Screen {
+    hidden [CommandPalette] $_commandPalette
+    
+    CommandPaletteScreen([object]$serviceContainer) : base("CommandPaletteScreen", $serviceContainer) {}
+
+    [void] Initialize() {
+        if (-not $this.ServiceContainer) { return }
+
+        # Create command palette centered on screen
+        $this._commandPalette = [CommandPalette]::new("MainCommandPalette", $this.ServiceContainer)
+        $this._commandPalette.X = [Math]::Floor(($this.Width - 60) / 2)
+        $this._commandPalette.Y = [Math]::Floor(($this.Height - 20) / 2)
+        $this._commandPalette.Width = 60
+        $this._commandPalette.Height = 20
+        $this._commandPalette.Visible = $true
+        
+        # Get all actions from ActionService
+        $actionService = $this.ServiceContainer.GetService("ActionService")
+        if ($actionService) {
+            $allActions = @()
+            foreach ($actionName in $actionService.ActionRegistry.Keys) {
+                $actionData = $actionService.ActionRegistry[$actionName]
+                $actionObj = @{
+                    Name = $actionName
+                    Category = $actionData.Category
+                    Description = $actionData.Description
+                    Hotkey = $actionData.Hotkey
+                }
+                $allActions += $actionObj
+            }
+            $this._commandPalette.SetActions($allActions)
+        }
+        
+        # Set up completion handler
+        $screenRef = $this
+        $this._commandPalette.OnClose = {
+            param($result)
+            if ($result) {
+                # Execute the selected action
+                $actionService = $screenRef.ServiceContainer.GetService("ActionService")
+                if ($actionService) {
+                    try {
+                        $actionService.ExecuteAction($result.Name)
+                    } catch {
+                        Write-Log -Level Error -Message "Failed to execute action: $_"
+                    }
+                }
+            }
+            # Go back handled by Dialog.Complete() method
+        }
+        
+        $this.AddChild($this._commandPalette)
+    }
+
+    [void] OnEnter() {
+        # Dialog will handle its own focus in OnEnter
+        $this._commandPalette.OnEnter()
+        $this.RequestRedraw()
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Let the command palette (Dialog) handle all input
+        return $this._commandPalette.HandleInput($keyInfo)
+    }
+}
+
+#<!-- END_PAGE: ASC.003 -->

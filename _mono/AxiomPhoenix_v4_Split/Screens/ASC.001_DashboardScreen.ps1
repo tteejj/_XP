@@ -38,7 +38,9 @@ using namespace System.Collections.Generic
 # ==============================================================================
 class DashboardScreen : Screen {
     hidden [Panel] $_mainPanel
-    hidden [ListBox] $_menuList
+    hidden [Panel] $_menuPanel
+    hidden [List[LabelComponent]] $_menuItems
+    hidden [int] $_selectedIndex = 0
     
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
@@ -52,42 +54,59 @@ class DashboardScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Axiom-Phoenix v4.0 - Main Menu "
+        $this._mainPanel.HasBorder = $true
+        $this._mainPanel.BorderStyle = "Double"
         $this.AddChild($this._mainPanel)
 
-        # Menu list in center
-        $this._menuList = [ListBox]::new("MenuList")
-        $this._menuList.X = [Math]::Floor(($this.Width - 40) / 2)
-        $this._menuList.Y = 5
-        $this._menuList.Width = 40
-        $this._menuList.Height = 10
-        $this._menuList.BorderStyle = "Double"
-        $this._menuList.Title = " Navigation "
+        # Menu panel
+        $this._menuPanel = [Panel]::new("MenuPanel")
+        $this._menuPanel.X = [Math]::Floor(($this.Width - 40) / 2)
+        $this._menuPanel.Y = 5
+        $this._menuPanel.Width = 40
+        $this._menuPanel.Height = 10
+        $this._menuPanel.HasBorder = $true
+        $this._menuPanel.BorderStyle = "Double"
+        $this._menuPanel.Title = " Navigation "
+        $this._mainPanel.AddChild($this._menuPanel)
         
-        # Add menu items
-        $this._menuList.AddItem("[1] Dashboard")
-        $this._menuList.AddItem("[2] Task List")
-        $this._menuList.AddItem("[3] New Task")
-        $this._menuList.AddItem("[4] Command Palette")
-        $this._menuList.AddItem("")
-        $this._menuList.AddItem("[Q] Quit")
+        # Create menu items as labels
+        $this._menuItems = [List[LabelComponent]]::new()
+        $menuTexts = @(
+            "[1] Dashboard (Current)",
+            "[2] Task List",
+            "[3] New Task", 
+            "[4] Command Palette (Ctrl+P)",
+            "",
+            "[Q] Quit"
+        )
         
-        $this._mainPanel.AddChild($this._menuList)
+        $yPos = 1
+        foreach ($text in $menuTexts) {
+            $label = [LabelComponent]::new("MenuItem_$yPos")
+            $label.Text = $text
+            $label.X = 2
+            $label.Y = $yPos
+            $label.ForegroundColor = Get-ThemeColor("component.text")
+            $this._menuPanel.AddChild($label)
+            $this._menuItems.Add($label)
+            $yPos++
+        }
+        
+        # Highlight first item
+        if ($this._menuItems.Count -gt 0) {
+            $this._menuItems[0].ForegroundColor = Get-ThemeColor("Primary")
+        }
         
         # Instructions
         $instructions = [LabelComponent]::new("Instructions")
         $instructions.Text = "Press the number/letter key to select an option"
         $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
         $instructions.Y = 17
-        $instructions.ForegroundColor = Get-ThemeColor -ColorName "Subtle"
+        $instructions.ForegroundColor = Get-ThemeColor("Subtle")
         $this._mainPanel.AddChild($instructions)
     }
 
     [void] OnEnter() {
-        # Set focus to menu list
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._menuList) {
-            $focusManager.SetFocus($this._menuList)
-        }
         $this.RequestRedraw()
     }
 
@@ -95,35 +114,78 @@ class DashboardScreen : Screen {
         $actionService = $this.ServiceContainer?.GetService("ActionService")
         if (-not $actionService) { return $false }
         
-        switch ($keyInfo.KeyChar) {
-            '1' {
-                # Already on dashboard
-                return $true
-            }
-            '2' {
-                $actionService.ExecuteAction("navigation.taskList")
-                return $true
-            }
-            '3' {
-                $actionService.ExecuteAction("navigation.newTask")
-                return $true
-            }
-            '4' {
-                $actionService.ExecuteAction("navigation.commandPalette")
-                return $true
-            }
-            'q' {
-                $actionService.ExecuteAction("app.exit")
-                return $true
-            }
-            'Q' {
-                $actionService.ExecuteAction("app.exit")
-                return $true
+        $handled = $false
+        
+        # Check both KeyChar and Key enum for number keys
+        $char = $keyInfo.KeyChar
+        $key = $keyInfo.Key
+        
+        # Direct character check
+        switch ($char) {
+            '1' { $handled = $true }
+            '2' { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
+            '3' { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
+            '4' { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
+            'q' { $actionService.ExecuteAction("app.exit"); $handled = $true }
+            'Q' { $actionService.ExecuteAction("app.exit"); $handled = $true }
+        }
+        
+        # If not handled by character, try Key enum
+        if (-not $handled) {
+            switch ($key) {
+                ([ConsoleKey]::D1) { $handled = $true }
+                ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
+                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
+                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
+                ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit"); $handled = $true }
             }
         }
         
-        # Let focused component handle other keys
-        return $false
+        # Arrow key navigation
+        switch ($key) {
+            ([ConsoleKey]::UpArrow) {
+                if ($this._selectedIndex -gt 0) {
+                    # Reset previous item color
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("component.text")
+                    $this._selectedIndex--
+                    # Skip empty items
+                    while ($this._selectedIndex -gt 0 -and [string]::IsNullOrWhiteSpace($this._menuItems[$this._selectedIndex].Text)) {
+                        $this._selectedIndex--
+                    }
+                    # Highlight new item
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("Primary")
+                    $this.RequestRedraw()
+                }
+                $handled = $true
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this._selectedIndex -lt $this._menuItems.Count - 1) {
+                    # Reset previous item color
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("component.text")
+                    $this._selectedIndex++
+                    # Skip empty items
+                    while ($this._selectedIndex -lt $this._menuItems.Count - 1 -and [string]::IsNullOrWhiteSpace($this._menuItems[$this._selectedIndex].Text)) {
+                        $this._selectedIndex++
+                    }
+                    # Highlight new item
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("Primary")
+                    $this.RequestRedraw()
+                }
+                $handled = $true
+            }
+            ([ConsoleKey]::Enter) {
+                # Execute selected item
+                switch ($this._selectedIndex) {
+                    0 { $handled = $true } # Already on dashboard
+                    1 { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
+                    2 { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
+                    3 { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
+                    5 { $actionService.ExecuteAction("app.exit"); $handled = $true }
+                }
+            }
+        }
+        
+        return $handled
     }
 }
 

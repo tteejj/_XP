@@ -32,50 +32,28 @@ function Invoke-TuiRender {
         
         # Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
-        # Get the current screen from global state (NavigationService updates this)
-        $currentScreenToRender = $global:TuiState.CurrentScreen
+        # WINDOW-BASED MODEL: Only render the active window
+        $currentWindow = $global:TuiState.CurrentScreen
         
-        # Render current screen
-        if ($currentScreenToRender) {
+        if ($currentWindow) {
             try {
-                # Render the screen which will update its internal buffer
-                $currentScreenToRender.Render()
+                # Render the window which will update its internal buffer
+                $currentWindow.Render()
                 
-                # Get the screen's buffer
-                $screenBuffer = $currentScreenToRender.GetBuffer()
+                # Get the window's buffer
+                $windowBuffer = $currentWindow.GetBuffer()
                 
-                if ($screenBuffer) {
-                    # Blend screen buffer into compositor
-                    $global:TuiState.CompositorBuffer.BlendBuffer($screenBuffer, 0, 0)
+                if ($windowBuffer) {
+                    # Blend window buffer into compositor
+                    $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
                 }
                 else {
-                    # Write-Verbose "Screen buffer is null for $($currentScreenToRender.Name)"
+                    Write-Log -Level Debug -Message "Window buffer is null for $($currentWindow.Name)"
                 }
             }
             catch {
-                Write-Error "Error rendering screen: $_"
+                Write-Error "Error rendering window: $_"
                 throw
-            }
-            
-            # Render overlays (including command palette)
-            if ($global:TuiState.ContainsKey('OverlayStack') -and $global:TuiState.OverlayStack -and @($global:TuiState.OverlayStack).Count -gt 0) {
-                Write-Log -Level Debug -Message "Rendering $($global:TuiState.OverlayStack.Count) overlays"
-                foreach ($overlay in $global:TuiState.OverlayStack) {
-                    if ($overlay -and $overlay.Visible) {
-                        try {
-                            Write-Log -Level Debug -Message "Rendering overlay: $($overlay.Name) at X=$($overlay.X), Y=$($overlay.Y)"
-                            $overlay.Render()
-                            $overlayBuffer = $overlay.GetBuffer()
-                            if ($overlayBuffer) {
-                                $global:TuiState.CompositorBuffer.BlendBuffer($overlayBuffer, $overlay.X, $overlay.Y)
-                            } else {
-                                Write-Log -Level Warning -Message "Overlay $($overlay.Name) has no buffer"
-                            }
-                        } catch {
-                            Write-Log -Level Error -Message "Error rendering overlay $($overlay.Name): $_"
-                        }
-                    }
-                }
             }
         }
         

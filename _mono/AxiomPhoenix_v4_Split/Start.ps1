@@ -85,7 +85,7 @@ try {
     $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
     
     Write-Host "  • Registering DialogManager..." -ForegroundColor Gray
-    $container.Register("DialogManager", [DialogManager]::new($container.GetService("EventManager"), $container.GetService("FocusManager")))
+    $container.Register("DialogManager", [DialogManager]::new($container))
     
     Write-Host "  • Registering ViewDefinitionService..." -ForegroundColor Gray
     $container.Register("ViewDefinitionService", [ViewDefinitionService]::new())

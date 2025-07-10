@@ -21,16 +21,15 @@ $global:TuiState = @{
     BufferHeight = 24
     CompositorBuffer = $null
     PreviousCompositorBuffer = $null
-    ScreenStack = [System.Collections.Generic.Stack[Screen]]::new() # CHANGED TO GENERIC STACK
-    CurrentScreen = $null
+    # REMOVED: ScreenStack - NavigationService handles this
+    CurrentScreen = $null  # The active window (Screen or Dialog)
     IsDirty = $true
     FocusedComponent = $null
-    # CommandPalette removed - now managed by CommandPaletteManager service
+    # REMOVED: OverlayStack - using window-based model
     Services = @{}
     LastRenderTime = [datetime]::Now
     FrameCount = 0
     InputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]'
-    OverlayStack = [System.Collections.Stack]::new() # Stack for proper Peek()
     # Added for input thread management
     CancellationTokenSource = $null
     InputRunspace = $null

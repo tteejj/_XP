@@ -1,0 +1,155 @@
+HOLISTIC INPUT ARCHITECTURE ANALYSIS
+Looking at successful TUI frameworks reveals our core problems:
+NCURSES PATTERN
+
+Single focused window gets ALL input
+Modal = top window captures everything
+No complex routing - just "who's on top?"
+
+GUI.CS PATTERN
+
+Clear hierarchy: Application → Modal → Window → View
+Input flows DOWN to focused view
+Returns bubble UP if not handled
+Modal dialogs create a new input "scope"
+
+LANTERNA PATTERN
+
+WindowManager owns focus AND z-order together
+Input thread separate from render
+Modal windows get exclusive input pump
+
+AXIOM-PHOENIX PROBLEMS
+1. SPLIT BRAIN ARCHITECTURE
+
+FocusManager tracks focus
+DialogManager tracks overlays
+Process-TuiInput tries to coordinate both
+No single source of truth for "who gets input"
+
+2. CONFLICTING HIERARCHIES
+
+Render hierarchy (parent/child)
+Focus hierarchy (what's focusable)
+Z-order (overlays)
+These don't align!
+
+3. MODAL IS BROKEN
+Current "modal" just adds to overlay stack but doesn't create an input scope. Input can still leak through.
+PROPOSED ARCHITECTURE
+Option 1: UNIFIED INPUT MANAGER
+InputManager {
+    - Owns focus tracking
+    - Owns modal stack
+    - Single ProcessInput() method
+    - Returns InputContext with:
+      - Current modal scope
+      - Focused element in that scope
+      - Z-ordered list of candidates
+}
+Option 2: WINDOW-BASED MODEL
+Like gui.cs:
+
+Screen = Window
+Dialog = Modal Window
+Only ONE window active at a time
+Modal windows completely replace input context
+
+Option 3: LAYER-BASED INPUT
+InputLayers [
+    0: Base Screen
+    1: Floating panels
+    2: Modal dialogs
+    3: System overlays (command palette)
+]
+Each layer blocks all layers below when active.
+Which direction makes sense for fixing this properly?JHLet's evaluate your proposed options in the context of your specific program and the PowerShell environment.
+Evaluation of Proposed Architectures
+Option 2: Window-Based Model (Like gui.cs)
+* Pros: This is a very robust and well-understood pattern. It's conceptually simple: only one "window" (be it a Screen or a Dialog) is ever the active recipient of input. It creates an ironclad modal system.
+* Cons: It can be rigid. It doesn't easily accommodate non-modal "tool windows" or floating panels that might be desirable later. Every pop-up must be strictly modal.
+* PowerShell Fit: Good. The concept of swapping out the entire input context fits well with a single-threaded scripting environment. It's less complex to manage than multiple active layers.
+Option 3: Layer-Based Input
+* Pros: Extremely powerful and flexible. It allows for complex UIs with multiple, potentially overlapping, non-modal elements. It's how modern graphical OS window managers think.
+* Cons: Overkill and Overly Complex for PowerShell. Managing these layers, propagating input through them, and handling focus scopes within each layer is a significant engineering challenge. It requires a very mature component model and state management system that is difficult to implement correctly in a single-threaded scripting environment like PowerShell. This path leads to the very "Split Brain" problem you identified if not executed perfectly.
+* PowerShell Fit: Poor. This pattern is best suited for compiled, multi-threaded languages with mature UI frameworks (WPF, WinForms, Qt, etc.).
+Option 1: Unified Input Manager
+* Pros: This is the "Goldilocks" solution. It is a pragmatic compromise that directly addresses your diagnosed problems without requiring a total rewrite of the component model. It unifies the "split brain" into a single source of truth.
+* Cons: It requires creating a new InputManager service and refactoring the responsibilities of FocusManager and DialogManager into it.
+* PowerShell Fit: Excellent. It creates a single, authoritative service that can be managed cleanly within the existing ServiceContainer. It centralizes the complex logic into one place, making the main application loop (Process-TuiInput) incredibly simple and declarative. It's a "PowerShell-friendly" way to manage a complex C#-style pattern.    ###SO I DONT KNOW. I AM NOT A CODER. I NEED ADVICE HERE. WHICH OF THESE, OR YOURS OR OTHERS MAKES SENSE HERE? SIMPLE/ROBUST AND GUARANTEED TO WORK ARE PREFERRED. I NEED THIS TO WORK.Thought process6sThe user is asking for advice on which approach to take. They're not a coder and need something simple, robust, and guaranteed to work. They're frustrated with the current broken state.
+Looking at this pragmatically:
+
+Option 2 (Window-Based) is the simplest and most proven
+Option 1 (Unified Input Manager) is more flexible but requires more refactoring
+Option 3 (Layer-Based) is overkill
+
+Given their requirements:
+
+Simple
+Robust
+Guaranteed to work
+They're not a coder
+
+I should recommend Option 2 (Window-Based Model) because:
+
+It's the simplest conceptually
+It's proven in gui.cs
+It requires the least architectural change
+It will definitely work
+It's easy to understand
+
+The key insight is that they just want it to work. They don't need flexibility for future features they may never build. They need a working TUI now.MY RECOMMENDATION: Option 2 - Window-Based Model
+Here's why this is the RIGHT choice for you:
+IT'S SIMPLE
+
+One window active at a time
+Modal dialogs completely take over
+No complex routing logic
+No ambiguity about who gets input
+
+IT'S PROVEN
+
+gui.cs uses this successfully
+Terminal.Gui (the .NET version) uses it
+Turbo Vision (DOS era) used it
+It just works
+
+MINIMAL CHANGES NEEDED
+
+NavigationService already manages screens (windows)
+DialogManager becomes simpler - just swaps the active window
+Process-TuiInput becomes trivial:
+powershell$activeWindow = $global:TuiState.ActiveWindow
+if ($activeWindow.HandleInput($keyInfo)) { return }
+
+
+HOW IT WORKS
+
+Screen = Normal window (Dashboard, TaskList)
+Dialog = Modal window (CommandPalette, Alerts)
+Only ONE is active - no confusion
+When you open CommandPalette:
+
+It becomes the ONLY active window
+Screen below is "paused"
+ALL input goes to CommandPalette
+When closed, previous screen resumes
+
+
+
+FIXES ALL YOUR ISSUES
+
+Dashboard keys will work (it's the only active window)
+CommandPalette text input will work (it gets ALL keys)
+No focus confusion (active window manages its own focus)
+No z-order issues (only one window visible)
+
+IMPLEMENTATION PATH
+
+Merge ActiveWindow tracking into NavigationService
+Make Dialog inherit from Screen (they're both windows)
+Simplify Process-TuiInput to just route to ActiveWindow
+Remove overlay complexity
+
+This is battle-tested simplicity. It WILL work.
+Should I implement this?

@@ -18,10 +18,10 @@ using namespace System.Management.Automation
 
 # ===== CLASS: Dialog =====
 # Module: dialog-system-class
-# Dependencies: UIElement, Panel
-# Purpose: Base class for modal dialogs
-# NOTE: This file was renamed from ACO.017 to ACO.014a to ensure Dialog loads before its subclasses
-class Dialog : UIElement {
+# Dependencies: Screen, Panel
+# Purpose: Base class for modal dialogs - NOW A WINDOW TYPE
+# FIXED: Dialog now inherits from Screen for proper window-based input
+class Dialog : Screen {
     [string]$Title = ""
     [string]$Message = ""
     hidden [Panel]$_panel
@@ -29,10 +29,11 @@ class Dialog : UIElement {
     hidden [bool]$_isComplete = $false
     [scriptblock]$OnClose
     [DialogResult]$DialogResult = [DialogResult]::None
+    
+    # Store the screen we came from
+    hidden [object]$_previousScreen = $null
 
-    Dialog([string]$name) : base($name) {
-        $this.IsFocusable = $true  # FIXED: Dialog must be focusable to handle Escape
-        $this.Visible = $false
+    Dialog([string]$name, [object]$serviceContainer) : base($name, $serviceContainer) {
         $this.IsOverlay = $true
         $this.Width = 50
         $this.Height = 10
@@ -44,8 +45,6 @@ class Dialog : UIElement {
         $this._panel = [Panel]::new($this.Name + "_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = Get-ThemeColor("Primary")    # FIXED: Use theme color
-        $this._panel.BackgroundColor = Get-ThemeColor("panel.background") # FIXED: Use theme color
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)
@@ -61,7 +60,6 @@ class Dialog : UIElement {
         $this.RequestRedraw()
     }
 
-    # Renamed from Close to Complete to match guide
     [void] Complete([object]$result) {
         $this.Result = $result
         $this._isComplete = $true
@@ -71,15 +69,19 @@ class Dialog : UIElement {
             try { 
                 & $this.OnClose $result 
             } catch { 
-                # Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
+                Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
             }
         }
         
-        # Publish a general dialog close event for DialogManager to pick up
-        if ($global:TuiState.Services.EventManager) {
-            $global:TuiState.Services.EventManager.Publish("Dialog.Completed", @{ Dialog = $this; Result = $result })
+        # Navigate back to previous screen
+        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        if ($navService) {
+            if ($navService.CanGoBack()) {
+                $navService.GoBack()
+            } else {
+                Write-Log -Level Warning -Message "Dialog '$($this.Name)': Cannot go back, no previous screen"
+            }
         }
-        # The DialogManager will then call HideDialog for actual UI removal and focus restoration.
     }
 
     # Legacy method for compatibility
@@ -87,27 +89,77 @@ class Dialog : UIElement {
         $this.Complete($result)
     }
 
-    # New method for DialogManager to call to set initial focus within the dialog
+    # Override Screen's OnEnter to set focus
+    [void] OnEnter() {
+        ([Screen]$this).OnEnter()
+        $this.SetInitialFocus()
+    }
+
+    # Override HandleInput to provide Dialog-specific behavior
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        
+        # Check for Escape at dialog level
+        if ($key.Key -eq [ConsoleKey]::Escape) {
+            $this.Complete($null)
+            return $true
+        }
+        
+        # Otherwise use default Screen behavior
+        return ([Screen]$this).HandleInput($key)
+    }
+
     [void] SetInitialFocus() {
-        $firstFocusable = $this.Children | Where-Object { $_.IsFocusable -and $_.Visible -and $_.Enabled } | Sort-Object TabIndex, Y, X | Select-Object -First 1
-        if ($firstFocusable -and $global:TuiState.Services.FocusManager) {
-            $global:TuiState.Services.FocusManager.SetFocus($firstFocusable)
-            # Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
+        # Find first focusable child
+        $firstFocusable = $null
+        $this.FindFocusableChild($this._panel, [ref]$firstFocusable)
+        
+        if ($firstFocusable) {
+            $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+            if ($focusManager) {
+                $focusManager.SetFocus($firstFocusable)
+                Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
+            }
+        }
+    }
+    
+    hidden [void] FindFocusableChild([UIElement]$parent, [ref]$result) {
+        if ($result.Value) { return }
+        
+        foreach ($child in $parent.Children) {
+            if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
+                $result.Value = $child
+                return
+            }
+            if ($child.Children.Count -gt 0) {
+                $this.FindFocusableChild($child, $result)
+            }
         }
     }
 
-    # Update Title on render
+    # Override render to center the dialog
     [void] OnRender() {
-        # Base Panel's OnRender already draws border and title using ThemeManager colors
-        $this._panel.Title = " $this.Title " # Ensure title is updated on panel
-        $this._panel.OnRender() # Render the internal panel
+        # Center the panel
+        $this._panel.X = [Math]::Floor(($this.Width - $this._panel.Width) / 2)
+        $this._panel.Y = [Math]::Floor(($this.Height - $this._panel.Height) / 2)
+        
+        # Update panel title
+        $this._panel.Title = " $this.Title "
+        
+        # Clear background with semi-transparent effect (simulate with darker color)
+        $bgColor = Get-ThemeColor("overlay.background")
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
     }
 
     [object] ShowDialog([string]$title, [string]$message) {
         $this.Show($title, $message)
         
-        # In a real implementation, this would block until dialog closes
-        # For now, return immediately
+        # Navigate to this dialog
+        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        if ($navService) {
+            $navService.NavigateTo($this)
+        }
+        
         return $this.Result
     }
 }

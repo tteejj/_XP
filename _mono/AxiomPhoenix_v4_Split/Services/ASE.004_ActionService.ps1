@@ -2,14 +2,6 @@
 # Axiom-Phoenix v4.0 - All Services (Load After Components)
 # Core application services: action, navigation, data, theming, logging, events
 # ==============================================================================
-#
-# TABLE OF CONTENTS DIRECTIVE:
-# When modifying this file, ensure page markers remain accurate and update
-# TableOfContents.md to reflect any structural changes.
-#
-# Search for "PAGE: ASE.###" to find specific sections.
-# Each section ends with "END_PAGE: ASE.###"
-# ==============================================================================
 
 #region Service Classes
 
@@ -160,24 +152,22 @@ class ActionService {
             Hotkey = "F1"
         })
         
-        # Add navigation.commandPalette action
-        $this.RegisterAction("navigation.commandPalette", {
+        # FIXED: Use CommandPaletteScreen instead of DialogManager
+        $this.RegisterAction("app.commandPalette", {
+            Write-Log -Level Debug -Message "app.commandPalette action triggered"
+            
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
+            
+            if (-not $navService -or -not $container) {
+                Write-Log -Level Error -Message "NavigationService or ServiceContainer not found"
+                return
+            }
+            
             $paletteScreen = [CommandPaletteScreen]::new($container)
             $paletteScreen.Initialize()
             $navService.NavigateTo($paletteScreen)
-        }, @{
-            Category = "Navigation"
-            Description = "Open Command Palette"
-        })
-        
-        # Update app.commandPalette to use navigation
-        $this.RegisterAction("app.commandPalette", {
-            $actionService = $global:TuiState.Services.ActionService
-            if ($actionService) {
-                $actionService.ExecuteAction("navigation.commandPalette")
-            }
+            
         }, @{
             Category = "Application"
             Description = "Show command palette"
@@ -186,11 +176,8 @@ class ActionService {
         
         # Theme picker action
         $this.RegisterAction("ui.theme.picker", {
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            $themeScreen = [ThemePickerScreen]::new($container)
-            $themeScreen.Initialize()
-            $navService.NavigateTo($themeScreen)
+            # Placeholder for theme picker
+            Write-Log -Level Info -Message "Theme picker not implemented yet"
         }, @{
             Category = "UI"
             Description = "Change Theme"
@@ -198,40 +185,30 @@ class ActionService {
         
         # Task management actions
         $this.RegisterAction("task.new", {
-            $navService = $global:TuiState.Services.NavigationService
-            $currentScreen = $navService?.CurrentScreen
-            if ($currentScreen -is [TaskListScreen]) {
-                $currentScreen._newButton.OnClick.Invoke()
-            }
+            # Placeholder
+            Write-Log -Level Info -Message "New task not implemented yet"
         }, @{
             Category = "Tasks"
             Description = "New Task"
         })
         
         $this.RegisterAction("task.list", {
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            $taskScreen = [TaskListScreen]::new($container)
-            $taskScreen.Initialize()
-            $navService.NavigateTo($taskScreen)
+            # Placeholder
+            Write-Log -Level Info -Message "Task list not implemented yet"
         }, @{
             Category = "Tasks"
             Description = "View All Tasks"
         })
         
-        # Add navigation.taskList action for consistency
+        # Navigation actions
         $this.RegisterAction("navigation.taskList", {
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            $taskScreen = [TaskListScreen]::new($container)
-            $taskScreen.Initialize()
-            $navService.NavigateTo($taskScreen)
+            # Placeholder - TaskListScreen not implemented
+            Write-Log -Level Info -Message "Task list screen not implemented yet"
         }, @{
             Category = "Navigation"
             Description = "Go to Task List"
         })
         
-        # Add navigation.dashboard action
         $this.RegisterAction("navigation.dashboard", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
@@ -243,19 +220,22 @@ class ActionService {
             Description = "Go to Dashboard"
         })
         
-        # Add navigation.newTask action
         $this.RegisterAction("navigation.newTask", {
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            $newTaskScreen = [NewTaskScreen]::new($container)
-            $newTaskScreen.Initialize()
-            $navService.NavigateTo($newTaskScreen)
+            # Placeholder
+            Write-Log -Level Info -Message "New task screen not implemented yet"
         }, @{
             Category = "Navigation"
             Description = "Create New Task"
         })
         
-        # Add navigation.back action
+        # FIXED: Add navigation.commandPalette for menu option
+        $this.RegisterAction("navigation.commandPalette", {
+            $this.ExecuteAction("app.commandPalette")
+        }, @{
+            Category = "Navigation"
+            Description = "Open Command Palette"
+        })
+        
         $this.RegisterAction("navigation.back", {
             $navService = $global:TuiState.Services.NavigationService
             if ($navService.CanGoBack()) {
@@ -266,45 +246,23 @@ class ActionService {
             Description = "Go Back"
         })
         
-        # Task CRUD actions
+        # Task CRUD actions (placeholders for now)
         $this.RegisterAction("task.edit.selected", {
-            $navService = $global:TuiState.Services.NavigationService
-            $currentScreen = $navService?.CurrentScreen
-            if ($currentScreen -is [TaskListScreen] -and $currentScreen._selectedTask) {
-                $container = $global:TuiState.ServiceContainer
-                $editScreen = [EditTaskScreen]::new($container, $currentScreen._selectedTask)
-                $editScreen.Initialize()
-                $navService.NavigateTo($editScreen)
-            }
+            Write-Log -Level Info -Message "Edit task not implemented yet"
         }, @{
             Category = "Tasks"
             Description = "Edit Selected Task"
         })
         
         $this.RegisterAction("task.delete.selected", {
-            $navService = $global:TuiState.Services.NavigationService
-            $currentScreen = $navService?.CurrentScreen
-            if ($currentScreen -is [TaskListScreen] -and $currentScreen._selectedTask) {
-                $dataManager = $global:TuiState.Services.DataManager
-                $dataManager.DeleteTask($currentScreen._selectedTask.Id)
-                $currentScreen._RefreshTasks()
-                $currentScreen._UpdateDisplay()
-            }
+            Write-Log -Level Info -Message "Delete task not implemented yet"
         }, @{
             Category = "Tasks"
             Description = "Delete Selected Task"
         })
         
         $this.RegisterAction("task.complete.selected", {
-            $navService = $global:TuiState.Services.NavigationService
-            $currentScreen = $navService?.CurrentScreen
-            if ($currentScreen -is [TaskListScreen] -and $currentScreen._selectedTask) {
-                $currentScreen._selectedTask.Complete()
-                $dataManager = $global:TuiState.Services.DataManager
-                $dataManager.UpdateTask($currentScreen._selectedTask)
-                $currentScreen._RefreshTasks()
-                $currentScreen._UpdateDisplay()
-            }
+            Write-Log -Level Info -Message "Complete task not implemented yet"
         }, @{
             Category = "Tasks"
             Description = "Complete Selected Task"

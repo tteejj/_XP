@@ -27,6 +27,7 @@ function Initialize-TuiEngine {
         
         # Configure console
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        [Console]::InputEncoding = [System.Text.Encoding]::UTF8  # ADDED: Set input encoding
         $env:PYTHONIOENCODING = "utf-8"
         [Console]::CursorVisible = $false
         $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
@@ -266,14 +267,15 @@ function Update-TuiEngineSize {
             } catch {}
         }
         
+        # FIXED: Correct stderr redirection syntax
         # Method 3: Mode command (Windows)
         if ($null -eq $newWidth -or $newWidth -le 0) {
             try {
-                $modeOutput = cmd /c "mode con" 2>$null | Select-String "Columns:"
+                $modeOutput = cmd /c mode con 2>&1 | Where-Object { $_ -match "Columns:" }
                 if ($modeOutput) {
                     $newWidth = [int]($modeOutput -replace '.*Columns:\s*', '')
                 }
-                $modeOutput = cmd /c "mode con" 2>$null | Select-String "Lines:"
+                $modeOutput = cmd /c mode con 2>&1 | Where-Object { $_ -match "Lines:" }
                 if ($modeOutput) {
                     $newHeight = [int]($modeOutput -replace '.*Lines:\s*', '')
                 }
