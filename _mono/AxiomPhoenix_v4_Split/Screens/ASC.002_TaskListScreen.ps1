@@ -130,23 +130,8 @@ class TaskListScreen : Screen {
         $this._newButton.Width = 12
         $this._newButton.Height = 1
         $this._newButton.OnClick = {
-            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
-            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
-            
-            if ($dialogManager -and $dataManager) {
-                $dialog = [TaskEditPanel]::new("New Task", $null)
-                $dialog.OnSave = {
-                    $newTask = $dialog.GetTask()
-                    $dataManager.AddTask($newTask)
-                    $dialogManager.HideDialog($dialog)
-                    $thisScreen._RefreshTasks()
-                    $thisScreen._UpdateDisplay()
-                }.GetNewClosure()
-                $dialog.OnCancel = {
-                    $dialogManager.HideDialog($dialog)
-                }.GetNewClosure()
-                $dialogManager.ShowDialog($dialog)
-            }
+            # TaskEditPanel not available in this version
+            Write-Host "New task feature coming soon!" -ForegroundColor Yellow
         }.GetNewClosure()
                 
         $this._mainPanel.AddChild($this._newButton)
@@ -160,23 +145,8 @@ class TaskListScreen : Screen {
         $this._editButton.Width = 12
         $this._editButton.Height = 1
         $this._editButton.OnClick = {
-            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
-            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
-            
-            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
-                $dialog = [TaskEditPanel]::new("Edit Task", $thisScreen._selectedTask)
-                $dialog.OnSave = {
-                    $updatedTask = $dialog.GetTask()
-                    $dataManager.UpdateTask($updatedTask)
-                    $dialogManager.HideDialog($dialog)
-                    $thisScreen._RefreshTasks()
-                    $thisScreen._UpdateDisplay()
-                }.GetNewClosure()
-                $dialog.OnCancel = {
-                    $dialogManager.HideDialog($dialog)
-                }.GetNewClosure()
-                $dialogManager.ShowDialog($dialog)
-            }
+            # TaskEditPanel not available in this version
+            Write-Host "Edit task feature coming soon!" -ForegroundColor Yellow
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._editButton)
         $currentX += $buttonSpacing
@@ -189,22 +159,8 @@ class TaskListScreen : Screen {
         $this._deleteButton.Width = 14
         $this._deleteButton.Height = 1
         $this._deleteButton.OnClick = {
-            $dialogManager = $thisScreen.ServiceContainer?.GetService("DialogManager")
-            $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
-            
-            if ($dialogManager -and $dataManager -and $thisScreen._selectedTask) {
-                $dialog = [TaskDeleteDialog]::new($thisScreen._selectedTask)
-                $dialog.OnConfirm = {
-                    $dataManager.DeleteTask($thisScreen._selectedTask.Id)
-                    $dialogManager.HideDialog($dialog)
-                    $thisScreen._RefreshTasks()
-                    $thisScreen._UpdateDisplay()
-                }.GetNewClosure()
-                $dialog.OnCancel = {
-                    $dialogManager.HideDialog($dialog)
-                }.GetNewClosure()
-                $dialogManager.ShowDialog($dialog)
-            }
+            # TaskDeleteDialog not available in this version
+            Write-Host "Delete task feature coming soon!" -ForegroundColor Yellow
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._deleteButton)
         $currentX += $buttonSpacing + 2

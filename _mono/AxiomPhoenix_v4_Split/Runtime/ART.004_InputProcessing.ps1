@@ -62,17 +62,17 @@ function Process-TuiInput {
                 }
             }
             
-            # Priority 2: If overlay is active, check if it wants to handle the input
-            # But don't enforce strict modality - let focused components handle their input
+            # Priority 2: Active Overlay (The Modal Gatekeeper)
             if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
                 Write-Log -Level Debug -Message "  - Checking overlay: $($topOverlay.Name)"
                 if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                     Write-Log -Level Debug -Message "  - Input handled by overlay"
-                    continue  # Only continue if overlay actually handled it
                 }
-                # Don't enforce modality - let the input continue to other handlers
+                # CRITICAL FIX: The loop cycle for this key ends HERE.
+                # Do not proceed to global keybindings or the screen.
+                continue
             }
             
             # Priority 3: Global keybindings (only if no overlay is active)

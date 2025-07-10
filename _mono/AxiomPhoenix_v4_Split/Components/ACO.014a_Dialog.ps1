@@ -20,6 +20,7 @@ using namespace System.Management.Automation
 # Module: dialog-system-class
 # Dependencies: UIElement, Panel
 # Purpose: Base class for modal dialogs
+# NOTE: This file was renamed from ACO.017 to ACO.014a to ensure Dialog loads before its subclasses
 class Dialog : UIElement {
     [string]$Title = ""
     [string]$Message = ""
@@ -30,7 +31,7 @@ class Dialog : UIElement {
     [DialogResult]$DialogResult = [DialogResult]::None
 
     Dialog([string]$name) : base($name) {
-        $this.IsFocusable = $true
+        $this.IsFocusable = $false
         $this.Visible = $false
         $this.IsOverlay = $true
         $this.Width = 50
@@ -111,4 +112,4 @@ class Dialog : UIElement {
     }
 }
 
-#<!-- END_PAGE: ACO.017 -->
+#<!-- END_PAGE: ACO.014a -->

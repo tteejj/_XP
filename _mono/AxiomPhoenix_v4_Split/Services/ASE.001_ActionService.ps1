@@ -171,12 +171,12 @@ class ActionService {
                 return
             }
             
-            # Create and configure the CommandPalette component
-            $palette = [CommandPalette]::new("CommandPalette")
+            # 1. Create the CommandPalette
+            $palette = [CommandPalette]::new("CommandPaletteDialog")
             $palette.Width = 60
             $palette.Height = 20
             
-            # Get all available actions and populate the palette
+            # 2. Configure - Populate with actions and set OnClose handler
             $allActions = $actionService.GetAllActions()
             $actionList = @()
             foreach ($actionEntry in $allActions.GetEnumerator()) {
@@ -189,52 +189,25 @@ class ActionService {
                 }
             }
             
-            # Set the actions data (Data Down)
+            # Set the actions data
             $palette.SetActions($actionList)
             
-            # Define what happens when user selects a command (Events Up)
-            $palette.OnExecute = {
-                param($sender, $selectedAction)
-                try {
-                    # Hide the palette first
-                    $dialogManager.HideDialog($palette)
-                    
-                    # Execute the selected action
-                    if ($selectedAction -and $selectedAction.Name) {
-                        $actionService.ExecuteAction($selectedAction.Name)
+            # Configure what happens when the dialog closes with a result
+            $palette.OnClose = {
+                param($result)
+                if ($result -and $result.Name) {
+                    # Execute the selected action after the dialog has closed
+                    try {
+                        $actionService.ExecuteAction($result.Name)
+                    }
+                    catch {
+                        Write-Log -Level Error -Message "Failed to execute action '$($result.Name)': $($_.Exception.Message)"
                     }
                 }
-                catch {
-                    Write-Log -Level Error -Message "Failed to execute command palette action: $($_.Exception.Message)"
-                }
             }.GetNewClosure()
             
-            # Define cancel behavior
-            $palette.OnCancel = {
-                $dialogManager.HideDialog($palette)
-            }.GetNewClosure()
-            
-            # Show the palette using the standard overlay mechanism
+            # 3. Show - Let DialogManager handle everything
             $dialogManager.ShowDialog($palette)
-            
-            # Set initial focus directly without sleep
-            if ($palette._searchBox) {
-                $focusManager = $global:TuiState.Services.FocusManager
-                if ($focusManager) {
-                    # Make sure the search box is ready
-                    $palette._searchBox.IsFocusable = $true
-                    $palette._searchBox.Enabled = $true
-                    $palette._searchBox.Visible = $true
-                    
-                    # Set focus and update global state
-                    $focusManager.SetFocus($palette._searchBox)
-                    $global:TuiState.FocusedComponent = $palette._searchBox
-                    
-                    # Force a redraw
-                    $palette._searchBox.RequestRedraw()
-                    $global:TuiState.IsDirty = $true
-                }
-            }
             
         }, @{
             Category = "Application"

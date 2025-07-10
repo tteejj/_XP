@@ -18,41 +18,31 @@ using namespace System.Management.Automation
 
 # ===== CLASS: CommandPalette =====
 # Module: command-palette
-# Dependencies: UIElement, Panel, ListBox, TextBoxComponent
+# Dependencies: Dialog, Panel, ListBox, TextBoxComponent
 # Purpose: Searchable command interface
-class CommandPalette : UIElement {
+class CommandPalette : Dialog {
     hidden [ListBox]$_listBox
     hidden [TextBoxComponent]$_searchBox
-    hidden [Panel]$_panel
     hidden [List[object]]$_allActions
     hidden [List[object]]$_filteredActions
     [scriptblock]$OnExecute
     [scriptblock]$OnCancel
 
     CommandPalette([string]$name) : base($name) {
-        $this.IsFocusable = $true
-        $this.Visible = $false
-        $this.IsOverlay = $true
         $this.Width = 60
         $this.Height = 20
         
         $this._allActions = [List[object]]::new()
         $this._filteredActions = [List[object]]::new()
         
-        $this.Initialize()
+        $this.InitializeControls()
     }
 
-    hidden [void] Initialize() {
-        # Create main panel with border
-        $this._panel = [Panel]::new("CommandPalette_Panel")
-        $this._panel.HasBorder = $true
-        $this._panel.BorderStyle = "Double"
+    hidden [void] InitializeControls() {
+        # Dialog base class already provides _panel with border
         $this._panel.Title = " Command Palette "
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
-        $this._panel.X = 0
-        $this._panel.Y = 0
-        $this.AddChild($this._panel)
 
         # Create search box
         $this._searchBox = [TextBoxComponent]::new("CommandPalette_Search")
@@ -150,57 +140,46 @@ class CommandPalette : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        $handled = $true
-        
+        # Only handle container-level actions
         switch ($key.Key) {
             ([ConsoleKey]::Escape) { 
-                if ($this.OnCancel) {
-                    & $this.OnCancel
-                }
+                $this.Complete($null)  # Signal cancellation
                 return $true 
             }
             ([ConsoleKey]::Enter) {
-                if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                    if ($selectedAction -and $this.OnExecute) {
-                        & $this.OnExecute $this $selectedAction
-                        return $true
+                # Only handle Enter if the list has focus and a selection
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager -and $focusManager.FocusedComponent -eq $this._listBox) {
+                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                        if ($selectedAction) {
+                            $this.Complete($selectedAction)  # Signal completion with result
+                            return $true
+                        }
+                    }
+                }
+                return $false  # Let the focused component handle Enter
+            }
+            ([ConsoleKey]::Tab) {
+                # Toggle focus between search box and list
+                $focusManager = $global:TuiState.Services.FocusManager
+                if ($focusManager) {
+                    if ($focusManager.FocusedComponent -eq $this._searchBox) {
+                        $focusManager.SetFocus($this._listBox)
+                    } else {
+                        $focusManager.SetFocus($this._searchBox)
                     }
                 }
                 return $true
             }
-            ([ConsoleKey]::Tab) {
-                # Switch focus between search box and list
-                if ($this._searchBox.IsFocused) {
-                    $this._searchBox.IsFocused = $false
-                    $this._listBox.IsFocusable = $true
-                    # Focus would be set by parent focus manager
-                } else {
-                    $this._searchBox.IsFocused = $true
-                    $this._listBox.IsFocusable = $false
-                }
-                $this.RequestRedraw()
-                return $true
-            }
-            {$_ -in @([ConsoleKey]::UpArrow, [ConsoleKey]::DownArrow, [ConsoleKey]::PageUp, [ConsoleKey]::PageDown, [ConsoleKey]::Home, [ConsoleKey]::End)} {
-                # Navigation keys go to the list
-                return $this._listBox.HandleInput($key)
-            }
             default {
-                # All other input goes to search box if it's focused
-                if ($this._searchBox.IsFocused) {
-                    return $this._searchBox.HandleInput($key)
-                } else {
-                    $handled = $false
-                }
+                # Let the input routing system handle everything else
+                return $false
             }
         }
         
-        if ($handled) {
-            $this.RequestRedraw()
-        }
-        
-        return $handled
+        # This should never be reached due to the switch statement, but added for safety
+        return $false
     }
 
     [void] OnFocus() {

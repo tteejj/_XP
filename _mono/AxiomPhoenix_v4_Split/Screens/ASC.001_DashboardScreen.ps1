@@ -264,18 +264,19 @@ class DashboardScreen : Screen {
 
         switch ($actionKey) {
             "tasks" {
-                $screen = [TaskListScreen]::new($this.ServiceContainer)
-                $screen.Initialize()
-                $navService.NavigateTo($screen)
+                # Tasks screen will be loaded dynamically to avoid circular dependency
+                $actionService = $this.ServiceContainer?.GetService("ActionService")
+                if ($actionService) {
+                    $actionService.ExecuteAction("navigation.taskList")
+                }
             }
             "projects" {
                 # Future: ProjectListScreen
                 Write-Host "Projects feature coming soon!" -ForegroundColor Yellow
             }
             "settings" {
-                $screen = [ThemePickerScreen]::new($this.ServiceContainer)
-                $screen.Initialize()
-                $navService.NavigateTo($screen)
+                # Theme picker not available in this version
+                Write-Host "Settings feature coming soon!" -ForegroundColor Yellow
             }
             "exit" {
                 $global:TuiState.Running = $false

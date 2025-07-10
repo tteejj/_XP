@@ -81,6 +81,15 @@ try {
     Write-Host "  • Registering NavigationService..." -ForegroundColor Gray
     $container.Register("NavigationService", [NavigationService]::new($container))
     
+    Write-Host "  • Registering FocusManager..." -ForegroundColor Gray
+    $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
+    
+    Write-Host "  • Registering DialogManager..." -ForegroundColor Gray
+    $container.Register("DialogManager", [DialogManager]::new($container.GetService("EventManager"), $container.GetService("FocusManager")))
+    
+    Write-Host "  • Registering ViewDefinitionService..." -ForegroundColor Gray
+    $container.Register("ViewDefinitionService", [ViewDefinitionService]::new())
+    
     Write-Host "Services initialized successfully!" -ForegroundColor Green
 
     # Initialize global state
@@ -92,6 +101,9 @@ try {
         ActionService = $container.GetService("ActionService")
         KeybindingService = $container.GetService("KeybindingService")
         NavigationService = $container.GetService("NavigationService")
+        FocusManager = $container.GetService("FocusManager")
+        DialogManager = $container.GetService("DialogManager")
+        ViewDefinitionService = $container.GetService("ViewDefinitionService")
     }
     $global:TuiState.ServiceContainer = $container
 
@@ -113,13 +125,34 @@ try {
     $dataManager = $container.GetService("DataManager")
     
     # Create sample tasks
-    $sampleTasks = @(
-        [PmcTask]::new("TASK-001", "Review project requirements", "Pending", "High"),
-        [PmcTask]::new("TASK-002", "Design system architecture", "InProgress", "High"),
-        [PmcTask]::new("TASK-003", "Implement core features", "InProgress", "Medium"),
-        [PmcTask]::new("TASK-004", "Write unit tests", "Pending", "Medium"),
-        [PmcTask]::new("TASK-005", "Deploy to staging", "Pending", "Low")
-    )
+    $sampleTasks = @()
+    
+    $task1 = [PmcTask]::new("Review project requirements")
+    $task1.Status = [TaskStatus]::Pending
+    $task1.Priority = [TaskPriority]::High
+    $sampleTasks += $task1
+    
+    $task2 = [PmcTask]::new("Design system architecture")
+    $task2.Status = [TaskStatus]::InProgress
+    $task2.Priority = [TaskPriority]::High
+    $task2.SetProgress(30)
+    $sampleTasks += $task2
+    
+    $task3 = [PmcTask]::new("Implement core features")
+    $task3.Status = [TaskStatus]::InProgress
+    $task3.Priority = [TaskPriority]::Medium
+    $task3.SetProgress(60)
+    $sampleTasks += $task3
+    
+    $task4 = [PmcTask]::new("Write unit tests")
+    $task4.Status = [TaskStatus]::Pending
+    $task4.Priority = [TaskPriority]::Medium
+    $sampleTasks += $task4
+    
+    $task5 = [PmcTask]::new("Deploy to staging")
+    $task5.Status = [TaskStatus]::Pending
+    $task5.Priority = [TaskPriority]::Low
+    $sampleTasks += $task5
     
     foreach ($task in $sampleTasks) {
         $dataManager.AddTask($task)
