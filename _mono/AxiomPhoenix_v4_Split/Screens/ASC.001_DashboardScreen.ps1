@@ -285,8 +285,9 @@ class DashboardScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Handle hotkeys for quick navigation
-        switch ($keyInfo.KeyChar.ToString().ToUpper()) {
+        # Handle hotkeys for quick navigation (case-insensitive)
+        $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
+        switch ($keyChar) {
             "T" {
                 $this._ExecuteNavigationAction("tasks")
                 return $true

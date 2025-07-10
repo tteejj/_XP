@@ -31,7 +31,7 @@ class Dialog : UIElement {
     [DialogResult]$DialogResult = [DialogResult]::None
 
     Dialog([string]$name) : base($name) {
-        $this.IsFocusable = $false
+        $this.IsFocusable = $true  # FIXED: Dialog must be focusable to handle Escape
         $this.Visible = $false
         $this.IsOverlay = $true
         $this.Width = 50
@@ -44,8 +44,8 @@ class Dialog : UIElement {
         $this._panel = [Panel]::new($this.Name + "_Panel")
         $this._panel.HasBorder = $true
         $this._panel.BorderStyle = "Double"
-        $this._panel.BorderColor = "#00FFFF"    # FIXED: Use hex string for border
-        $this._panel.BackgroundColor = "#000000" # FIXED: Use hex string for background
+        $this._panel.BorderColor = Get-ThemeColor("Primary")    # FIXED: Use theme color
+        $this._panel.BackgroundColor = Get-ThemeColor("panel.background") # FIXED: Use theme color
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
         $this.AddChild($this._panel)

@@ -16,6 +16,18 @@ class DialogManager {
     DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
         $this.EventManager = $eventManager
         $this.FocusManager = $focusManager
+        
+        # Subscribe to Dialog.Completed event to automatically hide dialogs
+        if ($this.EventManager) {
+            $dialogManagerRef = $this
+            $this.EventManager.Subscribe("Dialog.Completed", {
+                param($eventData)
+                if ($eventData.Dialog) {
+                    $dialogManagerRef.HideDialog($eventData.Dialog)
+                }
+            })
+        }
+        
         Write-Log -Level Debug -Message "DialogManager: Initialized."
     }
 

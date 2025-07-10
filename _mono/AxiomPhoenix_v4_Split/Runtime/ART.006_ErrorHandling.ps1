@@ -124,12 +124,30 @@ function Invoke-PanicHandler {
 function Start-AxiomPhoenix {
     [CmdletBinding()]
     param(
-        [ServiceContainer]$ServiceContainer,
-        [Screen]$InitialScreen
+        [object]$ServiceContainer,  # Changed from [ServiceContainer] to [object]
+        [object]$InitialScreen      # Changed from [Screen] to [object]
     )
     
     try {
         # Write-Log -Level Info -Message "Starting Axiom-Phoenix application..."
+        
+        # Validate ServiceContainer
+        if ($null -eq $ServiceContainer) {
+            throw [System.ArgumentNullException]::new("ServiceContainer")
+        }
+        if ($ServiceContainer.GetType().Name -ne 'ServiceContainer') {
+            throw [System.ArgumentException]::new("Expected ServiceContainer but got $($ServiceContainer.GetType().Name)")
+        }
+        
+        # Validate InitialScreen if provided
+        if ($null -ne $InitialScreen) {
+            # Check if it's a Screen-derived type by looking for expected properties/methods
+            if (-not ($InitialScreen.PSObject.Properties['ServiceContainer'] -and 
+                      $InitialScreen.PSObject.Methods['Initialize'] -and
+                      $InitialScreen.PSObject.Methods['OnEnter'])) {
+                throw [System.ArgumentException]::new("Expected Screen-derived object but got $($InitialScreen.GetType().Name)")
+            }
+        }
         
         # Store services
         $global:TuiState.Services = @{

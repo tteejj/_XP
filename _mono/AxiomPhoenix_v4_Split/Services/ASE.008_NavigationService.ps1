@@ -11,29 +11,47 @@
 # Each section ends with "END_PAGE: ASE.###"
 # ==============================================================================
 
+using namespace System.Collections.Generic
+using namespace System.Collections.Concurrent
+using namespace System.Management.Automation
+using namespace System.Threading
+
 #region NavigationService Class
 
 # ===== CLASS: NavigationService =====
 # Module: navigation-service (from axiom)
-# Dependencies: EventManager (optional)
+# Dependencies: ServiceContainer, EventManager (optional)
 # Purpose: Screen navigation and history management
 class NavigationService {
-    [System.Collections.Generic.Stack[Screen]]$NavigationStack = [System.Collections.Generic.Stack[Screen]]::new() # Explicitly initialize
-    [Screen]$CurrentScreen
-    [EventManager]$EventManager
+    [System.Collections.Generic.Stack[object]]$NavigationStack = [System.Collections.Generic.Stack[object]]::new() # Changed from Stack[Screen] to Stack[object]
+    [object]$CurrentScreen # Changed from [Screen] to [object]
     [hashtable]$ScreenRegistry = @{}
     [int]$MaxStackSize = 10
-    [hashtable]$Services # Added to store access to all services (for creating screens)
+    [object]$ServiceContainer # Store the container as object to avoid type issues
 
-    # Add constructor that takes ServiceContainer (or hashtable of services)
-    NavigationService([hashtable]$services) {
-        $this.Services = $services
-        $this.EventManager = $services.EventManager # Get EventManager if present
+    # Updated constructor that takes ServiceContainer directly (as object to avoid type conversion issues)
+    NavigationService([object]$serviceContainer) {
+        if ($null -eq $serviceContainer) {
+            throw [System.ArgumentNullException]::new("serviceContainer")
+        }
+        # Verify it's actually a ServiceContainer at runtime
+        if ($serviceContainer.GetType().Name -ne 'ServiceContainer') {
+            throw [System.ArgumentException]::new("Expected ServiceContainer but got $($serviceContainer.GetType().Name)")
+        }
+        $this.ServiceContainer = $serviceContainer
+        # No need to store EventManager separately - get it when needed
     }
 
     # IMPORTANT: Update NavigateTo method
-    [void] NavigateTo([Screen]$screen) {
+    [void] NavigateTo([object]$screen) {
         if ($null -eq $screen) { throw [System.ArgumentNullException]::new("screen", "Cannot navigate to a null screen.") }
+        
+        # Verify it's actually a Screen at runtime
+        if (-not ($screen.PSObject.Properties['ServiceContainer'] -and 
+                  $screen.PSObject.Methods['Initialize'] -and
+                  $screen.PSObject.Methods['OnEnter'])) {
+            throw [System.ArgumentException]::new("Expected Screen-derived object but got $($screen.GetType().Name)")
+        }
         
         try {
             # Exit current screen if one exists
@@ -65,8 +83,9 @@ class NavigationService {
             $screen.OnEnter() # Call lifecycle method
             
             # Publish navigation event
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Navigation.ScreenChanged", @{
+            $eventManager = $this.ServiceContainer.GetService("EventManager")
+            if ($eventManager) {
+                $eventManager.Publish("Navigation.ScreenChanged", @{
                     Screen = $screen
                     ScreenName = $screen.Name
                     StackDepth = $this.NavigationStack.Count
@@ -124,8 +143,9 @@ class NavigationService {
             $previousScreen.OnResume() # Call lifecycle method
             
             # Publish navigation event
-            if ($this.EventManager) {
-                $this.EventManager.Publish("Navigation.BackNavigation", @{
+            $eventManager = $this.ServiceContainer.GetService("EventManager")
+            if ($eventManager) {
+                $eventManager.Publish("Navigation.BackNavigation", @{
                     Screen = $previousScreen
                     ScreenName = $previousScreen.Name
                     StackDepth = $this.NavigationStack.Count

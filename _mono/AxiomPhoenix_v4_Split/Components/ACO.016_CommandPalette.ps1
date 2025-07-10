@@ -53,11 +53,13 @@ class CommandPalette : Dialog {
         $this._searchBox.Placeholder = "Type to search commands..."
         $this._searchBox.Visible = $true  # Ensure visible
         $this._searchBox.Enabled = $true  # Ensure enabled
+        $this._searchBox.IsFocusable = $true  # Ensure focusable
         
         # Connect search box to filtering
         $paletteRef = $this
         $this._searchBox.OnChange = { 
             param($sender, $text) 
+            Write-Log -Level Debug -Message "CommandPalette: Search text changed to '$text'"
             $paletteRef.FilterActions($text) 
         }.GetNewClosure()
         $this._panel.AddChild($this._searchBox)
@@ -134,11 +136,15 @@ class CommandPalette : Dialog {
                 Write-Log -Level Error -Message "CommandPalette.SetInitialFocus: FocusManager is null!"
             }
             $this._searchBox.RequestRedraw()
+            $this.RequestRedraw()  # Also redraw the palette to ensure everything is visible
         }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
+        
+        $focusManager = $global:TuiState.Services.FocusManager
+        $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
         
         # Only handle container-level actions
         switch ($key.Key) {
@@ -148,8 +154,7 @@ class CommandPalette : Dialog {
             }
             ([ConsoleKey]::Enter) {
                 # Only handle Enter if the list has focus and a selection
-                $focusManager = $global:TuiState.Services.FocusManager
-                if ($focusManager -and $focusManager.FocusedComponent -eq $this._listBox) {
+                if ($focusedComponent -eq $this._listBox) {
                     if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
                         $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
                         if ($selectedAction) {
@@ -162,15 +167,23 @@ class CommandPalette : Dialog {
             }
             ([ConsoleKey]::Tab) {
                 # Toggle focus between search box and list
-                $focusManager = $global:TuiState.Services.FocusManager
                 if ($focusManager) {
-                    if ($focusManager.FocusedComponent -eq $this._searchBox) {
+                    if ($focusedComponent -eq $this._searchBox) {
                         $focusManager.SetFocus($this._listBox)
                     } else {
                         $focusManager.SetFocus($this._searchBox)
                     }
                 }
                 return $true
+            }
+            ([ConsoleKey]::UpArrow) -or ([ConsoleKey]::DownArrow) {
+                # If search box has focus and user presses arrow keys, move focus to list
+                if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
+                    $focusManager.SetFocus($this._listBox)
+                    # Let the list handle the actual arrow key
+                    return $this._listBox.HandleInput($key)
+                }
+                return $false  # Let the focused component handle it
             }
             default {
                 # Let the input routing system handle everything else

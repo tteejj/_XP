@@ -22,7 +22,7 @@ This document provides a comprehensive, metadata-rich index of the framework. It
 | ABC.004 | UIElement Class | **Inherits:** N/A. **Purpose:** The abstract base for all visual components. Manages position, size, children, visibility, and the core rendering lifecycle (`OnRender`, `HandleInput`). |
 | ABC.005 | Component Class | **Inherits:** UIElement (ABC.004). **Purpose:** A generic, empty container component. |
 | ABC.006 | Screen Class | **Inherits:** UIElement (ABC.004). **Purpose:** Top-level container for a view. Integrates with the service container and has lifecycle methods (`OnEnter`, `OnExit`). Managed by `NavigationService`. |
-| ABC.007 | ServiceContainer Class | **Purpose:** A dependency injection (DI) container for registering and resolving application services. |
+| ABC.001a | ServiceContainer Class | **Purpose:** A dependency injection (DI) container for registering and resolving application services. |
 
 ---
 

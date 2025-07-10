@@ -43,12 +43,18 @@ class TextBoxComponent : UIElement {
         
         # Clear buffer with theme background
         $bgColor = Get-ThemeColor("input.background")
+        if (-not $bgColor) { $bgColor = "#1E1E1E" }  # Dark gray fallback
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Determine colors
         $fgColor = if ($this.IsFocused) { Get-ThemeColor("input.foreground") } else { Get-ThemeColor("Subtle") }
         $bgColor = Get-ThemeColor("input.background")
         $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+        
+        # FIXED: Ensure we have valid colors, fallback to white on black if theme is missing
+        if (-not $fgColor) { $fgColor = "#FFFFFF" }
+        if (-not $bgColor) { $bgColor = "#000000" }
+        if (-not $borderColorValue) { $borderColorValue = "#808080" }
         
         # Draw border
         Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
@@ -89,6 +95,7 @@ class TextBoxComponent : UIElement {
                 if ($visibleText) {
                     $textStyle = @{ FG = $fgColor; BG = $bgColor }
                     Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $visibleText -Style $textStyle
+                    Write-Log -Level Debug -Message "TextBox '$($this.Name)': Rendered text '$visibleText' at X=$contentStartX Y=$contentY with FG=$fgColor BG=$bgColor"
                 }
                 
                 # Draw cursor if focused (non-destructive - inverts colors)
@@ -114,6 +121,8 @@ class TextBoxComponent : UIElement {
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
+        
+        Write-Log -Level Debug -Message "TextBox '$($this.Name)': HandleInput called with key=$($key.Key) char='$($key.KeyChar)'"
         
         $handled = $true
         $oldText = $this.Text
@@ -160,14 +169,18 @@ class TextBoxComponent : UIElement {
         }
         
         if ($handled) {
-            if ($oldText -ne $this.Text -and $this.OnChange) {
-                try { 
-                    & $this.OnChange $this $this.Text 
-                } catch {
-                    # Ignore errors in onChange handler
+            if ($oldText -ne $this.Text) {
+                Write-Log -Level Debug -Message "TextBox '$($this.Name)': Text changed from '$oldText' to '$($this.Text)'"
+                if ($this.OnChange) {
+                    try { 
+                        & $this.OnChange $this $this.Text 
+                    } catch {
+                        Write-Log -Level Error -Message "TextBox '$($this.Name)': Error in OnChange handler: $_"
+                    }
                 }
             }
             $this.RequestRedraw()
+            $global:TuiState.IsDirty = $true  # Force immediate redraw
         }
         
         return $handled

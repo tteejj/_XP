@@ -48,8 +48,7 @@ $script:TuiVerbosePreference = 'SilentlyContinue'
 #   - Cleanup: Unsubscribe from events and release resources
 # ==============================================================================
 class Screen : UIElement {
-    [hashtable]$Services
-    [object]$ServiceContainer 
+    [object]$ServiceContainer # Changed to object to avoid type conversion issues
     [System.Collections.Generic.Dictionary[string, object]]$State
     [System.Collections.Generic.List[UIElement]] $Panels
     
@@ -58,38 +57,16 @@ class Screen : UIElement {
     hidden [bool] $_isInitialized = $false
     hidden [System.Collections.Generic.Dictionary[string, string]] $EventSubscriptions 
 
-    Screen([string]$name, [hashtable]$services) : base($name) {
-        $this.Services = $services
-        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
-        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
-        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
-        $this.ServiceContainer = $null
-        # Set initial screen dimensions to console size
-        $this.Width = [Math]::Max(80, [Console]::WindowWidth)
-        $this.Height = [Math]::Max(24, [Console]::WindowHeight)
-        # Write-Verbose "Screen '$($this.Name)' created with hashtable services."
-    }
-
+    # Primary constructor - takes ServiceContainer directly
     Screen([string]$name, [object]$serviceContainer) : base($name) {
-        $this.ServiceContainer = $serviceContainer
-        $this.Services = [hashtable]::new()
-        if ($this.ServiceContainer.PSObject.Methods['GetAllRegisteredServices'] -and $this.ServiceContainer.PSObject.Methods['GetService']) { 
-            try {
-                $registeredServices = $this.ServiceContainer.GetAllRegisteredServices()
-                foreach ($service in $registeredServices) {
-                    try {
-                        $this.Services[$service.Name] = $this.ServiceContainer.GetService($service.Name)
-                    } catch {
-                        Write-Warning "Screen '$($this.Name)': Failed to resolve service '$($service.Name)' from container: $($_.Exception.Message)"
-                    }
-                }
-                # Write-Verbose "Screen '$($this.Name)' populated Services hashtable from ServiceContainer."
-            } catch {
-                Write-Warning "Screen '$($this.Name)': Failed to enumerate services from container: $($_.Exception.Message)"
-            }
-        } else {
-            Write-Warning "Screen '$($this.Name)' received a non-ServiceContainer object for DI. Services hashtable might be incomplete or inaccurate."
+        if ($null -eq $serviceContainer) {
+            throw [System.ArgumentNullException]::new("serviceContainer")
         }
+        # Verify it's actually a ServiceContainer at runtime
+        if ($serviceContainer.GetType().Name -ne 'ServiceContainer') {
+            throw [System.ArgumentException]::new("Expected ServiceContainer but got $($serviceContainer.GetType().Name)")
+        }
+        $this.ServiceContainer = $serviceContainer
         $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
         $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
         $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
@@ -97,6 +74,19 @@ class Screen : UIElement {
         $this.Width = [Math]::Max(80, [Console]::WindowWidth)
         $this.Height = [Math]::Max(24, [Console]::WindowHeight)
         # Write-Verbose "Screen '$($this.Name)' created with ServiceContainer."
+    }
+
+    # Legacy constructor for backward compatibility (deprecated)
+    Screen([string]$name, [hashtable]$services) : base($name) {
+        Write-Warning "Screen '$($this.Name)': Using deprecated hashtable constructor. Please update to use ServiceContainer."
+        # This constructor is kept for backward compatibility but should be removed in future versions
+        $this.ServiceContainer = $null
+        $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
+        $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
+        $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
+        # Set initial screen dimensions to console size
+        $this.Width = [Math]::Max(80, [Console]::WindowWidth)
+        $this.Height = [Math]::Max(24, [Console]::WindowHeight)
     }
 
     [void] Initialize() { 
