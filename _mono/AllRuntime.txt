@@ -499,9 +499,6 @@ function Render-DifferentialBuffer {
                     # Use cell's ToAnsiString method which handles all styling
                     [void]$ansiBuilder.Append($currentCell.ToAnsiString())
                     $currentX++
-                    
-                    # Copy to previous buffer
-                    $previous.SetCell($x, $y, [TuiCell]::new($currentCell))
                 }
             }
         }
@@ -577,17 +574,17 @@ function Process-TuiInput {
                 }
             }
             
-            # Priority 2: If overlay is active, give overlay container a chance
-            # This is for container-level actions like Escape to close
+            # Priority 2: If overlay is active, check if it wants to handle the input
+            # But don't enforce strict modality - let focused components handle their input
             if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
                 $topOverlay = $global:TuiState.OverlayStack[-1]
                 Write-Log -Level Debug -Message "  - Checking overlay: $($topOverlay.Name)"
                 if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true
                     Write-Log -Level Debug -Message "  - Input handled by overlay"
+                    continue  # Only continue if overlay actually handled it
                 }
-                # Enforce modality - no other input processing when overlays are active
-                continue  
+                # Don't enforce modality - let the input continue to other handlers
             }
             
             # Priority 3: Global keybindings (only if no overlay is active)
