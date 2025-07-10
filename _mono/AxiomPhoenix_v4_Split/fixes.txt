@@ -1,0 +1,70 @@
+You are absolutely right. I jumped the gun again. My apologies. The process is critical: **analyze, plan, then execute.** I skipped the detailed planning step and went straight to code.
+
+Let's do this correctly. Here is the new, detailed, and holistic plan.
+
+---
+
+### The New, Definitive Plan
+
+This plan addresses the errors and oversights of the previous attempt. The goal remains the same: a unified, robust, and elegant **True Windowing Model**.
+
+#### **Phase 1: Solidify the Foundation (Base Classes)**
+
+1.  **`Dialog` Inherits from `Screen`:** This is the cornerstone. `Dialog` will be a direct child of `Screen`, not `UIElement`. This means every `Dialog` *is* a `Screen` and can be managed by the `NavigationService`. We will add an `$IsOverlay` property to `Dialog` and set it to `$true` by default so the renderer can identify it.
+
+2.  **`ScrollablePanel` Logic Correction:**
+    *   **Problem:** The previous `ScrollablePanel` was overly complex and its virtual buffer logic was flawed, especially during resizing.
+    *   **Fix:** The `_RenderContent` method will be simplified. It will *not* create a separate virtual buffer. Instead, it will:
+        1.  Render all its children into its *own* `_private_buffer` at their specified coordinates.
+        2.  During the parent panel's render phase, it will use `GetSubBuffer` to "clip" the visible viewport (factoring in the scroll offset) from this now-oversized `_private_buffer` and blend *that* onto the parent. This is a much more direct and less error-prone way to handle scrolling content. It relies on the core `UIElement` rendering pipeline.
+
+3.  **`TextBox` Wrapper Restoration & Fix:**
+    *   **Problem:** I incorrectly removed the `TextBox` wrapper class. The real bug was that the wrapper didn't resize its inner component correctly.
+    *   **Fix:** Reinstate the `TextBox` class that contains a `TextBoxComponent`. The critical fix is to override the `OnResize` method in the `TextBox` wrapper to explicitly call `$this._textBox.Resize($this.Width, $this.Height)`. This ensures the inner, visible component always matches the size of its logical container.
+
+#### **Phase 2: Refactor the Services for the Windowing Model**
+
+1.  **`NavigationService` Becomes Stack-Aware:**
+    *   **Problem:** The service only knew about the `CurrentScreen`.
+    *   **Fix:** It will now expose the entire window stack. A new method, `GetWindows()`, will return the stack as an array, with the bottom-most screen at index 0. This is what the renderer needs. It will also track focus.
+        *   `NavigateTo(window)`: If `window.IsOverlay` is true, it will ask `FocusManager` to `PushFocusState()`. It then pushes the window onto the stack.
+        *   `GoBack()`: It pops a window off the stack. Before returning, it will ask `FocusManager` to `PopFocusState()`.
+
+2.  **`FocusManager` Becomes Context-Aware:**
+    *   **Problem:** The manager had a single, global `FocusedComponent`.
+    *   **Fix:** It will now maintain its own internal stack of focused elements, parallel to the `NavigationService`'s window stack.
+        *   `PushFocusState()`: Saves the currently focused component to its internal stack.
+        *   `PopFocusState()`: Pops the last-saved component from its stack and sets focus to it.
+        *   This elegantly solves the "focus restoration" problem when closing dialogs.
+
+3.  **`DialogManager` Becomes a Clean Facade:**
+    *   **Problem:** It was a confusing mix of old and new logic.
+    *   **Fix:** Its role is now purely for convenience. It will hold a reference to the `NavigationService`. Its `ShowDialog($dialog)` method will simply call `$this.NavigationService.NavigateTo($dialog)`. The concept of "hiding" a dialog is removed from the manager; dialogs close themselves by calling `GoBack()` on the navigation service, which is a cleaner pattern.
+
+#### **Phase 3: Upgrade the Runtime Engine**
+
+1.  **The Render Loop (`Invoke-TuiRender`) is Rewritten:**
+    *   **Problem:** Only rendered the top-most screen.
+    *   **Fix:** The loop will now be stack-aware.
+        1.  Get the full window stack from `NavigationService.GetWindows()`.
+        2.  Clear the main compositor buffer.
+        3.  Loop through the window stack from bottom to top (index 0 upwards).
+        4.  For each window, call its `Render()` method. This updates the window's internal `_private_buffer`.
+        5.  Blend that window's buffer into the main compositor buffer.
+        6.  The result is a perfectly composited final image, with dialogs correctly rendered on top of their parent screens.
+
+2.  **The Input Loop (`Process-TuiInput`) is Simplified:**
+    *   **Problem:** Had to check for overlays.
+    *   **Fix:** This becomes much simpler. It will get the `CurrentScreen` (the top of the navigation stack) and route all input to it. **No other window receives input.** This is the essence of a modal system. The focused component logic within that active window remains the same.
+
+3.  **Buffer Swapping Optimization:**
+    *   **Problem:** Using `Clone()` in the render loop is inefficient.
+    *   **Fix:** Implement the reference swap for `CompositorBuffer` and `PreviousCompositorBuffer` as discussed. This is a final performance polish.
+
+#### **Phase 4: Component and Screen Cleanup**
+
+1.  **Consolidate `CommandPalette`:** The `CommandPaletteScreen` is redundant and will be removed. The `CommandPalette` component, which is a `Dialog` (and therefore a `Screen`), is the only implementation needed. The "app.commandPalette" action will now instantiate and show this component directly.
+
+2.  **Update `Dialog.Complete()`:** This method is the standard way for a dialog to close itself. It will now simply call `$this.ServiceContainer.GetService('NavigationService').GoBack()`. This is the final piece that connects the dialog's lifecycle to the navigation system.
+
+This plan is holistic and addresses the identified flaws. It results in a framework that is not only architecturally sound but also functionally correct and provides a better user experience. Now, with this clear roadmap, I can generate the code.
