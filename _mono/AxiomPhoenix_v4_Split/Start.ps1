@@ -93,6 +93,7 @@ try {
     Write-Host "Services initialized successfully!" -ForegroundColor Green
 
     # Initialize global state
+    $global:TuiState.ServiceContainer = $container
     $global:TuiState.Services = @{
         Logger = $container.GetService("Logger")
         EventManager = $container.GetService("EventManager") 

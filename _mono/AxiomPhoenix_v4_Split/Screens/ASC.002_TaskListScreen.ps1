@@ -41,42 +41,19 @@ class TaskListScreen : Screen {
     TaskListScreen([object]$serviceContainer) : base("TaskListScreen", $serviceContainer) {}
 
     [void] Initialize() {
-        if (-not $this.ServiceContainer) {
-            # Write-Verbose "TaskListScreen.Initialize: ServiceContainer is null"
-            return
-        }
+        if (-not $this.ServiceContainer) { return }
         
         # Ensure minimum size
         if ($this.Width -lt 80) { $this.Width = 80 }
         if ($this.Height -lt 24) { $this.Height = 24 }
         
-        # Create sidebar menu
-        $menu = [SidebarMenu]::new("MainMenu")
-        $menu.X = 0
-        $menu.Y = 0
-        $menu.Height = $this.Height
-        $menu.Width = 22
-        $menu.Title = "Navigation"
-        
-        $menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
-        $menu.AddMenuItem("2", "Task List", "navigation.taskList")
-        $menu.AddMenuItem("-", "", "")
-        $menu.AddMenuItem("N", "New Task", "navigation.newTask")
-        $menu.AddMenuItem("E", "Edit Task", "task.edit.selected")
-        $menu.AddMenuItem("D", "Delete Task", "task.delete.selected")
-        $menu.AddMenuItem("C", "Complete", "task.complete.selected")
-        $menu.AddMenuItem("-", "", "")
-        $menu.AddMenuItem("Q", "Quit", "app.exit")
-        
-        $this.AddChild($menu)
-        
-        # Main panel (adjusted for menu)
+        # Main panel takes full screen
         $this._mainPanel = [Panel]::new("Task List")
-        $this._mainPanel.X = 23
+        $this._mainPanel.X = 0
         $this._mainPanel.Y = 0
-        $this._mainPanel.Width = $this.Width - 24
+        $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
-        $this._mainPanel.Title = "Task List"
+        $this._mainPanel.Title = " Task List "
         $this._mainPanel.UpdateContentDimensions()
         $this.AddChild($this._mainPanel)
 
@@ -100,9 +77,9 @@ class TaskListScreen : Screen {
         $listWidth = [Math]::Floor($this.Width * 0.6)
         $this._taskGrid = [DataGridComponent]::new("TaskGrid")
         $this._taskGrid.X = 1
-        $this._taskGrid.Y = 4  # Move down to accommodate filter
+        $this._taskGrid.Y = 4
         $this._taskGrid.Width = $listWidth
-        $this._taskGrid.Height = $this.Height - 8  # Adjust for buttons and filter
+        $this._taskGrid.Height = $this.Height - 8
         $this._taskGrid.ShowHeaders = $true
         $this._taskGrid.OnSelectionChanged = {
             param($sender, $selectedIndex)
@@ -124,7 +101,7 @@ class TaskListScreen : Screen {
         $this._detailPanel.X = $detailX
         $this._detailPanel.Y = 1
         $this._detailPanel.Width = $detailWidth
-        $this._detailPanel.Height = $this.Height - 8  # Adjust for buttons
+        $this._detailPanel.Height = $this.Height - 8
         $this._detailPanel.Title = "Task Details"
         $this._detailPanel.UpdateContentDimensions()
         $this._mainPanel.AddChild($this._detailPanel)
@@ -143,6 +120,22 @@ class TaskListScreen : Screen {
         $buttonSpacing = 15
         $currentX = 2
         
+        # Navigation buttons
+        $dashButton = [ButtonComponent]::new("DashButton")
+        $dashButton.Text = "[1] Dashboard"
+        $dashButton.X = $currentX
+        $dashButton.Y = $buttonY
+        $dashButton.Width = 14
+        $dashButton.Height = 1
+        $dashButton.OnClick = {
+            $actionService = $thisScreen.ServiceContainer?.GetService("ActionService")
+            if ($actionService) {
+                $actionService.ExecuteAction("navigation.dashboard")
+            }
+        }.GetNewClosure()
+        $this._mainPanel.AddChild($dashButton)
+        $currentX += $buttonSpacing + 1
+        
         # New button
         $this._newButton = [ButtonComponent]::new("NewButton")
         $this._newButton.Text = "[N]ew Task"
@@ -151,10 +144,8 @@ class TaskListScreen : Screen {
         $this._newButton.Width = 12
         $this._newButton.Height = 1
         $this._newButton.OnClick = {
-            # TaskEditPanel not available in this version
             Write-Host "New task feature coming soon!" -ForegroundColor Yellow
         }.GetNewClosure()
-                
         $this._mainPanel.AddChild($this._newButton)
         $currentX += $buttonSpacing
         
@@ -166,7 +157,6 @@ class TaskListScreen : Screen {
         $this._editButton.Width = 12
         $this._editButton.Height = 1
         $this._editButton.OnClick = {
-            # TaskEditPanel not available in this version
             Write-Host "Edit task feature coming soon!" -ForegroundColor Yellow
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._editButton)
@@ -180,7 +170,6 @@ class TaskListScreen : Screen {
         $this._deleteButton.Width = 14
         $this._deleteButton.Height = 1
         $this._deleteButton.OnClick = {
-            # TaskDeleteDialog not available in this version
             Write-Host "Delete task feature coming soon!" -ForegroundColor Yellow
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._deleteButton)
@@ -201,7 +190,6 @@ class TaskListScreen : Screen {
                 $dataManager.UpdateTask($thisScreen._selectedTask)
                 $thisScreen._RefreshTasks()
                 $thisScreen._UpdateDisplay()
-                # Write-Verbose "Task completed: $($thisScreen._selectedTask.Title)"
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($this._completeButton)
@@ -477,9 +465,8 @@ class TaskListScreen : Screen {
         $statusLabel.Text = $statusText
         $statusLabel.ForegroundColor = Get-ThemeColor -ColorName "status.bar.fg" -DefaultColor "#FFFFFF"
         $panel.AddChild($statusLabel)
-        
         # Keyboard hints label
-        $hints = "Up/Down: Navigate | Enter: Edit | D: Delete | N: New | T/P/S/Q: Quick Nav"
+        $hints = "Arrow: Navigate | Enter: Edit | 1: Dashboard | N: New | D: Delete | C: Complete"
         $hintsX = $this.Width - $hints.Length - 3
         if ($hintsX -gt $statusText.Length + 2) {
             $hintsLabel = [LabelComponent]::new("StatusHints")
@@ -494,54 +481,85 @@ class TaskListScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # First, let the sidebar menu handle its keys
-        $menu = $this.Children | Where-Object { $_ -is [SidebarMenu] } | Select-Object -First 1
-        if ($menu -and $menu.HandleKey($keyInfo)) {
-            return $true
+        $actionService = $this.ServiceContainer?.GetService("ActionService")
+        if (-not $actionService) { return $false }
+        
+        # Handle navigation and action keys
+        switch ($keyInfo.KeyChar) {
+            '1' {
+                $actionService.ExecuteAction("navigation.dashboard")
+                return $true
+            }
+            '2' {
+                # Already on task list
+                return $true
+            }
+            'n' {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    $this._newButton.OnClick.Invoke()
+                    return $true
+                }
+            }
+            'N' {
+                $this._newButton.OnClick.Invoke()
+                return $true
+            }
+            'e' {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    $this._editButton.OnClick.Invoke()
+                    return $true
+                }
+            }
+            'E' {
+                if ($this._selectedTask) {
+                    $this._editButton.OnClick.Invoke()
+                    return $true
+                }
+            }
+            'd' {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    $this._deleteButton.OnClick.Invoke()
+                    return $true
+                }
+            }
+            'D' {
+                if ($this._selectedTask) {
+                    $this._deleteButton.OnClick.Invoke()
+                    return $true
+                }
+            }
+            'c' {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
+                    $this._completeButton.OnClick.Invoke()
+                    return $true
+                }
+            }
+            'C' {
+                if ($this._selectedTask) {
+                    $this._completeButton.OnClick.Invoke()
+                    return $true
+                }
+            }
+            'q' {
+                $actionService.ExecuteAction("app.exit")
+                return $true
+            }
+            'Q' {
+                $actionService.ExecuteAction("app.exit")
+                return $true
+            }
         }
         
-        # Handle action keys (navigation is now handled by DataGridComponent)
+        # Handle special keys
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Enter) {
-                # Edit task
                 if ($this._selectedTask -and $this._editButton) {
                     $this._editButton.OnClick.Invoke()
+                    return $true
                 }
-                return $true
-            }
-            ([ConsoleKey]::N) {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
-                    # New task
-                    $this._newButton.OnClick.Invoke()
-                }
-                return $true
-            }
-            ([ConsoleKey]::E) {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
-                    # Edit task
-                    $this._editButton.OnClick.Invoke()
-                }
-                return $true
-            }
-            ([ConsoleKey]::D) {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
-                    # Delete task
-                    $this._deleteButton.OnClick.Invoke()
-                }
-                return $true
-            }
-            ([ConsoleKey]::C) {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
-                    # Complete task
-                    $this._completeButton.OnClick.Invoke()
-                }
-                return $true
-            }
-            default {
-                # Unhandled key - let base class handle it
-                return ([Screen]$this).HandleInput($keyInfo)
             }
         }
+        
         return $false
     }
 }

@@ -45,11 +45,7 @@ class KeybindingService {
         $this.SetBinding("Tab", "navigation.nextComponent", "Global")
         $this.SetBinding("Shift+Tab", "navigation.previousComponent", "Global")
         
-        # Arrow keys
-        $this.SetBinding("UpArrow", "navigation.up", "Global")
-        $this.SetBinding("DownArrow", "navigation.down", "Global")
-        $this.SetBinding("LeftArrow", "navigation.left", "Global")
-        $this.SetBinding("RightArrow", "navigation.right", "Global")
+        # Arrow keys removed - handled by focused components instead
         
         # Write-Verbose "KeybindingService: Initialized default keybindings"
     }

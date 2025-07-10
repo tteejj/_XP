@@ -30,7 +30,7 @@ $global:TuiState = @{
     LastRenderTime = [datetime]::Now
     FrameCount = 0
     InputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[System.ConsoleKeyInfo]'
-    OverlayStack = [System.Collections.Generic.List[UIElement]]::new() # CHANGED TO GENERIC LIST
+    OverlayStack = [System.Collections.Stack]::new() # Stack for proper Peek()
     # Added for input thread management
     CancellationTokenSource = $null
     InputRunspace = $null
@@ -73,13 +73,8 @@ function Invoke-WithErrorHandling {
         $logger = $global:TuiState.Services.Logger
         if ($logger) {
             $logger.Log("Error", "Error in $Component during $Context : $($_.Exception.Message)")
-            # Log error details with minimal depth to avoid circular references
-            try {
-                $logger.Log("Debug", "Error details: $($errorDetails | ConvertTo-Json -Compress -Depth 3 -ErrorAction SilentlyContinue)")
-            } catch {
-                # If serialization fails, just log the error type
-                $logger.Log("Debug", "Error type: $($_.Exception.GetType().FullName)")
-            }
+            # Simple error logging without JSON serialization
+            $logger.Log("Debug", "Error type: $($_.Exception.GetType().FullName)")
         }
         
         # Re-throw for caller to handle if needed

@@ -160,55 +160,24 @@ class ActionService {
             Hotkey = "F1"
         })
         
+        # Add navigation.commandPalette action
+        $this.RegisterAction("navigation.commandPalette", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $paletteScreen = [CommandPaletteScreen]::new($container)
+            $paletteScreen.Initialize()
+            $navService.NavigateTo($paletteScreen)
+        }, @{
+            Category = "Navigation"
+            Description = "Open Command Palette"
+        })
+        
+        # Update app.commandPalette to use navigation
         $this.RegisterAction("app.commandPalette", {
-            # Write-Verbose "Executing app.commandPalette action"
-            # Get required services from global state
-            $dialogManager = $global:TuiState.Services.DialogManager
             $actionService = $global:TuiState.Services.ActionService
-            
-            if (-not $dialogManager -or -not $actionService) {
-                Write-Log -Level Error -Message "Required services not available for command palette"
-                return
+            if ($actionService) {
+                $actionService.ExecuteAction("navigation.commandPalette")
             }
-            
-            # 1. Create the CommandPalette
-            $palette = [CommandPalette]::new("CommandPaletteDialog")
-            $palette.Width = 60
-            $palette.Height = 20
-            
-            # 2. Configure - Populate with actions and set OnClose handler
-            $allActions = $actionService.GetAllActions()
-            $actionList = @()
-            foreach ($actionEntry in $allActions.GetEnumerator()) {
-                $actionData = $actionEntry.Value
-                $actionList += [PSCustomObject]@{
-                    Name = $actionEntry.Key
-                    Description = $actionData.Description
-                    Category = $actionData.Category
-                    Hotkey = $actionData.Hotkey
-                }
-            }
-            
-            # Set the actions data
-            $palette.SetActions($actionList)
-            
-            # Configure what happens when the dialog closes with a result
-            $palette.OnClose = {
-                param($result)
-                if ($result -and $result.Name) {
-                    # Execute the selected action after the dialog has closed
-                    try {
-                        $actionService.ExecuteAction($result.Name)
-                    }
-                    catch {
-                        Write-Log -Level Error -Message "Failed to execute action '$($result.Name)': $($_.Exception.Message)"
-                    }
-                }
-            }.GetNewClosure()
-            
-            # 3. Show - Let DialogManager handle everything
-            $dialogManager.ShowDialog($palette)
-            
         }, @{
             Category = "Application"
             Description = "Show command palette"

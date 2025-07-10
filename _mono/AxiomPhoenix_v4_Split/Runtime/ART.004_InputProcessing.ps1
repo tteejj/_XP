@@ -64,7 +64,7 @@ function Process-TuiInput {
             
             # Priority 2: Active Overlay (The Modal Gatekeeper)
             if ($global:TuiState.OverlayStack -and $global:TuiState.OverlayStack.Count -gt 0) {
-                $topOverlay = $global:TuiState.OverlayStack[-1]
+                $topOverlay = $global:TuiState.OverlayStack.Peek()
                 Write-Log -Level Debug -Message "  - Checking overlay: $($topOverlay.Name)"
                 if ($topOverlay -and $topOverlay.HandleInput($keyInfo)) {
                     $global:TuiState.IsDirty = $true

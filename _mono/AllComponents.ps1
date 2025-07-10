@@ -3432,6 +3432,169 @@ class NavigationMenu : UIElement {
 
 #<!-- END_PAGE: ACO.021 -->
 
+#<!-- PAGE: ACO.022 - SidebarMenu Class -->
+# ===== CLASS: SidebarMenu =====
+# Module: navigation-class
+# Dependencies: UIElement
+# Purpose: Sidebar navigation menu component
+class SidebarMenu : UIElement {
+    [System.Collections.Generic.List[hashtable]]$MenuItems
+    [int]$SelectedIndex = 0
+    [string]$Title = "Menu"
+    
+    SidebarMenu([string]$name) : base($name) {
+        $this.IsFocusable = $true
+        $this.MenuItems = [System.Collections.Generic.List[hashtable]]::new()
+    }
+    
+    [void] AddMenuItem([string]$key, [string]$text, [string]$action) {
+        $this.MenuItems.Add(@{
+            Key = $key
+            Text = $text
+            Action = $action
+        })
+        $this.RequestRedraw()
+    }
+    
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
+        # Clear buffer
+        $bgColor = Get-ThemeColor -ColorName "component.background" -DefaultColor "#000000"
+        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Draw border
+        $borderColor = Get-ThemeColor -ColorName "component.border" -DefaultColor "#808080"
+        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+            -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single"; TitleFG = Get-ThemeColor -ColorName "component.title" -DefaultColor "#FFFFFF" } `
+            -Title $this.Title
+        
+        # Draw menu items
+        $y = 2
+        for ($i = 0; $i -lt $this.MenuItems.Count; $i++) {
+            $item = $this.MenuItems[$i]
+            
+            if ($item.Key -eq "-") {
+                # Separator
+                for ($x = 1; $x -lt ($this.Width - 1); $x++) {
+                    $this._private_buffer.SetCell($x, $y, [TuiCell]::new('─', $borderColor, $bgColor))
+                }
+            }
+            else {
+                # Menu item
+                $isSelected = ($i -eq $this.SelectedIndex -and $this.IsFocused)
+                $fg = if ($isSelected) { 
+                    Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#000000" 
+                } else { 
+                    Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF" 
+                }
+                $bg = if ($isSelected) { 
+                    Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0078D4" 
+                } else { 
+                    $bgColor 
+                }
+                
+                # Draw selection indicator
+                if ($isSelected) {
+                    for ($x = 1; $x -lt ($this.Width - 1); $x++) {
+                        $this._private_buffer.SetCell($x, $y, [TuiCell]::new(' ', $fg, $bg))
+                    }
+                }
+                
+                # Draw text
+                $text = if ($item.Key) { "$($item.Key). $($item.Text)" } else { $item.Text }
+                if ($text.Length -gt ($this.Width - 4)) {
+                    $text = $text.Substring(0, $this.Width - 7) + "..."
+                }
+                
+                Write-TuiText -Buffer $this._private_buffer -X 2 -Y $y -Text $text `
+                    -Style @{ FG = $fg; BG = $bg }
+            }
+            
+            $y++
+            if ($y -ge ($this.Height - 1)) { break }
+        }
+    }
+    
+    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
+        if ($null -eq $key) { return $false }
+        
+        $handled = $false
+        $nonSeparatorIndices = @()
+        
+        # Build list of non-separator indices
+        for ($i = 0; $i -lt $this.MenuItems.Count; $i++) {
+            if ($this.MenuItems[$i].Key -ne "-") {
+                $nonSeparatorIndices += $i
+            }
+        }
+        
+        if ($nonSeparatorIndices.Count -eq 0) { return $false }
+        
+        switch ($key.Key) {
+            ([ConsoleKey]::UpArrow) {
+                # Find current position in non-separator list
+                $currentPos = [array]::IndexOf($nonSeparatorIndices, $this.SelectedIndex)
+                if ($currentPos -gt 0) {
+                    $this.SelectedIndex = $nonSeparatorIndices[$currentPos - 1]
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                # Find current position in non-separator list
+                $currentPos = [array]::IndexOf($nonSeparatorIndices, $this.SelectedIndex)
+                if ($currentPos -lt ($nonSeparatorIndices.Count - 1) -and $currentPos -ge 0) {
+                    $this.SelectedIndex = $nonSeparatorIndices[$currentPos + 1]
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                $this.ExecuteSelectedItem()
+                $handled = $true
+            }
+            default {
+                # Check for hotkeys
+                $handled = $this.HandleKey($key)
+            }
+        }
+        
+        if ($handled) {
+            $this.RequestRedraw()
+        }
+        
+        return $handled
+    }
+    
+    [bool] HandleKey([System.ConsoleKeyInfo]$key) {
+        $keyChar = $key.KeyChar.ToString().ToUpper()
+        
+        for ($i = 0; $i -lt $this.MenuItems.Count; $i++) {
+            $item = $this.MenuItems[$i]
+            if ($item.Key -and $item.Key.ToUpper() -eq $keyChar) {
+                $this.SelectedIndex = $i
+                $this.ExecuteSelectedItem()
+                return $true
+            }
+        }
+        
+        return $false
+    }
+    
+    hidden [void] ExecuteSelectedItem() {
+        if ($this.SelectedIndex -ge 0 -and $this.SelectedIndex -lt $this.MenuItems.Count) {
+            $item = $this.MenuItems[$this.SelectedIndex]
+            if ($item.Action -and $item.Key -ne "-") {
+                # Execute action through ActionService
+                $actionService = $global:TuiState.Services.ActionService
+                if ($actionService -and $actionService.ActionRegistry.ContainsKey($item.Action)) {
+                    $actionService.ExecuteAction($item.Action)
+                }
+            }
+        }
+    }
+}
+#<!-- END_PAGE: ACO.022 -->
+
 #<!-- PAGE: ACO.022 - DataGridComponent Class -->
 # ===== CLASS: DataGridComponent =====
 # Module: data-grid-component

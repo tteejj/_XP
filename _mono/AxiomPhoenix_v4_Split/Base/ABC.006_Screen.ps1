@@ -102,8 +102,9 @@ class Screen : UIElement {
         # Write-Verbose "OnResume called for Screen '$($this.Name)': Default (no-op)." 
     }
 
-    [void] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Write-Verbose "HandleInput called for Screen '$($this.Name)': Key: $($keyInfo.Key). Default (no-op)."
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        # Base implementation - screens should override this
+        return $false
     }
 
     [void] HandleKeyPress([System.ConsoleKeyInfo]$keyInfo) {

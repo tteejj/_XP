@@ -37,65 +37,93 @@ using namespace System.Collections.Generic
 #   using the ViewDefinitionService pattern for consistent formatting.
 # ==============================================================================
 class DashboardScreen : Screen {
+    hidden [Panel] $_mainPanel
+    hidden [ListBox] $_menuList
+    
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
     [void] Initialize() {
         if (-not $this.ServiceContainer) { return }
 
-        # Create sidebar menu
-        $menu = [SidebarMenu]::new("MainMenu")
-        $menu.X = 0
-        $menu.Y = 0
-        $menu.Height = $this.Height
-        $menu.Width = 22
-        $menu.Title = "Navigation"
+        # Main panel takes full screen
+        $this._mainPanel = [Panel]::new("MainPanel")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = " Axiom-Phoenix v4.0 - Main Menu "
+        $this.AddChild($this._mainPanel)
+
+        # Menu list in center
+        $this._menuList = [ListBox]::new("MenuList")
+        $this._menuList.X = [Math]::Floor(($this.Width - 40) / 2)
+        $this._menuList.Y = 5
+        $this._menuList.Width = 40
+        $this._menuList.Height = 10
+        $this._menuList.BorderStyle = "Double"
+        $this._menuList.Title = " Navigation "
         
-        $menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
-        $menu.AddMenuItem("2", "Task List", "navigation.taskList")
-        $menu.AddMenuItem("T", "Task List", "navigation.taskList")
-        $menu.AddMenuItem("N", "New Task", "navigation.newTask")
-        $menu.AddMenuItem("-", "", "")
-        $menu.AddMenuItem("Q", "Quit", "app.exit")
+        # Add menu items
+        $this._menuList.AddItem("[1] Dashboard")
+        $this._menuList.AddItem("[2] Task List")
+        $this._menuList.AddItem("[3] New Task")
+        $this._menuList.AddItem("[4] Command Palette")
+        $this._menuList.AddItem("")
+        $this._menuList.AddItem("[Q] Quit")
         
-        $this.AddChild($menu)
-
-        # Simple welcome panel
-        $welcomePanel = [Panel]::new("WelcomePanel")
-        $welcomePanel.X = 23
-        $welcomePanel.Y = 0
-        $welcomePanel.Width = $this.Width - 24
-        $welcomePanel.Height = $this.Height
-        $welcomePanel.Title = " Axiom-Phoenix v4.0 "
-        $this.AddChild($welcomePanel)
-
-        # Simple welcome message
-        $welcome = [LabelComponent]::new("WelcomeMsg")
-        $welcome.Text = "Welcome! Use the menu on the left to navigate."
-        $welcome.X = 2
-        $welcome.Y = 2
-        $welcome.ForegroundColor = Get-ThemeColor -ColorName "Primary"
-        $welcomePanel.AddChild($welcome)
-
-        $instruction = [LabelComponent]::new("Instruction")
-        $instruction.Text = "Press the number/letter key to select an option."
-        $instruction.X = 2
-        $instruction.Y = 4
-        $welcomePanel.AddChild($instruction)
+        $this._mainPanel.AddChild($this._menuList)
+        
+        # Instructions
+        $instructions = [LabelComponent]::new("Instructions")
+        $instructions.Text = "Press the number/letter key to select an option"
+        $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
+        $instructions.Y = 17
+        $instructions.ForegroundColor = Get-ThemeColor -ColorName "Subtle"
+        $this._mainPanel.AddChild($instructions)
     }
 
     [void] OnEnter() {
-        # Nothing needed for simple menu
+        # Set focus to menu list
+        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+        if ($focusManager -and $this._menuList) {
+            $focusManager.SetFocus($this._menuList)
+        }
+        $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Let menu handle its keys
-        $menu = $this.Children | Where-Object { $_ -is [SidebarMenu] } | Select-Object -First 1
-        if ($menu -and $menu.HandleKey($keyInfo)) {
-            return $true
+        $actionService = $this.ServiceContainer?.GetService("ActionService")
+        if (-not $actionService) { return $false }
+        
+        switch ($keyInfo.KeyChar) {
+            '1' {
+                # Already on dashboard
+                return $true
+            }
+            '2' {
+                $actionService.ExecuteAction("navigation.taskList")
+                return $true
+            }
+            '3' {
+                $actionService.ExecuteAction("navigation.newTask")
+                return $true
+            }
+            '4' {
+                $actionService.ExecuteAction("navigation.commandPalette")
+                return $true
+            }
+            'q' {
+                $actionService.ExecuteAction("app.exit")
+                return $true
+            }
+            'Q' {
+                $actionService.ExecuteAction("app.exit")
+                return $true
+            }
         }
         
-        # Pass to base
-        return ([Screen]$this).HandleInput($keyInfo)
+        # Let focused component handle other keys
+        return $false
     }
 }
 
