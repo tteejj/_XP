@@ -61,20 +61,28 @@ class Dialog : Screen {
     }
 
     [void] Complete([object]$result) {
+        Write-Log -Level Debug -Message "Dialog.Complete called on '$($this.Name)' with result: $(if ($null -ne $result) { $result | ConvertTo-Json -Compress } else { 'null' })"
+        
         $this.Result = $result
         $this._isComplete = $true
         
         # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
+            Write-Log -Level Debug -Message "Dialog '$($this.Name)': Calling OnClose callback"
             try { 
                 & $this.OnClose $result 
             } catch { 
                 Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
             }
+        } else {
+            Write-Log -Level Debug -Message "Dialog '$($this.Name)': No OnClose callback set"
         }
         
         # Navigate back to previous screen
-        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        $navService = $null
+        if ($null -ne $this.ServiceContainer) {
+            $navService = $this.ServiceContainer.GetService("NavigationService")
+        }
         if ($navService) {
             if ($navService.CanGoBack()) {
                 $navService.GoBack()
@@ -115,7 +123,10 @@ class Dialog : Screen {
         $this.FindFocusableChild($this._panel, [ref]$firstFocusable)
         
         if ($firstFocusable) {
-            $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+            $focusManager = $null
+            if ($null -ne $this.ServiceContainer) {
+                $focusManager = $this.ServiceContainer.GetService("FocusManager")
+            }
             if ($focusManager) {
                 $focusManager.SetFocus($firstFocusable)
                 Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
@@ -155,7 +166,10 @@ class Dialog : Screen {
         $this.Show($title, $message)
         
         # Navigate to this dialog
-        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        $navService = $null
+        if ($null -ne $this.ServiceContainer) {
+            $navService = $this.ServiceContainer.GetService("NavigationService")
+        }
         if ($navService) {
             $navService.NavigateTo($this)
         }

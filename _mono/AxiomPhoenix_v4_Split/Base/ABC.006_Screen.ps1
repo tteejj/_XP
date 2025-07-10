@@ -51,6 +51,7 @@ class Screen : UIElement {
     [object]$ServiceContainer # Changed to object to avoid type conversion issues
     [System.Collections.Generic.Dictionary[string, object]]$State
     [System.Collections.Generic.List[UIElement]] $Panels
+    [bool]$IsOverlay = $false  # NEW: Indicates if this screen renders as an overlay
     
     $LastFocusedComponent
     

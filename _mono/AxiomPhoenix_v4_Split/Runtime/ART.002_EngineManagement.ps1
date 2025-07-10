@@ -83,6 +83,20 @@ function Start-TuiEngine {
         $global:TuiState.Running = $true
         $global:TuiState.FrameCount = 0
         
+        # Setup deferred action handler for window-based navigation
+        $global:TuiState.DeferredActions = New-Object 'System.Collections.Concurrent.ConcurrentQueue[hashtable]'
+        $eventManager = $global:TuiState.Services.EventManager
+        if ($eventManager) {
+            Write-Log -Level Debug -Message "Engine: Setting up DeferredAction handler"
+            $deferredHandler = $eventManager.Subscribe("DeferredAction", {
+                param($sender, $data)
+                if ($data -and $data.ActionName) {
+                    Write-Log -Level Debug -Message "Engine: DeferredAction event received - ActionName: $($data.ActionName)"
+                    $global:TuiState.DeferredActions.Enqueue($data)
+                }
+            })
+        }
+        
         if ($EnablePerformanceMonitoring) {
             $performanceStopwatch.Start()
         }
@@ -105,7 +119,24 @@ function Start-TuiEngine {
                     Process-TuiInput
                 }
                 
-                # Phase 3: Render frame
+                # Phase 3: Process deferred actions (execute AFTER navigation completes)
+                if ($global:TuiState.DeferredActions -and $global:TuiState.DeferredActions.Count -gt 0) {
+                    $deferredAction = $null
+                    if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
+                        if ($deferredAction -and $deferredAction.ActionName) {
+                            Write-Log -Level Debug -Message "Engine: Processing deferred action: $($deferredAction.ActionName)"
+                            Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
+                                $actionService = $global:TuiState.Services.ActionService
+                                if ($actionService) {
+                                    Write-Log -Level Debug -Message "Engine: Executing deferred action: $($deferredAction.ActionName)"
+                                    $actionService.ExecuteAction($deferredAction.ActionName, @{})
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                # Phase 4: Render frame
                 # Always render to maintain consistent frame rate and handle animations
                 Invoke-WithErrorHandling -Component "TuiEngine" -Context "Render" -ScriptBlock {
                     Invoke-TuiRender
@@ -113,7 +144,7 @@ function Start-TuiEngine {
                 
                 $global:TuiState.FrameCount++
                 
-                # Phase 4: Performance monitoring
+                # Phase 5: Performance monitoring
                 if ($EnablePerformanceMonitoring) {
                     $frameTime = $frameStopwatch.ElapsedMilliseconds
                     
@@ -142,7 +173,7 @@ function Start-TuiEngine {
                     }
                 }
                 
-                # Phase 5: Frame rate throttling
+                # Phase 6: Frame rate throttling
                 $frameStopwatch.Stop()
                 $elapsedTime = $frameStopwatch.Elapsed
                 

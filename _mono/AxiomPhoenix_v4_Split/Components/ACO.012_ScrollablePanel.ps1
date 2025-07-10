@@ -24,26 +24,17 @@ class ScrollablePanel : Panel {
     [int]$ScrollOffsetY = 0
     [int]$MaxScrollY = 0
     [bool]$ShowScrollbar = $true
-    hidden [int]$_contentHeight = 0 # This will be the virtual content height
-    hidden [TuiBuffer]$_virtual_buffer = $null # NEW: To hold the entire scrollable content
+    hidden [int]$_contentHeight = 0 # Total height of all content
 
     ScrollablePanel([string]$name) : base($name) {
         $this.IsFocusable = $true
-        # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
-        # Start with max possible height or a reasonable large value, will grow as children are added
-        $this._virtual_buffer = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
     }
 
-    # Override OnResize to ensure virtual buffer matches actual content area needs
+    # Override OnResize to recalculate scroll limits
     [void] OnResize([int]$newWidth, [int]$newHeight) {
         # Call base Panel resize, which updates Width, Height, and _private_buffer
         ([Panel]$this).Resize($newWidth, $newHeight) 
-
-        # Ensure the virtual buffer is wide enough for the content area
-        $targetVirtualWidth = $this.ContentWidth 
-        if ($this._virtual_buffer.Width -ne $targetVirtualWidth) {
-            $this._virtual_buffer.Resize($targetVirtualWidth, $this._virtual_buffer.Height) # Only resize width for now
-        }
+        
         $this.UpdateMaxScroll() # Recalculate max scroll on resize
         $this.RequestRedraw()
     }
@@ -51,60 +42,74 @@ class ScrollablePanel : Panel {
     # Override _RenderContent to implement virtual scrolling logic
     hidden [void] _RenderContent() {
         # 1. First, render the base Panel. This clears its own _private_buffer and draws borders/title.
-        # This implicitly calls ([Panel]$this).OnRender()
         ([Panel]$this)._RenderContent()
 
-        # 2. Render all children onto the _virtual_buffer
-        $this._virtual_buffer.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
-        
+        # 2. Calculate content height and update scroll limits
         $actualContentBottom = 0
-        foreach ($child in $this.Children | Sort-Object ZIndex) {
+        foreach ($child in $this.Children) {
             if ($child.Visible) {
-                # Render each child to its own private buffer
-                $child.Render() 
-                if ($null -ne $child._private_buffer) {
-                    # Blend child's buffer onto our _virtual_buffer at its original coordinates
-                    # (relative to the panel's content area)
-                    $this._virtual_buffer.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
-                }
-                # Track the maximum vertical extent of children to determine virtual height
-                $childExtent = ($child.Y - $this.ContentY) + $child.Height
-                if ($childExtent -gt $actualContentBottom) {
-                    $actualContentBottom = $childExtent
+                $childBottom = ($child.Y - $this.ContentY) + $child.Height
+                if ($childBottom -gt $actualContentBottom) {
+                    $actualContentBottom = $childBottom
                 }
             }
         }
-        $this._contentHeight = $actualContentBottom # Update actual content height
-
-        # 3. Update MaxScrollY and clamp ScrollOffsetY
+        $this._contentHeight = $actualContentBottom
         $this.UpdateMaxScroll()
 
-        # 4. Extract the visible portion from _virtual_buffer and blend it onto _private_buffer
-        #    This accounts for the scroll offset when drawing to screen.
-        $viewportWidth = $this.ContentWidth
-        $viewportHeight = $this.ContentHeight
+        # 3. Render visible children directly with viewport clipping
+        $viewportTop = $this.ScrollOffsetY
+        $viewportBottom = $this.ScrollOffsetY + $this.ContentHeight
         
-        # Ensure target size for sub-buffer is positive
-        $viewportWidth = [Math]::Max(1, $viewportWidth)
-        $viewportHeight = [Math]::Max(1, $viewportHeight)
-
-        $sourceX = 0 # No horizontal scrolling for now, but easily extendable
-        $sourceY = $this.ScrollOffsetY
-        
-        # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
-        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this._virtual_buffer.Height - $sourceY)
-        if ($effectiveSourceHeight -le 0) {
-            # No content to display in viewport
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
-            return
+        foreach ($child in $this.Children | Sort-Object ZIndex) {
+            if (-not $child.Visible) { continue }
+            
+            # Calculate child position relative to content area
+            $childRelY = $child.Y - $this.ContentY
+            $childTop = $childRelY
+            $childBottom = $childRelY + $child.Height
+            
+            # Skip if completely outside viewport
+            if ($childBottom -lt $viewportTop -or $childTop -ge $viewportBottom) {
+                continue
+            }
+            
+            # Render child
+            $child.Render()
+            
+            if ($null -ne $child._private_buffer) {
+                # Calculate where to place the child in our buffer
+                $destX = $child.X
+                $destY = $this.ContentY + ($childRelY - $this.ScrollOffsetY)
+                
+                # Clip the child buffer if it extends beyond viewport
+                $sourceY = 0
+                $sourceHeight = $child.Height
+                
+                # Adjust if child is partially above viewport
+                if ($childTop -lt $viewportTop) {
+                    $clipTop = $viewportTop - $childTop
+                    $sourceY = $clipTop
+                    $sourceHeight -= $clipTop
+                    $destY = $this.ContentY
+                }
+                
+                # Adjust if child is partially below viewport
+                if ($childBottom -gt $viewportBottom) {
+                    $clipBottom = $childBottom - $viewportBottom
+                    $sourceHeight -= $clipBottom
+                }
+                
+                # Blend the visible portion
+                if ($sourceHeight -gt 0) {
+                    # Create a sub-buffer for the visible portion of the child
+                    $visiblePortion = $child._private_buffer.GetSubBuffer(0, $sourceY, $child.Width, $sourceHeight)
+                    $this._private_buffer.BlendBuffer($visiblePortion, $destX, $destY)
+                }
+            }
         }
 
-        $visiblePortion = $this._virtual_buffer.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
-        
-        # Blend the visible portion onto our own _private_buffer, at the content area
-        $this._private_buffer.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
-
-        # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
+        # 4. Draw scrollbar if needed
         if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
             $this.DrawScrollbar()
         }
@@ -116,14 +121,6 @@ class ScrollablePanel : Panel {
     [void] UpdateMaxScroll() {
         $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
         
-        # Ensure virtual buffer height is at least content height
-        $currentVirtualHeight = $this._virtual_buffer.Height
-        $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
-        if ($newVirtualHeight -ne $currentVirtualHeight) {
-            $this._virtual_buffer.Resize($this._virtual_buffer.Width, $newVirtualHeight)
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
-        }
-
         $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
         $this.ScrollOffsetY = [Math]::Max(0, [Math]::Min($this.ScrollOffsetY, $this.MaxScrollY))
         # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': ContentHeight=$($this._contentHeight), ViewportHeight=$($viewportHeight), MaxScrollY=$($this.MaxScrollY), ScrollOffsetY=$($this.ScrollOffsetY)."

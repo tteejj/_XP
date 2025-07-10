@@ -139,11 +139,15 @@ class CommandPalette : Dialog {
                 return $true 
             }
             ([ConsoleKey]::Enter) {
+                $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'null' }
+                Write-Log -Level Debug -Message "CommandPalette: Enter key pressed, focused component: $focusedName"
                 # Only handle Enter if the list has focus and a selection
                 if ($focusedComponent -eq $this._listBox) {
+                    Write-Log -Level Debug -Message "CommandPalette: ListBox has focus, SelectedIndex: $($this._listBox.SelectedIndex), FilteredCount: $($this._filteredActions.Count)"
                     if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
                         $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
                         if ($selectedAction) {
+                            Write-Log -Level Debug -Message "CommandPalette: Selected action: $($selectedAction.Name)"
                             $this.Complete($selectedAction)  # Signal completion with result
                             return $true
                         }

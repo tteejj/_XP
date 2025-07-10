@@ -109,7 +109,8 @@ class TextBoxComponent : UIElement {
                     # Invert its colors to represent the cursor
                     $cursorFg = $cellUnderCursor.BackgroundColor
                     $cursorBg = $cellUnderCursor.ForegroundColor
-                    $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true)
+                    # Use the 7-parameter constructor for bold cursor
+                    $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true, $false, $false, $false)
                     $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
                 }
             }

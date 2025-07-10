@@ -20,6 +20,7 @@
 class FocusManager {
     [UIElement]$FocusedComponent = $null
     [EventManager]$EventManager = $null
+    [System.Collections.Generic.Stack[UIElement]]$FocusStack = [System.Collections.Generic.Stack[UIElement]]::new()  # NEW: Focus history stack
 
     FocusManager([EventManager]$eventManager) {
         $this.EventManager = $eventManager
@@ -125,119 +126,96 @@ class FocusManager {
         $this.SetFocus($null)
         # Write-Log -Level Debug -Message "FocusManager: All focus released."
     }
+    
+    # NEW: Save current focus state to stack
+    [void] PushFocusState() {
+        $focusName = if ($null -ne $this.FocusedComponent) { $this.FocusedComponent.Name } else { 'null' }
+        Write-Log -Level Debug -Message "FocusManager.PushFocusState: Saving focus on $focusName"
+        $this.FocusStack.Push($this.FocusedComponent)  # Can push null
+    }
+    
+    # NEW: Restore focus from stack
+    [void] PopFocusState() {
+        if ($this.FocusStack.Count -gt 0) {
+            $previousFocus = $this.FocusStack.Pop()
+            $focusName = if ($null -ne $previousFocus) { $previousFocus.Name } else { 'null' }
+            Write-Log -Level Debug -Message "FocusManager.PopFocusState: Restoring focus to $focusName"
+            $this.SetFocus($previousFocus)
+        } else {
+            Write-Log -Level Debug -Message "FocusManager.PopFocusState: No saved focus state to restore"
+            $this.SetFocus($null)
+        }
+    }
 
     [void] Cleanup() {
         $this.FocusedComponent = $null
+        $this.FocusStack.Clear()  # NEW: Clear the focus stack
         # Write-Log -Level Debug -Message "FocusManager: Cleanup complete."
     }
 }
 
 # ===== CLASS: DialogManager =====
 # Module: dialog-manager (new service)
-# Dependencies: EventManager, FocusManager
-# Purpose: Centralized dialog management
+# Dependencies: NavigationService
+# Purpose: Convenience facade for dialog management
 class DialogManager {
-    [System.Collections.Generic.List[UIElement]] $_activeDialogs = [System.Collections.Generic.List[UIElement]]::new()
-    [EventManager]$EventManager = $null
-    [FocusManager]$FocusManager = $null
-    hidden [UIElement]$_previousFocus = $null
+    [object]$NavigationService = $null  # Using object to avoid type issues
+    [object]$ServiceContainer = $null
 
-    DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
-        $this.EventManager = $eventManager
-        $this.FocusManager = $focusManager
+    DialogManager([object]$serviceContainer) {
+        if ($null -eq $serviceContainer) {
+            throw [System.ArgumentNullException]::new("serviceContainer")
+        }
+        $this.ServiceContainer = $serviceContainer
+        # NavigationService will be resolved when needed
         # Write-Log -Level Debug -Message "DialogManager: Initialized."
     }
 
-    [void] ShowDialog([UIElement]$dialog) {
+    [void] ShowDialog([object]$dialog) {
         if ($null -eq $dialog) {
-            throw [System.ArgumentException]::new("Provided element is null.", "dialog")
+            throw [System.ArgumentException]::new("Provided dialog is null.", "dialog")
         }
         
-        # Store previous focus for restoration
-        if ($this.FocusManager) {
-            $this._previousFocus = $this.FocusManager.FocusedComponent
+        # Verify it's a Dialog (which is a Screen)
+        if (-not ($dialog.PSObject.Properties['IsOverlay'])) {
+            throw [System.ArgumentException]::new("Expected Dialog-derived object but got $($dialog.GetType().Name)")
         }
         
-        # Calculate center position based on console size
-        $consoleWidth = $global:TuiState.BufferWidth
-        $consoleHeight = $global:TuiState.BufferHeight
-
-        $dialog.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $dialog.Width) / 2))
-        $dialog.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $dialog.Height) / 2))
-
-        # If there's a currently focused component, release it
-        if ($this.FocusManager) {
-            $this.FocusManager.ReleaseFocus() # Release current focus
-        }
-
-        # Add to local tracking list and global overlay stack
-        $this._activeDialogs.Add($dialog)
-        $dialog.Visible = $true
-        $dialog.IsOverlay = $true # Mark as an overlay for rendering
-
-        # Explicitly add to global overlay stack
-        $global:TuiState.OverlayStack.Add($dialog)
+        # Ensure dialog is marked as overlay
+        $dialog.IsOverlay = $true
         
-        # Initialize and enter the dialog if it implements these methods
-        if ($dialog.PSObject.Methods['Initialize'] -and -not $dialog._isInitialized) {
-            $dialog.Initialize()
-            $dialog._isInitialized = $true
+        # Get NavigationService lazily
+        if ($null -eq $this.NavigationService) {
+            $this.NavigationService = $this.ServiceContainer.GetService("NavigationService")
         }
-        if ($dialog.PSObject.Methods['OnEnter']) {
-            $dialog.OnEnter()
-        }
-
-        $dialog.RequestRedraw()
-        # Write-Log -Level Info -Message "DialogManager: Showing dialog '$($dialog.Name)' at X=$($dialog.X), Y=$($dialog.Y)."
         
-        # Set focus to the dialog itself or its first focusable child
-        if ($this.FocusManager) {
-            # Let the dialog class handle finding its first internal focusable
-            if ($dialog.PSObject.Methods['SetInitialFocus']) {
-                # Force a redraw first to ensure components are ready
-                $dialog.RequestRedraw()
-                $global:TuiState.IsDirty = $true
-                
-                # Now set initial focus
-                $dialog.SetInitialFocus()
-            } else {
-                $this.FocusManager.SetFocus($dialog) # Fallback to focusing the dialog container
-            }
+        # Navigate to the dialog - NavigationService handles focus saving
+        if ($this.NavigationService) {
+            $this.NavigationService.NavigateTo($dialog)
+        } else {
+            throw [System.InvalidOperationException]::new("NavigationService not available")
         }
+        
+        # Write-Log -Level Info -Message "DialogManager: Showing dialog '$($dialog.Name)'."
     }
 
-    [void] HideDialog([UIElement]$dialog) {
-        if ($null -eq $dialog) { return }
-
-        if ($this._activeDialogs.Remove($dialog)) {
-            $dialog.Visible = $false
-            $dialog.IsOverlay = $false
-
-            # Remove from global overlay stack
-            if ($global:TuiState.OverlayStack.Contains($dialog)) {
-                $global:TuiState.OverlayStack.Remove($dialog)
-            }
-
-            # Call Cleanup on the dialog to release its resources
-            $dialog.Cleanup()
-
-            # Restore previous focus
-            if ($this.FocusManager) {
-                $this.FocusManager.SetFocus($this._previousFocus)
-            }
-
-            $dialog.RequestRedraw() # Force redraw to remove dialog from screen
-            # Write-Log -Level Info -Message "DialogManager: Hiding dialog '$($dialog.Name)'."
-        } else {
-            # Write-Log -Level Warning -Message "DialogManager: Attempted to hide a dialog '$($dialog.Name)' that was not active."
+    [void] HideDialog([object]$dialog) {
+        # This method is now just a convenience wrapper
+        # Dialogs should call NavigationService.GoBack() themselves via Complete()
+        Write-Log -Level Warning -Message "DialogManager.HideDialog is deprecated. Use dialog.Complete() instead."
+        
+        # For backward compatibility, try to navigate back
+        if ($null -eq $this.NavigationService) {
+            $this.NavigationService = $this.ServiceContainer.GetService("NavigationService")
+        }
+        
+        if ($this.NavigationService -and $this.NavigationService.CanGoBack()) {
+            $this.NavigationService.GoBack()
         }
     }
 
     [void] Cleanup() {
-        foreach ($dialog in $this._activeDialogs.ToArray()) { # Use ToArray to avoid collection modification during iteration
-            $this.HideDialog($dialog) # This will also cleanup and remove from overlay stack
-        }
-        $this._activeDialogs.Clear()
+        # Nothing to clean up - NavigationService manages all windows
         # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
     }
 }

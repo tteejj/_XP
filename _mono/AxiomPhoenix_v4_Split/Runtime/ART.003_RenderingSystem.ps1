@@ -32,28 +32,42 @@ function Invoke-TuiRender {
         
         # Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
-        # WINDOW-BASED MODEL: Only render the active window
-        $currentWindow = $global:TuiState.CurrentScreen
-        
-        if ($currentWindow) {
-            try {
-                # Render the window which will update its internal buffer
-                $currentWindow.Render()
+        # WINDOW-BASED MODEL: Render all windows in the stack
+        $navService = $global:TuiState.Services.NavigationService
+        if ($navService) {
+            $windows = $navService.GetWindows()
+            
+            # Render each window from bottom to top
+            foreach ($window in $windows) {
+                if ($null -eq $window) { continue }
                 
-                # Get the window's buffer
-                $windowBuffer = $currentWindow.GetBuffer()
-                
-                if ($windowBuffer) {
-                    # Blend window buffer into compositor
-                    $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
+                try {
+                    # Render the window which will update its internal buffer
+                    $window.Render()
+                    
+                    # Get the window's buffer
+                    $windowBuffer = $window.GetBuffer()
+                    
+                    if ($windowBuffer) {
+                        # For overlays, render with transparency effect
+                        if ($window.IsOverlay -and $window -ne $windows[0]) {
+                            # Dim the background for overlay effect
+                            # This is a simple approach - could be enhanced with alpha blending
+                            $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
+                        }
+                        else {
+                            # Normal window - full opaque blend
+                            $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
+                        }
+                    }
+                    else {
+                        Write-Log -Level Debug -Message "Window buffer is null for $($window.Name)"
+                    }
                 }
-                else {
-                    Write-Log -Level Debug -Message "Window buffer is null for $($currentWindow.Name)"
+                catch {
+                    Write-Error "Error rendering window '$($window.Name)': $_"
+                    throw
                 }
-            }
-            catch {
-                Write-Error "Error rendering window: $_"
-                throw
             }
         }
         

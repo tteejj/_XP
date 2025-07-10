@@ -167,6 +167,9 @@ try {
     Start-Sleep -Seconds 1
     
     $dashboardScreen = [DashboardScreen]::new($container)
+    Write-Host "Initializing Dashboard screen..." -ForegroundColor Yellow
+    $dashboardScreen.Initialize()
+    Write-Host "Dashboard initialized. Starting engine..." -ForegroundColor Yellow
     Clear-Host
     Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
 

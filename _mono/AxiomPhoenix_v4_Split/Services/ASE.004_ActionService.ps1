@@ -152,22 +152,59 @@ class ActionService {
             Hotkey = "F1"
         })
         
-        # FIXED: Use CommandPaletteScreen instead of DialogManager
+        # Use CommandPalette dialog directly (it inherits from Dialog/Screen)
         $this.RegisterAction("app.commandPalette", {
             Write-Log -Level Debug -Message "app.commandPalette action triggered"
             
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
+            $actionService = $global:TuiState.Services.ActionService
             
-            if (-not $navService -or -not $container) {
-                Write-Log -Level Error -Message "NavigationService or ServiceContainer not found"
+            if (-not $navService -or -not $container -or -not $actionService) {
+                Write-Log -Level Error -Message "Required services not found"
                 return
             }
             
-            $paletteScreen = [CommandPaletteScreen]::new($container)
-            $paletteScreen.Initialize()
-            $navService.NavigateTo($paletteScreen)
+            # Create CommandPalette dialog
+            $palette = [CommandPalette]::new("CommandPalette", $container)
             
+            # Get all registered actions
+            $allActions = @()
+            foreach ($actionName in $actionService.ActionRegistry.Keys) {
+                $actionData = $actionService.ActionRegistry[$actionName]
+                $allActions += @{
+                    Name = $actionName
+                    Category = $actionData.Category
+                    Description = $actionData.Description
+                    Hotkey = $actionData.Hotkey
+                }
+            }
+            
+            # Set actions and show
+            $palette.SetActions($allActions)
+            
+            # Set callback to execute selected action
+            $palette.OnClose = {
+                param($result)
+                if ($result -and $result.Name) {
+                    Write-Log -Level Debug -Message "CommandPalette OnClose: Selected action: $($result.Name)"
+                    
+                    # Defer execution to avoid re-entrance issues in window-based model
+                    # Actions should execute AFTER the dialog closes and navigation completes
+                    $evtMgr = $global:TuiState.Services.EventManager
+                    if ($evtMgr) {
+                        Write-Log -Level Debug -Message "CommandPalette OnClose: Publishing DeferredAction event for: $($result.Name)"
+                        $evtMgr.Publish("DeferredAction", @{
+                            ActionName = $result.Name
+                        })
+                    } else {
+                        Write-Log -Level Error -Message "CommandPalette OnClose: EventManager not found!"
+                    }
+                }
+            }
+            
+            # Navigate to the palette (it will handle its own lifecycle)
+            $navService.NavigateTo($palette)
         }, @{
             Category = "Application"
             Description = "Show command palette"
@@ -185,16 +222,30 @@ class ActionService {
         
         # Task management actions
         $this.RegisterAction("task.new", {
-            # Placeholder
-            Write-Log -Level Info -Message "New task not implemented yet"
+            Write-Log -Level Info -Message "Navigating to New Task screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                # For now, just show a message and navigate to task list
+                $eventManager = $global:TuiState.Services.EventManager
+                if ($eventManager) {
+                    $eventManager.Publish("ShowMessage", @{
+                        Message = "New Task screen coming soon!"
+                        Type = "Info"
+                    })
+                }
+                # Navigate to task list as a placeholder
+                $this.ExecuteAction("navigation.taskList", @{})
+            }
         }, @{
             Category = "Tasks"
             Description = "New Task"
         })
         
         $this.RegisterAction("task.list", {
-            # Placeholder
-            Write-Log -Level Info -Message "Task list not implemented yet"
+            Write-Log -Level Info -Message "Executing task.list - navigating to Task List"
+            # Use the existing navigation.taskList action
+            $this.ExecuteAction("navigation.taskList")
         }, @{
             Category = "Tasks"
             Description = "View All Tasks"
@@ -202,8 +253,25 @@ class ActionService {
         
         # Navigation actions
         $this.RegisterAction("navigation.taskList", {
-            # Placeholder - TaskListScreen not implemented
-            Write-Log -Level Info -Message "Task list screen not implemented yet"
+            Write-Log -Level Info -Message "Navigating to Task List screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    # Create and navigate to TaskListScreen
+                    $taskListScreen = [TaskListScreen]::new($container)
+                    $taskListScreen.Initialize()
+                    $navService.NavigateTo($taskListScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to TaskListScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to TaskListScreen: $_"
+                    # Fallback to dashboard
+                    $dashboardScreen = [DashboardScreen]::new($container)
+                    $dashboardScreen.Initialize()
+                    $navService.NavigateTo($dashboardScreen)
+                }
+            }
         }, @{
             Category = "Navigation"
             Description = "Go to Task List"
@@ -221,8 +289,31 @@ class ActionService {
         })
         
         $this.RegisterAction("navigation.newTask", {
-            # Placeholder
-            Write-Log -Level Info -Message "New task screen not implemented yet"
+            Write-Log -Level Info -Message "Navigating to New Task screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    # Check if NewTaskScreen exists
+                    $newTaskScreen = [NewTaskScreen]::new($container)
+                    $newTaskScreen.Initialize()
+                    $navService.NavigateTo($newTaskScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to NewTaskScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to NewTaskScreen: $_"
+                    # Show message and go to task list instead
+                    $dialogManager = $global:TuiState.Services.DialogManager
+                    if ($dialogManager) {
+                        $dialogManager.ShowMessage(
+                            "New Task", 
+                            "New Task screen is being updated. Navigating to Task List instead.", 
+                            "Info"
+                        )
+                    }
+                    $this.ExecuteAction("navigation.taskList", @{})
+                }
+            }
         }, @{
             Category = "Navigation"
             Description = "Create New Task"
@@ -230,7 +321,7 @@ class ActionService {
         
         # FIXED: Add navigation.commandPalette for menu option
         $this.RegisterAction("navigation.commandPalette", {
-            $this.ExecuteAction("app.commandPalette")
+            $this.ExecuteAction("app.commandPalette", @{})
         }, @{
             Category = "Navigation"
             Description = "Open Command Palette"
@@ -268,9 +359,37 @@ class ActionService {
             Description = "Complete Selected Task"
         })
         
+        # Simple test action that returns to dashboard
+        $this.RegisterAction("test.simple", {
+            Write-Log -Level Info -Message "TEST ACTION EXECUTED: Showing test dialog"
+            
+            $dialogManager = $global:TuiState.Services.DialogManager
+            if ($dialogManager) {
+                # Show a simple message dialog
+                $dialogManager.ShowMessage(
+                    "Test Action Executed!", 
+                    "This confirms that command palette actions are working correctly.`n`nPress any key to continue.", 
+                    "Info"
+                )
+            }
+            
+            # Navigate back to dashboard
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                $dashboardScreen = [DashboardScreen]::new($container)
+                $dashboardScreen.Initialize()
+                $navService.NavigateTo($dashboardScreen)
+                Write-Log -Level Info -Message "Test complete - navigated to dashboard"
+            }
+        }, @{
+            Category = "Test"
+            Description = "Simple test - show dialog and refresh"
+        })
+        
         # Write-Verbose "ActionService: Registered default actions"
     }
 }
 
 #endregion
-#<!-- END_PAGE: ASE.001 -->
+#<!-- END_PAGE: ASE.004 -->

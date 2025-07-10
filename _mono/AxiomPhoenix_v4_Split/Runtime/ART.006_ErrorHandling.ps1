@@ -183,10 +183,12 @@ function Start-AxiomPhoenix {
 
         # Set initial screen using NavigationService (CRUCIAL FIX)
         if ($InitialScreen) {
+            Write-Log -Level Debug -Message "Start-AxiomPhoenix: Navigating to initial screen: $($InitialScreen.Name)"
             $navService.NavigateTo($InitialScreen) # Use the service directly
+            Write-Log -Level Debug -Message "Start-AxiomPhoenix: Navigation complete. CurrentScreen: $($navService.CurrentScreen?.Name)"
         }
         else {
-            # Write-Log -Level Warning -Message "No initial screen provided. Application might not display anything."
+            Write-Log -Level Warning -Message "No initial screen provided. Application might not display anything."
         }
         
         # Start main loop

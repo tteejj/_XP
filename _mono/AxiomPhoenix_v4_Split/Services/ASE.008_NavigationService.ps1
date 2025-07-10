@@ -42,6 +42,25 @@ class NavigationService {
         # No need to store EventManager separately - get it when needed
     }
 
+    # NEW: Get the window stack for rendering
+    [object[]] GetWindows() {
+        # Build array with current screen at the end (top of stack)
+        $windows = @()
+        
+        # Add all screens from navigation stack (bottom to top)
+        $stackArray = $this.NavigationStack.ToArray()
+        for ($i = $stackArray.Length - 1; $i -ge 0; $i--) {
+            $windows += $stackArray[$i]
+        }
+        
+        # Add current screen on top
+        if ($this.CurrentScreen) {
+            $windows += $this.CurrentScreen
+        }
+        
+        return $windows
+    }
+
     # IMPORTANT: Update NavigateTo method
     [void] NavigateTo([object]$screen) {
         if ($null -eq $screen) { throw [System.ArgumentNullException]::new("screen", "Cannot navigate to a null screen.") }
@@ -54,6 +73,14 @@ class NavigationService {
         }
         
         try {
+            # NEW: If navigating to an overlay, save focus state
+            if ($screen.IsOverlay) {
+                $focusManager = $this.ServiceContainer.GetService("FocusManager")
+                if ($focusManager) {
+                    $focusManager.PushFocusState()
+                }
+            }
+            
             # Exit current screen if one exists
             if ($this.CurrentScreen) {
                 # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)'"
@@ -125,10 +152,19 @@ class NavigationService {
         
         try {
             # Exit current screen
-            if ($this.CurrentScreen) {
-                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)' (going back)"
-                $this.CurrentScreen.OnExit()
-                $this.CurrentScreen.Cleanup() # Clean up the screen being exited/popped
+            $exitingScreen = $this.CurrentScreen
+            if ($exitingScreen) {
+                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($exitingScreen.Name)' (going back)"
+                $exitingScreen.OnExit()
+                $exitingScreen.Cleanup() # Clean up the screen being exited/popped
+                
+                # NEW: If exiting an overlay, restore focus state
+                if ($exitingScreen.IsOverlay) {
+                    $focusManager = $this.ServiceContainer.GetService("FocusManager")
+                    if ($focusManager) {
+                        $focusManager.PopFocusState()
+                    }
+                }
             }
             
             # Pop and resume previous screen

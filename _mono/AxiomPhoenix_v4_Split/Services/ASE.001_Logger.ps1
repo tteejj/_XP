@@ -46,12 +46,22 @@ class Logger {
     hidden [void] _Initialize() {
         $this.LogQueue = [System.Collections.Queue]::new()
         
+        # Check for environment variable to set log level
+        if ($env:AXIOM_LOG_LEVEL) {
+            if ($this.LevelPriority.ContainsKey($env:AXIOM_LOG_LEVEL)) {
+                $this.MinimumLevel = $env:AXIOM_LOG_LEVEL
+            }
+        }
+        
+        # Don't enable console logging for TUI apps - it interferes with display
+        # Use file logging instead
+        
         $logDir = Split-Path -Parent $this.LogPath
         if (-not (Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         }
         
-        # Write-Verbose "Logger: Initialized with log path: $($this.LogPath)"
+        # Write-Verbose "Logger: Initialized with log path: $($this.LogPath), MinimumLevel: $($this.MinimumLevel)"
     }
     
     [void] Log([string]$message, [string]$level = "Info") {

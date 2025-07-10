@@ -45,7 +45,11 @@ class DashboardScreen : Screen {
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
     [void] Initialize() {
-        if (-not $this.ServiceContainer) { return }
+        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting initialization"
+        if (-not $this.ServiceContainer) { 
+            Write-Log -Level Error -Message "DashboardScreen.Initialize: ServiceContainer is null!"
+            return 
+        }
 
         # Main panel takes full screen
         $this._mainPanel = [Panel]::new("MainPanel")
@@ -107,12 +111,18 @@ class DashboardScreen : Screen {
     }
 
     [void] OnEnter() {
+        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
         $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Received key - Key: $($keyInfo.Key), KeyChar: '$($keyInfo.KeyChar)', Modifiers: $($keyInfo.Modifiers)"
+        
         $actionService = $this.ServiceContainer?.GetService("ActionService")
-        if (-not $actionService) { return $false }
+        if (-not $actionService) { 
+            Write-Log -Level Error -Message "DashboardScreen: ActionService not found!"
+            return $false 
+        }
         
         $handled = $false
         
@@ -123,21 +133,21 @@ class DashboardScreen : Screen {
         # Direct character check
         switch ($char) {
             '1' { $handled = $true }
-            '2' { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
-            '3' { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
-            '4' { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
-            'q' { $actionService.ExecuteAction("app.exit"); $handled = $true }
-            'Q' { $actionService.ExecuteAction("app.exit"); $handled = $true }
+            '2' { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+            '3' { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+            '4' { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+            'q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+            'Q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
         }
         
         # If not handled by character, try Key enum
         if (-not $handled) {
             switch ($key) {
                 ([ConsoleKey]::D1) { $handled = $true }
-                ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
-                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
-                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
-                ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit"); $handled = $true }
+                ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
             }
         }
         
@@ -177,10 +187,10 @@ class DashboardScreen : Screen {
                 # Execute selected item
                 switch ($this._selectedIndex) {
                     0 { $handled = $true } # Already on dashboard
-                    1 { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
-                    2 { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
-                    3 { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
-                    5 { $actionService.ExecuteAction("app.exit"); $handled = $true }
+                    1 { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                    2 { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+                    3 { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                    5 { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
                 }
             }
         }

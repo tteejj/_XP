@@ -39,6 +39,12 @@ class LabelComponent : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
+        # Skip rendering if text is empty
+        if ([string]::IsNullOrEmpty($this.Text)) {
+            $this._needs_redraw = $false
+            return
+        }
+        
         # Get foreground color
         if ($this.ForegroundColor) {
             if ($this.ForegroundColor -is [ConsoleColor]) {
