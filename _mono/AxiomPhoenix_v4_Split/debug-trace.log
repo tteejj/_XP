@@ -202,3 +202,9 @@
 [09:33:39.891] DeferredActions queue created: True
 [09:33:39.902] EventManager found, registering DeferredAction handler...
 [09:33:39.915] DeferredAction handler registered!
+
+=== ENGINE START - 2025-07-11 09:48:39.106 ===
+[09:48:39.115] Setting up DeferredActions queue...
+[09:48:39.127] DeferredActions queue created: True
+[09:48:39.141] EventManager found, registering DeferredAction handler...
+[09:48:39.160] DeferredAction handler registered!

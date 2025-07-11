@@ -229,8 +229,10 @@ class PmcProject : ValidationBase {
     [bool]$IsActive = $true                  # Whether project is active
     
     # Enhanced properties from reference implementation
-    [string]$ID1                             # Optional secondary identifier
-    [Nullable[datetime]]$BFDate              # Bring-Forward date for follow-ups
+    [string]$ID1                             # Optional secondary identifier (matches 101 - non-unique)
+    [string]$ID2                             # NEW: Main Case ID (matches 102 - Main case ID)
+    [Nullable[datetime]]$AssignedDate        # NEW: Assigned Date
+    [Nullable[datetime]]$BFDate              # Bring-Forward date for follow-ups (matches Due Date in image)
     [string]$ProjectFolderPath               # Full path to the project's root folder on disk
     [string]$CaaFileName                     # Relative name of the associated CAA file
     [string]$RequestFileName                 # Relative name of the associated Request file
@@ -310,6 +312,15 @@ class PmcProject : ValidationBase {
             Tags = $this.Tags
             Metadata = $this.Metadata.Clone()
             IsActive = $this.IsActive
+            # NEW Properties
+            ID1 = $this.ID1
+            ID2 = $this.ID2
+            AssignedDate = if ($this.AssignedDate) { $this.AssignedDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            BFDate = if ($this.BFDate) { $this.BFDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            ProjectFolderPath = $this.ProjectFolderPath
+            CaaFileName = $this.CaaFileName
+            RequestFileName = $this.RequestFileName
+            T2020FileName = $this.T2020FileName
         }
     }
     
@@ -330,6 +341,19 @@ class PmcProject : ValidationBase {
         if ($data.ContainsKey('Tags')) { $project.Tags = @($data.Tags) }
         if ($data.ContainsKey('Metadata')) { $project.Metadata = $data.Metadata.Clone() }
         if ($data.ContainsKey('IsActive')) { $project.IsActive = [bool]$data.IsActive }
+        # NEW Properties
+        if ($data.ContainsKey('ID1')) { $project.ID1 = $data.ID1 }
+        if ($data.ContainsKey('ID2')) { $project.ID2 = $data.ID2 }
+        if ($data.ContainsKey('AssignedDate') -and $data.AssignedDate) { 
+            $project.AssignedDate = [DateTime]::Parse($data.AssignedDate)
+        }
+        if ($data.ContainsKey('BFDate') -and $data.BFDate) { 
+            $project.BFDate = [DateTime]::Parse($data.BFDate)
+        }
+        if ($data.ContainsKey('ProjectFolderPath')) { $project.ProjectFolderPath = $data.ProjectFolderPath }
+        if ($data.ContainsKey('CaaFileName')) { $project.CaaFileName = $data.CaaFileName }
+        if ($data.ContainsKey('RequestFileName')) { $project.RequestFileName = $data.RequestFileName }
+        if ($data.ContainsKey('T2020FileName')) { $project.T2020FileName = $data.T2020FileName }
         
         return $project
     }

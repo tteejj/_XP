@@ -354,6 +354,27 @@ class ActionService {
             Description = "Go to Theme Selection"
         })
         
+        $this.RegisterAction("navigation.projects", {
+            Write-Log -Level Info -Message "Navigating to Projects List screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    $projectsScreen = [ProjectsListScreen]::new($container)
+                    $projectsScreen.Initialize()
+                    $navService.NavigateTo($projectsScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to ProjectsListScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to ProjectsListScreen: $_"
+                    Write-Log -Level Error -Message "Stack trace: $($_.ScriptStackTrace)"
+                }
+            }
+        }, @{
+            Category = "Navigation"
+            Description = "Go to Projects List"
+        })
+        
         # Add navigation.commandPalette for menu option
         $this.RegisterAction("navigation.commandPalette", {
             $this.ExecuteAction("app.commandPalette", @{})
