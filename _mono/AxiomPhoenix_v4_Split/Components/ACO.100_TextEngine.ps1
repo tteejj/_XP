@@ -237,11 +237,11 @@ class TextBuffer {
     # Get substring
     [string] GetText([int]$start, [int]$length) {
         if ($start -lt 0) { $start = 0 }
-        if ($start + $length -gt $this.Length) { $length = $this.Length - $start }
-        if ($length -le 0) { return "" }
+        if ($start + $length -gt $this.Length) { $len = $this.Length - $start } else { $len = $length }
+        if ($len -le 0) { return "" }
         
-        $sb = [System.Text.StringBuilder]::new($length)
-        $end = $start + $length
+        $sb = [System.Text.StringBuilder]::new($len)
+        $end = $start + $len
         
         for ($i = $start; $i -lt $end; $i++) {
             if ($i -lt $this._preGap.Count) {
@@ -623,8 +623,8 @@ class TextSelection {
     
     [bool] ContainsPosition([int]$position) {
         if (-not $this.IsActive) { return $false }
-        $start = $this.GetNormalizedStart()
-        $end = $this.GetNormalizedEnd()
-        return $position -ge $start -and $position -lt $end
+        $startPos = $this.GetNormalizedStart()
+        $endPos = $this.GetNormalizedEnd()
+        return $position -ge $startPos -and $position -lt $endPos
     }
 }
