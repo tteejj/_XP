@@ -141,19 +141,19 @@ class CommandPalette : Dialog {
             ([ConsoleKey]::Enter) {
                 $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'null' }
                 Write-Log -Level Debug -Message "CommandPalette: Enter key pressed, focused component: $focusedName"
-                # Only handle Enter if the list has focus and a selection
-                if ($focusedComponent -eq $this._listBox) {
-                    Write-Log -Level Debug -Message "CommandPalette: ListBox has focus, SelectedIndex: $($this._listBox.SelectedIndex), FilteredCount: $($this._filteredActions.Count)"
-                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                        if ($selectedAction) {
-                            Write-Log -Level Debug -Message "CommandPalette: Selected action: $($selectedAction.Name)"
-                            $this.Complete($selectedAction)  # Signal completion with result
-                            return $true
-                        }
+                
+                # Execute the currently selected action in the list, regardless of which component has focus
+                if ($this._filteredActions.Count -gt 0 -and $this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                    if ($selectedAction) {
+                        Write-Log -Level Debug -Message "CommandPalette: Executing selected action at index $($this._listBox.SelectedIndex): $($selectedAction.Name)"
+                        $this.Complete($selectedAction)
+                        return $true
                     }
                 }
-                return $false  # Let the focused component handle Enter
+                
+                Write-Log -Level Debug -Message "CommandPalette: No valid selection to execute"
+                return $false
             }
             ([ConsoleKey]::Tab) {
                 # Toggle focus between search box and list
@@ -167,22 +167,80 @@ class CommandPalette : Dialog {
                 return $true
             }
             ([ConsoleKey]::UpArrow) {
-                # If search box has focus and user presses arrow keys, move focus to list
+                # If search box has focus, handle selection movement directly
                 if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    $focusManager.SetFocus($this._listBox)
-                    # Let the list handle the actual arrow key
-                    return $this._listBox.HandleInput($key)
+                    # Move selection up in the list (without changing focus)
+                    if ($this._listBox.SelectedIndex -gt 0) {
+                        $this._listBox.SelectedIndex--
+                        $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                        $this._listBox.RequestRedraw()
+                        $this.RequestRedraw()
+                    }
+                    return $true
                 }
-                return $false  # Let the focused component handle it
+                return $false  # Let the list handle it if it has focus
             }
             ([ConsoleKey]::DownArrow) {
-                # If search box has focus and user presses arrow keys, move focus to list
+                # If search box has focus, handle selection movement directly
                 if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    $focusManager.SetFocus($this._listBox)
-                    # Let the list handle the actual arrow key
-                    return $this._listBox.HandleInput($key)
+                    # Move selection down in the list (without changing focus)
+                    if ($this._listBox.SelectedIndex -lt $this._filteredActions.Count - 1) {
+                        $this._listBox.SelectedIndex++
+                        $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                        $this._listBox.RequestRedraw()
+                        $this.RequestRedraw()
+                    }
+                    return $true
                 }
-                return $false  # Let the focused component handle it
+                return $false  # Let the list handle it if it has focus
+            }
+            ([ConsoleKey]::PageUp) {
+                # Move selection up by a page
+                if ($this._filteredActions.Count -gt 0) {
+                    $pageSize = [Math]::Max(1, $this._listBox.Height - 2)
+                    $newIndex = [Math]::Max(0, $this._listBox.SelectedIndex - $pageSize)
+                    $this._listBox.SelectedIndex = $newIndex
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::PageDown) {
+                # Move selection down by a page
+                if ($this._filteredActions.Count -gt 0) {
+                    $pageSize = [Math]::Max(1, $this._listBox.Height - 2)
+                    $newIndex = [Math]::Min($this._filteredActions.Count - 1, $this._listBox.SelectedIndex + $pageSize)
+                    $this._listBox.SelectedIndex = $newIndex
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::Home) {
+                # Move to first item
+                if ($this._filteredActions.Count -gt 0) {
+                    $this._listBox.SelectedIndex = 0
+                    $this._listBox.EnsureVisible(0)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::End) {
+                # Move to last item
+                if ($this._filteredActions.Count -gt 0) {
+                    $this._listBox.SelectedIndex = $this._filteredActions.Count - 1
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
             }
             default {
                 # Let the input routing system handle everything else
