@@ -219,12 +219,12 @@ class TextEditorScreen : Screen {
             
             for ($j = 0; $j -lt $lineNumStr.Length; $j++) {
                 $buffer.SetCell($j, $screenY, 
-                    [TuiCell]::new($lineNumStr[$j], $lineNumColor, Get-ThemeColor "Background"))
+                    [TuiCell]::new($lineNumStr[$j], $lineNumColor, (Get-ThemeColor "Background")))
             }
             
             # Separator
             $buffer.SetCell($this._lineNumberWidth - 1, $screenY,
-                [TuiCell]::new('│', Get-ThemeColor "component.border", Get-ThemeColor "Background"))
+                [TuiCell]::new('│', (Get-ThemeColor "component.border"), (Get-ThemeColor "Background")))
         }
         
         # Get line text
