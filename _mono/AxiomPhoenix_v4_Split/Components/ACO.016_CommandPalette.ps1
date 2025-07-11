@@ -147,6 +147,7 @@ class CommandPalette : Dialog {
                     $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
                     if ($selectedAction) {
                         Write-Log -Level Debug -Message "CommandPalette: Executing selected action at index $($this._listBox.SelectedIndex): $($selectedAction.Name)"
+                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] CommandPalette calling Complete() with action: $($selectedAction.Name)"
                         $this.Complete($selectedAction)
                         return $true
                     }

@@ -69,6 +69,10 @@ function Start-TuiEngine {
     try {
         Write-Log -Level Info -Message "Starting TUI Engine with target FPS: $TargetFPS"
         
+        # Clear debug trace log at start
+        $debugLog = Join-Path (Split-Path $PSScriptRoot -Parent) "debug-trace.log"
+        Add-Content -Path $debugLog -Value "`n=== ENGINE START - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') ===" -ErrorAction SilentlyContinue
+        
         # Calculate frame timing
         $targetFrameTime = [timespan]::FromSeconds(1.0 / $TargetFPS)
         $frameStopwatch = [System.Diagnostics.Stopwatch]::new()
@@ -84,17 +88,27 @@ function Start-TuiEngine {
         $global:TuiState.FrameCount = 0
         
         # Setup deferred action handler for window-based navigation
+        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Setting up DeferredActions queue..."
         $global:TuiState.DeferredActions = New-Object 'System.Collections.Concurrent.ConcurrentQueue[hashtable]'
+        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] DeferredActions queue created: $($null -ne $global:TuiState.DeferredActions)"
+        
         $eventManager = $global:TuiState.Services.EventManager
         if ($eventManager) {
             Write-Log -Level Debug -Message "Engine: Setting up DeferredAction handler"
+            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] EventManager found, registering DeferredAction handler..."
             $deferredHandler = $eventManager.Subscribe("DeferredAction", {
                 param($sender, $data)
+                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] DeferredAction handler called with sender: $($sender.GetType().Name), data: $($data | ConvertTo-Json -Compress)"
                 if ($data -and $data.ActionName) {
                     Write-Log -Level Debug -Message "Engine: DeferredAction event received - ActionName: $($data.ActionName)"
+                    Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] DeferredAction received: $($data.ActionName)"
                     $global:TuiState.DeferredActions.Enqueue($data)
+                    Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] DeferredAction enqueued successfully"
                 }
             })
+            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] DeferredAction handler registered!"
+        } else {
+            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] WARNING: EventManager not found!"
         }
         
         if ($EnablePerformanceMonitoring) {
@@ -121,6 +135,7 @@ function Start-TuiEngine {
                 
                 # Phase 3: Process deferred actions (execute AFTER navigation completes)
                 if ($global:TuiState.DeferredActions -and $global:TuiState.DeferredActions.Count -gt 0) {
+                    Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Found $($global:TuiState.DeferredActions.Count) deferred actions"
                     # Add a frame delay to ensure dialog is fully cleared from screen
                     if (-not $global:TuiState.DeferredActionDelay) {
                         $global:TuiState.DeferredActionDelay = 2  # Wait 2 frames
@@ -133,10 +148,12 @@ function Start-TuiEngine {
                         if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
                             if ($deferredAction -and $deferredAction.ActionName) {
                                 Write-Log -Level Debug -Message "Engine: Processing deferred action: $($deferredAction.ActionName)"
+                                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Processing deferred action: $($deferredAction.ActionName)"
                                 Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
                                     $actionService = $global:TuiState.Services.ActionService
                                     if ($actionService) {
                                         Write-Log -Level Debug -Message "Engine: Executing deferred action: $($deferredAction.ActionName)"
+                                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Executing action: $($deferredAction.ActionName)"
                                         $actionService.ExecuteAction($deferredAction.ActionName, @{})
                                     }
                                 }

@@ -62,6 +62,7 @@ class Dialog : Screen {
 
     [void] Complete([object]$result) {
         Write-Log -Level Debug -Message "Dialog.Complete called on '$($this.Name)' with result: $(if ($null -ne $result) { $result | ConvertTo-Json -Compress } else { 'null' })"
+        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Dialog.Complete called for '$($this.Name)'"
         
         $this.Result = $result
         $this._isComplete = $true
@@ -74,13 +75,17 @@ class Dialog : Screen {
         # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
             Write-Log -Level Debug -Message "Dialog '$($this.Name)': Calling OnClose callback"
+            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Dialog calling OnClose callback..."
             try { 
                 & $this.OnClose $result 
+                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] OnClose callback completed"
             } catch { 
                 Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
+                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] ERROR in OnClose: $_"
             }
         } else {
             Write-Log -Level Debug -Message "Dialog '$($this.Name)': No OnClose callback set"
+            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] No OnClose callback set"
         }
         
         # Navigate back to previous screen

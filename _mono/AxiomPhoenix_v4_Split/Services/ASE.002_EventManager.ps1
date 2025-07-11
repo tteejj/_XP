@@ -140,7 +140,7 @@ class EventManager {
                 try {
                     $handlerData = $entry.Value
                     $handlerData.ExecutionCount++
-                    & $handlerData.Handler $eventData
+                    & $handlerData.Handler $this $eventData
                 }
                 catch {
                     # Log errors without complex data

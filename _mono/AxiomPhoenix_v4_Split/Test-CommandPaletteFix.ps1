@@ -1,37 +1,28 @@
-# Test script to verify CommandPalette fix
-Write-Host "Testing CommandPalette fixes..." -ForegroundColor Cyan
-
-# Test 1: Check if CommandPalette Complete method exists
-$cpType = [CommandPalette]
-$completeMethod = $cpType.GetMethod('Complete')
-if ($completeMethod) {
-    Write-Host "✓ CommandPalette.Complete method exists" -ForegroundColor Green
-} else {
-    Write-Host "✗ CommandPalette.Complete method missing" -ForegroundColor Red
-}
-
-# Test 2: Check if Dialog.Complete method exists  
-$dialogType = [Dialog]
-$dialogCompleteMethod = $dialogType.GetMethod('Complete')
-if ($dialogCompleteMethod) {
-    Write-Host "✓ Dialog.Complete method exists" -ForegroundColor Green
-} else {
-    Write-Host "✗ Dialog.Complete method missing" -ForegroundColor Red
-}
-
-# Test 3: Verify deferred action queue exists
-if ($global:TuiState.DeferredActions) {
-    Write-Host "✓ DeferredActions queue exists" -ForegroundColor Green
-} else {
-    Write-Host "✗ DeferredActions queue missing" -ForegroundColor Red
-}
-
-Write-Host "`nCommandPalette fixes have been applied." -ForegroundColor Yellow
-Write-Host "Key changes:" -ForegroundColor Yellow
-Write-Host "1. CommandPalette now overrides Complete() to ensure proper cleanup" -ForegroundColor Gray
-Write-Host "2. Dialog.Complete() now hides the dialog before navigation" -ForegroundColor Gray
-Write-Host "3. Engine adds 2-frame delay before executing deferred actions" -ForegroundColor Gray
-Write-Host "4. This ensures the screen is fully cleared before action execution" -ForegroundColor Gray
-
-Write-Host "`nPress any key to continue..." -ForegroundColor Cyan
+# Quick test of the fix
+Clear-Host
+Write-Host "TESTING COMMANDPALETTE FIX" -ForegroundColor Cyan
+Write-Host "=========================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "The bug was: EventManager was passing 1 parameter but handlers expect 2" -ForegroundColor Yellow
+Write-Host "Fixed by changing:" -ForegroundColor Yellow
+Write-Host "  & `$handlerData.Handler `$eventData" -ForegroundColor Red
+Write-Host "To:" -ForegroundColor Yellow  
+Write-Host "  & `$handlerData.Handler `$this `$eventData" -ForegroundColor Green
+Write-Host ""
+Write-Host "Instructions:" -ForegroundColor Cyan
+Write-Host "1. Press '4' to open Command Palette"
+Write-Host "2. Select 'test.simple' action"
+Write-Host "3. Press Enter"
+Write-Host "4. You should see a dialog confirming execution!"
+Write-Host ""
+Write-Host "Press any key to start..." -ForegroundColor Gray
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+# Clear the debug log
+$debugLog = "$PSScriptRoot\debug-trace.log"
+if (Test-Path $debugLog) {
+    Clear-Content $debugLog
+}
+
+# Run the app
+& "$PSScriptRoot\Start.ps1"

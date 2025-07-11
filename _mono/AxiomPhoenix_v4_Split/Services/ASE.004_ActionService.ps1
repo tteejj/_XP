@@ -186,20 +186,27 @@ class ActionService {
             # Set callback to execute selected action
             $palette.OnClose = {
                 param($result)
+                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] CommandPalette OnClose called!"
                 if ($result -and $result.Name) {
                     Write-Log -Level Debug -Message "CommandPalette OnClose: Selected action: $($result.Name)"
+                    Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Selected action: $($result.Name)"
                     
                     # Defer execution to avoid re-entrance issues in window-based model
                     # Actions should execute AFTER the dialog closes and navigation completes
                     $evtMgr = $global:TuiState.Services.EventManager
                     if ($evtMgr) {
                         Write-Log -Level Debug -Message "CommandPalette OnClose: Publishing DeferredAction event for: $($result.Name)"
+                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Publishing DeferredAction event..."
                         $evtMgr.Publish("DeferredAction", @{
                             ActionName = $result.Name
                         })
+                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] DeferredAction event published!"
                     } else {
                         Write-Log -Level Error -Message "CommandPalette OnClose: EventManager not found!"
+                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] ERROR: EventManager not found!"
                     }
+                } else {
+                    Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] No action selected (result was null or had no Name)"
                 }
             }
             
@@ -362,6 +369,7 @@ class ActionService {
         # Simple test action that returns to dashboard
         $this.RegisterAction("test.simple", {
             Write-Log -Level Info -Message "TEST ACTION EXECUTED: Showing test dialog"
+            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] >>> TEST ACTION EXECUTED! <<<"
             
             $dialogManager = $global:TuiState.Services.DialogManager
             if ($dialogManager) {
