@@ -114,7 +114,7 @@ class SidebarMenu : UIElement {
             $actionService = $global:TuiState.Services.ActionService
             if ($actionService) {
                 try {
-                    $actionService.ExecuteAction($action)
+                    $actionService.ExecuteAction($action, @{})
                     return $true
                 } catch {
                     Write-Log -Level Error -Message "Failed to execute menu action '$action': $_"

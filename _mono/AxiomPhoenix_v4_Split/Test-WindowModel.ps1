@@ -75,7 +75,7 @@ try {
     
     # Execute command palette action
     Write-Host "  Executing app.commandPalette action..."
-    $actionService.ExecuteAction("app.commandPalette")
+    $actionService.ExecuteAction("app.commandPalette", @{})
     
     # Check window stack
     Start-Sleep -Milliseconds 100  # Give it time to navigate

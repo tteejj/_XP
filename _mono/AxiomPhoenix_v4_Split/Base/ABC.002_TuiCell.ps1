@@ -41,6 +41,14 @@ class TuiCell {
         $this.BackgroundColor = $bg
     }
     
+    # Constructor with 4 parameters (char, fg, bg, bold)
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+    }
+    
     # Full constructor with all parameters
     TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold, [bool]$italic, [bool]$underline, [bool]$strikethrough) {
         $this.Char = $char

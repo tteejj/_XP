@@ -177,7 +177,7 @@ class CommandPaletteScreen : Screen {
                                     $navService.GoBack()
                                 }
                                 # Then execute action
-                                $actionService.ExecuteAction($selectedAction.Name)
+                                $actionService.ExecuteAction($selectedAction.Name, @{})
                             }
                         }
                     }

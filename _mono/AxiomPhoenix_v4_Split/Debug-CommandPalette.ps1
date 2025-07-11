@@ -59,7 +59,7 @@ try {
     
     # Test 1: Direct action execution
     Write-Host "`nTest 1: Direct Action Execution" -ForegroundColor Yellow
-    $actionService.ExecuteAction("test.action1")
+    $actionService.ExecuteAction("test.action1", @{})
     Write-Host "  Direct execution works!" -ForegroundColor Green
     
     # Test 2: Create CommandPalette manually
@@ -171,7 +171,7 @@ try {
     }, @{ Category = "Application"; Description = "Show command palette" })
     
     # Execute the action
-    $actionService.ExecuteAction("app.commandPalette")
+    $actionService.ExecuteAction("app.commandPalette", @{})
     
     Write-Host "`nAll tests completed!" -ForegroundColor Green
     

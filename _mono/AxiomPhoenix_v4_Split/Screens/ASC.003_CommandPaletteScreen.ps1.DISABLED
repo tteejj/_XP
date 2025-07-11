@@ -47,7 +47,7 @@ class CommandPaletteScreen : Screen {
                 $actionService = $screenRef.ServiceContainer.GetService("ActionService")
                 if ($actionService) {
                     try {
-                        $actionService.ExecuteAction($result.Name)
+                        $actionService.ExecuteAction($result.Name, @{})
                     } catch {
                         Write-Log -Level Error -Message "Failed to execute action: $_"
                     }

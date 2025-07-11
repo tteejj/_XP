@@ -130,7 +130,7 @@ class TaskListScreen : Screen {
         $dashButton.OnClick = {
             $actionService = $thisScreen.ServiceContainer?.GetService("ActionService")
             if ($actionService) {
-                $actionService.ExecuteAction("navigation.dashboard")
+                $actionService.ExecuteAction("navigation.dashboard", @{})
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($dashButton)
@@ -487,7 +487,7 @@ class TaskListScreen : Screen {
         # Handle navigation and action keys
         switch ($keyInfo.KeyChar) {
             '1' {
-                $actionService.ExecuteAction("navigation.dashboard")
+                $actionService.ExecuteAction("navigation.dashboard", @{})
                 return $true
             }
             '2' {
@@ -541,11 +541,11 @@ class TaskListScreen : Screen {
                 }
             }
             'q' {
-                $actionService.ExecuteAction("app.exit")
+                $actionService.ExecuteAction("app.exit", @{})
                 return $true
             }
             'Q' {
-                $actionService.ExecuteAction("app.exit")
+                $actionService.ExecuteAction("app.exit", @{})
                 return $true
             }
         }

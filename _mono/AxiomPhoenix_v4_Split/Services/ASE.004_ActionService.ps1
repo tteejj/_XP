@@ -245,7 +245,7 @@ class ActionService {
         $this.RegisterAction("task.list", {
             Write-Log -Level Info -Message "Executing task.list - navigating to Task List"
             # Use the existing navigation.taskList action
-            $this.ExecuteAction("navigation.taskList")
+            $this.ExecuteAction("navigation.taskList", @{})
         }, @{
             Category = "Tasks"
             Description = "View All Tasks"

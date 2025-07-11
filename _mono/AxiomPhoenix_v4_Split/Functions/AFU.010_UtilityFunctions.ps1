@@ -67,7 +67,7 @@ function Show-CommandPalette {
     $selection = [int]$key.Character - 48  # Convert char to number
     if ($actionMap.ContainsKey($selection)) {
         Clear-Host
-        $actionService.ExecuteAction($actionMap[$selection])
+        $actionService.ExecuteAction($actionMap[$selection], @{})
     } else {
         Clear-Host
     }
