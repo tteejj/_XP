@@ -66,6 +66,11 @@ class Dialog : Screen {
         $this.Result = $result
         $this._isComplete = $true
         
+        # Make dialog invisible immediately
+        $this.Visible = $false
+        $this.RequestRedraw()
+        $global:TuiState.IsDirty = $true
+        
         # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
             Write-Log -Level Debug -Message "Dialog '$($this.Name)': Calling OnClose callback"

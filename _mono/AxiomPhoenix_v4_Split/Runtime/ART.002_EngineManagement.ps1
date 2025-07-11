@@ -121,18 +121,28 @@ function Start-TuiEngine {
                 
                 # Phase 3: Process deferred actions (execute AFTER navigation completes)
                 if ($global:TuiState.DeferredActions -and $global:TuiState.DeferredActions.Count -gt 0) {
-                    $deferredAction = $null
-                    if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
-                        if ($deferredAction -and $deferredAction.ActionName) {
-                            Write-Log -Level Debug -Message "Engine: Processing deferred action: $($deferredAction.ActionName)"
-                            Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
-                                $actionService = $global:TuiState.Services.ActionService
-                                if ($actionService) {
-                                    Write-Log -Level Debug -Message "Engine: Executing deferred action: $($deferredAction.ActionName)"
-                                    $actionService.ExecuteAction($deferredAction.ActionName, @{})
+                    # Add a frame delay to ensure dialog is fully cleared from screen
+                    if (-not $global:TuiState.DeferredActionDelay) {
+                        $global:TuiState.DeferredActionDelay = 2  # Wait 2 frames
+                    }
+                    
+                    $global:TuiState.DeferredActionDelay--
+                    
+                    if ($global:TuiState.DeferredActionDelay -le 0) {
+                        $deferredAction = $null
+                        if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
+                            if ($deferredAction -and $deferredAction.ActionName) {
+                                Write-Log -Level Debug -Message "Engine: Processing deferred action: $($deferredAction.ActionName)"
+                                Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
+                                    $actionService = $global:TuiState.Services.ActionService
+                                    if ($actionService) {
+                                        Write-Log -Level Debug -Message "Engine: Executing deferred action: $($deferredAction.ActionName)"
+                                        $actionService.ExecuteAction($deferredAction.ActionName, @{})
+                                    }
                                 }
                             }
                         }
+                        $global:TuiState.DeferredActionDelay = $null
                     }
                 }
                 

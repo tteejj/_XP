@@ -264,6 +264,21 @@ class CommandPalette : Dialog {
         $this._allActions.Clear()
         $this._filteredActions.Clear()
     }
+    
+    # Override Complete to ensure proper cleanup
+    [void] Complete([object]$result) {
+        Write-Log -Level Debug -Message "CommandPalette.Complete called with result: $(if ($null -ne $result) { $result | ConvertTo-Json -Compress } else { 'null' })"
+        
+        # Clean up our state first
+        $this.Cleanup()
+        
+        # Force a redraw to clear the screen before navigation
+        $this.RequestRedraw()
+        $global:TuiState.IsDirty = $true
+        
+        # Call parent Complete which handles navigation and OnClose callback
+        ([Dialog]$this).Complete($result)
+    }
 }
 
 #<!-- END_PAGE: ACO.016 -->

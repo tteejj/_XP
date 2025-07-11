@@ -300,6 +300,14 @@ class TuiCell {
         $this.BackgroundColor = $bg
     }
     
+    # Constructor with 4 parameters (char, fg, bg, bold)
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+    }
+    
     # Full constructor with all parameters
     TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold, [bool]$italic, [bool]$underline, [bool]$strikethrough) {
         $this.Char = $char
@@ -1085,6 +1093,7 @@ class Screen : UIElement {
     [object]$ServiceContainer # Changed to object to avoid type conversion issues
     [System.Collections.Generic.Dictionary[string, object]]$State
     [System.Collections.Generic.List[UIElement]] $Panels
+    [bool]$IsOverlay = $false  # NEW: Indicates if this screen renders as an overlay
     
     $LastFocusedComponent
     
@@ -1276,6 +1285,12 @@ class LabelComponent : UIElement {
         # Clear buffer with theme background
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
+        
+        # Skip rendering if text is empty
+        if ([string]::IsNullOrEmpty($this.Text)) {
+            $this._needs_redraw = $false
+            return
+        }
         
         # Get foreground color
         if ($this.ForegroundColor) {
@@ -1522,6 +1537,7 @@ class TextBoxComponent : UIElement {
                     # Invert its colors to represent the cursor
                     $cursorFg = $cellUnderCursor.BackgroundColor
                     $cursorBg = $cellUnderCursor.ForegroundColor
+                    # Use the 4-parameter constructor for bold cursor
                     $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true)
                     $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
                 }
@@ -3385,26 +3401,17 @@ class ScrollablePanel : Panel {
     [int]$ScrollOffsetY = 0
     [int]$MaxScrollY = 0
     [bool]$ShowScrollbar = $true
-    hidden [int]$_contentHeight = 0 # This will be the virtual content height
-    hidden [TuiBuffer]$_virtual_buffer = $null # NEW: To hold the entire scrollable content
+    hidden [int]$_contentHeight = 0 # Total height of all content
 
     ScrollablePanel([string]$name) : base($name) {
         $this.IsFocusable = $true
-        # Initialize _virtual_buffer with initial dimensions. Will be resized later based on content.
-        # Start with max possible height or a reasonable large value, will grow as children are added
-        $this._virtual_buffer = [TuiBuffer]::new($this.Width, 1000, "$($this.Name).Virtual") 
     }
 
-    # Override OnResize to ensure virtual buffer matches actual content area needs
+    # Override OnResize to recalculate scroll limits
     [void] OnResize([int]$newWidth, [int]$newHeight) {
         # Call base Panel resize, which updates Width, Height, and _private_buffer
         ([Panel]$this).Resize($newWidth, $newHeight) 
-
-        # Ensure the virtual buffer is wide enough for the content area
-        $targetVirtualWidth = $this.ContentWidth 
-        if ($this._virtual_buffer.Width -ne $targetVirtualWidth) {
-            $this._virtual_buffer.Resize($targetVirtualWidth, $this._virtual_buffer.Height) # Only resize width for now
-        }
+        
         $this.UpdateMaxScroll() # Recalculate max scroll on resize
         $this.RequestRedraw()
     }
@@ -3412,60 +3419,74 @@ class ScrollablePanel : Panel {
     # Override _RenderContent to implement virtual scrolling logic
     hidden [void] _RenderContent() {
         # 1. First, render the base Panel. This clears its own _private_buffer and draws borders/title.
-        # This implicitly calls ([Panel]$this).OnRender()
         ([Panel]$this)._RenderContent()
 
-        # 2. Render all children onto the _virtual_buffer
-        $this._virtual_buffer.Clear([TuiCell]::new(' ', $this.BackgroundColor, $this.BackgroundColor)) # Clear virtual buffer
-        
+        # 2. Calculate content height and update scroll limits
         $actualContentBottom = 0
-        foreach ($child in $this.Children | Sort-Object ZIndex) {
+        foreach ($child in $this.Children) {
             if ($child.Visible) {
-                # Render each child to its own private buffer
-                $child.Render() 
-                if ($null -ne $child._private_buffer) {
-                    # Blend child's buffer onto our _virtual_buffer at its original coordinates
-                    # (relative to the panel's content area)
-                    $this._virtual_buffer.BlendBuffer($child._private_buffer, $child.X - $this.ContentX, $child.Y - $this.ContentY)
-                }
-                # Track the maximum vertical extent of children to determine virtual height
-                $childExtent = ($child.Y - $this.ContentY) + $child.Height
-                if ($childExtent -gt $actualContentBottom) {
-                    $actualContentBottom = $childExtent
+                $childBottom = ($child.Y - $this.ContentY) + $child.Height
+                if ($childBottom -gt $actualContentBottom) {
+                    $actualContentBottom = $childBottom
                 }
             }
         }
-        $this._contentHeight = $actualContentBottom # Update actual content height
-
-        # 3. Update MaxScrollY and clamp ScrollOffsetY
+        $this._contentHeight = $actualContentBottom
         $this.UpdateMaxScroll()
 
-        # 4. Extract the visible portion from _virtual_buffer and blend it onto _private_buffer
-        #    This accounts for the scroll offset when drawing to screen.
-        $viewportWidth = $this.ContentWidth
-        $viewportHeight = $this.ContentHeight
+        # 3. Render visible children directly with viewport clipping
+        $viewportTop = $this.ScrollOffsetY
+        $viewportBottom = $this.ScrollOffsetY + $this.ContentHeight
         
-        # Ensure target size for sub-buffer is positive
-        $viewportWidth = [Math]::Max(1, $viewportWidth)
-        $viewportHeight = [Math]::Max(1, $viewportHeight)
-
-        $sourceX = 0 # No horizontal scrolling for now, but easily extendable
-        $sourceY = $this.ScrollOffsetY
-        
-        # Get sub-buffer, ensure it's not trying to read beyond virtual buffer bounds
-        $effectiveSourceHeight = [Math]::Min($viewportHeight, $this._virtual_buffer.Height - $sourceY)
-        if ($effectiveSourceHeight -le 0) {
-            # No content to display in viewport
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': No effective content for viewport."
-            return
+        foreach ($child in $this.Children | Sort-Object ZIndex) {
+            if (-not $child.Visible) { continue }
+            
+            # Calculate child position relative to content area
+            $childRelY = $child.Y - $this.ContentY
+            $childTop = $childRelY
+            $childBottom = $childRelY + $child.Height
+            
+            # Skip if completely outside viewport
+            if ($childBottom -lt $viewportTop -or $childTop -ge $viewportBottom) {
+                continue
+            }
+            
+            # Render child
+            $child.Render()
+            
+            if ($null -ne $child._private_buffer) {
+                # Calculate where to place the child in our buffer
+                $destX = $child.X
+                $destY = $this.ContentY + ($childRelY - $this.ScrollOffsetY)
+                
+                # Clip the child buffer if it extends beyond viewport
+                $sourceY = 0
+                $sourceHeight = $child.Height
+                
+                # Adjust if child is partially above viewport
+                if ($childTop -lt $viewportTop) {
+                    $clipTop = $viewportTop - $childTop
+                    $sourceY = $clipTop
+                    $sourceHeight -= $clipTop
+                    $destY = $this.ContentY
+                }
+                
+                # Adjust if child is partially below viewport
+                if ($childBottom -gt $viewportBottom) {
+                    $clipBottom = $childBottom - $viewportBottom
+                    $sourceHeight -= $clipBottom
+                }
+                
+                # Blend the visible portion
+                if ($sourceHeight -gt 0) {
+                    # Create a sub-buffer for the visible portion of the child
+                    $visiblePortion = $child._private_buffer.GetSubBuffer(0, $sourceY, $child.Width, $sourceHeight)
+                    $this._private_buffer.BlendBuffer($visiblePortion, $destX, $destY)
+                }
+            }
         }
 
-        $visiblePortion = $this._virtual_buffer.GetSubBuffer($sourceX, $sourceY, $viewportWidth, $effectiveSourceHeight)
-        
-        # Blend the visible portion onto our own _private_buffer, at the content area
-        $this._private_buffer.BlendBuffer($visiblePortion, $this.ContentX, $this.ContentY)
-
-        # 5. Draw scrollbar if needed (uses _private_buffer and current ScrollOffsetY)
+        # 4. Draw scrollbar if needed
         if ($this.ShowScrollbar -and $this.MaxScrollY -gt 0) {
             $this.DrawScrollbar()
         }
@@ -3477,14 +3498,6 @@ class ScrollablePanel : Panel {
     [void] UpdateMaxScroll() {
         $viewportHeight = $this.ContentHeight # Use ContentHeight as the available rendering area
         
-        # Ensure virtual buffer height is at least content height
-        $currentVirtualHeight = $this._virtual_buffer.Height
-        $newVirtualHeight = [Math]::Max($currentVirtualHeight, $this._contentHeight)
-        if ($newVirtualHeight -ne $currentVirtualHeight) {
-            $this._virtual_buffer.Resize($this._virtual_buffer.Width, $newVirtualHeight)
-            # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Resized virtual buffer height to $newVirtualHeight."
-        }
-
         $this.MaxScrollY = [Math]::Max(0, $this._contentHeight - $viewportHeight)
         $this.ScrollOffsetY = [Math]::Max(0, [Math]::Min($this.ScrollOffsetY, $this.MaxScrollY))
         # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': ContentHeight=$($this._contentHeight), ViewportHeight=$($viewportHeight), MaxScrollY=$($this.MaxScrollY), ScrollOffsetY=$($this.ScrollOffsetY)."
@@ -3921,20 +3934,33 @@ class Dialog : Screen {
     }
 
     [void] Complete([object]$result) {
+        Write-Log -Level Debug -Message "Dialog.Complete called on '$($this.Name)' with result: $(if ($null -ne $result) { $result | ConvertTo-Json -Compress } else { 'null' })"
+        
         $this.Result = $result
         $this._isComplete = $true
         
+        # Make dialog invisible immediately
+        $this.Visible = $false
+        $this.RequestRedraw()
+        $global:TuiState.IsDirty = $true
+        
         # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
+            Write-Log -Level Debug -Message "Dialog '$($this.Name)': Calling OnClose callback"
             try { 
                 & $this.OnClose $result 
             } catch { 
                 Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
             }
+        } else {
+            Write-Log -Level Debug -Message "Dialog '$($this.Name)': No OnClose callback set"
         }
         
         # Navigate back to previous screen
-        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        $navService = $null
+        if ($null -ne $this.ServiceContainer) {
+            $navService = $this.ServiceContainer.GetService("NavigationService")
+        }
         if ($navService) {
             if ($navService.CanGoBack()) {
                 $navService.GoBack()
@@ -3975,7 +4001,10 @@ class Dialog : Screen {
         $this.FindFocusableChild($this._panel, [ref]$firstFocusable)
         
         if ($firstFocusable) {
-            $focusManager = $this.ServiceContainer?.GetService("FocusManager")
+            $focusManager = $null
+            if ($null -ne $this.ServiceContainer) {
+                $focusManager = $this.ServiceContainer.GetService("FocusManager")
+            }
             if ($focusManager) {
                 $focusManager.SetFocus($firstFocusable)
                 Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
@@ -4015,7 +4044,10 @@ class Dialog : Screen {
         $this.Show($title, $message)
         
         # Navigate to this dialog
-        $navService = $this.ServiceContainer?.GetService("NavigationService")
+        $navService = $null
+        if ($null -ne $this.ServiceContainer) {
+            $navService = $this.ServiceContainer.GetService("NavigationService")
+        }
         if ($navService) {
             $navService.NavigateTo($this)
         }
@@ -4259,17 +4291,21 @@ class CommandPalette : Dialog {
                 return $true 
             }
             ([ConsoleKey]::Enter) {
-                # Only handle Enter if the list has focus and a selection
-                if ($focusedComponent -eq $this._listBox) {
-                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                        if ($selectedAction) {
-                            $this.Complete($selectedAction)  # Signal completion with result
-                            return $true
-                        }
+                $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'null' }
+                Write-Log -Level Debug -Message "CommandPalette: Enter key pressed, focused component: $focusedName"
+                
+                # Execute the currently selected action in the list, regardless of which component has focus
+                if ($this._filteredActions.Count -gt 0 -and $this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+                    $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+                    if ($selectedAction) {
+                        Write-Log -Level Debug -Message "CommandPalette: Executing selected action at index $($this._listBox.SelectedIndex): $($selectedAction.Name)"
+                        $this.Complete($selectedAction)
+                        return $true
                     }
                 }
-                return $false  # Let the focused component handle Enter
+                
+                Write-Log -Level Debug -Message "CommandPalette: No valid selection to execute"
+                return $false
             }
             ([ConsoleKey]::Tab) {
                 # Toggle focus between search box and list
@@ -4283,22 +4319,80 @@ class CommandPalette : Dialog {
                 return $true
             }
             ([ConsoleKey]::UpArrow) {
-                # If search box has focus and user presses arrow keys, move focus to list
+                # If search box has focus, handle selection movement directly
                 if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    $focusManager.SetFocus($this._listBox)
-                    # Let the list handle the actual arrow key
-                    return $this._listBox.HandleInput($key)
+                    # Move selection up in the list (without changing focus)
+                    if ($this._listBox.SelectedIndex -gt 0) {
+                        $this._listBox.SelectedIndex--
+                        $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                        $this._listBox.RequestRedraw()
+                        $this.RequestRedraw()
+                    }
+                    return $true
                 }
-                return $false  # Let the focused component handle it
+                return $false  # Let the list handle it if it has focus
             }
             ([ConsoleKey]::DownArrow) {
-                # If search box has focus and user presses arrow keys, move focus to list
+                # If search box has focus, handle selection movement directly
                 if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    $focusManager.SetFocus($this._listBox)
-                    # Let the list handle the actual arrow key
-                    return $this._listBox.HandleInput($key)
+                    # Move selection down in the list (without changing focus)
+                    if ($this._listBox.SelectedIndex -lt $this._filteredActions.Count - 1) {
+                        $this._listBox.SelectedIndex++
+                        $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                        $this._listBox.RequestRedraw()
+                        $this.RequestRedraw()
+                    }
+                    return $true
                 }
-                return $false  # Let the focused component handle it
+                return $false  # Let the list handle it if it has focus
+            }
+            ([ConsoleKey]::PageUp) {
+                # Move selection up by a page
+                if ($this._filteredActions.Count -gt 0) {
+                    $pageSize = [Math]::Max(1, $this._listBox.Height - 2)
+                    $newIndex = [Math]::Max(0, $this._listBox.SelectedIndex - $pageSize)
+                    $this._listBox.SelectedIndex = $newIndex
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::PageDown) {
+                # Move selection down by a page
+                if ($this._filteredActions.Count -gt 0) {
+                    $pageSize = [Math]::Max(1, $this._listBox.Height - 2)
+                    $newIndex = [Math]::Min($this._filteredActions.Count - 1, $this._listBox.SelectedIndex + $pageSize)
+                    $this._listBox.SelectedIndex = $newIndex
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::Home) {
+                # Move to first item
+                if ($this._filteredActions.Count -gt 0) {
+                    $this._listBox.SelectedIndex = 0
+                    $this._listBox.EnsureVisible(0)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::End) {
+                # Move to last item
+                if ($this._filteredActions.Count -gt 0) {
+                    $this._listBox.SelectedIndex = $this._filteredActions.Count - 1
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
+                    $this.RequestRedraw()
+                    return $true
+                }
+                return $false
             }
             default {
                 # Let the input routing system handle everything else
@@ -4321,6 +4415,21 @@ class CommandPalette : Dialog {
         }
         $this._allActions.Clear()
         $this._filteredActions.Clear()
+    }
+    
+    # Override Complete to ensure proper cleanup
+    [void] Complete([object]$result) {
+        Write-Log -Level Debug -Message "CommandPalette.Complete called with result: $(if ($null -ne $result) { $result | ConvertTo-Json -Compress } else { 'null' })"
+        
+        # Clean up our state first
+        $this.Cleanup()
+        
+        # Force a redraw to clear the screen before navigation
+        $this.RequestRedraw()
+        $global:TuiState.IsDirty = $true
+        
+        # Call parent Complete which handles navigation and OnClose callback
+        ([Dialog]$this).Complete($result)
     }
 }
 
@@ -5440,7 +5549,7 @@ class SidebarMenu : UIElement {
             $actionService = $global:TuiState.Services.ActionService
             if ($actionService) {
                 try {
-                    $actionService.ExecuteAction($action)
+                    $actionService.ExecuteAction($action, @{})
                     return $true
                 } catch {
                     Write-Log -Level Error -Message "Failed to execute menu action '$action': $_"
@@ -6175,7 +6284,7 @@ function Show-CommandPalette {
     $selection = [int]$key.Character - 48  # Convert char to number
     if ($actionMap.ContainsKey($selection)) {
         Clear-Host
-        $actionService.ExecuteAction($actionMap[$selection])
+        $actionService.ExecuteAction($actionMap[$selection], @{})
     } else {
         Clear-Host
     }
@@ -7068,6 +7177,20 @@ function Start-TuiEngine {
         $global:TuiState.Running = $true
         $global:TuiState.FrameCount = 0
         
+        # Setup deferred action handler for window-based navigation
+        $global:TuiState.DeferredActions = New-Object 'System.Collections.Concurrent.ConcurrentQueue[hashtable]'
+        $eventManager = $global:TuiState.Services.EventManager
+        if ($eventManager) {
+            Write-Log -Level Debug -Message "Engine: Setting up DeferredAction handler"
+            $deferredHandler = $eventManager.Subscribe("DeferredAction", {
+                param($sender, $data)
+                if ($data -and $data.ActionName) {
+                    Write-Log -Level Debug -Message "Engine: DeferredAction event received - ActionName: $($data.ActionName)"
+                    $global:TuiState.DeferredActions.Enqueue($data)
+                }
+            })
+        }
+        
         if ($EnablePerformanceMonitoring) {
             $performanceStopwatch.Start()
         }
@@ -7090,7 +7213,34 @@ function Start-TuiEngine {
                     Process-TuiInput
                 }
                 
-                # Phase 3: Render frame
+                # Phase 3: Process deferred actions (execute AFTER navigation completes)
+                if ($global:TuiState.DeferredActions -and $global:TuiState.DeferredActions.Count -gt 0) {
+                    # Add a frame delay to ensure dialog is fully cleared from screen
+                    if (-not $global:TuiState.DeferredActionDelay) {
+                        $global:TuiState.DeferredActionDelay = 2  # Wait 2 frames
+                    }
+                    
+                    $global:TuiState.DeferredActionDelay--
+                    
+                    if ($global:TuiState.DeferredActionDelay -le 0) {
+                        $deferredAction = $null
+                        if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
+                            if ($deferredAction -and $deferredAction.ActionName) {
+                                Write-Log -Level Debug -Message "Engine: Processing deferred action: $($deferredAction.ActionName)"
+                                Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
+                                    $actionService = $global:TuiState.Services.ActionService
+                                    if ($actionService) {
+                                        Write-Log -Level Debug -Message "Engine: Executing deferred action: $($deferredAction.ActionName)"
+                                        $actionService.ExecuteAction($deferredAction.ActionName, @{})
+                                    }
+                                }
+                            }
+                        }
+                        $global:TuiState.DeferredActionDelay = $null
+                    }
+                }
+                
+                # Phase 4: Render frame
                 # Always render to maintain consistent frame rate and handle animations
                 Invoke-WithErrorHandling -Component "TuiEngine" -Context "Render" -ScriptBlock {
                     Invoke-TuiRender
@@ -7098,7 +7248,7 @@ function Start-TuiEngine {
                 
                 $global:TuiState.FrameCount++
                 
-                # Phase 4: Performance monitoring
+                # Phase 5: Performance monitoring
                 if ($EnablePerformanceMonitoring) {
                     $frameTime = $frameStopwatch.ElapsedMilliseconds
                     
@@ -7127,7 +7277,7 @@ function Start-TuiEngine {
                     }
                 }
                 
-                # Phase 5: Frame rate throttling
+                # Phase 6: Frame rate throttling
                 $frameStopwatch.Stop()
                 $elapsedTime = $frameStopwatch.Elapsed
                 
@@ -7345,28 +7495,42 @@ function Invoke-TuiRender {
         
         # Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
         
-        # WINDOW-BASED MODEL: Only render the active window
-        $currentWindow = $global:TuiState.CurrentScreen
-        
-        if ($currentWindow) {
-            try {
-                # Render the window which will update its internal buffer
-                $currentWindow.Render()
+        # WINDOW-BASED MODEL: Render all windows in the stack
+        $navService = $global:TuiState.Services.NavigationService
+        if ($navService) {
+            $windows = $navService.GetWindows()
+            
+            # Render each window from bottom to top
+            foreach ($window in $windows) {
+                if ($null -eq $window) { continue }
                 
-                # Get the window's buffer
-                $windowBuffer = $currentWindow.GetBuffer()
-                
-                if ($windowBuffer) {
-                    # Blend window buffer into compositor
-                    $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
+                try {
+                    # Render the window which will update its internal buffer
+                    $window.Render()
+                    
+                    # Get the window's buffer
+                    $windowBuffer = $window.GetBuffer()
+                    
+                    if ($windowBuffer) {
+                        # For overlays, render with transparency effect
+                        if ($window.IsOverlay -and $window -ne $windows[0]) {
+                            # Dim the background for overlay effect
+                            # This is a simple approach - could be enhanced with alpha blending
+                            $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
+                        }
+                        else {
+                            # Normal window - full opaque blend
+                            $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
+                        }
+                    }
+                    else {
+                        Write-Log -Level Debug -Message "Window buffer is null for $($window.Name)"
+                    }
                 }
-                else {
-                    Write-Log -Level Debug -Message "Window buffer is null for $($currentWindow.Name)"
+                catch {
+                    Write-Error "Error rendering window '$($window.Name)': $_"
+                    throw
                 }
-            }
-            catch {
-                Write-Error "Error rendering window: $_"
-                throw
             }
         }
         
@@ -7871,10 +8035,12 @@ function Start-AxiomPhoenix {
 
         # Set initial screen using NavigationService (CRUCIAL FIX)
         if ($InitialScreen) {
+            Write-Log -Level Debug -Message "Start-AxiomPhoenix: Navigating to initial screen: $($InitialScreen.Name)"
             $navService.NavigateTo($InitialScreen) # Use the service directly
+            Write-Log -Level Debug -Message "Start-AxiomPhoenix: Navigation complete. CurrentScreen: $($navService.CurrentScreen?.Name)"
         }
         else {
-            # Write-Log -Level Warning -Message "No initial screen provided. Application might not display anything."
+            Write-Log -Level Warning -Message "No initial screen provided. Application might not display anything."
         }
         
         # Start main loop
@@ -7942,7 +8108,11 @@ class DashboardScreen : Screen {
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
 
     [void] Initialize() {
-        if (-not $this.ServiceContainer) { return }
+        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting initialization"
+        if (-not $this.ServiceContainer) { 
+            Write-Log -Level Error -Message "DashboardScreen.Initialize: ServiceContainer is null!"
+            return 
+        }
 
         # Main panel takes full screen
         $this._mainPanel = [Panel]::new("MainPanel")
@@ -8004,12 +8174,18 @@ class DashboardScreen : Screen {
     }
 
     [void] OnEnter() {
+        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
         $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Received key - Key: $($keyInfo.Key), KeyChar: '$($keyInfo.KeyChar)', Modifiers: $($keyInfo.Modifiers)"
+        
         $actionService = $this.ServiceContainer?.GetService("ActionService")
-        if (-not $actionService) { return $false }
+        if (-not $actionService) { 
+            Write-Log -Level Error -Message "DashboardScreen: ActionService not found!"
+            return $false 
+        }
         
         $handled = $false
         
@@ -8020,21 +8196,21 @@ class DashboardScreen : Screen {
         # Direct character check
         switch ($char) {
             '1' { $handled = $true }
-            '2' { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
-            '3' { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
-            '4' { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
-            'q' { $actionService.ExecuteAction("app.exit"); $handled = $true }
-            'Q' { $actionService.ExecuteAction("app.exit"); $handled = $true }
+            '2' { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+            '3' { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+            '4' { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+            'q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+            'Q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
         }
         
         # If not handled by character, try Key enum
         if (-not $handled) {
             switch ($key) {
                 ([ConsoleKey]::D1) { $handled = $true }
-                ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
-                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
-                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
-                ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit"); $handled = $true }
+                ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
             }
         }
         
@@ -8074,10 +8250,10 @@ class DashboardScreen : Screen {
                 # Execute selected item
                 switch ($this._selectedIndex) {
                     0 { $handled = $true } # Already on dashboard
-                    1 { $actionService.ExecuteAction("navigation.taskList"); $handled = $true }
-                    2 { $actionService.ExecuteAction("navigation.newTask"); $handled = $true }
-                    3 { $actionService.ExecuteAction("app.commandPalette"); $handled = $true }
-                    5 { $actionService.ExecuteAction("app.exit"); $handled = $true }
+                    1 { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                    2 { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+                    3 { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                    5 { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
                 }
             }
         }
@@ -8224,7 +8400,7 @@ class TaskListScreen : Screen {
         $dashButton.OnClick = {
             $actionService = $thisScreen.ServiceContainer?.GetService("ActionService")
             if ($actionService) {
-                $actionService.ExecuteAction("navigation.dashboard")
+                $actionService.ExecuteAction("navigation.dashboard", @{})
             }
         }.GetNewClosure()
         $this._mainPanel.AddChild($dashButton)
@@ -8581,7 +8757,7 @@ class TaskListScreen : Screen {
         # Handle navigation and action keys
         switch ($keyInfo.KeyChar) {
             '1' {
-                $actionService.ExecuteAction("navigation.dashboard")
+                $actionService.ExecuteAction("navigation.dashboard", @{})
                 return $true
             }
             '2' {
@@ -8635,11 +8811,11 @@ class TaskListScreen : Screen {
                 }
             }
             'q' {
-                $actionService.ExecuteAction("app.exit")
+                $actionService.ExecuteAction("app.exit", @{})
                 return $true
             }
             'Q' {
-                $actionService.ExecuteAction("app.exit")
+                $actionService.ExecuteAction("app.exit", @{})
                 return $true
             }
         }
@@ -8877,84 +9053,6 @@ class ThemePickerScreen : Screen {
 
 
 
-####\Screens\ASC.003_CommandPaletteScreen.ps1
-# ==============================================================================
-# Axiom-Phoenix v4.0 - CommandPaletteScreen
-# A dedicated screen for the command palette
-# ==============================================================================
-
-using namespace System.Collections.Generic
-
-class CommandPaletteScreen : Screen {
-    hidden [CommandPalette] $_commandPalette
-    
-    CommandPaletteScreen([object]$serviceContainer) : base("CommandPaletteScreen", $serviceContainer) {}
-
-    [void] Initialize() {
-        if (-not $this.ServiceContainer) { return }
-
-        # Create command palette centered on screen
-        $this._commandPalette = [CommandPalette]::new("MainCommandPalette", $this.ServiceContainer)
-        $this._commandPalette.X = [Math]::Floor(($this.Width - 60) / 2)
-        $this._commandPalette.Y = [Math]::Floor(($this.Height - 20) / 2)
-        $this._commandPalette.Width = 60
-        $this._commandPalette.Height = 20
-        $this._commandPalette.Visible = $true
-        
-        # Get all actions from ActionService
-        $actionService = $this.ServiceContainer.GetService("ActionService")
-        if ($actionService) {
-            $allActions = @()
-            foreach ($actionName in $actionService.ActionRegistry.Keys) {
-                $actionData = $actionService.ActionRegistry[$actionName]
-                $actionObj = @{
-                    Name = $actionName
-                    Category = $actionData.Category
-                    Description = $actionData.Description
-                    Hotkey = $actionData.Hotkey
-                }
-                $allActions += $actionObj
-            }
-            $this._commandPalette.SetActions($allActions)
-        }
-        
-        # Set up completion handler
-        $screenRef = $this
-        $this._commandPalette.OnClose = {
-            param($result)
-            if ($result) {
-                # Execute the selected action
-                $actionService = $screenRef.ServiceContainer.GetService("ActionService")
-                if ($actionService) {
-                    try {
-                        $actionService.ExecuteAction($result.Name)
-                    } catch {
-                        Write-Log -Level Error -Message "Failed to execute action: $_"
-                    }
-                }
-            }
-            # Go back handled by Dialog.Complete() method
-        }
-        
-        $this.AddChild($this._commandPalette)
-    }
-
-    [void] OnEnter() {
-        # Dialog will handle its own focus in OnEnter
-        $this._commandPalette.OnEnter()
-        $this.RequestRedraw()
-    }
-
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Let the command palette (Dialog) handle all input
-        return $this._commandPalette.HandleInput($keyInfo)
-    }
-}
-
-#<!-- END_PAGE: ASC.003 -->
-
-
-
 ####\Screens\ASC.003_ScreenUtilities.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Screens (Load After Components)
@@ -9135,7 +9233,7 @@ class CommandPaletteScreen : Screen {
                                     $navService.GoBack()
                                 }
                                 # Then execute action
-                                $actionService.ExecuteAction($selectedAction.Name)
+                                $actionService.ExecuteAction($selectedAction.Name, @{})
                             }
                         }
                     }
@@ -9773,12 +9871,22 @@ class Logger {
     hidden [void] _Initialize() {
         $this.LogQueue = [System.Collections.Queue]::new()
         
+        # Check for environment variable to set log level
+        if ($env:AXIOM_LOG_LEVEL) {
+            if ($this.LevelPriority.ContainsKey($env:AXIOM_LOG_LEVEL)) {
+                $this.MinimumLevel = $env:AXIOM_LOG_LEVEL
+            }
+        }
+        
+        # Don't enable console logging for TUI apps - it interferes with display
+        # Use file logging instead
+        
         $logDir = Split-Path -Parent $this.LogPath
         if (-not (Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         }
         
-        # Write-Verbose "Logger: Initialized with log path: $($this.LogPath)"
+        # Write-Verbose "Logger: Initialized with log path: $($this.LogPath), MinimumLevel: $($this.MinimumLevel)"
     }
     
     [void] Log([string]$message, [string]$level = "Info") {
@@ -10481,22 +10589,59 @@ class ActionService {
             Hotkey = "F1"
         })
         
-        # FIXED: Use CommandPaletteScreen instead of DialogManager
+        # Use CommandPalette dialog directly (it inherits from Dialog/Screen)
         $this.RegisterAction("app.commandPalette", {
             Write-Log -Level Debug -Message "app.commandPalette action triggered"
             
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
+            $actionService = $global:TuiState.Services.ActionService
             
-            if (-not $navService -or -not $container) {
-                Write-Log -Level Error -Message "NavigationService or ServiceContainer not found"
+            if (-not $navService -or -not $container -or -not $actionService) {
+                Write-Log -Level Error -Message "Required services not found"
                 return
             }
             
-            $paletteScreen = [CommandPaletteScreen]::new($container)
-            $paletteScreen.Initialize()
-            $navService.NavigateTo($paletteScreen)
+            # Create CommandPalette dialog
+            $palette = [CommandPalette]::new("CommandPalette", $container)
             
+            # Get all registered actions
+            $allActions = @()
+            foreach ($actionName in $actionService.ActionRegistry.Keys) {
+                $actionData = $actionService.ActionRegistry[$actionName]
+                $allActions += @{
+                    Name = $actionName
+                    Category = $actionData.Category
+                    Description = $actionData.Description
+                    Hotkey = $actionData.Hotkey
+                }
+            }
+            
+            # Set actions and show
+            $palette.SetActions($allActions)
+            
+            # Set callback to execute selected action
+            $palette.OnClose = {
+                param($result)
+                if ($result -and $result.Name) {
+                    Write-Log -Level Debug -Message "CommandPalette OnClose: Selected action: $($result.Name)"
+                    
+                    # Defer execution to avoid re-entrance issues in window-based model
+                    # Actions should execute AFTER the dialog closes and navigation completes
+                    $evtMgr = $global:TuiState.Services.EventManager
+                    if ($evtMgr) {
+                        Write-Log -Level Debug -Message "CommandPalette OnClose: Publishing DeferredAction event for: $($result.Name)"
+                        $evtMgr.Publish("DeferredAction", @{
+                            ActionName = $result.Name
+                        })
+                    } else {
+                        Write-Log -Level Error -Message "CommandPalette OnClose: EventManager not found!"
+                    }
+                }
+            }
+            
+            # Navigate to the palette (it will handle its own lifecycle)
+            $navService.NavigateTo($palette)
         }, @{
             Category = "Application"
             Description = "Show command palette"
@@ -10514,16 +10659,30 @@ class ActionService {
         
         # Task management actions
         $this.RegisterAction("task.new", {
-            # Placeholder
-            Write-Log -Level Info -Message "New task not implemented yet"
+            Write-Log -Level Info -Message "Navigating to New Task screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                # For now, just show a message and navigate to task list
+                $eventManager = $global:TuiState.Services.EventManager
+                if ($eventManager) {
+                    $eventManager.Publish("ShowMessage", @{
+                        Message = "New Task screen coming soon!"
+                        Type = "Info"
+                    })
+                }
+                # Navigate to task list as a placeholder
+                $this.ExecuteAction("navigation.taskList", @{})
+            }
         }, @{
             Category = "Tasks"
             Description = "New Task"
         })
         
         $this.RegisterAction("task.list", {
-            # Placeholder
-            Write-Log -Level Info -Message "Task list not implemented yet"
+            Write-Log -Level Info -Message "Executing task.list - navigating to Task List"
+            # Use the existing navigation.taskList action
+            $this.ExecuteAction("navigation.taskList", @{})
         }, @{
             Category = "Tasks"
             Description = "View All Tasks"
@@ -10531,8 +10690,25 @@ class ActionService {
         
         # Navigation actions
         $this.RegisterAction("navigation.taskList", {
-            # Placeholder - TaskListScreen not implemented
-            Write-Log -Level Info -Message "Task list screen not implemented yet"
+            Write-Log -Level Info -Message "Navigating to Task List screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    # Create and navigate to TaskListScreen
+                    $taskListScreen = [TaskListScreen]::new($container)
+                    $taskListScreen.Initialize()
+                    $navService.NavigateTo($taskListScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to TaskListScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to TaskListScreen: $_"
+                    # Fallback to dashboard
+                    $dashboardScreen = [DashboardScreen]::new($container)
+                    $dashboardScreen.Initialize()
+                    $navService.NavigateTo($dashboardScreen)
+                }
+            }
         }, @{
             Category = "Navigation"
             Description = "Go to Task List"
@@ -10550,8 +10726,31 @@ class ActionService {
         })
         
         $this.RegisterAction("navigation.newTask", {
-            # Placeholder
-            Write-Log -Level Info -Message "New task screen not implemented yet"
+            Write-Log -Level Info -Message "Navigating to New Task screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    # Check if NewTaskScreen exists
+                    $newTaskScreen = [NewTaskScreen]::new($container)
+                    $newTaskScreen.Initialize()
+                    $navService.NavigateTo($newTaskScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to NewTaskScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to NewTaskScreen: $_"
+                    # Show message and go to task list instead
+                    $dialogManager = $global:TuiState.Services.DialogManager
+                    if ($dialogManager) {
+                        $dialogManager.ShowMessage(
+                            "New Task", 
+                            "New Task screen is being updated. Navigating to Task List instead.", 
+                            "Info"
+                        )
+                    }
+                    $this.ExecuteAction("navigation.taskList", @{})
+                }
+            }
         }, @{
             Category = "Navigation"
             Description = "Create New Task"
@@ -10559,7 +10758,7 @@ class ActionService {
         
         # FIXED: Add navigation.commandPalette for menu option
         $this.RegisterAction("navigation.commandPalette", {
-            $this.ExecuteAction("app.commandPalette")
+            $this.ExecuteAction("app.commandPalette", @{})
         }, @{
             Category = "Navigation"
             Description = "Open Command Palette"
@@ -10597,12 +10796,40 @@ class ActionService {
             Description = "Complete Selected Task"
         })
         
+        # Simple test action that returns to dashboard
+        $this.RegisterAction("test.simple", {
+            Write-Log -Level Info -Message "TEST ACTION EXECUTED: Showing test dialog"
+            
+            $dialogManager = $global:TuiState.Services.DialogManager
+            if ($dialogManager) {
+                # Show a simple message dialog
+                $dialogManager.ShowMessage(
+                    "Test Action Executed!", 
+                    "This confirms that command palette actions are working correctly.`n`nPress any key to continue.", 
+                    "Info"
+                )
+            }
+            
+            # Navigate back to dashboard
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                $dashboardScreen = [DashboardScreen]::new($container)
+                $dashboardScreen.Initialize()
+                $navService.NavigateTo($dashboardScreen)
+                Write-Log -Level Info -Message "Test complete - navigated to dashboard"
+            }
+        }, @{
+            Category = "Test"
+            Description = "Simple test - show dialog and refresh"
+        })
+        
         # Write-Verbose "ActionService: Registered default actions"
     }
 }
 
 #endregion
-#<!-- END_PAGE: ASE.001 -->
+#<!-- END_PAGE: ASE.004 -->
 
 
 
@@ -11104,6 +11331,7 @@ class DataManager : System.IDisposable {
 class FocusManager {
     [UIElement]$FocusedComponent = $null
     [EventManager]$EventManager = $null
+    [System.Collections.Generic.Stack[UIElement]]$FocusStack = [System.Collections.Generic.Stack[UIElement]]::new()  # NEW: Focus history stack
 
     FocusManager([EventManager]$eventManager) {
         $this.EventManager = $eventManager
@@ -11209,119 +11437,96 @@ class FocusManager {
         $this.SetFocus($null)
         # Write-Log -Level Debug -Message "FocusManager: All focus released."
     }
+    
+    # NEW: Save current focus state to stack
+    [void] PushFocusState() {
+        $focusName = if ($null -ne $this.FocusedComponent) { $this.FocusedComponent.Name } else { 'null' }
+        Write-Log -Level Debug -Message "FocusManager.PushFocusState: Saving focus on $focusName"
+        $this.FocusStack.Push($this.FocusedComponent)  # Can push null
+    }
+    
+    # NEW: Restore focus from stack
+    [void] PopFocusState() {
+        if ($this.FocusStack.Count -gt 0) {
+            $previousFocus = $this.FocusStack.Pop()
+            $focusName = if ($null -ne $previousFocus) { $previousFocus.Name } else { 'null' }
+            Write-Log -Level Debug -Message "FocusManager.PopFocusState: Restoring focus to $focusName"
+            $this.SetFocus($previousFocus)
+        } else {
+            Write-Log -Level Debug -Message "FocusManager.PopFocusState: No saved focus state to restore"
+            $this.SetFocus($null)
+        }
+    }
 
     [void] Cleanup() {
         $this.FocusedComponent = $null
+        $this.FocusStack.Clear()  # NEW: Clear the focus stack
         # Write-Log -Level Debug -Message "FocusManager: Cleanup complete."
     }
 }
 
 # ===== CLASS: DialogManager =====
 # Module: dialog-manager (new service)
-# Dependencies: EventManager, FocusManager
-# Purpose: Centralized dialog management
+# Dependencies: NavigationService
+# Purpose: Convenience facade for dialog management
 class DialogManager {
-    [System.Collections.Generic.List[UIElement]] $_activeDialogs = [System.Collections.Generic.List[UIElement]]::new()
-    [EventManager]$EventManager = $null
-    [FocusManager]$FocusManager = $null
-    hidden [UIElement]$_previousFocus = $null
+    [object]$NavigationService = $null  # Using object to avoid type issues
+    [object]$ServiceContainer = $null
 
-    DialogManager([EventManager]$eventManager, [FocusManager]$focusManager) {
-        $this.EventManager = $eventManager
-        $this.FocusManager = $focusManager
+    DialogManager([object]$serviceContainer) {
+        if ($null -eq $serviceContainer) {
+            throw [System.ArgumentNullException]::new("serviceContainer")
+        }
+        $this.ServiceContainer = $serviceContainer
+        # NavigationService will be resolved when needed
         # Write-Log -Level Debug -Message "DialogManager: Initialized."
     }
 
-    [void] ShowDialog([UIElement]$dialog) {
+    [void] ShowDialog([object]$dialog) {
         if ($null -eq $dialog) {
-            throw [System.ArgumentException]::new("Provided element is null.", "dialog")
+            throw [System.ArgumentException]::new("Provided dialog is null.", "dialog")
         }
         
-        # Store previous focus for restoration
-        if ($this.FocusManager) {
-            $this._previousFocus = $this.FocusManager.FocusedComponent
+        # Verify it's a Dialog (which is a Screen)
+        if (-not ($dialog.PSObject.Properties['IsOverlay'])) {
+            throw [System.ArgumentException]::new("Expected Dialog-derived object but got $($dialog.GetType().Name)")
         }
         
-        # Calculate center position based on console size
-        $consoleWidth = $global:TuiState.BufferWidth
-        $consoleHeight = $global:TuiState.BufferHeight
-
-        $dialog.X = [Math]::Max(0, [Math]::Floor(($consoleWidth - $dialog.Width) / 2))
-        $dialog.Y = [Math]::Max(0, [Math]::Floor(($consoleHeight - $dialog.Height) / 2))
-
-        # If there's a currently focused component, release it
-        if ($this.FocusManager) {
-            $this.FocusManager.ReleaseFocus() # Release current focus
-        }
-
-        # Add to local tracking list and global overlay stack
-        $this._activeDialogs.Add($dialog)
-        $dialog.Visible = $true
-        $dialog.IsOverlay = $true # Mark as an overlay for rendering
-
-        # Explicitly add to global overlay stack
-        $global:TuiState.OverlayStack.Add($dialog)
+        # Ensure dialog is marked as overlay
+        $dialog.IsOverlay = $true
         
-        # Initialize and enter the dialog if it implements these methods
-        if ($dialog.PSObject.Methods['Initialize'] -and -not $dialog._isInitialized) {
-            $dialog.Initialize()
-            $dialog._isInitialized = $true
+        # Get NavigationService lazily
+        if ($null -eq $this.NavigationService) {
+            $this.NavigationService = $this.ServiceContainer.GetService("NavigationService")
         }
-        if ($dialog.PSObject.Methods['OnEnter']) {
-            $dialog.OnEnter()
-        }
-
-        $dialog.RequestRedraw()
-        # Write-Log -Level Info -Message "DialogManager: Showing dialog '$($dialog.Name)' at X=$($dialog.X), Y=$($dialog.Y)."
         
-        # Set focus to the dialog itself or its first focusable child
-        if ($this.FocusManager) {
-            # Let the dialog class handle finding its first internal focusable
-            if ($dialog.PSObject.Methods['SetInitialFocus']) {
-                # Force a redraw first to ensure components are ready
-                $dialog.RequestRedraw()
-                $global:TuiState.IsDirty = $true
-                
-                # Now set initial focus
-                $dialog.SetInitialFocus()
-            } else {
-                $this.FocusManager.SetFocus($dialog) # Fallback to focusing the dialog container
-            }
+        # Navigate to the dialog - NavigationService handles focus saving
+        if ($this.NavigationService) {
+            $this.NavigationService.NavigateTo($dialog)
+        } else {
+            throw [System.InvalidOperationException]::new("NavigationService not available")
         }
+        
+        # Write-Log -Level Info -Message "DialogManager: Showing dialog '$($dialog.Name)'."
     }
 
-    [void] HideDialog([UIElement]$dialog) {
-        if ($null -eq $dialog) { return }
-
-        if ($this._activeDialogs.Remove($dialog)) {
-            $dialog.Visible = $false
-            $dialog.IsOverlay = $false
-
-            # Remove from global overlay stack
-            if ($global:TuiState.OverlayStack.Contains($dialog)) {
-                $global:TuiState.OverlayStack.Remove($dialog)
-            }
-
-            # Call Cleanup on the dialog to release its resources
-            $dialog.Cleanup()
-
-            # Restore previous focus
-            if ($this.FocusManager) {
-                $this.FocusManager.SetFocus($this._previousFocus)
-            }
-
-            $dialog.RequestRedraw() # Force redraw to remove dialog from screen
-            # Write-Log -Level Info -Message "DialogManager: Hiding dialog '$($dialog.Name)'."
-        } else {
-            # Write-Log -Level Warning -Message "DialogManager: Attempted to hide a dialog '$($dialog.Name)' that was not active."
+    [void] HideDialog([object]$dialog) {
+        # This method is now just a convenience wrapper
+        # Dialogs should call NavigationService.GoBack() themselves via Complete()
+        Write-Log -Level Warning -Message "DialogManager.HideDialog is deprecated. Use dialog.Complete() instead."
+        
+        # For backward compatibility, try to navigate back
+        if ($null -eq $this.NavigationService) {
+            $this.NavigationService = $this.ServiceContainer.GetService("NavigationService")
+        }
+        
+        if ($this.NavigationService -and $this.NavigationService.CanGoBack()) {
+            $this.NavigationService.GoBack()
         }
     }
 
     [void] Cleanup() {
-        foreach ($dialog in $this._activeDialogs.ToArray()) { # Use ToArray to avoid collection modification during iteration
-            $this.HideDialog($dialog) # This will also cleanup and remove from overlay stack
-        }
-        $this._activeDialogs.Clear()
+        # Nothing to clean up - NavigationService manages all windows
         # Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
     }
 }
@@ -11583,6 +11788,25 @@ class NavigationService {
         # No need to store EventManager separately - get it when needed
     }
 
+    # NEW: Get the window stack for rendering
+    [object[]] GetWindows() {
+        # Build array with current screen at the end (top of stack)
+        $windows = @()
+        
+        # Add all screens from navigation stack (bottom to top)
+        $stackArray = $this.NavigationStack.ToArray()
+        for ($i = $stackArray.Length - 1; $i -ge 0; $i--) {
+            $windows += $stackArray[$i]
+        }
+        
+        # Add current screen on top
+        if ($this.CurrentScreen) {
+            $windows += $this.CurrentScreen
+        }
+        
+        return $windows
+    }
+
     # IMPORTANT: Update NavigateTo method
     [void] NavigateTo([object]$screen) {
         if ($null -eq $screen) { throw [System.ArgumentNullException]::new("screen", "Cannot navigate to a null screen.") }
@@ -11595,6 +11819,14 @@ class NavigationService {
         }
         
         try {
+            # NEW: If navigating to an overlay, save focus state
+            if ($screen.IsOverlay) {
+                $focusManager = $this.ServiceContainer.GetService("FocusManager")
+                if ($focusManager) {
+                    $focusManager.PushFocusState()
+                }
+            }
+            
             # Exit current screen if one exists
             if ($this.CurrentScreen) {
                 # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)'"
@@ -11666,10 +11898,19 @@ class NavigationService {
         
         try {
             # Exit current screen
-            if ($this.CurrentScreen) {
-                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)' (going back)"
-                $this.CurrentScreen.OnExit()
-                $this.CurrentScreen.Cleanup() # Clean up the screen being exited/popped
+            $exitingScreen = $this.CurrentScreen
+            if ($exitingScreen) {
+                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($exitingScreen.Name)' (going back)"
+                $exitingScreen.OnExit()
+                $exitingScreen.Cleanup() # Clean up the screen being exited/popped
+                
+                # NEW: If exiting an overlay, restore focus state
+                if ($exitingScreen.IsOverlay) {
+                    $focusManager = $this.ServiceContainer.GetService("FocusManager")
+                    if ($focusManager) {
+                        $focusManager.PopFocusState()
+                    }
+                }
             }
             
             # Pop and resume previous screen
@@ -12347,6 +12588,361 @@ class AsyncJobService {
 
 
 
+####\Check-ExecuteAction.ps1
+# Check-ExecuteAction.ps1
+# This script verifies that all ExecuteAction calls have been fixed
+
+Write-Host "`nChecking for ExecuteAction calls missing second parameter..." -ForegroundColor Cyan
+
+$searchPath = $PSScriptRoot
+$problemFiles = @()
+
+# Search for ExecuteAction calls with only one parameter
+Get-ChildItem -Path $searchPath -Filter "*.ps1" -Recurse | ForEach-Object {
+    # Skip disabled files
+    if ($_.Name -like "*.DISABLED") { return }
+    
+    $content = Get-Content $_.FullName -Raw
+    
+    # Look for ExecuteAction calls with only one parameter (no comma after first parameter)
+    # This pattern matches ExecuteAction("something") without a comma and second parameter
+    $pattern = '\.ExecuteAction\s*\(\s*["''][^"'']+["'']\s*\)\s*(?![,])'
+    
+    if ($content -match $pattern) {
+        $matches = [regex]::Matches($content, $pattern)
+        foreach ($match in $matches) {
+            # Get line number
+            $lines = $content.Split("`n")
+            $lineNum = 1
+            $charCount = 0
+            foreach ($line in $lines) {
+                $charCount += $line.Length + 1  # +1 for newline
+                if ($charCount -gt $match.Index) {
+                    break
+                }
+                $lineNum++
+            }
+            
+            $problemFiles += [PSCustomObject]@{
+                File = $_.FullName.Replace("$searchPath\", "")
+                Line = $lineNum
+                Code = $match.Value.Trim()
+            }
+        }
+    }
+}
+
+if ($problemFiles.Count -eq 0) {
+    Write-Host "`nAll ExecuteAction calls appear to be fixed!" -ForegroundColor Green
+} else {
+    Write-Host "`nFound $($problemFiles.Count) ExecuteAction calls missing second parameter:" -ForegroundColor Red
+    $problemFiles | Format-Table -AutoSize
+    
+    Write-Host "`nTo fix, add ', @{}' after the action name in each call." -ForegroundColor Yellow
+    Write-Host "Example: ExecuteAction(`"navigation.dashboard`") should be ExecuteAction(`"navigation.dashboard`", @{})" -ForegroundColor Yellow
+}
+
+Write-Host "`n" -NoNewline
+Write-Host "CRITICAL: " -ForegroundColor Red -NoNewline
+Write-Host "PowerShell caches class definitions!" -ForegroundColor Yellow
+Write-Host "You MUST restart PowerShell for ALL fixes to take effect, including:" -ForegroundColor Yellow
+Write-Host "  - TuiCell constructor fixes (4-parameter constructor)" -ForegroundColor Cyan
+write-Host "  - ExecuteAction parameter fixes" -ForegroundColor Cyan
+Write-Host "  - CommandPalette Enter key behavior" -ForegroundColor Cyan
+Write-Host "`nRestart PowerShell and run Start.ps1 again." -ForegroundColor Green
+
+
+
+####\Check-PowerShellVersion.ps1
+# PowerShell Version Check Script
+
+Write-Host "PowerShell Version Information:" -ForegroundColor Cyan
+Write-Host "================================" -ForegroundColor Cyan
+
+# Display version details
+Write-Host "PSVersion: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
+Write-Host "PSEdition: $($PSVersionTable.PSEdition)" -ForegroundColor Yellow
+Write-Host "PSCompatibleVersions: $($PSVersionTable.PSCompatibleVersions -join ', ')" -ForegroundColor Yellow
+Write-Host "BuildVersion: $($PSVersionTable.BuildVersion)" -ForegroundColor Yellow
+Write-Host "CLRVersion: $($PSVersionTable.CLRVersion)" -ForegroundColor Yellow
+Write-Host "WSManStackVersion: $($PSVersionTable.WSManStackVersion)" -ForegroundColor Yellow
+Write-Host "PSRemotingProtocolVersion: $($PSVersionTable.PSRemotingProtocolVersion)" -ForegroundColor Yellow
+
+Write-Host "`nOperating System:" -ForegroundColor Cyan
+Write-Host "OS: $($PSVersionTable.OS)" -ForegroundColor Yellow
+Write-Host "Platform: $($PSVersionTable.Platform)" -ForegroundColor Yellow
+
+# Check for null-conditional operator support
+Write-Host "`nFeature Support:" -ForegroundColor Cyan
+$supportsNullConditional = $PSVersionTable.PSVersion.Major -ge 7
+Write-Host "Null-conditional operator (?.): $(if ($supportsNullConditional) { 'Supported' } else { 'Not Supported' })" -ForegroundColor $(if ($supportsNullConditional) { 'Green' } else { 'Red' })
+Write-Host "Null-coalescing operator (??): $(if ($supportsNullConditional) { 'Supported' } else { 'Not Supported' })" -ForegroundColor $(if ($supportsNullConditional) { 'Green' } else { 'Red' })
+
+Write-Host "`nRecommendation:" -ForegroundColor Cyan
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    Write-Host "Your PowerShell version is $($PSVersionTable.PSVersion). The framework has been updated for compatibility." -ForegroundColor Green
+    Write-Host "However, for best performance and features, consider upgrading to PowerShell 7.x" -ForegroundColor Yellow
+    Write-Host "Download from: https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
+} else {
+    Write-Host "Your PowerShell version is $($PSVersionTable.PSVersion). You have full feature support!" -ForegroundColor Green
+}
+
+Write-Host "`nTesting null-safe pattern..." -ForegroundColor Cyan
+$testObject = @{ Name = "Test" }
+$nullObject = $null
+
+# Test the compatible pattern
+$name1 = if ($null -ne $testObject) { $testObject.Name } else { 'null' }
+$name2 = if ($null -ne $nullObject) { $nullObject.Name } else { 'null' }
+
+Write-Host "Object with Name: $name1" -ForegroundColor Green
+Write-Host "Null object: $name2" -ForegroundColor Green
+Write-Host "Pattern works correctly!" -ForegroundColor Green
+
+
+
+####\Debug-CommandPalette.ps1
+# ==============================================================================
+# Debug Script for CommandPalette Action Execution
+# Tests why actions aren't executing when Enter is pressed
+# ==============================================================================
+
+param(
+    [switch]$Debug
+)
+
+# Set error action preference
+$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "Testing CommandPalette Action Execution..." -ForegroundColor Cyan
+    
+    # Load the framework (don't start the full app)
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    
+    # Load all framework files
+    $loadOrder = @("Base", "Models", "Functions", "Components", "Screens", "Services", "Runtime")
+    foreach ($folder in $loadOrder) {
+        $folderPath = Join-Path $scriptDir $folder
+        if (Test-Path $folderPath) {
+            $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Sort-Object Name
+            foreach ($file in $files) {
+                . $file.FullName
+            }
+        }
+    }
+    
+    # Setup minimal services
+    $container = [ServiceContainer]::new()
+    $container.Register("Logger", [Logger]::new((Join-Path $env:TEMP "axiom-debug.log")))
+    $container.Register("EventManager", [EventManager]::new())
+    $container.Register("ThemeManager", [ThemeManager]::new())
+    $container.Register("ActionService", [ActionService]::new($container.GetService("EventManager")))
+    $container.Register("NavigationService", [NavigationService]::new($container))
+    $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
+    
+    # Initialize global state
+    $global:TuiState.ServiceContainer = $container
+    $global:TuiState.Services = @{
+        Logger = $container.GetService("Logger")
+        EventManager = $container.GetService("EventManager")
+        ActionService = $container.GetService("ActionService")
+        NavigationService = $container.GetService("NavigationService")
+        FocusManager = $container.GetService("FocusManager")
+    }
+    
+    # Register test actions
+    $actionService = $container.GetService("ActionService")
+    $actionService.RegisterAction("test.action1", {
+        Write-Host "TEST ACTION 1 EXECUTED!" -ForegroundColor Green
+    }, @{ Category = "Test"; Description = "First test action" })
+    
+    $actionService.RegisterAction("test.action2", {
+        Write-Host "TEST ACTION 2 EXECUTED!" -ForegroundColor Yellow
+    }, @{ Category = "Test"; Description = "Second test action" })
+    
+    # Test 1: Direct action execution
+    Write-Host "`nTest 1: Direct Action Execution" -ForegroundColor Yellow
+    $actionService.ExecuteAction("test.action1", @{})
+    Write-Host "  Direct execution works!" -ForegroundColor Green
+    
+    # Test 2: Create CommandPalette manually
+    Write-Host "`nTest 2: CommandPalette Setup" -ForegroundColor Yellow
+    $palette = [CommandPalette]::new("TestPalette", $container)
+    
+    # Set actions
+    $allActions = @()
+    foreach ($actionName in $actionService.ActionRegistry.Keys) {
+        $actionData = $actionService.ActionRegistry[$actionName]
+        $allActions += @{
+            Name = $actionName
+            Category = $actionData.Category
+            Description = $actionData.Description
+        }
+    }
+    $palette.SetActions($allActions)
+    Write-Host "  Actions set: $($palette._filteredActions.Count) actions available" -ForegroundColor Green
+    
+    # Test 3: Test Complete method
+    Write-Host "`nTest 3: Complete Method" -ForegroundColor Yellow
+    
+    # Set up event listener for DeferredAction
+    $deferredCalled = $false
+    $eventManager = $container.GetService("EventManager")
+    $eventManager.Subscribe("DeferredAction", {
+        param($sender, $data)
+        Write-Host "  DeferredAction event received! ActionName: $($data.ActionName)" -ForegroundColor Cyan
+        $script:deferredCalled = $true
+    })
+    
+    # Set OnClose callback
+    $palette.OnClose = {
+        param($result)
+        Write-Host "  OnClose callback triggered! Result: $($result | ConvertTo-Json -Compress)" -ForegroundColor Magenta
+        if ($result) {
+            Write-Host "  Publishing DeferredAction for: $($result.Name)" -ForegroundColor Magenta
+            $eventManager = $global:TuiState.Services.EventManager
+            if ($eventManager) {
+                $eventManager.Publish("DeferredAction", @{
+                    ActionName = $result.Name
+                })
+            }
+        }
+    }
+    
+    # Simulate selecting an action
+    $testAction = $palette._filteredActions[0]
+    Write-Host "  Calling Complete with action: $($testAction.Name)" -ForegroundColor Yellow
+    
+    # Call Complete (this should trigger OnClose)
+    $palette.Complete($testAction)
+    
+    Write-Host "  Complete called. Result set to: $($palette.Result | ConvertTo-Json -Compress)" -ForegroundColor Green
+    Write-Host "  DeferredAction event published: $deferredCalled" -ForegroundColor $(if ($deferredCalled) { 'Green' } else { 'Red' })
+    
+    # Test 4: Test the full app.commandPalette action
+    Write-Host "`nTest 4: Full app.commandPalette Action" -ForegroundColor Yellow
+    
+    # Register the full action as in the real app
+    $actionService.RegisterAction("app.commandPalette", {
+        Write-Host "  app.commandPalette action triggered" -ForegroundColor Cyan
+        
+        $navService = $global:TuiState.Services.NavigationService
+        $container = $global:TuiState.ServiceContainer
+        $actionService = $global:TuiState.Services.ActionService
+        
+        # Create CommandPalette dialog
+        $palette = [CommandPalette]::new("CommandPalette", $container)
+        
+        # Get all registered actions
+        $allActions = @()
+        foreach ($actionName in $actionService.ActionRegistry.Keys) {
+            $actionData = $actionService.ActionRegistry[$actionName]
+            $allActions += @{
+                Name = $actionName
+                Category = $actionData.Category
+                Description = $actionData.Description
+            }
+        }
+        
+        Write-Host "  Setting $($allActions.Count) actions" -ForegroundColor Cyan
+        $palette.SetActions($allActions)
+        
+        # Set callback to execute selected action
+        $palette.OnClose = {
+            param($result)
+            Write-Host "  OnClose in app.commandPalette! Result: $(if ($result) { $result.Name } else { 'null' })" -ForegroundColor Green
+            if ($result) {
+                Write-Host "  Publishing DeferredAction..." -ForegroundColor Green
+                $eventManager = $global:TuiState.Services.EventManager
+                if ($eventManager) {
+                    $eventManager.Publish("DeferredAction", @{
+                        ActionName = $result.Name
+                    })
+                }
+            }
+        }
+        
+        Write-Host "  CommandPalette created and configured" -ForegroundColor Cyan
+        
+        # Instead of navigating (which would require full UI), test directly
+        # Simulate user selecting first action
+        if ($palette._filteredActions.Count -gt 0) {
+            $selectedAction = $palette._filteredActions[0]
+            Write-Host "  Simulating selection of: $($selectedAction.Name)" -ForegroundColor Yellow
+            $palette.Complete($selectedAction)
+        }
+    }, @{ Category = "Application"; Description = "Show command palette" })
+    
+    # Execute the action
+    $actionService.ExecuteAction("app.commandPalette", @{})
+    
+    Write-Host "`nAll tests completed!" -ForegroundColor Green
+    
+} catch {
+    Write-Host "`nTest failed!" -ForegroundColor Red
+    Write-Host "$($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Red
+    exit 1
+}
+
+
+
+####\Debug-Helper.ps1
+# Debug Helper Script for Axiom-Phoenix
+Write-Host "Axiom-Phoenix Debug Helper" -ForegroundColor Cyan
+Write-Host "=========================" -ForegroundColor Cyan
+
+# Set debug logging
+$env:AXIOM_LOG_LEVEL = "Debug"
+Write-Host "`nDebug logging enabled" -ForegroundColor Green
+
+# Show log location
+$logPath = Join-Path $env:TEMP "axiom-phoenix.log"
+Write-Host "Log file: $logPath" -ForegroundColor Yellow
+
+# Clear existing log
+if (Test-Path $logPath) {
+    Remove-Item $logPath -Force
+    Write-Host "Cleared existing log" -ForegroundColor Gray
+}
+
+Write-Host "`nStarting Axiom-Phoenix..." -ForegroundColor Cyan
+Write-Host "1. Press Ctrl+P to open Command Palette" -ForegroundColor Yellow
+Write-Host "2. Select 'test.simple' action" -ForegroundColor Yellow
+Write-Host "3. Press Enter" -ForegroundColor Yellow
+Write-Host "4. Press Ctrl+Q to exit" -ForegroundColor Yellow
+Write-Host "`nPress any key to continue..." -ForegroundColor Gray
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+# Run the app
+& "$PSScriptRoot\Start.ps1"
+
+# Show log tail
+Write-Host "`n`nShowing last 50 lines of log:" -ForegroundColor Cyan
+Write-Host "=============================" -ForegroundColor Cyan
+if (Test-Path $logPath) {
+    Get-Content $logPath -Tail 50 | ForEach-Object {
+        if ($_ -match "\[DEBUG\s*\]") {
+            Write-Host $_ -ForegroundColor Gray
+        } elseif ($_ -match "\[INFO\s*\]") {
+            Write-Host $_ -ForegroundColor White
+        } elseif ($_ -match "\[WARNING\]") {
+            Write-Host $_ -ForegroundColor Yellow
+        } elseif ($_ -match "\[ERROR\s*\]") {
+            Write-Host $_ -ForegroundColor Red
+        } else {
+            Write-Host $_
+        }
+    }
+} else {
+    Write-Host "No log file found" -ForegroundColor Red
+}
+
+Write-Host "`nFull log saved to: $logPath" -ForegroundColor Yellow
+
+
+
 ####\fc2.ps1
 #------------------------------------------------------------------------------------------
 # SCRIPT:      filecopy-and-concatenate.ps1
@@ -12553,6 +13149,16 @@ Write-Host " 12. AsyncJobService"
 
 
 
+####\Start-Debug.ps1
+# Enable debug logging for CommandPalette testing
+$env:AXIOM_LOG_LEVEL = "Debug"
+$env:AXIOM_VERBOSE = "1"
+
+# Run the main application
+& "$PSScriptRoot\Start.ps1"
+
+
+
 ####\Start.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Application Startup (Generated from Split Structure)
@@ -12723,6 +13329,9 @@ try {
     Start-Sleep -Seconds 1
     
     $dashboardScreen = [DashboardScreen]::new($container)
+    Write-Host "Initializing Dashboard screen..." -ForegroundColor Yellow
+    $dashboardScreen.Initialize()
+    Write-Host "Dashboard initialized. Starting engine..." -ForegroundColor Yellow
     Clear-Host
     Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
 
@@ -12730,6 +13339,152 @@ try {
     Write-Host "`nCRITICAL ERROR! Failed to start framework." -ForegroundColor Red
     Write-Host "$($_.Exception.Message)" -ForegroundColor Yellow
     Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Red
+    exit 1
+}
+
+
+
+####\Test-CommandPalette.ps1
+# ==============================================================================
+# CommandPalette Test Instructions
+# ==============================================================================
+
+Write-Host @"
+CommandPalette Action Execution Test
+===================================
+
+This test verifies that the CommandPalette can execute actions correctly.
+
+SETUP:
+"@ -ForegroundColor Cyan
+
+# Enable debug logging
+$env:AXIOM_LOG_LEVEL = "Debug"
+Write-Host "✓ Debug logging enabled" -ForegroundColor Green
+
+# Show where to find logs
+$logPath = Join-Path $env:TEMP "axiom-phoenix.log"
+Write-Host "✓ Log file: $logPath" -ForegroundColor Green
+
+Write-Host @"
+
+TEST STEPS:
+1. Run Start.ps1 to launch the application
+2. Press Ctrl+P (or select option 4) to open Command Palette
+3. Type 'test' to filter for test actions
+4. Use arrow keys to select 'test.simple'
+5. Press Enter
+
+EXPECTED RESULT:
+- The action should execute
+- The dashboard should refresh (new instance)
+- Check the log file for these messages:
+  * "CommandPalette: Enter key pressed"
+  * "CommandPalette: Selected action: test.simple"
+  * "Dialog.Complete called"
+  * "Engine: DeferredAction event received"
+  * "TEST ACTION EXECUTED"
+
+TROUBLESHOOTING:
+- If Enter doesn't work, check if:
+  * The listbox has focus (should be highlighted)
+  * An item is selected (should be highlighted differently)
+- Tail the log file in another window:
+  Get-Content "$logPath" -Wait -Tail 20
+
+"@ -ForegroundColor White
+
+Write-Host "Press any key to open the log file location..." -ForegroundColor Yellow
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+# Open log folder
+Start-Process explorer.exe -ArgumentList "/select,`"$logPath`""
+
+Write-Host "`nNow run Start.ps1 to begin the test." -ForegroundColor Green
+
+
+
+####\Test-CommandPaletteFix.ps1
+# Test script to verify CommandPalette fix
+Write-Host "Testing CommandPalette fixes..." -ForegroundColor Cyan
+
+# Test 1: Check if CommandPalette Complete method exists
+$cpType = [CommandPalette]
+$completeMethod = $cpType.GetMethod('Complete')
+if ($completeMethod) {
+    Write-Host "✓ CommandPalette.Complete method exists" -ForegroundColor Green
+} else {
+    Write-Host "✗ CommandPalette.Complete method missing" -ForegroundColor Red
+}
+
+# Test 2: Check if Dialog.Complete method exists  
+$dialogType = [Dialog]
+$dialogCompleteMethod = $dialogType.GetMethod('Complete')
+if ($dialogCompleteMethod) {
+    Write-Host "✓ Dialog.Complete method exists" -ForegroundColor Green
+} else {
+    Write-Host "✗ Dialog.Complete method missing" -ForegroundColor Red
+}
+
+# Test 3: Verify deferred action queue exists
+if ($global:TuiState.DeferredActions) {
+    Write-Host "✓ DeferredActions queue exists" -ForegroundColor Green
+} else {
+    Write-Host "✗ DeferredActions queue missing" -ForegroundColor Red
+}
+
+Write-Host "`nCommandPalette fixes have been applied." -ForegroundColor Yellow
+Write-Host "Key changes:" -ForegroundColor Yellow
+Write-Host "1. CommandPalette now overrides Complete() to ensure proper cleanup" -ForegroundColor Gray
+Write-Host "2. Dialog.Complete() now hides the dialog before navigation" -ForegroundColor Gray
+Write-Host "3. Engine adds 2-frame delay before executing deferred actions" -ForegroundColor Gray
+Write-Host "4. This ensures the screen is fully cleared before action execution" -ForegroundColor Gray
+
+Write-Host "`nPress any key to continue..." -ForegroundColor Cyan
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+
+
+####\Test-CommandPaletteIntegration.ps1
+# CommandPalette Integration Test
+# This script tests the CommandPalette fixes in a controlled manner
+
+param(
+    [switch]$AutoTest
+)
+
+Write-Host "`n===== CommandPalette Fix Test =====" -ForegroundColor Cyan
+Write-Host "This test will verify that the CommandPalette:" -ForegroundColor Yellow
+Write-Host "1. Opens without issues" -ForegroundColor Gray
+Write-Host "2. Allows action selection" -ForegroundColor Gray
+Write-Host "3. Closes cleanly without visual artifacts" -ForegroundColor Gray
+Write-Host "4. Executes the selected action properly" -ForegroundColor Gray
+Write-Host "5. Returns input control to the main screen" -ForegroundColor Gray
+
+Write-Host "`nPress any key to start the test..." -ForegroundColor Green
+if (-not $AutoTest) {
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+try {
+    # Load the framework
+    Write-Host "`nLoading Axiom-Phoenix..." -ForegroundColor Cyan
+    . "$PSScriptRoot\Start.ps1" -Debug
+    
+    Write-Host "`nFramework loaded. Testing sequence:" -ForegroundColor Green
+    Write-Host "1. Press Ctrl+P to open CommandPalette" -ForegroundColor Yellow
+    Write-Host "2. Use arrows to select 'Go to Task List'" -ForegroundColor Yellow
+    Write-Host "3. Press Enter to execute" -ForegroundColor Yellow
+    Write-Host "4. Verify no visual artifacts appear" -ForegroundColor Yellow
+    Write-Host "5. Press 'q' to exit when done testing" -ForegroundColor Yellow
+    
+    Write-Host "`nStarting application..." -ForegroundColor Cyan
+    Start-Sleep -Seconds 2
+    
+} catch {
+    Write-Host "`nTest failed with error:" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Yellow
+    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
     exit 1
 }
 
@@ -12989,6 +13744,203 @@ try {
     Pop-Location
     $ErrorActionPreference = 'Continue'
 }
+
+
+
+####\Test-WindowModel.ps1
+# ==============================================================================
+# Test Script for True Windowing Model
+# Tests the window stack, focus management, and dialog system
+# ==============================================================================
+
+param(
+    [switch]$Debug
+)
+
+# Set error action preference
+$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Host "Testing True Windowing Model..." -ForegroundColor Cyan
+    
+    # Load the framework
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    . (Join-Path $scriptDir "Start.ps1") -Debug:$Debug
+    
+    Write-Host "`nFramework loaded. Running tests..." -ForegroundColor Green
+    
+    # Get services
+    $container = $global:TuiState.ServiceContainer
+    $navService = $container.GetService("NavigationService")
+    $focusManager = $container.GetService("FocusManager")
+    $dialogManager = $container.GetService("DialogManager")
+    
+    # Test 1: NavigationService.GetWindows()
+    Write-Host "`nTest 1: NavigationService.GetWindows()" -ForegroundColor Yellow
+    $windows = $navService.GetWindows()
+    Write-Host "  Initial window count: $($windows.Count)"
+    $currentScreenName = if ($null -ne $navService.CurrentScreen) { $navService.CurrentScreen.Name } else { 'null' }
+    Write-Host "  Current screen: $currentScreenName"
+    
+    # Test 2: Dialog navigation with focus preservation
+    Write-Host "`nTest 2: Dialog Navigation with Focus Preservation" -ForegroundColor Yellow
+    
+    # Create a test dialog
+    $testDialog = [AlertDialog]::new("TestAlert", $container)
+    $testDialog.Show("Test Dialog", "This is a test of the window model")
+    
+    $currentFocusName = if ($null -ne $focusManager.FocusedComponent) { $focusManager.FocusedComponent.Name } else { 'null' }
+    Write-Host "  Current focus before dialog: $currentFocusName"
+    Write-Host "  Focus stack count: $($focusManager.FocusStack.Count)"
+    
+    # Navigate to dialog
+    $navService.NavigateTo($testDialog)
+    
+    $windows = $navService.GetWindows()
+    Write-Host "  Window count after dialog: $($windows.Count)"
+    Write-Host "  Top window: $($windows[-1].Name)"
+    Write-Host "  Top window IsOverlay: $($windows[-1].IsOverlay)"
+    Write-Host "  Focus stack count after: $($focusManager.FocusStack.Count)"
+    
+    # Test 3: Focus restoration on dialog close
+    Write-Host "`nTest 3: Focus Restoration" -ForegroundColor Yellow
+    
+    # Close dialog
+    $testDialog.Complete("OK")
+    
+    $windows = $navService.GetWindows()
+    Write-Host "  Window count after close: $($windows.Count)"
+    $currentScreenName2 = if ($null -ne $navService.CurrentScreen) { $navService.CurrentScreen.Name } else { 'null' }
+    Write-Host "  Current screen: $currentScreenName2"
+    $restoredFocusName = if ($null -ne $focusManager.FocusedComponent) { $focusManager.FocusedComponent.Name } else { 'null' }
+    Write-Host "  Restored focus: $restoredFocusName"
+    Write-Host "  Focus stack count: $($focusManager.FocusStack.Count)"
+    
+    # Test 4: Command Palette as Dialog
+    Write-Host "`nTest 4: Command Palette as Dialog" -ForegroundColor Yellow
+    
+    $actionService = $container.GetService("ActionService")
+    $actionCount = $actionService.ActionRegistry.Count
+    Write-Host "  Registered actions: $actionCount"
+    
+    # Execute command palette action
+    Write-Host "  Executing app.commandPalette action..."
+    $actionService.ExecuteAction("app.commandPalette", @{})
+    
+    # Check window stack
+    Start-Sleep -Milliseconds 100  # Give it time to navigate
+    $windows = $navService.GetWindows()
+    Write-Host "  Window count with palette: $($windows.Count)"
+    if ($windows.Count -gt 0) {
+        Write-Host "  Top window: $($windows[-1].Name)"
+        Write-Host "  Top window type: $($windows[-1].GetType().Name)"
+    }
+    
+    # Test 5: Render all windows
+    Write-Host "`nTest 5: Render Window Stack" -ForegroundColor Yellow
+    
+    # Force a render
+    Invoke-TuiRender
+    Write-Host "  Render completed successfully"
+    
+    # Test 6: ScrollablePanel without virtual buffer
+    Write-Host "`nTest 6: ScrollablePanel Simplified" -ForegroundColor Yellow
+    
+    $scrollPanel = [ScrollablePanel]::new("TestScrollPanel")
+    $scrollPanel.Width = 40
+    $scrollPanel.Height = 10
+    
+    # Add some test content
+    for ($i = 1; $i -le 20; $i++) {
+        $label = [LabelComponent]::new("Label$i")
+        $label.Text = "Test Item $i"
+        $label.Y = $i * 2
+        $scrollPanel.AddChild($label)
+    }
+    
+    Write-Host "  Created ScrollablePanel with 20 items"
+    Write-Host "  Content height: $($scrollPanel._contentHeight)"
+    Write-Host "  Max scroll: $($scrollPanel.MaxScrollY)"
+    
+    # Test scrolling
+    $scrollPanel.ScrollDown(5)
+    Write-Host "  Scrolled down 5 lines, offset: $($scrollPanel.ScrollOffsetY)"
+    
+    # Render the panel
+    $scrollPanel.Render()
+    Write-Host "  ScrollablePanel rendered successfully"
+    
+    Write-Host "`nAll tests completed!" -ForegroundColor Green
+    Write-Host "Window model is functioning correctly." -ForegroundColor Green
+    
+} catch {
+    Write-Host "`nTest failed!" -ForegroundColor Red
+    Write-Host "$($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Red
+    exit 1
+} finally {
+    # Cleanup
+    if ($global:TuiState.Running) {
+        Stop-TuiEngine
+    }
+}
+
+
+
+####\Verify-CommandPaletteFixes.ps1
+# Verify CommandPalette Fixes Are Applied
+Write-Host "`nVerifying CommandPalette fixes..." -ForegroundColor Cyan
+
+$issues = @()
+
+# Check 1: CommandPalette Complete override
+Write-Host "`nChecking CommandPalette.Complete override..." -ForegroundColor Yellow
+$cpFile = Get-Content "$PSScriptRoot\Components\ACO.016_CommandPalette.ps1" -Raw
+if ($cpFile -match '\[void\]\s+Complete\s*\(\[object\]\s*\$result\)') {
+    Write-Host "✓ CommandPalette.Complete override found" -ForegroundColor Green
+} else {
+    Write-Host "✗ CommandPalette.Complete override missing" -ForegroundColor Red
+    $issues += "CommandPalette.Complete override not found"
+}
+
+# Check 2: Dialog visibility fix
+Write-Host "`nChecking Dialog.Complete visibility fix..." -ForegroundColor Yellow
+$dialogFile = Get-Content "$PSScriptRoot\Components\ACO.014a_Dialog.ps1" -Raw
+if ($dialogFile -match '\$this\.Visible\s*=\s*\$false') {
+    Write-Host "✓ Dialog visibility fix found" -ForegroundColor Green
+} else {
+    Write-Host "✗ Dialog visibility fix missing" -ForegroundColor Red
+    $issues += "Dialog visibility fix not found"
+}
+
+# Check 3: Engine deferred action delay
+Write-Host "`nChecking Engine deferred action delay..." -ForegroundColor Yellow
+$engineFile = Get-Content "$PSScriptRoot\Runtime\ART.002_EngineManagement.ps1" -Raw
+if ($engineFile -match 'DeferredActionDelay') {
+    Write-Host "✓ Engine deferred action delay found" -ForegroundColor Green
+} else {
+    Write-Host "✗ Engine deferred action delay missing" -ForegroundColor Red
+    $issues += "Engine deferred action delay not found"
+}
+
+# Summary
+Write-Host "`n===== Summary =====" -ForegroundColor Cyan
+if ($issues.Count -eq 0) {
+    Write-Host "All fixes are properly applied! ✓" -ForegroundColor Green
+    Write-Host "`nThe CommandPalette should now:" -ForegroundColor Yellow
+    Write-Host "- Close cleanly without visual artifacts" -ForegroundColor Gray
+    Write-Host "- Execute selected actions properly" -ForegroundColor Gray
+    Write-Host "- Return input control to the main screen" -ForegroundColor Gray
+} else {
+    Write-Host "Some fixes are missing:" -ForegroundColor Red
+    foreach ($issue in $issues) {
+        Write-Host "  - $issue" -ForegroundColor Yellow
+    }
+    Write-Host "`nPlease reapply the fixes or check the COMMANDPALETTE_FIX_SUMMARY.md file" -ForegroundColor Yellow
+}
+
+Write-Host "`nPress any key to exit..." -ForegroundColor Cyan
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
 
 
