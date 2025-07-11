@@ -1311,6 +1311,135 @@ class ThemeManager {
             "list.item.selected.background" = "#58a6ff"
             "list.scrollbar" = "#8b949e"
         }
+        
+        # Green Console Theme - Classic terminal green
+        $this.Themes["Green Console"] = @{
+            # Base colors
+            "Background" = "#000000"
+            "Foreground" = "#00FF00"
+            "Subtle" = "#008000"
+            "Primary" = "#00FF00"
+            "Accent" = "#00FFFF"
+            "Secondary" = "#00AA00"
+            "Error" = "#FF0000"
+            "Warning" = "#FFFF00"
+            "Success" = "#00FF00"
+            "Info" = "#00FFFF"
+            
+            # Component specific
+            "component.background" = "#000000"
+            "component.border" = "#00FF00"
+            "component.title" = "#00FFFF"
+            
+            # Input
+            "input.background" = "#001100"
+            "input.foreground" = "#00FF00"
+            "input.placeholder" = "#008000"
+            
+            # Button states
+            "button.normal.fg" = "#000000"
+            "button.normal.bg" = "#00FF00"
+            "button.focused.fg" = "#000000"
+            "button.focused.bg" = "#00FFFF"
+            "button.pressed.fg" = "#000000"
+            "button.pressed.bg" = "#FFFF00"
+            "button.disabled.fg" = "#005500"
+            "button.disabled.bg" = "#001100"
+            
+            # List/Table
+            "list.header.fg" = "#00FFFF"
+            "list.header.bg" = "#001100"
+            "list.item.normal" = "#00FF00"
+            "list.item.selected" = "#000000"
+            "list.item.selected.background" = "#00FF00"
+            "list.scrollbar" = "#008000"
+        }
+        
+        # Amber Console Theme - Classic amber terminal
+        $this.Themes["Amber Console"] = @{
+            # Base colors
+            "Background" = "#000000"
+            "Foreground" = "#FFB000"
+            "Subtle" = "#AA7700"
+            "Primary" = "#FFB000"
+            "Accent" = "#FFFF00"
+            "Secondary" = "#FF8800"
+            "Error" = "#FF0000"
+            "Warning" = "#FFFF00"
+            "Success" = "#00FF00"
+            "Info" = "#00FFFF"
+            
+            # Component specific
+            "component.background" = "#000000"
+            "component.border" = "#FFB000"
+            "component.title" = "#FFFF00"
+            
+            # Input
+            "input.background" = "#110800"
+            "input.foreground" = "#FFB000"
+            "input.placeholder" = "#AA7700"
+            
+            # Button states
+            "button.normal.fg" = "#000000"
+            "button.normal.bg" = "#FFB000"
+            "button.focused.fg" = "#000000"
+            "button.focused.bg" = "#FFFF00"
+            "button.pressed.fg" = "#000000"
+            "button.pressed.bg" = "#FF8800"
+            "button.disabled.fg" = "#553300"
+            "button.disabled.bg" = "#110800"
+            
+            # List/Table
+            "list.header.fg" = "#FFFF00"
+            "list.header.bg" = "#110800"
+            "list.item.normal" = "#FFB000"
+            "list.item.selected" = "#000000"
+            "list.item.selected.background" = "#FFB000"
+            "list.scrollbar" = "#AA7700"
+        }
+        
+        # Notepad Theme - Light theme like Windows Notepad
+        $this.Themes["Notepad"] = @{
+            # Base colors
+            "Background" = "#FFFFFF"
+            "Foreground" = "#000000"
+            "Subtle" = "#666666"
+            "Primary" = "#0000FF"
+            "Accent" = "#FF0000"
+            "Secondary" = "#008000"
+            "Error" = "#FF0000"
+            "Warning" = "#FF8800"
+            "Success" = "#008000"
+            "Info" = "#0000FF"
+            
+            # Component specific
+            "component.background" = "#FFFFFF"
+            "component.border" = "#000000"
+            "component.title" = "#0000FF"
+            
+            # Input
+            "input.background" = "#FFFFF0"
+            "input.foreground" = "#000000"
+            "input.placeholder" = "#999999"
+            
+            # Button states
+            "button.normal.fg" = "#000000"
+            "button.normal.bg" = "#E0E0E0"
+            "button.focused.fg" = "#FFFFFF"
+            "button.focused.bg" = "#0000FF"
+            "button.pressed.fg" = "#FFFFFF"
+            "button.pressed.bg" = "#000080"
+            "button.disabled.fg" = "#999999"
+            "button.disabled.bg" = "#F0F0F0"
+            
+            # List/Table
+            "list.header.fg" = "#FFFFFF"
+            "list.header.bg" = "#000080"
+            "list.item.normal" = "#000000"
+            "list.item.selected" = "#FFFFFF"
+            "list.item.selected.background" = "#0000FF"
+            "list.scrollbar" = "#666666"
+        }
     }
     
     [void] LoadTheme([string]$themeName) {

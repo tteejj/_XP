@@ -78,7 +78,7 @@ class DashboardScreen : Screen {
         $menuTexts = @(
             "[1] Dashboard (Current)",
             "[2] Task List",
-            "[3] New Task", 
+            "[3] Theme Picker", 
             "[4] Command Palette (Ctrl+P)",
             "",
             "[Q] Quit"
@@ -134,7 +134,7 @@ class DashboardScreen : Screen {
         switch ($char) {
             '1' { $handled = $true }
             '2' { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
-            '3' { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+            '3' { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
             '4' { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
             'q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
             'Q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
@@ -145,7 +145,7 @@ class DashboardScreen : Screen {
             switch ($key) {
                 ([ConsoleKey]::D1) { $handled = $true }
                 ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
-                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
                 ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
                 ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
             }
@@ -188,7 +188,7 @@ class DashboardScreen : Screen {
                 switch ($this._selectedIndex) {
                     0 { $handled = $true } # Already on dashboard
                     1 { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
-                    2 { $actionService.ExecuteAction("navigation.newTask", @{}); $handled = $true }
+                    2 { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
                     3 { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
                     5 { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
                 }

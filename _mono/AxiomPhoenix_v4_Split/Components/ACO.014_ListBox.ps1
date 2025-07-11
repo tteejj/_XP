@@ -28,6 +28,11 @@ class ListBox : UIElement {
     [string]$SelectedForegroundColor = "#000000" # Changed from ConsoleColor to hex string
     [string]$SelectedBackgroundColor = "#00FFFF" # Changed from ConsoleColor to hex string
     [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
+    [bool]$HasBorder = $true
+    [string]$BorderStyle = "Single"
+    [string]$Title = ""
+    [scriptblock]$SelectedIndexChanged = $null
+    [string]$ItemForegroundColor = "#E0E0E0" # Default item text color
     hidden [int]$ScrollOffset = 0
 
     ListBox([string]$name) : base($name) {
@@ -58,15 +63,17 @@ class ListBox : UIElement {
         $bgColor = Get-ThemeColor("component.background")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        # Draw border
-        Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-            -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = $bgColor; BorderStyle = "Single" }
+        # Draw border if enabled
+        if ($this.HasBorder) {
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
+                -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = $bgColor; BorderStyle = $this.BorderStyle; Title = $this.Title }
+        }
             
-            # Calculate visible area
-            $contentY = 1
-            $contentHeight = $this.Height - 2
-            $contentX = 1
-            $contentWidth = $this.Width - 2
+        # Calculate visible area
+        $contentY = if ($this.HasBorder) { 1 } else { 0 }
+        $contentHeight = if ($this.HasBorder) { $this.Height - 2 } else { $this.Height }
+        $contentX = if ($this.HasBorder) { 1 } else { 0 }
+        $contentWidth = if ($this.HasBorder) { $this.Width - 2 } else { $this.Width }
             
             # Ensure selected item is visible
             $this.EnsureVisible($this.SelectedIndex)
@@ -87,12 +94,12 @@ class ListBox : UIElement {
                 
                 $isSelected = ($itemIndex -eq $this.SelectedIndex)
                 if ($isSelected) { 
-                    $fgColor = Get-ThemeColor("list.item.selected") 
+                    $fgColor = $this.SelectedForegroundColor
                 } else { 
-                    $fgColor = Get-ThemeColor("list.item.normal") 
+                    $fgColor = $this.ItemForegroundColor
                 }
                 if ($isSelected) { 
-                    $itemBgColor = Get-ThemeColor("list.item.selected.background") 
+                    $itemBgColor = $this.SelectedBackgroundColor
                 } else { 
                     $itemBgColor = $bgColor 
                 }
@@ -127,6 +134,7 @@ class ListBox : UIElement {
         if ($null -eq $key -or $this.Items.Count -eq 0) { return $false }
         
         $handled = $true
+        $oldIndex = $this.SelectedIndex
         
         switch ($key.Key) {
             ([ConsoleKey]::UpArrow) {
@@ -160,6 +168,11 @@ class ListBox : UIElement {
         
         if ($handled) {
             $this.RequestRedraw()
+            
+            # Trigger SelectedIndexChanged event if index changed
+            if ($oldIndex -ne $this.SelectedIndex -and $this.SelectedIndexChanged) {
+                & $this.SelectedIndexChanged $this $this.SelectedIndex
+            }
         }
         
         return $handled

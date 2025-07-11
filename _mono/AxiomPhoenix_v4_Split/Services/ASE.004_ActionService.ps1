@@ -1,14 +1,8 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Services (Load After Components)
-# Core application services: action, navigation, data, theming, logging, events
+# Axiom-Phoenix v4.0 - ActionService
+# Central command registry and execution service
 # ==============================================================================
 
-#region Service Classes
-
-# ===== CLASS: ActionService =====
-# Module: action-service (from axiom)
-# Dependencies: EventManager (optional)
-# Purpose: Central command registry and execution service
 class ActionService {
     [hashtable]$ActionRegistry = @{}
     [hashtable]$EventSubscriptions = @{}
@@ -219,40 +213,44 @@ class ActionService {
         })
         
         # Theme picker action
-        $this.RegisterAction("ui.theme.picker", {
-            # Placeholder for theme picker
-            Write-Log -Level Info -Message "Theme picker not implemented yet"
+        $this.RegisterAction("ui.themePicker", {
+            Write-Log -Level Info -Message "Opening Theme Selection screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    $themeScreen = [ThemeScreen]::new($container)
+                    $themeScreen.Initialize()
+                    $navService.NavigateTo($themeScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to ThemeScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to ThemeScreen: $_"
+                }
+            }
         }, @{
             Category = "UI"
             Description = "Change Theme"
         })
         
-        # Task management actions
-        $this.RegisterAction("task.new", {
-            Write-Log -Level Info -Message "Navigating to New Task screen"
+        # Task list action
+        $this.RegisterAction("task.list", {
+            Write-Log -Level Info -Message "Navigating to Task List screen"
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
             if ($navService -and $container) {
-                # For now, just show a message and navigate to task list
-                $eventManager = $global:TuiState.Services.EventManager
-                if ($eventManager) {
-                    $eventManager.Publish("ShowMessage", @{
-                        Message = "New Task screen coming soon!"
-                        Type = "Info"
-                    })
+                try {
+                    # Create and navigate to TaskListScreen
+                    $taskListScreen = [TaskListScreen]::new($container)
+                    $taskListScreen.Initialize()
+                    $navService.NavigateTo($taskListScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to TaskListScreen"
                 }
-                # Navigate to task list as a placeholder
-                $this.ExecuteAction("navigation.taskList", @{})
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to TaskListScreen: $_"
+                    Write-Log -Level Error -Message "Stack trace: $($_.ScriptStackTrace)"
+                }
             }
-        }, @{
-            Category = "Tasks"
-            Description = "New Task"
-        })
-        
-        $this.RegisterAction("task.list", {
-            Write-Log -Level Info -Message "Executing task.list - navigating to Task List"
-            # Use the existing navigation.taskList action
-            $this.ExecuteAction("navigation.taskList", @{})
         }, @{
             Category = "Tasks"
             Description = "View All Tasks"
@@ -273,10 +271,7 @@ class ActionService {
                 }
                 catch {
                     Write-Log -Level Error -Message "Failed to navigate to TaskListScreen: $_"
-                    # Fallback to dashboard
-                    $dashboardScreen = [DashboardScreen]::new($container)
-                    $dashboardScreen.Initialize()
-                    $navService.NavigateTo($dashboardScreen)
+                    Write-Log -Level Error -Message "Stack trace: $($_.ScriptStackTrace)"
                 }
             }
         }, @{
@@ -295,38 +290,27 @@ class ActionService {
             Description = "Go to Dashboard"
         })
         
-        $this.RegisterAction("navigation.newTask", {
-            Write-Log -Level Info -Message "Navigating to New Task screen"
+        $this.RegisterAction("navigation.themePicker", {
+            Write-Log -Level Info -Message "Navigating to Theme Selection screen"
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
             if ($navService -and $container) {
                 try {
-                    # Check if NewTaskScreen exists
-                    $newTaskScreen = [NewTaskScreen]::new($container)
-                    $newTaskScreen.Initialize()
-                    $navService.NavigateTo($newTaskScreen)
-                    Write-Log -Level Info -Message "Successfully navigated to NewTaskScreen"
+                    $themeScreen = [ThemeScreen]::new($container)
+                    $themeScreen.Initialize()
+                    $navService.NavigateTo($themeScreen)
+                    Write-Log -Level Info -Message "Successfully navigated to ThemeScreen"
                 }
                 catch {
-                    Write-Log -Level Error -Message "Failed to navigate to NewTaskScreen: $_"
-                    # Show message and go to task list instead
-                    $dialogManager = $global:TuiState.Services.DialogManager
-                    if ($dialogManager) {
-                        $dialogManager.ShowMessage(
-                            "New Task", 
-                            "New Task screen is being updated. Navigating to Task List instead.", 
-                            "Info"
-                        )
-                    }
-                    $this.ExecuteAction("navigation.taskList", @{})
+                    Write-Log -Level Error -Message "Failed to navigate to ThemeScreen: $_"
                 }
             }
         }, @{
             Category = "Navigation"
-            Description = "Create New Task"
+            Description = "Go to Theme Selection"
         })
         
-        # FIXED: Add navigation.commandPalette for menu option
+        # Add navigation.commandPalette for menu option
         $this.RegisterAction("navigation.commandPalette", {
             $this.ExecuteAction("app.commandPalette", @{})
         }, @{
@@ -400,4 +384,3 @@ class ActionService {
 }
 
 #endregion
-#<!-- END_PAGE: ASE.004 -->

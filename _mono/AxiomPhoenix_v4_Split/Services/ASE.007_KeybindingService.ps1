@@ -1,22 +1,8 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Services (Load After Components)
-# Core application services: action, navigation, data, theming, logging, events
-# ==============================================================================
-#
-# TABLE OF CONTENTS DIRECTIVE:
-# When modifying this file, ensure page markers remain accurate and update
-# TableOfContents.md to reflect any structural changes.
-#
-# Search for "PAGE: ASE.###" to find specific sections.
-# Each section ends with "END_PAGE: ASE.###"
+# Axiom-Phoenix v4.0 - KeybindingService
+# Global keyboard shortcut management
 # ==============================================================================
 
-#region KeybindingService Class
-
-# ===== CLASS: KeybindingService =====
-# Module: keybinding-service (from axiom)
-# Dependencies: ActionService (optional)
-# Purpose: Global keyboard shortcut management
 class KeybindingService {
     [hashtable]$KeyMap = @{}
     [hashtable]$GlobalHandlers = @{}
@@ -36,18 +22,18 @@ class KeybindingService {
     }
     
     hidden [void] _InitializeDefaultBindings() {
-        # Default global bindings
+        # Global navigation
         $this.SetBinding("Ctrl+Q", "app.exit", "Global")
         $this.SetBinding("F1", "app.help", "Global")
         $this.SetBinding("Ctrl+P", "app.commandPalette", "Global")
         
-        # Navigation bindings
+        # Tab navigation - but DON'T bind number keys globally
         $this.SetBinding("Tab", "navigation.nextComponent", "Global")
         $this.SetBinding("Shift+Tab", "navigation.previousComponent", "Global")
         
         # Arrow keys removed - handled by focused components instead
         
-        # Write-Verbose "KeybindingService: Initialized default keybindings"
+        Write-Log -Level Debug -Message "KeybindingService: Initialized default bindings"
     }
     
     [void] SetBinding([string]$keyPattern, [string]$actionName, [string]$context = "Global") {
@@ -56,13 +42,13 @@ class KeybindingService {
         }
         
         $this.KeyMap[$context][$keyPattern] = $actionName
-        # Write-Verbose "KeybindingService: Bound '$keyPattern' to '$actionName' in context '$context'"
+        Write-Log -Level Debug -Message "KeybindingService: Bound $keyPattern to $actionName in context $context"
     }
     
     [void] RemoveBinding([string]$keyPattern, [string]$context = "Global") {
         if ($this.KeyMap.ContainsKey($context)) {
             $this.KeyMap[$context].Remove($keyPattern)
-            # Write-Verbose "KeybindingService: Removed binding for '$keyPattern' in context '$context'"
+            Write-Log -Level Debug -Message "KeybindingService: Removed binding for $keyPattern from context $context"
         }
     }
     
@@ -78,7 +64,7 @@ class KeybindingService {
         
         # Check global context
         if ($this.KeyMap.ContainsKey("Global") -and 
-            $this.KeyMap["Global"].ContainsKey($keyPattern) -and
+            $this.KeyMap["Global"].ContainsKey($keyPattern) -and 
             $this.KeyMap["Global"][$keyPattern] -eq $actionName) {
             return $true
         }
@@ -91,20 +77,20 @@ class KeybindingService {
         
         # Log key pattern for debugging
         if ($keyPattern -match "Ctrl") {
-            Write-Log -Level Debug -Message "KeybindingService: Key pattern detected: $keyPattern"
+            Write-Log -Level Debug -Message "KeybindingService: Looking up action for $keyPattern"
         }
         
         # Check current context stack (most recent first)
         foreach ($context in $this.ContextStack) {
             if ($context.ContainsKey($keyPattern)) {
-                Write-Log -Level Debug -Message "KeybindingService: Found action in context: $($context[$keyPattern])"
+                Write-Log -Level Debug -Message "KeybindingService: Found action in context stack: $($context[$keyPattern])"
                 return $context[$keyPattern]
             }
         }
         
         # Check global context
         if ($this.KeyMap.ContainsKey("Global") -and $this.KeyMap["Global"].ContainsKey($keyPattern)) {
-            Write-Log -Level Debug -Message "KeybindingService: Found action in global context: $($this.KeyMap["Global"][$keyPattern])"
+            Write-Log -Level Debug -Message "KeybindingService: Found global action: $($this.KeyMap["Global"][$keyPattern])"
             return $this.KeyMap["Global"][$keyPattern]
         }
         
@@ -119,85 +105,71 @@ class KeybindingService {
                 return $actionData.Description
             }
         }
-        return $null
+        return ""
     }
     
     hidden [string] _GetKeyPattern([System.ConsoleKeyInfo]$keyInfo) {
         $parts = @()
         
-        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Control) {
+        if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
             $parts += "Ctrl"
         }
-        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Alt) {
+        if ($keyInfo.Modifiers -band [ConsoleModifiers]::Alt) {
             $parts += "Alt"
         }
-        if ($keyInfo.Modifiers -band [System.ConsoleModifiers]::Shift) {
+        if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
             $parts += "Shift"
         }
         
-        $parts += $keyInfo.Key.ToString()
+        # Use Key enum for special keys, KeyChar for regular characters
+        if ($keyInfo.Key -ne [ConsoleKey]::None -and 
+            ($keyInfo.Key -lt [ConsoleKey]::D0 -or $keyInfo.Key -gt [ConsoleKey]::Z)) {
+            $parts += $keyInfo.Key.ToString()
+        }
+        elseif ($keyInfo.KeyChar -ne [char]0) {
+            $parts += [char]::ToUpper($keyInfo.KeyChar).ToString()
+        }
         
         return $parts -join "+"
     }
     
     [void] PushContext([hashtable]$contextBindings) {
         $this.ContextStack.Push($contextBindings)
-        # Write-Verbose "KeybindingService: Pushed new context with $($contextBindings.Count) bindings"
+        Write-Log -Level Debug -Message "KeybindingService: Pushed new context with $($contextBindings.Count) bindings"
     }
     
     [void] PopContext() {
         if ($this.ContextStack.Count -gt 0) {
             $removed = $this.ContextStack.Pop()
-            # Write-Verbose "KeybindingService: Popped context with $($removed.Count) bindings"
+            Write-Log -Level Debug -Message "KeybindingService: Popped context with $($removed.Count) bindings"
         }
     }
     
     [void] RegisterGlobalHandler([string]$handlerId, [scriptblock]$handler) {
         $this.GlobalHandlers[$handlerId] = $handler
-        # Write-Verbose "KeybindingService: Registered global handler '$handlerId'"
+        Write-Log -Level Debug -Message "KeybindingService: Registered global handler $handlerId"
     }
     
     [void] UnregisterGlobalHandler([string]$handlerId) {
         $this.GlobalHandlers.Remove($handlerId)
-        # Write-Verbose "KeybindingService: Unregistered global handler '$handlerId'"
+        Write-Log -Level Debug -Message "KeybindingService: Unregistered global handler $handlerId"
     }
     
     [void] SetDefaultBindings() {
         # Application control
         $this.SetBinding("Ctrl+Q", "app.exit", "Global")
-        $this.SetBinding("Escape", "app.cancel", "Global")
         $this.SetBinding("F1", "app.help", "Global")
         $this.SetBinding("Ctrl+P", "app.commandPalette", "Global")
         
-        # Navigation
-        $this.SetBinding("Tab", "nav.nextField", "Global")
-        $this.SetBinding("Shift+Tab", "nav.previousField", "Global")
-        $this.SetBinding("Enter", "nav.select", "Global")
-        $this.SetBinding("Space", "nav.toggle", "Global")
-        
-        # Movement
-        $this.SetBinding("UpArrow", "nav.up", "Global")
-        $this.SetBinding("DownArrow", "nav.down", "Global")
-        $this.SetBinding("LeftArrow", "nav.left", "Global")
-        $this.SetBinding("RightArrow", "nav.right", "Global")
-        $this.SetBinding("PageUp", "nav.pageUp", "Global")
-        $this.SetBinding("PageDown", "nav.pageDown", "Global")
-        $this.SetBinding("Home", "nav.home", "Global")
-        $this.SetBinding("End", "nav.end", "Global")
+        # Component navigation
+        $this.SetBinding("Tab", "navigation.nextComponent", "Global")
+        $this.SetBinding("Shift+Tab", "navigation.previousComponent", "Global")
         
         # Screen navigation
-        $this.SetBinding("Ctrl+N", "screen.new", "Global")
-        $this.SetBinding("Ctrl+D", "screen.dashboard", "Global")
-        $this.SetBinding("Ctrl+T", "screen.tasks", "Global")
-        $this.SetBinding("Ctrl+B", "nav.back", "Global")
-    }
-    
-    [void] Cleanup() {
-        $this.KeyMap.Clear()
-        $this.GlobalHandlers.Clear()
-        $this.ContextStack.Clear()
+        $this.SetBinding("Escape", "navigation.back", "Global")
+        
+        Write-Log -Level Debug -Message "KeybindingService: Set default bindings"
     }
 }
 
 #endregion
-#<!-- END_PAGE: ASE.002 -->

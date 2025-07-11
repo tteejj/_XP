@@ -1,67 +1,132 @@
-=== COMMANDPALETTE DEBUG TRACE - 2025-07-10 20:34:30 ===
 
+=== ENGINE START - 2025-07-10 21:30:43.470 ===
+[21:30:43.477] Setting up DeferredActions queue...
+[21:30:43.487] DeferredActions queue created: True
+[21:30:43.497] EventManager found, registering DeferredAction handler...
+[21:30:43.509] DeferredAction handler registered!
+[21:30:59.836] CommandPalette calling Complete() with action: task.list
+[21:30:59.849] Dialog.Complete called for 'CommandPalette'
+[21:30:59.859] Dialog calling OnClose callback...
+[21:30:59.868] CommandPalette OnClose called!
+[21:30:59.876] Selected action: task.list
+[21:30:59.883] Publishing DeferredAction event...
+[21:30:59.895] DeferredAction handler called with sender: EventManager, data: {"ActionName":"task.list"}
+[21:30:59.903] DeferredAction received: task.list
+[21:30:59.911] DeferredAction enqueued successfully
+[21:30:59.918] DeferredAction event published!
+[21:30:59.925] OnClose callback completed
+[21:30:59.943] Found 1 deferred actions
+[21:31:00.240] Found 1 deferred actions
+[21:31:00.251] Processing deferred action: task.list
+[21:31:00.259] Executing action: task.list
 
-=== ENGINE START - 2025-07-10 20:34:46.392 ===
-[20:34:46.417] Setting up DeferredActions queue...
-[20:34:46.433] DeferredActions queue created: True
-[20:34:46.441] EventManager found, registering DeferredAction handler...
-[20:34:46.451] DeferredAction handler registered!
-[20:35:01.341] CommandPalette calling Complete() with action: task.list
-[20:35:01.354] Dialog.Complete called for 'CommandPalette'
-[20:35:01.363] Dialog calling OnClose callback...
-[20:35:01.382] CommandPalette OnClose called!
-[20:35:01.389] Selected action: task.list
-[20:35:01.396] Publishing DeferredAction event...
-[20:35:01.417] DeferredAction event published!
-[20:35:01.424] OnClose callback completed
+=== ENGINE START - 2025-07-10 21:41:25.563 ===
+[21:41:25.579] Setting up DeferredActions queue...
+[21:41:25.589] DeferredActions queue created: True
+[21:41:25.600] EventManager found, registering DeferredAction handler...
+[21:41:25.613] DeferredAction handler registered!
 
-=== ENGINE START - 2025-07-10 20:39:20.849 ===
-[20:39:20.856] Setting up DeferredActions queue...
-[20:39:20.865] DeferredActions queue created: True
-[20:39:20.874] EventManager found, registering DeferredAction handler...
-[20:39:20.885] DeferredAction handler registered!
-[20:39:28.929] CommandPalette calling Complete() with action: task.list
-[20:39:28.943] Dialog.Complete called for 'CommandPalette'
-[20:39:28.953] Dialog calling OnClose callback...
-[20:39:28.961] CommandPalette OnClose called!
-[20:39:28.969] Selected action: task.list
-[20:39:28.977] Publishing DeferredAction event...
-[20:39:29.003] DeferredAction handler called with sender: EventManager, data: {"ActionName":"task.list"}
-[20:39:29.015] DeferredAction received: task.list
-[20:39:29.023] DeferredAction enqueued successfully
-[20:39:29.030] DeferredAction event published!
-[20:39:29.037] OnClose callback completed
-[20:39:29.055] Found 1 deferred actions
-[20:39:29.276] Found 1 deferred actions
-[20:39:29.287] Processing deferred action: task.list
-[20:39:29.305] Executing action: task.list
-[20:39:45.166] CommandPalette calling Complete() with action: ui.theme.picker
-[20:39:45.175] Dialog.Complete called for 'CommandPalette'
-[20:39:45.182] Dialog calling OnClose callback...
-[20:39:45.189] CommandPalette OnClose called!
-[20:39:45.196] Selected action: ui.theme.picker
-[20:39:45.203] Publishing DeferredAction event...
-[20:39:45.210] DeferredAction handler called with sender: EventManager, data: {"ActionName":"ui.theme.picker"}
-[20:39:45.217] DeferredAction received: ui.theme.picker
-[20:39:45.224] DeferredAction enqueued successfully
-[20:39:45.230] DeferredAction event published!
-[20:39:45.237] OnClose callback completed
-[20:39:45.247] Found 1 deferred actions
-[20:39:45.698] Found 1 deferred actions
-[20:39:45.707] Processing deferred action: ui.theme.picker
-[20:39:45.713] Executing action: ui.theme.picker
-[20:39:59.868] CommandPalette calling Complete() with action: navigation.dashboard
-[20:39:59.876] Dialog.Complete called for 'CommandPalette'
-[20:39:59.883] Dialog calling OnClose callback...
-[20:39:59.890] CommandPalette OnClose called!
-[20:39:59.897] Selected action: navigation.dashboard
-[20:39:59.904] Publishing DeferredAction event...
-[20:39:59.910] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.dashboard"}
-[20:39:59.917] DeferredAction received: navigation.dashboard
-[20:39:59.924] DeferredAction enqueued successfully
-[20:39:59.931] DeferredAction event published!
-[20:39:59.937] OnClose callback completed
-[20:39:59.945] Found 1 deferred actions
-[20:40:00.401] Found 1 deferred actions
-[20:40:00.410] Processing deferred action: navigation.dashboard
-[20:40:00.418] Executing action: navigation.dashboard
+=== ENGINE START - 2025-07-10 21:46:29.305 ===
+[21:46:29.320] Setting up DeferredActions queue...
+[21:46:29.329] DeferredActions queue created: True
+[21:46:29.339] EventManager found, registering DeferredAction handler...
+[21:46:29.352] DeferredAction handler registered!
+[21:46:41.156] CommandPalette calling Complete() with action: navigation.taskList
+[21:46:41.170] Dialog.Complete called for 'CommandPalette'
+[21:46:41.180] Dialog calling OnClose callback...
+[21:46:41.192] CommandPalette OnClose called!
+[21:46:41.201] Selected action: navigation.taskList
+[21:46:41.208] Publishing DeferredAction event...
+[21:46:41.221] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.taskList"}
+[21:46:41.230] DeferredAction received: navigation.taskList
+[21:46:41.238] DeferredAction enqueued successfully
+[21:46:41.246] DeferredAction event published!
+[21:46:41.252] OnClose callback completed
+[21:46:41.270] Found 1 deferred actions
+[21:46:41.503] Found 1 deferred actions
+[21:46:41.513] Processing deferred action: navigation.taskList
+[21:46:41.523] Executing action: navigation.taskList
+
+=== ENGINE START - 2025-07-10 21:47:51.761 ===
+[21:47:51.769] Setting up DeferredActions queue...
+[21:47:51.777] DeferredActions queue created: True
+[21:47:51.784] EventManager found, registering DeferredAction handler...
+[21:47:51.790] DeferredAction handler registered!
+[21:47:58.917] CommandPalette calling Complete() with action: navigation.taskList
+[21:47:58.926] Dialog.Complete called for 'CommandPalette'
+[21:47:58.934] Dialog calling OnClose callback...
+[21:47:58.941] CommandPalette OnClose called!
+[21:47:58.948] Selected action: navigation.taskList
+[21:47:58.955] Publishing DeferredAction event...
+[21:47:58.962] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.taskList"}
+[21:47:58.969] DeferredAction received: navigation.taskList
+[21:47:58.976] DeferredAction enqueued successfully
+[21:47:58.983] DeferredAction event published!
+[21:47:58.989] OnClose callback completed
+[21:47:58.996] Found 1 deferred actions
+[21:47:59.219] Found 1 deferred actions
+[21:47:59.227] Processing deferred action: navigation.taskList
+[21:47:59.234] Executing action: navigation.taskList
+
+=== ENGINE START - 2025-07-10 21:55:20.466 ===
+[21:55:20.481] Setting up DeferredActions queue...
+[21:55:20.491] DeferredActions queue created: True
+[21:55:20.502] EventManager found, registering DeferredAction handler...
+[21:55:20.514] DeferredAction handler registered!
+[21:55:30.159] CommandPalette calling Complete() with action: task.complete.selected
+[21:55:30.173] Dialog.Complete called for 'CommandPalette'
+[21:55:30.184] Dialog calling OnClose callback...
+[21:55:30.194] CommandPalette OnClose called!
+[21:55:30.202] Selected action: task.complete.selected
+[21:55:30.210] Publishing DeferredAction event...
+[21:55:30.226] DeferredAction handler called with sender: EventManager, data: {"ActionName":"task.complete.selected"}
+[21:55:30.236] DeferredAction received: task.complete.selected
+[21:55:30.244] DeferredAction enqueued successfully
+[21:55:30.252] DeferredAction event published!
+[21:55:30.259] OnClose callback completed
+[21:55:30.277] Found 1 deferred actions
+[21:55:30.511] Found 1 deferred actions
+[21:55:30.523] Processing deferred action: task.complete.selected
+[21:55:30.532] Executing action: task.complete.selected
+[21:55:37.314] CommandPalette calling Complete() with action: navigation.dashboard
+[21:55:37.323] Dialog.Complete called for 'CommandPalette'
+[21:55:37.331] Dialog calling OnClose callback...
+[21:55:37.338] CommandPalette OnClose called!
+[21:55:37.345] Selected action: navigation.dashboard
+[21:55:37.353] Publishing DeferredAction event...
+[21:55:37.360] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.dashboard"}
+[21:55:37.367] DeferredAction received: navigation.dashboard
+[21:55:37.374] DeferredAction enqueued successfully
+[21:55:37.381] DeferredAction event published!
+[21:55:37.388] OnClose callback completed
+[21:55:37.396] Found 1 deferred actions
+[21:55:37.618] Found 1 deferred actions
+[21:55:37.627] Processing deferred action: navigation.dashboard
+[21:55:37.634] Executing action: navigation.dashboard
+
+=== ENGINE START - 2025-07-10 21:55:52.717 ===
+[21:55:52.726] Setting up DeferredActions queue...
+[21:55:52.734] DeferredActions queue created: True
+[21:55:52.741] EventManager found, registering DeferredAction handler...
+[21:55:52.748] DeferredAction handler registered!
+[21:56:01.116] CommandPalette calling Complete() with action: navigation.themePicker
+[21:56:01.125] Dialog.Complete called for 'CommandPalette'
+[21:56:01.134] Dialog calling OnClose callback...
+[21:56:01.141] CommandPalette OnClose called!
+[21:56:01.148] Selected action: navigation.themePicker
+[21:56:01.156] Publishing DeferredAction event...
+[21:56:01.163] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.themePicker"}
+[21:56:01.170] DeferredAction received: navigation.themePicker
+[21:56:01.177] DeferredAction enqueued successfully
+[21:56:01.184] DeferredAction event published!
+[21:56:01.191] OnClose callback completed
+[21:56:01.199] Found 1 deferred actions
+[21:56:01.420] Found 1 deferred actions
+[21:56:01.428] Processing deferred action: navigation.themePicker
+[21:56:01.436] Executing action: navigation.themePicker
+
+=== ENGINE START - 2025-07-10 22:03:34.129 ===
+[22:03:34.145] Setting up DeferredActions queue...
+[22:03:34.155] DeferredActions queue created: True
+[22:03:34.166] EventManager found, registering DeferredAction handler...
+[22:03:34.179] DeferredAction handler registered!

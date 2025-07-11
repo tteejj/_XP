@@ -72,7 +72,6 @@ class DashboardScreen : Screen {
         # Define menu items
         $this._menuItems = @(
             @{ Name = "Task Management"; Action = "navigation.taskList"; Description = "View and manage tasks" },
-            @{ Name = "New Task"; Action = "navigation.newTask"; Description = "Create a new task" },
             @{ Name = "Theme Settings"; Action = "ui.theme.picker"; Description = "Change application theme" },
             @{ Name = "Exit Application"; Action = "app.exit"; Description = "Quit Axiom-Phoenix" }
         )
@@ -169,12 +168,6 @@ class DashboardScreen : Screen {
             ([ConsoleKey]::T) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     $this._ExecuteAction("navigation.taskList")
-                    return $true
-                }
-            }
-            ([ConsoleKey]::N) {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
-                    $this._ExecuteAction("navigation.newTask")
                     return $true
                 }
             }
