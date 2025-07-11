@@ -25,6 +25,7 @@ using namespace System.Management.Automation
 class LabelComponent : UIElement {
     [string]$Text = ""
     [object]$ForegroundColor
+    [object]$BackgroundColor = $null
 
     LabelComponent([string]$name) : base($name) {
         $this.IsFocusable = $false
@@ -35,8 +36,18 @@ class LabelComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        # Clear buffer with theme background
-        $bgColor = Get-ThemeColor("component.background")
+        # Get background color
+        if ($this.BackgroundColor) {
+            if ($this.BackgroundColor -is [ConsoleColor]) {
+                $bgColor = Get-ThemeColor("component.background") # Use theme default instead
+            } else {
+                $bgColor = $this.BackgroundColor # Assume it's already hex
+            }
+        } else {
+            $bgColor = Get-ThemeColor("component.background")
+        }
+        
+        # Clear buffer with background color
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Skip rendering if text is empty

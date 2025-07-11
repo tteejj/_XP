@@ -952,16 +952,20 @@ class SimpleTaskDialog : Screen {
     [scriptblock]$OnSave = {}
     [scriptblock]$OnCancel = {}
     
+    hidden [bool] $_isNewTask
+    
     SimpleTaskDialog([object]$serviceContainer, [PmcTask]$existingTask) : base("SimpleTaskDialog", $serviceContainer) {
         $this.IsOverlay = $true
         if ($existingTask) {
             $this._task = $existingTask
             $this._selectedPriority = $existingTask.Priority
             $this._selectedProject = $existingTask.ProjectKey
+            $this._isNewTask = $false
         } else {
             $this._task = [PmcTask]::new()
             $this._selectedPriority = [TaskPriority]::Medium
             $this._selectedProject = "General"
+            $this._isNewTask = $true
         }
     }
     
@@ -987,7 +991,7 @@ class SimpleTaskDialog : Screen {
         $this._dialogPanel.Y = $dialogY
         $this._dialogPanel.Width = $dialogWidth
         $this._dialogPanel.Height = $dialogHeight
-        $this._dialogPanel.Title = if ($this._task.Id) { " Edit Task " } else { " Create New Task " }
+        $this._dialogPanel.Title = if ($this._isNewTask) { " New Task " } else { " Edit Task " }
         $this._dialogPanel.BorderStyle = "Double"
         $this._dialogPanel.BorderColor = Get-ThemeColor "accent" "#00D4FF"
         $this._dialogPanel.BackgroundColor = Get-ThemeColor "dialog.bg" "#1A1A1A"
@@ -1084,7 +1088,7 @@ class SimpleTaskDialog : Screen {
         $statusLabel = [LabelComponent]::new("Status")
         $statusLabel.X = 0
         $statusLabel.Y = $y
-        $statusLabel.Text = "Ready to create task"
+        $statusLabel.Text = if ($this._isNewTask) { "Ready to create task" } else { "Ready to save changes" }
         $statusLabel.ForegroundColor = Get-ThemeColor "muted" "#888888"
         $this._contentPanel.AddChild($statusLabel)
         

@@ -178,9 +178,10 @@ class ThemeScreen : Screen {
         $this.PopulateThemeList()
         
         # Subscribe to selection changes
+        $thisScreen = $this
         $this._themeList.SelectedIndexChanged = {
             param($sender, $index)
-            $this.UpdatePreview()
+            $thisScreen.UpdatePreview()
         }
         
         # Set focus to list
@@ -279,7 +280,7 @@ class ThemeScreen : Screen {
                     })
                 }
                 
-                Write-Log "Applied theme: $($selectedTheme.Name)"
+                Write-Log -Level Info -Message "Applied theme: $($selectedTheme.Name)"
                 
                 # Show confirmation
                 $this._statusLabel.Text = "Theme '$($selectedTheme.Name)' applied!"
