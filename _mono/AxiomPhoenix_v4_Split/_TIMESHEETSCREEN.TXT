@@ -1,0 +1,2447 @@
+You are absolutely right. My apologies. I clearly got stuck in a loop and failed to deliver the required quality. My previous responses added the functionality but neglected the crucial integration and robustness aspects, particularly concerning the `DataManager`'s role with `TimeEntry` objects.
+
+I have reviewed my internal memory of our conversation and identified the key points for improvement, especially the missing `TimeEntry` management within the `DataManager`, and subsequent UI/UX refinements.
+
+Let's break the loop and fix this definitively.
+
+### **Revised Plan for `TimesheetScreen` and `TimeSheetService`:**
+
+1.  **Crucial: Enhance `DataManager` (`Services\ASE.005_DataManager.ps1`)**:
+    *   Add a private `_timeEntryIndex` (a `Dictionary`) to store `TimeEntry` objects.
+    *   Implement `AddTimeEntry`, `UpdateTimeEntry`, `DeleteTimeEntry`, `GetTimeEntries`, and `GetTimeEntriesByProject` methods, mirroring the `PmcTask` and `PmcProject` patterns.
+    *   Ensure `SaveData` and `LoadData` handle the serialization and deserialization of `TimeEntry` objects.
+
+2.  **Refine `TimeSheetService` (`Services\ASE.013_TimeSheetService.ps1`)**:
+    *   Ensure `GenerateWeeklyReport` correctly retrieves `TimeEntry` data from the enhanced `DataManager`.
+    *   Improve report formatting and column naming to be directly usable by the `Table` component.
+
+3.  **Enhance `TimesheetScreen` (`Screens\ASC.009_TimesheetScreen.ps1`)**:
+    *   **Add "Add Time Entry" capability**: Include an "Add Entry" button/action. When triggered, it will use `DialogManager` to show a `TimeEntryDialog` (a new simple dialog screen).
+    *   **Refined UI Layout**: Ensure all labels, buttons, and the table are well-positioned and use theme colors.
+    *   **User Feedback**: Provide clear messages when no data is found for the selected week.
+    *   **Focus Management**: Ensure smooth `Tab` navigation between the date input, buttons, and the table.
+
+4.  **New Dialog Screen: `TimeEntryDialog` (`Screens\ASC.010_TimeEntryDialog.ps1`)**:
+    *   A simple modal dialog (`Dialog` subclass) for entering `TimeEntry` details (Project/Task selection, Date, Hours, Description). This reuses existing input components like `DateInputComponent`, `NumericInputComponent`, `TextBoxComponent`, and `ComboBoxComponent`.
+
+5.  **Update `Start.ps1`**:
+    *   Register the new `TimeSheetService` and ensure `DataManager` is correctly initialized for `TimeEntry` data.
+    *   Add more realistic and diverse `TimeEntry` sample data across multiple projects and days to properly test the timesheet aggregation.
+
+6.  **Update `Screens\ASC.001_DashboardScreen.ps1`**:
+    *   Ensure the "View Timesheet" menu option is correctly added.
+
+---
+
+Here are the complete code blocks for all affected files. Please replace the *entire content* of each file with the provided code.
+
+---
+
+### 1. **`Models\AMO.003_CoreModelClasses.ps1`**
+
+*(This file remains **unchanged** from the last correct version. The `TimeEntry` class definition is already here.)*
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - All Models (No UI Dependencies) - UPDATED
+# Data models, enums, and validation classes
+# ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: AMO.###" to find specific sections.
+# Each section ends with "END_PAGE: AMO.###"
+# ==============================================================================
+
+#region Core Model Classes
+
+# ===== CLASS: PmcTask =====
+# Module: models (from axiom)
+# Dependencies: ValidationBase, TaskStatus, TaskPriority enums
+# Purpose: Represents a single task with lifecycle methods
+class PmcTask : ValidationBase {
+    [string]$Id = [Guid]::NewGuid().ToString() # Unique identifier for the task
+    [string]$Title                            # Short descriptive title
+    [string]$Description                      # Detailed description
+    [TaskStatus]$Status = [TaskStatus]::Pending # Current status of the task
+    [TaskPriority]$Priority = [TaskPriority]::Medium # Importance level
+    [string]$ProjectKey = "General"           # Associated project (key)
+    [string]$Category                         # Alias for ProjectKey, for broader use
+    [datetime]$CreatedAt = [datetime]::Now   # Timestamp of creation
+    [datetime]$UpdatedAt = [datetime]::Now   # Last update timestamp
+    [Nullable[datetime]]$DueDate             # Optional due date
+    [string[]]$Tags = @()                     # Array of tags
+    [int]$Progress = 0                        # Progress percentage (0-100)
+    [bool]$Completed = $false                 # Convenience flag for completed status
+
+    # Default constructor: Initializes a new task with default values.
+    PmcTask() {}
+    
+    # Constructor: Initializes a new task with a title.
+    PmcTask([string]$title) {
+        [ValidationBase]::ValidateNotEmpty($title, "Title")
+        $this.Title = $title
+    }
+    
+    # Constructor: Initializes a new task with common detailed properties.
+    PmcTask(
+        [string]$title,
+        [string]$description,
+        [TaskPriority]$priority,
+        [string]$projectKey
+    ) {
+        [ValidationBase]::ValidateNotEmpty($title, "Title")
+        [ValidationBase]::ValidateNotEmpty($projectKey, "ProjectKey")
+
+        $this.Title = $title
+        $this.Description = $description
+        $this.Priority = $priority
+        $this.ProjectKey = $projectKey
+        $this.Category = $projectKey # Category is often an alias for ProjectKey
+    }
+
+    # Complete: Marks the task as completed, setting progress to 100% and updating timestamp.
+    [void] Complete() {
+        $this.Status = [TaskStatus]::Completed
+        $this.Progress = 100
+        $this.Completed = $true
+        $this.UpdatedAt = [datetime]::Now
+    }
+    
+    # Cancel: Marks the task as cancelled and updates timestamp.
+    [void] Cancel() {
+        $this.Status = [TaskStatus]::Cancelled
+        $this.UpdatedAt = [datetime]::Now
+    }
+    
+    # SetProgress: Updates the progress percentage and adjusts status accordingly.
+    [void] SetProgress([int]$progress) {
+        if ($progress -lt 0 -or $progress -gt 100) {
+            throw [System.ArgumentOutOfRangeException]::new("progress", "Progress must be between 0 and 100.")
+        }
+        
+        $this.Progress = $progress
+        
+        # Auto-update status based on progress
+        if ($progress -eq 0 -and $this.Status -eq [TaskStatus]::InProgress) {
+            $this.Status = [TaskStatus]::Pending
+        }
+        elseif ($progress -gt 0 -and $progress -lt 100) {
+            $this.Status = [TaskStatus]::InProgress
+        }
+        elseif ($progress -eq 100) {
+            $this.Complete()
+        }
+        
+        $this.UpdatedAt = [datetime]::Now
+    }
+    
+    # AddTag: Adds a tag to the task if not already present.
+    [void] AddTag([string]$tag) {
+        [ValidationBase]::ValidateNotEmpty($tag, "Tag")
+        if ($this.Tags -notcontains $tag) {
+            $this.Tags += $tag
+            $this.UpdatedAt = [datetime]::Now
+        }
+    }
+    
+    # RemoveTag: Removes a tag from the task.
+    [void] RemoveTag([string]$tag) {
+        $this.Tags = $this.Tags | Where-Object { $_ -ne $tag }
+        $this.UpdatedAt = [datetime]::Now
+    }
+    
+    # GetAge: Returns the age of the task as a TimeSpan.
+    [TimeSpan] GetAge() {
+        return [datetime]::Now - $this.CreatedAt
+    }
+    
+    # IsOverdue: Checks if the task is overdue based on DueDate.
+    [bool] IsOverdue() {
+        if ($null -eq $this.DueDate) { return $false }
+        if ($this.Status -in @([TaskStatus]::Completed, [TaskStatus]::Cancelled)) { return $false }
+        return [datetime]::Now -gt $this.DueDate
+    }
+    
+    # Clone: Creates a deep copy of the task with a new ID.
+    [PmcTask] Clone() {
+        $clone = [PmcTask]::new()
+        $clone.Title = $this.Title
+        $clone.Description = $this.Description
+        $clone.Status = $this.Status
+        $clone.Priority = $this.Priority
+        $clone.ProjectKey = $this.ProjectKey
+        $clone.Category = $this.Category
+        $clone.DueDate = $this.DueDate
+        $clone.Tags = $this.Tags.Clone()
+        $clone.Progress = $this.Progress
+        $clone.Completed = $this.Completed
+        # New task gets new timestamps and ID
+        $clone.CreatedAt = [datetime]::Now
+        $clone.UpdatedAt = [datetime]::Now
+        return $clone
+    }
+    
+    # ToLegacyFormat: Converts task to hashtable for JSON serialization
+    [hashtable] ToLegacyFormat() {
+        return @{
+            Id = $this.Id
+            Title = $this.Title
+            Description = $this.Description
+            Status = $this.Status.ToString()
+            Priority = $this.Priority.ToString()
+            ProjectKey = $this.ProjectKey
+            Category = $this.Category
+            CreatedAt = $this.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            UpdatedAt = $this.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            DueDate = if ($this.DueDate) { $this.DueDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            Tags = $this.Tags
+            Progress = $this.Progress
+            Completed = $this.Completed
+        }
+    }
+    
+    # FromLegacyFormat: Creates task from hashtable (JSON deserialization)
+    static [PmcTask] FromLegacyFormat([hashtable]$data) {
+        $task = [PmcTask]::new()
+        
+        if ($data.ContainsKey('Id')) { $task.Id = $data.Id }
+        if ($data.ContainsKey('Title')) { $task.Title = $data.Title }
+        if ($data.ContainsKey('Description')) { $task.Description = $data.Description }
+        if ($data.ContainsKey('Status')) { 
+            $task.Status = [System.Enum]::Parse([TaskStatus], $data.Status, $true)
+        }
+        if ($data.ContainsKey('Priority')) { 
+            $task.Priority = [System.Enum]::Parse([TaskPriority], $data.Priority, $true)
+        }
+        if ($data.ContainsKey('ProjectKey')) { $task.ProjectKey = $data.ProjectKey }
+        if ($data.ContainsKey('Category')) { $task.Category = $data.Category }
+        if ($data.ContainsKey('CreatedAt')) { 
+            $task.CreatedAt = [DateTime]::Parse($data.CreatedAt)
+        }
+        if ($data.ContainsKey('UpdatedAt')) { 
+            $task.UpdatedAt = [DateTime]::Parse($data.UpdatedAt)
+        }
+        if ($data.ContainsKey('DueDate') -and $data.DueDate) { 
+            $task.DueDate = [DateTime]::Parse($data.DueDate)
+        }
+        if ($data.ContainsKey('Tags')) { $task.Tags = @($data.Tags) }
+        if ($data.ContainsKey('Progress')) { $task.Progress = [int]$data.Progress }
+        if ($data.ContainsKey('Completed')) { $task.Completed = [bool]$data.Completed }
+        
+        return $task
+    }
+    
+    # ToString: Returns a string representation of the task.
+    [string] ToString() {
+        $statusSymbol = switch ($this.Status) {
+            ([TaskStatus]::Pending) { "○" }
+            ([TaskStatus]::InProgress) { "◐" }
+            ([TaskStatus]::Completed) { "●" }
+            ([TaskStatus]::Cancelled) { "✕" }
+            default { "?" }
+        }
+        
+        $prioritySymbol = switch ($this.Priority) {
+            ([TaskPriority]::Low) { "↓" }
+            ([TaskPriority]::Medium) { "→" }
+            ([TaskPriority]::High) { "↑" }
+            default { "-" }
+        }
+        
+        $overdueFlag = if ($this.IsOverdue()) { " [OVERDUE]" } else { "" }
+        
+        return "$statusSymbol $prioritySymbol $($this.Title) ($($this.Progress)%)$overdueFlag"
+    }
+}
+
+# ===== CLASS: PmcProject =====
+# Module: models (from axiom)
+# Dependencies: ValidationBase
+# Purpose: Represents a project that contains multiple tasks
+class PmcProject : ValidationBase {
+    [string]$Key                              # Unique project key (e.g., "PROJ-001")
+    [string]$Name                             # Project name
+    [string]$Description                      # Project description
+    [DateTime]$CreatedAt = [DateTime]::Now  # Creation timestamp
+    [DateTime]$UpdatedAt = [DateTime]::Now  # Last update timestamp
+    [string]$Owner                           # Project owner
+    [string[]]$Tags = @()                    # Project tags
+    [hashtable]$Metadata = @{}               # Additional project metadata
+    [bool]$IsActive = $true                  # Whether project is active
+    
+    # Enhanced properties from reference implementation
+    [string]$ID1                             # Optional secondary identifier (matches 101 - non-unique)
+    [string]$ID2                             # NEW: Main Case ID (matches 102 - Main case ID)
+    [Nullable[datetime]]$AssignedDate        # NEW: Assigned Date
+    [Nullable[datetime]]$BFDate              # Bring-Forward date for follow-ups (matches Due Date in image)
+    [string]$ProjectFolderPath               # Full path to the project's root folder on disk
+    [string]$CaaFileName                     # Relative name of the associated CAA file
+    [string]$RequestFileName                 # Relative name of the associated Request file
+    [string]$T2020FileName                   # Relative name of the associated T2020 file
+
+    # Default constructor
+    PmcProject() {}
+
+    # Constructor with key and name
+    PmcProject([string]$key, [string]$name) {
+        [ValidationBase]::ValidateNotEmpty($key, "Key")
+        [ValidationBase]::ValidateNotEmpty($name, "Name")
+        $this.Key = $key
+        $this.Name = $name
+    }
+
+    # Constructor with full details
+    PmcProject([string]$key, [string]$name, [string]$description, [string]$owner) {
+        [ValidationBase]::ValidateNotEmpty($key, "Key")
+        [ValidationBase]::ValidateNotEmpty($name, "Name")
+        [ValidationBase]::ValidateNotEmpty($owner, "Owner")
+        
+        $this.Key = $key
+        $this.Name = $name
+        $this.Description = $description
+        $this.Owner = $owner
+    }
+
+    # Archive: Marks the project as inactive
+    [void] Archive() {
+        $this.IsActive = $false
+        $this.UpdatedAt = [DateTime]::Now
+    }
+
+    # Activate: Marks the project as active
+    [void] Activate() {
+        $this.IsActive = $true
+        $this.UpdatedAt = [DateTime]::Now
+    }
+
+    # AddTag: Adds a tag to the project if not already present
+    [void] AddTag([string]$tag) {
+        [ValidationBase]::ValidateNotEmpty($tag, "Tag")
+        if ($this.Tags -notcontains $tag) {
+            $this.Tags += $tag
+            $this.UpdatedAt = [DateTime]::Now
+        }
+    }
+
+    # RemoveTag: Removes a tag from the project.
+    [void] RemoveTag([string]$tag) {
+        $this.Tags = $this.Tags | Where-Object { $_ -ne $tag }
+        $this.UpdatedAt = [DateTime]::Now
+    }
+
+    # SetMetadata: Sets a metadata key-value pair
+    [void] SetMetadata([string]$key, $value) {
+        [ValidationBase]::ValidateNotEmpty($key, "Key")
+        $this.Metadata[$key] = $value
+        $this.UpdatedAt = [DateTime]::Now
+    }
+
+    # GetMetadata: Gets a metadata value by key
+    [object] GetMetadata([string]$key) {
+        return $this.Metadata[$key]
+    }
+    
+    # ToLegacyFormat: Converts project to hashtable for JSON serialization
+    [hashtable] ToLegacyFormat() {
+        return @{
+            Key = $this.Key
+            Name = $this.Name
+            Description = $this.Description
+            CreatedAt = $this.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            UpdatedAt = $this.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
+            Owner = $this.Owner
+            Tags = $this.Tags
+            Metadata = $this.Metadata.Clone()
+            IsActive = $this.IsActive
+            # NEW Properties
+            ID1 = $this.ID1
+            ID2 = $this.ID2
+            AssignedDate = if ($this.AssignedDate) { $this.AssignedDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            BFDate = if ($this.BFDate) { $this.BFDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            ProjectFolderPath = $this.ProjectFolderPath
+            CaaFileName = $this.CaaFileName
+            RequestFileName = $this.RequestFileName
+            T2020FileName = $this.T2020FileName
+        }
+    }
+    
+    # FromLegacyFormat: Creates project from hashtable (JSON deserialization)
+    static [PmcProject] FromLegacyFormat([hashtable]$data) {
+        $project = [PmcProject]::new()
+        
+        if ($data.ContainsKey('Key')) { $project.Key = $data.Key }
+        if ($data.ContainsKey('Name')) { $project.Name = $data.Name }
+        if ($data.ContainsKey('Description')) { $project.Description = $data.Description }
+        if ($data.ContainsKey('CreatedAt')) { 
+            $project.CreatedAt = [DateTime]::Parse($data.CreatedAt)
+        }
+        if ($data.ContainsKey('UpdatedAt')) { 
+            $project.UpdatedAt = [DateTime]::Parse($data.UpdatedAt)
+        }
+        if ($data.ContainsKey('Owner')) { $project.Owner = $data.Owner }
+        if ($data.ContainsKey('Tags')) { $project.Tags = @($data.Tags) }
+        if ($data.ContainsKey('Metadata')) { $project.Metadata = $data.Metadata.Clone() }
+        if ($data.ContainsKey('IsActive')) { $project.IsActive = [bool]$data.IsActive }
+        # NEW Properties
+        if ($data.ContainsKey('ID1')) { $project.ID1 = $data.ID1 }
+        if ($data.ContainsKey('ID2')) { $project.ID2 = $data.ID2 }
+        if ($data.ContainsKey('AssignedDate') -and $data.AssignedDate) { 
+            $project.AssignedDate = [DateTime]::Parse($data.AssignedDate)
+        }
+        if ($data.ContainsKey('BFDate') -and $data.BFDate) { 
+            $project.BFDate = [DateTime]::Parse($data.BFDate)
+        }
+        if ($data.ContainsKey('ProjectFolderPath')) { $project.ProjectFolderPath = $data.ProjectFolderPath }
+        if ($data.ContainsKey('CaaFileName')) { $project.CaaFileName = $data.CaaFileName }
+        if ($data.ContainsKey('RequestFileName')) { $project.RequestFileName = $data.RequestFileName }
+        if ($data.ContainsKey('T2020FileName')) { $project.T2020FileName = $data.T2020FileName }
+        
+        return $project
+    }
+
+    # ToString: Returns a string representation of the project
+    [string] ToString() {
+        $status = if ($this.IsActive) { "Active" } else { "Archived" }
+        return "[$($this.Key)] $($this.Name) - $status"
+    }
+}
+
+# ===== CLASS: TimeEntry =====
+# Module: models (from axiom)
+# Dependencies: ValidationBase, BillingType enum
+# Purpose: Represents a time entry for a task
+class TimeEntry : ValidationBase {
+    [string]$Id = [Guid]::NewGuid().ToString()  # Unique identifier
+    [string]$TaskId                              # Associated task ID
+    [string]$ProjectKey                          # Associated project key
+    [DateTime]$StartTime                         # When work started
+    [Nullable[DateTime]]$EndTime                 # When work ended (null if ongoing)
+    [string]$Description                         # What was done
+    [BillingType]$BillingType = [BillingType]::Billable # Billing classification
+    [string]$UserId                              # Who logged the time
+    [decimal]$HourlyRate = 0                    # Rate per hour (if applicable)
+    [hashtable]$Metadata = @{}                   # Additional metadata
+
+    # Default constructor
+    TimeEntry() {}
+
+    # Constructor with basic details
+    TimeEntry([string]$taskId, [string]$projectKey, [DateTime]$startTime) {
+        [ValidationBase]::ValidateNotEmpty($taskId, "TaskId")
+        [ValidationBase]::ValidateNotEmpty($projectKey, "ProjectKey")
+        
+        $this.TaskId = $taskId
+        $this.ProjectKey = $projectKey
+        $this.StartTime = $startTime
+    }
+
+    # GetDuration: Returns the duration of the time entry
+    [TimeSpan] GetDuration() {
+        if ($null -eq $this.EndTime) {
+            return [DateTime]::Now - $this.StartTime
+        }
+        return $this.EndTime - $this.StartTime
+    }
+
+    # GetHours: Returns the duration in decimal hours
+    [decimal] GetHours() {
+        return [decimal]($this.GetDuration().TotalHours)
+    }
+
+    # GetTotalValue: Returns the monetary value of the time entry
+    [decimal] GetTotalValue() {
+        if ($this.BillingType -eq [BillingType]::NonBillable) {
+            return 0
+        }
+        return $this.GetHours() * $this.HourlyRate
+    }
+
+    # Stop: Stops the timer on this entry
+    [void] Stop() {
+        if ($null -eq $this.EndTime) {
+            $this.EndTime = [DateTime]::Now
+        }
+    }
+
+    # IsRunning: Checks if the time entry is still running
+    [bool] IsRunning() {
+        return $null -eq $this.EndTime
+    }
+
+    # ToString: Returns a string representation of the time entry
+    [string] ToString() {
+        $duration = $this.GetDuration()
+        $status = if ($this.IsRunning()) { "Running" } else { "Completed" }
+        return "$($this.ProjectKey) - $($duration.ToString('hh\:mm\:ss')) [$status]"
+    }
+}
+
+#endregion
+#<!-- END_PAGE: AMO.003 -->
+```
+
+---
+
+### 2. **`Services\ASE.005_DataManager.ps1`** (ENHANCED)
+
+This is the most critical update to support `TimeEntry` objects.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - All Services (Load After Components)
+# Core application services: action, navigation, data, theming, logging, events
+# ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ASE.###" to find specific sections.
+# Each section ends with "END_PAGE: ASE.###"
+# ==============================================================================
+
+#region DataManager Class
+
+# ===== CLASS: DataManager =====
+# Module: data-manager (from axiom)
+# Dependencies: EventManager (optional), PmcTask, PmcProject, TimeEntry
+# Purpose: High-performance data management with transactions, backups, and robust serialization
+class DataManager : System.IDisposable {
+    # Private fields for high-performance indexes
+    hidden [System.Collections.Generic.Dictionary[string, PmcTask]]$_taskIndex
+    hidden [System.Collections.Generic.Dictionary[string, PmcProject]]$_projectIndex
+    hidden [System.Collections.Generic.Dictionary[string, TimeEntry]]$_timeEntryIndex # NEW: Index for TimeEntry objects
+    hidden [string]$_dataFilePath
+    hidden [string]$_backupPath
+    hidden [datetime]$_lastSaveTime
+    hidden [bool]$_dataModified = $false
+    hidden [int]$_updateTransactionCount = 0
+    
+    # Public properties
+    [hashtable]$Metadata = @{}
+    [bool]$AutoSave = $true
+    [int]$BackupCount = 5
+    [EventManager]$EventManager = $null
+    
+    DataManager([string]$dataPath) {
+        $this._dataFilePath = $dataPath
+        $this._Initialize()
+    }
+    
+    DataManager([string]$dataPath, [EventManager]$eventManager) {
+        $this._dataFilePath = $dataPath
+        $this.EventManager = $eventManager
+        $this._Initialize()
+    }
+    
+    hidden [void] _Initialize() {
+        # Initialize indexes
+        $this._taskIndex = [System.Collections.Generic.Dictionary[string, PmcTask]]::new()
+        $this._projectIndex = [System.Collections.Generic.Dictionary[string, PmcProject]]::new()
+        $this._timeEntryIndex = [System.Collections.Generic.Dictionary[string, TimeEntry]]::new() # NEW: Initialize TimeEntry index
+        
+        # Set up directories
+        $baseDir = Split-Path -Path $this._dataFilePath -Parent
+        $this._backupPath = Join-Path $baseDir "backups"
+        
+        # Ensure directories exist
+        if (-not (Test-Path $baseDir)) {
+            New-Item -ItemType Directory -Path $baseDir -Force | Out-Null
+        }
+        if (-not (Test-Path $this._backupPath)) {
+            New-Item -ItemType Directory -Path $this._backupPath -Force | Out-Null
+        }
+        
+        # Write-Verbose "DataManager: Initialized with path '$($this._dataFilePath)'"
+    }
+    
+    [void] LoadData() {
+        try {
+            if (-not (Test-Path $this._dataFilePath)) {
+                # Write-Verbose "DataManager: No existing data file found at '$($this._dataFilePath)'"
+                return
+            }
+            
+            $jsonContent = Get-Content -Path $this._dataFilePath -Raw -Encoding UTF8
+            if ([string]::IsNullOrWhiteSpace($jsonContent)) {
+                # Write-Verbose "DataManager: Data file is empty"
+                return
+            }
+            
+            $data = $jsonContent | ConvertFrom-Json -AsHashtable
+            
+            # Clear existing data
+            $this._taskIndex.Clear()
+            $this._projectIndex.Clear()
+            $this._timeEntryIndex.Clear() # NEW: Clear existing time entries
+            
+            # Load tasks using FromLegacyFormat
+            if ($data.ContainsKey('Tasks')) {
+                foreach ($taskData in $data.Tasks) {
+                    try {
+                        $task = [PmcTask]::FromLegacyFormat($taskData)
+                        $this._taskIndex[$task.Id] = $task
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load task: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # Load projects using FromLegacyFormat
+            if ($data.ContainsKey('Projects')) {
+                foreach ($projectData in $data.Projects) {
+                    try {
+                        $project = [PmcProject]::FromLegacyFormat($projectData)
+                        $this._projectIndex[$project.Key] = $project
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load project: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # NEW: Load time entries using FromLegacyFormat (assuming TimeEntry has one)
+            if ($data.ContainsKey('TimeEntries')) {
+                foreach ($entryData in $data.TimeEntries) {
+                    try {
+                        # Assuming TimeEntry also has a FromLegacyFormat static method, similar to PmcTask/PmcProject
+                        # For now, let's create a simple FromLegacyFormat for TimeEntry if not already present.
+                        # (Self-correction: The TimeEntry class above doesn't have FromLegacyFormat, but it's simple enough
+                        # to map directly if the properties match, or add the method. For this example, I will assume it's simple.)
+                        $entry = [TimeEntry]::new()
+                        $entry.Id = $entryData.Id
+                        $entry.TaskId = $entryData.TaskId
+                        $entry.ProjectKey = $entryData.ProjectKey
+                        $entry.StartTime = [DateTime]::Parse($entryData.StartTime)
+                        $entry.EndTime = if ($entryData.EndTime) { [DateTime]::Parse($entryData.EndTime) } else { $null }
+                        $entry.Description = $entryData.Description
+                        $entry.BillingType = [System.Enum]::Parse([BillingType], $entryData.BillingType, $true)
+                        $entry.UserId = $entryData.UserId
+                        $entry.HourlyRate = [decimal]$entryData.HourlyRate
+                        $entry.Metadata = if ($entryData.Metadata) { $entryData.Metadata.Clone() } else { @{} }
+
+                        $this._timeEntryIndex[$entry.Id] = $entry
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load time entry: $($_.Exception.Message)"
+                    }
+                }
+            }
+
+            # Load metadata
+            if ($data.ContainsKey('Metadata')) {
+                $this.Metadata = $data.Metadata.Clone()
+            }
+            
+            $this._lastSaveTime = [datetime]::Now
+            $this._dataModified = $false
+            
+            # Write-Verbose "DataManager: Loaded $($this._taskIndex.Count) tasks and $($this._projectIndex.Count) projects"
+            Write-Log -Level Info -Message "DataManager: Loaded $($this._taskIndex.Count) tasks, $($this._projectIndex.Count) projects, and $($this._timeEntryIndex.Count) time entries."
+            
+            # Publish event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Data.Loaded", @{
+                    TaskCount = $this._taskIndex.Count
+                    ProjectCount = $this._projectIndex.Count
+                    TimeEntryCount = $this._timeEntryIndex.Count # NEW
+                    Source = $this._dataFilePath
+                })
+            }
+        }
+        catch {
+            Write-Error "DataManager: Failed to load data from '$($this._dataFilePath)': $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    [void] SaveData() {
+        if ($this._updateTransactionCount -gt 0) {
+            # Write-Verbose "DataManager: SaveData deferred - inside update transaction (level $($this._updateTransactionCount))"
+            return
+        }
+        
+        try {
+            $this.CreateBackup()
+            
+            $saveData = @{
+                Tasks = @()
+                Projects = @()
+                TimeEntries = @() # NEW: Array for time entries
+                Metadata = $this.Metadata.Clone()
+                SavedAt = [datetime]::Now
+                Version = "4.0"
+            }
+            
+            # Convert tasks to legacy format for serialization
+            foreach ($task in $this._taskIndex.Values) {
+                $saveData.Tasks += $task.ToLegacyFormat()
+            }
+            
+            # Convert projects to legacy format for serialization
+            foreach ($project in $this._projectIndex.Values) {
+                $saveData.Projects += $project.ToLegacyFormat()
+            }
+
+            # NEW: Convert time entries to legacy format for serialization
+            foreach ($entry in $this._timeEntryIndex.Values) {
+                # Assuming TimeEntry also has a ToLegacyFormat method, or map properties directly
+                $saveData.TimeEntries += @{
+                    Id = $entry.Id
+                    TaskId = $entry.TaskId
+                    ProjectKey = $entry.ProjectKey
+                    StartTime = $entry.StartTime.ToString("yyyy-MM-ddTHH:mm:ss")
+                    EndTime = if ($entry.EndTime) { $entry.EndTime.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+                    Description = $entry.Description
+                    BillingType = $entry.BillingType.ToString()
+                    UserId = $entry.UserId
+                    HourlyRate = $entry.HourlyRate
+                    Metadata = $entry.Metadata.Clone()
+                }
+            }
+            
+            $saveData | ConvertTo-Json -Depth 10 -WarningAction SilentlyContinue | Set-Content -Path $this._dataFilePath -Encoding UTF8 -Force
+            $this._lastSaveTime = [datetime]::Now
+            $this._dataModified = $false
+            
+            # Write-Verbose "DataManager: Data saved to '$($this._dataFilePath)'"
+            Write-Log -Level Info -Message "DataManager: Data saved to '$($this._dataFilePath)' (tasks: $($saveData.Tasks.Count), projects: $($saveData.Projects.Count), time entries: $($saveData.TimeEntries.Count))."
+            
+            # Publish event
+            if ($this.EventManager) {
+                $this.EventManager.Publish("Data.Saved", @{
+                    TaskCount = $saveData.Tasks.Count
+                    ProjectCount = $saveData.Projects.Count
+                    TimeEntryCount = $saveData.TimeEntries.Count # NEW
+                    Destination = $this._dataFilePath
+                })
+            }
+        }
+        catch {
+            Write-Error "DataManager: Failed to save data: $($_.Exception.Message)"
+            throw
+        }
+    }
+    
+    hidden [void] CreateBackup() {
+        try {
+            if (Test-Path $this._dataFilePath) {
+                $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
+                $backupFileName = "data-backup-$timestamp.json"
+                $backupFilePath = Join-Path $this._backupPath $backupFileName
+                
+                Copy-Item -Path $this._dataFilePath -Destination $backupFilePath -Force
+                
+                # Manage backup rotation
+                if ($this.BackupCount -gt 0) {
+                    $backups = Get-ChildItem -Path $this._backupPath -Filter "data-backup-*.json" | 
+                               Sort-Object LastWriteTime -Descending
+                    
+                    if ($backups.Count -gt $this.BackupCount) {
+                        $backupsToDelete = $backups | Select-Object -Skip $this.BackupCount
+                        foreach ($backup in $backupsToDelete) {
+                            Remove-Item -Path $backup.FullName -Force
+                            # Write-Verbose "DataManager: Removed old backup '$($backup.Name)'"
+                        }
+                    }
+                }
+                
+                # Write-Verbose "DataManager: Created backup '$backupFileName'"
+            }
+        }
+        catch {
+            Write-Warning "DataManager: Failed to create backup: $($_.Exception.Message)"
+        }
+    }
+    
+    # Transactional update methods
+    [void] BeginUpdate() {
+        $this._updateTransactionCount++
+        # Write-Verbose "DataManager: Began update transaction. Depth: $($this._updateTransactionCount)"
+    }
+    
+    [void] EndUpdate() {
+        $this.EndUpdate($false)
+    }
+    
+    [void] EndUpdate([bool]$forceSave) {
+        if ($this._updateTransactionCount -gt 0) {
+            $this._updateTransactionCount--
+        }
+        
+        # Write-Verbose "DataManager: Ended update transaction. Depth: $($this._updateTransactionCount)"
+        
+        if ($this._updateTransactionCount -eq 0 -and ($this._dataModified -or $forceSave)) {
+            if ($this.AutoSave -or $forceSave) {
+                $this.SaveData()
+            }
+        }
+    }
+    
+    # Task management methods
+    [PmcTask[]] GetTasks() {
+        return @($this._taskIndex.Values)
+    }
+    
+    [PmcTask] GetTask([string]$taskId) {
+        if ($this._taskIndex.ContainsKey($taskId)) {
+            return $this._taskIndex[$taskId]
+        }
+        return $null
+    }
+    
+    [PmcTask[]] GetTasksByProject([string]$projectKey) {
+        return @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+    }
+    
+    [PmcTask] AddTask([PmcTask]$task) {
+        if ($null -eq $task) {
+            throw [System.ArgumentNullException]::new("task", "Task cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($task.Id)) {
+            $task.Id = [guid]::NewGuid().ToString()
+        }
+        
+        if ($this._taskIndex.ContainsKey($task.Id)) {
+            throw [System.InvalidOperationException]::new("Task with ID '$($task.Id)' already exists")
+        }
+        
+        $this._taskIndex[$task.Id] = $task
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Created"; Task = $task })
+        }
+        
+        # Write-Verbose "DataManager: Added task '$($task.Title)' with ID '$($task.Id)'"
+        return $task
+    }
+    
+    [PmcTask] UpdateTask([PmcTask]$task) {
+        if ($null -eq $task) {
+            throw [System.ArgumentNullException]::new("task", "Task cannot be null")
+        }
+        
+        if (-not $this._taskIndex.ContainsKey($task.Id)) {
+            throw [System.InvalidOperationException]::new("Task with ID '$($task.Id)' not found")
+        }
+        
+        $task.UpdatedAt = [datetime]::Now
+        $this._taskIndex[$task.Id] = $task
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Updated"; Task = $task })
+        }
+        
+        # Write-Verbose "DataManager: Updated task '$($task.Title)' with ID '$($task.Id)'"
+        return $task
+    }
+    
+    [bool] DeleteTask([string]$taskId) {
+        if (-not $this._taskIndex.ContainsKey($taskId)) {
+            # Write-Verbose "DataManager: Task '$taskId' not found for deletion"
+            return $false
+        }
+        
+        $task = $this._taskIndex[$taskId]
+        $this._taskIndex.Remove($taskId) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Tasks.Changed", @{ Action = "Deleted"; TaskId = $taskId })
+        }
+        
+        # Write-Verbose "DataManager: Deleted task with ID '$taskId'"
+        return $true
+    }
+    
+    # Project management methods
+    [PmcProject[]] GetProjects() {
+        return @($this._projectIndex.Values)
+    }
+    
+    [PmcProject] GetProject([string]$projectKey) {
+        if ($this._projectIndex.ContainsKey($projectKey)) {
+            return $this._projectIndex[$projectKey]
+        }
+        return $null
+    }
+    
+    [PmcProject] AddProject([PmcProject]$project) {
+        if ($null -eq $project) {
+            throw [System.ArgumentNullException]::new("project", "Project cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($project.Key)) {
+            throw [System.ArgumentException]::new("Project Key is required")
+        }
+        
+        if ($this._projectIndex.ContainsKey($project.Key)) {
+            throw [System.InvalidOperationException]::new("Project with Key '$($project.Key)' already exists")
+        }
+        
+        $this._projectIndex[$project.Key] = $project
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ Action = "Created"; Project = $project })
+        }
+        
+        # Write-Verbose "DataManager: Added project '$($project.Name)' with Key '$($project.Key)'"
+        return $project
+    }
+    
+    [PmcProject] UpdateProject([PmcProject]$project) {
+        if ($null -eq $project) {
+            throw [System.ArgumentNullException]::new("project", "Project cannot be null")
+        }
+        
+        if (-not $this._projectIndex.ContainsKey($project.Key)) {
+            throw [System.InvalidOperationException]::new("Project with Key '$($project.Key)' not found")
+        }
+        
+        $project.UpdatedAt = [datetime]::Now
+        $this._projectIndex[$project.Key] = $project
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ Action = "Updated"; Project = $project })
+        }
+        
+        # Write-Verbose "DataManager: Updated project '$($project.Name)' with Key '$($project.Key)'"
+        return $project
+    }
+    
+    [bool] DeleteProject([string]$projectKey) {
+        if (-not $this._projectIndex.ContainsKey($projectKey)) {
+            # Write-Verbose "DataManager: Project '$projectKey' not found for deletion"
+            return $false
+        }
+        
+        # Delete all tasks associated with this project
+        $tasksToDelete = @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        foreach ($task in $tasksToDelete) {
+            $this.DeleteTask($task.Id) | Out-Null
+        }
+        
+        # NEW: Delete all time entries associated with this project
+        $timeEntriesToDelete = @($this._timeEntryIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        foreach ($entry in $timeEntriesToDelete) {
+            $this.DeleteTimeEntry($entry.Id) | Out-Null
+        }
+
+        $project = $this._projectIndex[$projectKey]
+        $this._projectIndex.Remove($projectKey) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("Projects.Changed", @{ 
+                Action = "Deleted"
+                ProjectKey = $projectKey
+                DeletedTaskCount = $tasksToDelete.Count
+                DeletedTimeEntryCount = $timeEntriesToDelete.Count # NEW
+            })
+        }
+        
+        # Write-Verbose "DataManager: Deleted project '$projectKey' and $($tasksToDelete.Count) associated tasks"
+        Write-Log -Level Info -Message "DataManager: Deleted project '$projectKey' and $($tasksToDelete.Count) associated tasks, $($timeEntriesToDelete.Count) time entries."
+        return $true
+    }
+    
+    # NEW: Time Entry management methods
+    [TimeEntry[]] GetTimeEntries() {
+        return @($this._timeEntryIndex.Values)
+    }
+
+    [TimeEntry] GetTimeEntry([string]$timeEntryId) {
+        if ($this._timeEntryIndex.ContainsKey($timeEntryId)) {
+            return $this._timeEntryIndex[$timeEntryId]
+        }
+        return $null
+    }
+
+    [TimeEntry[]] GetTimeEntriesByProject([string]$projectKey) {
+        return @($this._timeEntryIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+    }
+
+    [TimeEntry] AddTimeEntry([TimeEntry]$timeEntry) {
+        if ($null -eq $timeEntry) {
+            throw [System.ArgumentNullException]::new("timeEntry", "Time entry cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($timeEntry.Id)) {
+            $timeEntry.Id = [guid]::NewGuid().ToString()
+        }
+        
+        if ($this._timeEntryIndex.ContainsKey($timeEntry.Id)) {
+            throw [System.InvalidOperationException]::new("Time entry with ID '$($timeEntry.Id)' already exists")
+        }
+        
+        $this._timeEntryIndex[$timeEntry.Id] = $timeEntry
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("TimeEntries.Changed", @{ Action = "Created"; TimeEntry = $timeEntry })
+        }
+        
+        Write-Log -Level Debug -Message "DataManager: Added time entry '$($timeEntry.Description)' for project '$($timeEntry.ProjectKey)'."
+        return $timeEntry
+    }
+
+    [TimeEntry] UpdateTimeEntry([TimeEntry]$timeEntry) {
+        if ($null -eq $timeEntry) {
+            throw [System.ArgumentNullException]::new("timeEntry", "Time entry cannot be null")
+        }
+        
+        if (-not $this._timeEntryIndex.ContainsKey($timeEntry.Id)) {
+            throw [System.InvalidOperationException]::new("Time entry with ID '$($timeEntry.Id)' not found")
+        }
+        
+        # No 'UpdatedAt' property on TimeEntry, assuming it's mutable directly
+        $this._timeEntryIndex[$timeEntry.Id] = $timeEntry
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("TimeEntries.Changed", @{ Action = "Updated"; TimeEntry = $timeEntry })
+        }
+        
+        Write-Log -Level Debug -Message "DataManager: Updated time entry '$($timeEntry.Description)' for project '$($timeEntry.ProjectKey)'."
+        return $timeEntry
+    }
+
+    [bool] DeleteTimeEntry([string]$timeEntryId) {
+        if (-not $this._timeEntryIndex.ContainsKey($timeEntryId)) {
+            Write-Log -Level Debug -Message "DataManager: Time entry '$timeEntryId' not found for deletion."
+            return $false
+        }
+        
+        $timeEntry = $this._timeEntryIndex[$timeEntryId]
+        $this._timeEntryIndex.Remove($timeEntryId) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("TimeEntries.Changed", @{ Action = "Deleted"; TimeEntryId = $timeEntryId })
+        }
+        
+        Write-Log -Level Debug -Message "DataManager: Deleted time entry with ID '$timeEntryId'."
+        return $true
+    }
+
+    # Utility methods
+    [datetime] GetLastSaveTime() {
+        return $this._lastSaveTime
+    }
+    
+    [void] ForceSave() {
+        $originalTransactionCount = $this._updateTransactionCount
+        $this._updateTransactionCount = 0
+        try {
+            $this.SaveData()
+        }
+        finally {
+            $this._updateTransactionCount = $originalTransactionCount
+        }
+    }
+    
+    # IDisposable implementation
+    [void] Dispose() {
+        # Write-Verbose "DataManager: Disposing - checking for unsaved data"
+        
+        if ($this._dataModified) {
+            $originalTransactionCount = $this._updateTransactionCount
+            $this._updateTransactionCount = 0
+            try {
+                $this.SaveData()
+                # Write-Verbose "DataManager: Performed final save during dispose"
+            }
+            catch {
+                Write-Warning "DataManager: Failed to save data during dispose: $($_.Exception.Message)"
+            }
+            finally {
+                $this._updateTransactionCount = $originalTransactionCount
+            }
+        }
+    }
+    
+    # Cleanup method (alias for Dispose)
+    [void] Cleanup() {
+        $this.Dispose()
+    }
+}
+
+#endregion
+#<!-- END_PAGE: ASE.003 -->
+```
+
+---
+
+### 3. **`Services\ASE.013_TimeSheetService.ps1`** (REFINED)
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - TimeSheetService
+# Aggregates and pivots time entry data into structured timesheet reports.
+# ==============================================================================
+
+using namespace System.Collections.Generic
+using namespace System.Linq # For LINQ operations like GroupBy, needed for more complex pivoting
+
+class TimeSheetService {
+    [DataManager]$DataManager # Dependency injected
+    
+    TimeSheetService([DataManager]$dataManager) {
+        $this.DataManager = $dataManager
+        Write-Log -Level Debug -Message "TimeSheetService: Initialized."
+    }
+
+    # Generate a weekly timesheet report
+    # startDate: Assumed to be the Monday of the week to report on.
+    [PSCustomObject[]] GenerateWeeklyReport([DateTime]$startDate) {
+        if ($null -eq $startDate) {
+            throw [System.ArgumentNullException]::new("startDate", "Start date cannot be null.")
+        }
+
+        # Ensure startDate is a Monday and normalize to start of day
+        $startOfWeek = $startDate.Date
+        while ($startOfWeek.DayOfWeek -ne [DayOfWeek]::Monday) {
+            $startOfWeek = $startOfWeek.AddDays(-1)
+        }
+        
+        $endOfWeek = $startOfWeek.AddDays(7).AddSeconds(-1) # End of Sunday for the selected week
+
+        Write-Log -Level Debug -Message "TimeSheetService: Generating weekly report from $($startOfWeek.ToShortDateString()) to $($endOfWeek.ToShortDateString())."
+
+        $allTimeEntries = $this.DataManager.GetTimeEntries() 
+        $projects = $this.DataManager.GetProjects() | Group-Object -Property Key -AsHashtable # For quick project name lookup
+
+        $reportData = [Dictionary[string, PSCustomObject]]::new() # Key: ProjectKey, Value: Report Row
+
+        foreach ($entry in $allTimeEntries) {
+            # Filter entries within the current week
+            if ($entry.StartTime.Date -ge $startOfWeek.Date -and $entry.StartTime.Date -le $endOfWeek.Date) {
+                # Aggregate by ProjectKey
+                $aggregateKey = $entry.ProjectKey
+
+                if (-not $reportData.ContainsKey($aggregateKey)) {
+                    # Initialize new row for this project
+                    $reportData[$aggregateKey] = [PSCustomObject]@{
+                        ProjectKey = $aggregateKey
+                        ProjectName = if ($projects.ContainsKey($aggregateKey)) { $projects[$aggregateKey][0].Name } else { "Unknown Project" }
+                        Monday = 0.0
+                        Tuesday = 0.0
+                        Wednesday = 0.0
+                        Thursday = 0.0
+                        Friday = 0.0
+                        Saturday = 0.0
+                        Sunday = 0.0
+                        Total = 0.0
+                    }
+                }
+
+                $row = $reportData[$aggregateKey]
+                $hours = [Math]::Round($entry.GetHours(), 2) # Round to 2 decimal places
+
+                # Add hours to correct day
+                switch ($entry.StartTime.DayOfWeek) {
+                    ([DayOfWeek]::Monday) { $row.Monday += $hours }
+                    ([DayOfWeek]::Tuesday) { $row.Tuesday += $hours }
+                    ([DayOfWeek]::Wednesday) { $row.Wednesday += $hours }
+                    ([DayOfWeek]::Thursday) { $row.Thursday += $hours }
+                    ([DayOfWeek]::Friday) { $row.Friday += $hours }
+                    ([DayOfWeek]::Saturday) { $row.Saturday += $hours }
+                    ([DayOfWeek]::Sunday) { $row.Sunday += $hours }
+                }
+                $row.Total += $hours
+            }
+        }
+
+        # Convert dictionary values to an array of PSCustomObject and sort
+        $finalReport = $reportData.Values | Sort-Object ProjectName | ForEach-Object {
+            # Create new PSCustomObject for clean output and formatted properties
+            [PSCustomObject]@{
+                ProjectName = $_.ProjectName
+                Monday = ($this._FormatHours($_.Monday))
+                Tuesday = ($this._FormatHours($_.Tuesday))
+                Wednesday = ($this._FormatHours($_.Wednesday))
+                Thursday = ($this._FormatHours($_.Thursday))
+                Friday = ($this._FormatHours($_.Friday))
+                Saturday = ($this._FormatHours($_.Saturday))
+                Sunday = ($this._FormatHours($_.Sunday))
+                Total = ($this._FormatHours($_.Total))
+            }
+        }
+
+        Write-Log -Level Debug -Message "TimeSheetService: Generated report with $($finalReport.Count) rows."
+        return $finalReport
+    }
+
+    hidden [string] _FormatHours([double]$hours) {
+        if ([Math]::Abs($hours) -lt 0.001) { return "" } # Display empty for near-zero hours for cleaner look
+        return "{0:N2}" -f $hours # Format to 2 decimal places
+    }
+
+    [void] Cleanup() {
+        Write-Log -Level Debug -Message "TimeSheetService: Cleanup complete."
+    }
+}
+```
+
+---
+
+### 4. **`Screens\ASC.009_TimesheetScreen.ps1`** (ENHANCED)
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Timesheet Screen
+# Displays weekly timesheet data aggregated by project.
+# ==============================================================================
+
+using namespace System.Collections.Generic
+
+class TimesheetScreen : Screen {
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_controlsPanel
+    hidden [LabelComponent] $_startDateLabel
+    hidden [DateInputComponent] $_startDateInput
+    hidden [ButtonComponent] $_generateButton
+    hidden [ButtonComponent] $_addEntryButton # NEW Button
+    hidden [Table] $_timesheetTable # Using the Table component
+    hidden [LabelComponent] $_statusMessageLabel # NEW Label for status/feedback
+    
+    hidden [TimeSheetService] $_timesheetService # Injected service
+    hidden [DialogManager] $_dialogManager # Injected service
+    hidden [FocusManager] $_focusManager # Injected service
+    hidden [DataManager] $_dataManager # Injected for add entry
+    
+    TimesheetScreen([object]$serviceContainer) : base("TimesheetScreen", $serviceContainer) {
+        $this._timesheetService = $serviceContainer.GetService("TimeSheetService")
+        $this._dialogManager = $serviceContainer.GetService("DialogManager")
+        $this._focusManager = $serviceContainer.GetService("FocusManager")
+        $this._dataManager = $serviceContainer.GetService("DataManager") # Initialize DataManager
+        $this.Title = " Weekly Timesheet "
+    }
+
+    [void] Initialize() {
+        # Main panel covering the whole screen
+        $this._mainPanel = [Panel]::new("TimesheetMainPanel")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = " Weekly Timesheet Report "
+        $this._mainPanel.BorderStyle = "Double"
+        $this._mainPanel.BorderColor = Get-ThemeColor "Primary"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Background"
+        $this.AddChild($this._mainPanel)
+
+        # Controls Panel (top part for date input and button)
+        $this._controlsPanel = [Panel]::new("ControlsPanel")
+        $this._controlsPanel.X = 1
+        $this._controlsPanel.Y = 1
+        $this._controlsPanel.Width = $this.Width - 2
+        $this._controlsPanel.Height = 5
+        $this._controlsPanel.HasBorder = $false # No border, just a container
+        $this._mainPanel.AddChild($this._controlsPanel)
+
+        # Start Date Input
+        $this._startDateLabel = [LabelComponent]::new("StartDateLabel")
+        $this._startDateLabel.Text = "Week Start (Mon):"
+        $this._startDateLabel.X = 2
+        $this._startDateLabel.Y = 1
+        $this._startDateLabel.ForegroundColor = Get-ThemeColor "label"
+        $this._controlsPanel.AddChild($this._startDateLabel)
+
+        $this._startDateInput = [DateInputComponent]::new("StartDateInput")
+        $this._startDateInput.X = 20
+        $this._startDateInput.Y = 1
+        $this._startDateInput.Width = 15 # Compact width
+        $this._startDateInput.Height = 1 # Single line
+        # Default to current week's Monday
+        $today = [DateTime]::Today
+        $startOfWeek = $today
+        while ($startOfWeek.DayOfWeek -ne [DayOfWeek]::Monday) {
+            $startOfWeek = $startOfWeek.AddDays(-1)
+        }
+        $this._startDateInput.Value = $startOfWeek
+        $this._startDateInput.IsFocusable = $true
+        $this._controlsPanel.AddChild($this._startDateInput)
+
+        # Generate Button
+        $currentScreenRef = $this # Capture $this for scriptblock
+        $this._generateButton = [ButtonComponent]::new("GenerateButton")
+        $this._generateButton.Text = "Generate Report"
+        $this._generateButton.X = 40
+        $this._generateButton.Y = 1
+        $this._generateButton.Width = 20
+        $this._generateButton.Height = 3
+        $this._generateButton.IsFocusable = $true
+        $this._generateButton.OnClick = {
+            $currentScreenRef._GenerateReport()
+        }.GetNewClosure()
+        $this._controlsPanel.AddChild($this._generateButton)
+
+        # NEW: Add Entry Button
+        $this._addEntryButton = [ButtonComponent]::new("AddEntryButton")
+        $this._addEntryButton.Text = "Add Entry"
+        $this._addEntryButton.X = 65 # Position next to Generate
+        $this._addEntryButton.Y = 1
+        $this._addEntryButton.Width = 15
+        $this._addEntryButton.Height = 3
+        $this._addEntryButton.IsFocusable = $true
+        $this._addEntryButton.OnClick = {
+            $currentScreenRef._ShowAddTimeEntryDialog()
+        }.GetNewClosure()
+        $this._controlsPanel.AddChild($this._addEntryButton)
+
+
+        # Timesheet Table
+        $tableY = $this._controlsPanel.Y + $this._controlsPanel.Height + 1
+        $tableHeight = $this.Height - $tableY - 2 # Leave space for bottom instructions
+
+        $this._timesheetTable = [Table]::new("TimesheetTable")
+        $this._timesheetTable.X = 1
+        $this._timesheetTable.Y = $tableY
+        $this._timesheetTable.Width = $this.Width - 2
+        $this._timesheetTable.Height = $tableHeight
+        $this._timesheetTable.Title = " Weekly Summary "
+        $this._timesheetTable.ShowBorder = $true
+        $this._timesheetTable.IsFocusable = $true # Table is focusable for scrolling/selection
+        
+        # Define table columns
+        $this._timesheetTable.SetColumns(@(
+            @{Name="ProjectName"; Header="Project"; Width=25},
+            @{Name="Monday"; Header="Mon"; Width=7},
+            @{Name="Tuesday"; Header="Tue"; Width=7},
+            @{Name="Wednesday"; Header="Wed"; Width=7},
+            @{Name="Thursday"; Header="Thu"; Width=7},
+            @{Name="Friday"; Header="Fri"; Width=7},
+            @{Name="Saturday"; Header="Sat"; Width=7},
+            @{Name="Sunday"; Header="Sun"; Width=7},
+            @{Name="Total"; Header="Total"; Width=8}
+        ))
+        $this._timesheetTable.ShowHeaders = $true
+        $this._timesheetTable.AllowSelection = $false # For now, table is read-only display
+        
+        $this._mainPanel.AddChild($this._timesheetTable)
+
+        # NEW: Status Message Label (below table, above instructions)
+        $statusMessageY = $this.Height - 3
+        $this._statusMessageLabel = [LabelComponent]::new("TimesheetStatusLabel")
+        $this._statusMessageLabel.Text = ""
+        $this._statusMessageLabel.X = 1
+        $this._statusMessageLabel.Y = $statusMessageY
+        $this._statusMessageLabel.Width = $this.Width - 2
+        $this._statusMessageLabel.ForegroundColor = Get-ThemeColor "Info"
+        $this._mainPanel.AddChild($this._statusMessageLabel)
+
+        # Instructions (adjusted Y to account for new status label)
+        $instructions = [LabelComponent]::new("Instructions")
+        $instructions.Text = "↑↓: Date | Enter: Generate | Tab: Cycle Focus | A: Add Entry | ESC: Back" # Added 'A' hotkey
+        $instructions.X = 1
+        $instructions.Y = $this.Height - 2
+        $instructions.ForegroundColor = Get-ThemeColor "Subtle"
+        $this._mainPanel.AddChild($instructions)
+    }
+
+    [void] OnEnter() {
+        Write-Log -Level Debug -Message "TimesheetScreen.OnEnter: Activating screen."
+        
+        # Subscribe to TimeEntries.Changed event to refresh report automatically
+        $currentScreenRef = $this
+        $this.SubscribeToEvent("TimeEntries.Changed", {
+            param($sender, $eventData)
+            Write-Log -Level Debug -Message "TimesheetScreen: TimeEntries.Changed event received, refreshing report."
+            $currentScreenRef._GenerateReport() # Regenerate report on data change
+        }.GetNewClosure())
+
+        # Generate report for the initially set date
+        $this._GenerateReport()
+
+        # Set initial focus to the date input
+        if ($this._focusManager) {
+            Write-Log -Level Debug -Message "TimesheetScreen.OnEnter: Setting initial focus to StartDateInput."
+            $this._focusManager.SetFocus($this._startDateInput)
+        }
+
+        $this.RequestRedraw()
+        ([Screen]$this).OnEnter() # Call base OnEnter
+    }
+
+    [void] OnExit() {
+        Write-Log -Level Debug -Message "TimesheetScreen.OnExit: Deactivating screen."
+        $this._timesheetTable.SetItems(@()) # Clear table data
+        # Event subscription cleanup handled by base Screen class using EventSubscriptions dictionary
+        ([Screen]$this).OnExit() # Call base OnExit
+    }
+
+    hidden [void] _GenerateReport() {
+        if ($null -eq $this._timesheetService) {
+            $this._dialogManager.ShowAlert("Error", "TimesheetService not available.")
+            Write-Log -Level Error -Message "TimesheetScreen: TimesheetService is null, cannot generate report."
+            return
+        }
+
+        try {
+            $reportItems = $this._timesheetService.GenerateWeeklyReport($this._startDateInput.Value)
+            
+            # Table component expects an array of hashtables. PSCustomObjects are fine.
+            $this._timesheetTable.SetItems($reportItems)
+            
+            if ($reportItems.Count -eq 0) {
+                $this._statusMessageLabel.Text = "No time entries found for the week starting $($this._startDateInput.Value.ToShortDateString())."
+                $this._statusMessageLabel.ForegroundColor = Get-ThemeColor "Warning"
+            } else {
+                $this._statusMessageLabel.Text = "Report generated successfully for week starting $($this._startDateInput.Value.ToShortDateString())."
+                $this._statusMessageLabel.ForegroundColor = Get-ThemeColor "Success"
+            }
+            Write-Log -Level Info -Message "TimesheetScreen: Report generated successfully for week starting $($this._startDateInput.Value.ToShortDateString()). Found $($reportItems.Count) projects with time."
+        } catch {
+            $this._dialogManager.ShowAlert("Report Error", "Failed to generate report:`n$($_.Exception.Message)")
+            $this._statusMessageLabel.Text = "Error generating report: $($_.Exception.Message)"
+            $this._statusMessageLabel.ForegroundColor = Get-ThemeColor "Error"
+            Write-Log -Level Error -Message "TimesheetScreen: Error generating report: $($_.Exception.Message)"
+        }
+        $this.RequestRedraw()
+    }
+
+    hidden [void] _ShowAddTimeEntryDialog() {
+        Write-Log -Level Debug -Message "TimesheetScreen: Showing Add Time Entry dialog."
+        $addTimeEntryDialog = [TimeEntryDialog]::new($this.ServiceContainer)
+        $addTimeEntryDialog.Initialize() # Initialize the dialog
+        $this._navService.NavigateTo($addTimeEntryDialog) # Navigate to the dialog
+        # The dialog's Complete() method will handle navigation back
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
+
+        $handled = $false
+        $focusedComponent = $this._focusManager.FocusedComponent
+
+        # --- Screen-level actions (e.g., hotkeys for the Timesheet view) ---
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                Write-Log -Level Debug -Message "TimesheetScreen.HandleInput: ESC pressed, navigating back."
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::Tab) {
+                # Cycle focus: DateInput -> Generate Button -> Add Entry Button -> Table -> (back to DateInput)
+                if ($focusedComponent -eq $this._startDateInput) {
+                    $this._focusManager.SetFocus($this._generateButton)
+                } elseif ($focusedComponent -eq $this._generateButton) {
+                    $this._focusManager.SetFocus($this._addEntryButton)
+                } elseif ($focusedComponent -eq $this._addEntryButton) {
+                    $this._focusManager.SetFocus($this._timesheetTable)
+                } elseif ($focusedComponent -eq $this._timesheetTable) {
+                    $this._focusManager.SetFocus($this._startDateInput)
+                } else {
+                    $this._focusManager.SetFocus($this._startDateInput) # Fallback
+                }
+                $handled = $true
+            }
+            ([ConsoleKey]::A) { # 'A' for Add Entry
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    $this._ShowAddTimeEntryDialog()
+                    $handled = $true
+                }
+            }
+        }
+        
+        if ($handled) { return $true }
+
+        # --- Route to Focused Component ---
+        if ($focusedComponent) {
+            $handled = $focusedComponent.HandleInput($keyInfo)
+        }
+        
+        return $handled
+    }
+}
+```
+
+---
+
+### 5. **`Screens\ASC.010_TimeEntryDialog.ps1`** (NEW FILE)
+
+Create this new file.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Time Entry Dialog
+# A modal dialog for adding new time entries.
+# ==============================================================================
+
+using namespace System.Collections.Generic
+
+class TimeEntryDialog : Dialog {
+    hidden [Panel] $_dialogPanel
+    hidden [Panel] $_contentPanel
+    hidden [ComboBoxComponent] $_projectCombo
+    hidden [ComboBoxComponent] $_taskCombo
+    hidden [DateInputComponent] $_dateInput
+    hidden [NumericInputComponent] $_hoursInput
+    hidden [TextBoxComponent] $_descriptionBox
+    hidden [ButtonComponent] $_saveButton
+    hidden [ButtonComponent] $_cancelButton
+    hidden [LabelComponent] $_statusMessageLabel
+    
+    hidden [DataManager] $_dataManager # Injected
+    hidden [NavigationService] $_navService # Injected
+    hidden [FocusManager] $_focusManager # Injected
+
+    TimeEntryDialog([object]$serviceContainer) : base("TimeEntryDialog", $serviceContainer) {
+        $this.Width = 70
+        $this.Height = 22 # Increased height for more fields
+        $this.Title = " Add Time Entry "
+        
+        $this._dataManager = $serviceContainer.GetService("DataManager")
+        $this._navService = $serviceContainer.GetService("NavigationService")
+        $this._focusManager = $serviceContainer.GetService("FocusManager")
+    }
+
+    [void] Initialize() {
+        # Dialog base class already creates _panel. Adjust its properties.
+        $this._panel.Width = $this.Width
+        $this._panel.Height = $this.Height
+        $this._panel.Title = " Add Time Entry " # Ensure title matches
+        $this._panel.BorderStyle = "Double"
+        $this._panel.BorderColor = Get-ThemeColor "Accent"
+        $this._panel.BackgroundColor = Get-ThemeColor "dialog.bg"
+
+        # Content Panel inside dialog panel
+        $this._contentPanel = [Panel]::new("ContentPanel")
+        $this._contentPanel.X = 2
+        $this._contentPanel.Y = 1
+        $this._contentPanel.Width = $this._panel.ContentWidth - 4
+        $this._contentPanel.Height = $this._panel.ContentHeight - 2
+        $this._contentPanel.HasBorder = $false
+        $this._contentPanel.LayoutType = "Vertical" # Use vertical layout
+        $this._contentPanel.Padding = 1
+        $this._contentPanel.Spacing = 1
+        $this._panel.AddChild($this._contentPanel)
+
+        # Helper for adding a labeled input row
+        $addLabeledInput = {
+            param($parentPanel, $labelName, $labelText, $inputComponent, $inputXOffset = 0)
+            $label = [LabelComponent]::new($labelName)
+            $label.Text = $labelText
+            $label.X = 0 # Layout handles X
+            $label.Y = 0 # Layout handles Y
+            $label.Width = 15
+            $label.ForegroundColor = Get-ThemeColor "label"
+            $parentPanel.AddChild($label)
+            
+            $inputComponent.X = $label.Width + 1 + $inputXOffset # Position relative to label
+            $inputComponent.Y = 0
+            $inputComponent.Width = $parentPanel.ContentWidth - ($label.Width + 1 + $inputXOffset) - $parentPanel.Padding*2
+            $inputComponent.IsFocusable = $true
+            $parentPanel.AddChild($inputComponent)
+        }
+
+        # Project Selection
+        $this._projectCombo = [ComboBoxComponent]::new("ProjectCombo")
+        $this._projectCombo.DisplayMember = "Name" # Display Project.Name
+        $this._projectCombo.ValueMember = "Key" # Return Project.Key as value
+        $this._projectCombo.Placeholder = "Select project..."
+        $this._projectCombo.Height = 1 # Standard height for combo
+        $this._projectCombo.IsFocusable = $true
+        $currentDialogRef = $this
+        $this._projectCombo.OnSelectionChanged = { 
+            param($sender, $index) 
+            $currentDialogRef._PopulateTasksForSelectedProject() 
+        }.GetNewClosure()
+        & $addLabeledInput $this._contentPanel "lblProject" "Project:" $this._projectCombo
+
+        # Task Selection
+        $this._taskCombo = [ComboBoxComponent]::new("TaskCombo")
+        $this._taskCombo.DisplayMember = "Title" # Display Task.Title
+        $this._taskCombo.ValueMember = "Id" # Return Task.Id as value
+        $this._taskCombo.Placeholder = "Select task (optional)..."
+        $this._taskCombo.Height = 1
+        $this._taskCombo.IsFocusable = $true
+        & $addLabeledInput $this._contentPanel "lblTask" "Task (Opt):" $this._taskCombo
+
+        # Date Input
+        $this._dateInput = [DateInputComponent]::new("DateInput")
+        $this._dateInput.Value = [DateTime]::Today # Default to today
+        $this._dateInput.Height = 1
+        $this._dateInput.IsFocusable = $true
+        & $addLabeledInput $this._contentPanel "lblDate" "Date:" $this._dateInput
+
+        # Hours Input
+        $this._hoursInput = [NumericInputComponent]::new("HoursInput")
+        $this._hoursInput.Value = 1 # Default to 1 hour
+        $this._hoursInput.DecimalPlaces = 2
+        $this._hoursInput.Minimum = 0.01
+        $this._hoursInput.Maximum = 24.0
+        $this._hoursInput.Height = 1
+        $this._hoursInput.Width = 10 # Smaller width for hours
+        $this._hoursInput.IsFocusable = $true
+        & $addLabeledInput $this._contentPanel "lblHours" "Hours:" $this._hoursInput
+
+        # Description
+        $this._descriptionBox = [TextBoxComponent]::new("DescriptionBox")
+        $this._descriptionBox.Placeholder = "Enter work description..."
+        $this._descriptionBox.Height = 3 # More height for description
+        $this._descriptionBox.IsFocusable = $true
+        & $addLabeledInput $this._contentPanel "lblDesc" "Description:" $this._descriptionBox
+
+        # Status Message Label (for validation feedback)
+        $this._statusMessageLabel = [LabelComponent]::new("StatusMessageLabel")
+        $this._statusMessageLabel.Text = ""
+        $this._statusMessageLabel.X = 0
+        $this._statusMessageLabel.Y = 0
+        $this._statusMessageLabel.Width = $this._contentPanel.ContentWidth
+        $this._statusMessageLabel.ForegroundColor = Get-ThemeColor "Error"
+        $this._contentPanel.AddChild($this._statusMessageLabel)
+        $this._contentPanel.Spacing = 0 # No extra spacing for status label
+
+        # Buttons (aligned at bottom)
+        $buttonY = $this.Height - 5 # Position relative to dialog screen
+        $buttonWidth = 12
+        $spacing = 4
+        $totalButtonWidth = ($buttonWidth * 2) + $spacing
+        $startX = [Math]::Floor(($this.Width - $totalButtonWidth) / 2) # Center buttons on dialog
+        
+        $this._saveButton = [ButtonComponent]::new("SaveButton")
+        $this._saveButton.Text = "Save"
+        $this._saveButton.X = $startX
+        $this._saveButton.Y = $buttonY
+        $this._saveButton.Width = $buttonWidth
+        $this._saveButton.Height = 1
+        $this._saveButton.IsFocusable = $true
+        $this._saveButton.OnClick = {
+            $currentDialogRef._SaveTimeEntry()
+        }.GetNewClosure()
+        $this._panel.AddChild($this._saveButton) # Add to dialog's main panel
+
+        $this._cancelButton = [ButtonComponent]::new("CancelButton")
+        $this._cancelButton.Text = "Cancel"
+        $this._cancelButton.X = $startX + $buttonWidth + $spacing
+        $this._cancelButton.Y = $buttonY
+        $this._cancelButton.Width = $buttonWidth
+        $this._cancelButton.Height = 1
+        $this._cancelButton.IsFocusable = $true
+        $this._cancelButton.OnClick = {
+            $currentDialogRef.Complete($null) # Close dialog with null result
+        }.GetNewClosure()
+        $this._panel.AddChild($this._cancelButton) # Add to dialog's main panel
+    }
+
+    [void] OnEnter() {
+        Write-Log -Level Debug -Message "TimeEntryDialog.OnEnter: Activating dialog."
+        
+        # Populate projects dropdown
+        $projects = $this._dataManager.GetProjects()
+        $this._projectCombo.Items.Clear()
+        # Add a "No Project" option
+        $this._projectCombo.Items.Add([PSCustomObject]@{ Name="[No Project]"; Key="" }) # Use empty key for "no project"
+        foreach ($p in $projects) { $this._projectCombo.Items.Add($p) }
+        $this._projectCombo.SelectedIndex = 0 # Default to "No Project"
+
+        # Initially populate tasks for "No Project" or default
+        $this._PopulateTasksForSelectedProject()
+
+        # Set initial focus to the first input field
+        if ($this._focusManager) {
+            Write-Log -Level Debug -Message "TimeEntryDialog.OnEnter: Setting initial focus to ProjectCombo."
+            $this._focusManager.SetFocus($this._projectCombo)
+        }
+        $this.RequestRedraw()
+        ([Screen]$this).OnEnter() # Call base OnEnter
+    }
+
+    [void] OnExit() {
+        Write-Log -Level Debug -Message "TimeEntryDialog.OnExit: Deactivating dialog."
+        # Clear fields when exiting to prevent stale data on re-opening
+        $this._projectCombo.Items.Clear()
+        $this._taskCombo.Items.Clear()
+        $this._hoursInput.Value = 1
+        $this._descriptionBox.Text = ""
+        $this._statusMessageLabel.Text = ""
+        ([Screen]$this).OnExit() # Call base OnExit
+    }
+
+    hidden [void] _PopulateTasksForSelectedProject() {
+        $this._taskCombo.Items.Clear()
+        $selectedProjectItem = $this._projectCombo.Items[$this._projectCombo.SelectedIndex]
+        
+        if ($selectedProjectItem -and -not [string]::IsNullOrEmpty($selectedProjectItem.Key)) {
+            $tasks = $this._dataManager.GetTasksByProject($selectedProjectItem.Key)
+            $this._taskCombo.Items.Add([PSCustomObject]@{ Title="[No Specific Task]"; Id="" })
+            foreach ($t in $tasks) { $this._taskCombo.Items.Add($t) }
+            $this._taskCombo.SelectedIndex = 0 # Default to "[No Specific Task]"
+        } else {
+            $this._taskCombo.Items.Add([PSCustomObject]@{ Title="[No Specific Task]"; Id="" })
+            $this._taskCombo.SelectedIndex = 0
+        }
+        $this.RequestRedraw()
+    }
+
+    hidden [void] _SaveTimeEntry() {
+        # Input validation
+        $selectedProject = $null
+        if ($this._projectCombo.SelectedIndex -ge 0) {
+            $selectedProject = $this._projectCombo.Items[$this._projectCombo.SelectedIndex]
+        }
+        
+        $selectedTask = $null
+        if ($this._taskCombo.SelectedIndex -ge 0) {
+            $selectedTask = $this._taskCombo.Items[$this._taskCombo.SelectedIndex]
+        }
+
+        if (-not $selectedProject -or [string]::IsNullOrEmpty($selectedProject.Key)) {
+            $this._SetStatusMessage("Please select a project.", "Error")
+            return
+        }
+        if ($this._hoursInput.Value -le 0) {
+            $this._SetStatusMessage("Hours must be greater than 0.", "Error")
+            return
+        }
+        if ([string]::IsNullOrWhiteSpace($this._descriptionBox.Text)) {
+            $this._SetStatusMessage("Description is required.", "Error")
+            return
+        }
+
+        try {
+            $newEntry = [TimeEntry]::new(
+                if($selectedTask) { $selectedTask.Id } else { $null }, # TaskId can be null if "No Specific Task"
+                $selectedProject.Key, # ProjectKey is required
+                $this._dateInput.Value.Date.AddHours((Get-Date).Hour).AddMinutes((Get-Date).Minute) # Use selected date, current time
+            )
+            $newEntry.EndTime = $newEntry.StartTime.AddHours($this._hoursInput.Value)
+            $newEntry.Description = $this._descriptionBox.Text.Trim()
+            $newEntry.UserId = "current_user" # Placeholder: In a real app, get from auth service
+
+            $this._dataManager.AddTimeEntry($newEntry) # This will publish TimeEntries.Changed
+            $this._SetStatusMessage("Time entry saved successfully!", "Success")
+
+            # Close dialog after a short delay
+            Start-Sleep -Milliseconds 500
+            $this.Complete($true) # Signal success and close dialog
+        } catch {
+            $this._SetStatusMessage("Failed to save entry: $($_.Exception.Message)", "Error")
+            Write-Log -Level Error -Message "TimeEntryDialog: Error saving time entry: $($_.Exception.Message)"
+        }
+    }
+
+    hidden [void] _SetStatusMessage([string]$message, [string]$level = "Info") {
+        $this._statusMessageLabel.Text = $message
+        $this._statusMessageLabel.ForegroundColor = Get-ThemeColor $level
+        $this.RequestRedraw()
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
+
+        $handled = $false
+        $focusedComponent = $this._focusManager.FocusedComponent
+
+        # Global dialog actions
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                Write-Log -Level Debug -Message "TimeEntryDialog.HandleInput: ESC pressed, cancelling dialog."
+                $this.Complete($null) # Close dialog with null result
+                $handled = $true
+            }
+            ([ConsoleKey]::Enter) {
+                # If Save/Cancel buttons are focused, trigger their click
+                if ($focusedComponent -eq $this._saveButton) {
+                    $this._saveButton.OnClick.Invoke()
+                    $handled = $true
+                } elseif ($focusedComponent -eq $this._cancelButton) {
+                    $this._cancelButton.OnClick.Invoke()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::Tab) {
+                # Override default Tab behavior to cycle through specific controls
+                $focusableControls = @(
+                    $this._projectCombo,
+                    $this._taskCombo,
+                    $this._dateInput,
+                    $this._hoursInput,
+                    $this._descriptionBox,
+                    $this._saveButton,
+                    $this._cancelButton
+                )
+                
+                $currentIndex = -1
+                for ($i = 0; $i -lt $focusableControls.Count; $i++) {
+                    if ($focusedComponent -eq $focusableControls[$i]) {
+                        $currentIndex = $i
+                        break
+                    }
+                }
+                
+                $nextIndex = ($currentIndex + 1) % $focusableControls.Count
+                if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) { # Shift+Tab for reverse
+                    $nextIndex = ($currentIndex - 1 + $focusableControls.Count) % $focusableControls.Count
+                }
+
+                $this._focusManager.SetFocus($focusableControls[$nextIndex])
+                $handled = $true
+            }
+        }
+        
+        if ($handled) { return $true }
+
+        # Let the currently focused component handle input
+        if ($focusedComponent) {
+            $handled = $focusedComponent.HandleInput($keyInfo)
+        }
+        
+        return $handled
+    }
+}
+```
+
+---
+
+### 6. **`Start.ps1`** (ENHANCED)
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Application Startup (Generated from Split Structure)
+# This script loads the framework from its organized file structure.
+# ==============================================================================
+
+param(
+    [string]$Theme = "Synthwave",
+    [switch]$Debug
+)
+
+# Set error action preference
+$ErrorActionPreference = 'Stop'
+$VerbosePreference = if ($env:AXIOM_VERBOSE -eq '1') { 'Continue' } else { 'SilentlyContinue' }
+$WarningPreference = $VerbosePreference
+
+try {
+    Write-Host "Loading Axiom-Phoenix v4.0 (Split Architecture)..." -ForegroundColor Cyan
+    
+    $scriptDir = $PSScriptRoot
+    if ([string]::IsNullOrEmpty($scriptDir)) {
+        $scriptDir = Get-Location
+    }
+
+    # Define the correct loading order for the framework directories
+    $loadOrder = @(
+        "Base",
+        "Models", 
+        "Functions",
+        "Components",
+        "Screens",
+        "Services",
+        "Runtime"
+    )
+
+    # Load all framework files in the correct order
+    foreach ($folder in $loadOrder) {
+        $folderPath = Join-Path $scriptDir $folder
+        if (-not (Test-Path $folderPath)) { 
+            Write-Warning "Folder not found: $folder"
+            continue 
+        }
+
+        Write-Host "Loading $folder..." -ForegroundColor Gray
+        $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Sort-Object Name
+        foreach ($file in $files) {
+            Write-Verbose "  - Dot-sourcing $($file.Name)"
+            try {
+                . $file.FullName
+            } catch {
+                Write-Error "Failed to load $($file.Name): $($_.Exception.Message)"
+                throw
+            }
+        }
+    }
+
+    Write-Host "`nFramework loaded successfully!`n" -ForegroundColor Green
+
+    # Service container setup and application startup
+    Write-Host "Initializing services..." -ForegroundColor Cyan
+    $container = [ServiceContainer]::new()
+    
+    # Register core services
+    Write-Host "  • Registering Logger..." -ForegroundColor Gray
+    $container.Register("Logger", [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")))
+    
+    Write-Host "  • Registering EventManager..." -ForegroundColor Gray  
+    $container.Register("EventManager", [EventManager]::new())
+    
+    Write-Host "  • Registering ThemeManager..." -ForegroundColor Gray
+    $container.Register("ThemeManager", [ThemeManager]::new())
+    
+    Write-Host "  • Registering DataManager..." -ForegroundColor Gray
+    $container.Register("DataManager", [DataManager]::new((Join-Path $env:TEMP "axiom-data.json"), $container.GetService("EventManager")))
+    
+    Write-Host "  • Registering ActionService..." -ForegroundColor Gray
+    $container.Register("ActionService", [ActionService]::new($container.GetService("EventManager")))
+    
+    Write-Host "  • Registering KeybindingService..." -ForegroundColor Gray
+    $container.Register("KeybindingService", [KeybindingService]::new($container.GetService("ActionService")))
+    
+    Write-Host "  • Registering NavigationService..." -ForegroundColor Gray
+    $container.Register("NavigationService", [NavigationService]::new($container))
+    
+    Write-Host "  • Registering FocusManager..." -ForegroundColor Gray
+    $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
+    
+    Write-Host "  • Registering DialogManager..." -ForegroundColor Gray
+    $container.Register("DialogManager", [DialogManager]::new($container))
+    
+    Write-Host "  • Registering ViewDefinitionService..." -ForegroundColor Gray
+    $container.Register("ViewDefinitionService", [ViewDefinitionService]::new())
+    
+    Write-Host "  • Registering TimesheetService..." -ForegroundColor Gray # NEW SERVICE
+    $container.Register("TimeSheetService", [TimeSheetService]::new($container.GetService("DataManager"))) # NEW SERVICE
+    
+    Write-Host "Services initialized successfully!" -ForegroundColor Green
+
+    # Initialize global state
+    $global:TuiState.ServiceContainer = $container
+    $global:TuiState.Services = @{
+        Logger = $container.GetService("Logger")
+        EventManager = $container.GetService("EventManager") 
+        ThemeManager = $container.GetService("ThemeManager")
+        DataManager = $container.GetService("DataManager")
+        ActionService = $container.GetService("ActionService")
+        KeybindingService = $container.GetService("KeybindingService")
+        NavigationService = $container.GetService("NavigationService")
+        FocusManager = $container.GetService("FocusManager")
+        DialogManager = $container.GetService("DialogManager")
+        ViewDefinitionService = $container.GetService("ViewDefinitionService")
+        TimeSheetService = $container.GetService("TimeSheetService") # NEW SERVICE
+    }
+    $global:TuiState.ServiceContainer = $container
+
+    # Apply theme and register default actions
+    $themeManager = $container.GetService("ThemeManager")
+    if ($themeManager -and $Theme) { 
+        $themeManager.LoadTheme($Theme)
+        Write-Host "Theme '$Theme' activated!" -ForegroundColor Magenta 
+    }
+    
+    $actionService = $container.GetService("ActionService")
+    if ($actionService) { 
+        $actionService.RegisterDefaultActions()
+        Write-Host "Default actions registered!" -ForegroundColor Green 
+    }
+
+    # Create sample data
+    Write-Host "Generating sample data..." -ForegroundColor Cyan
+    $dataManager = $container.GetService("DataManager")
+    
+    # Create sample tasks (keep existing for task list screen)
+    $sampleTasks = @()
+    
+    $task1 = [PmcTask]::new("Review project requirements")
+    $task1.Status = [TaskStatus]::Pending
+    $task1.Priority = [TaskPriority]::High
+    $task1.ProjectKey = "PROJ-001" # Assign to new project
+    $task1.DueDate = (Get-Date).AddDays(7)
+    $sampleTasks += $task1
+    
+    $task2 = [PmcTask]::new("Design system architecture")
+    $task2.Status = [TaskStatus]::InProgress
+    $task2.Priority = [TaskPriority]::High
+    $task2.SetProgress(30)
+    $task2.ProjectKey = "PROJ-001" # Assign to new project
+    $task2.DueDate = (Get-Date).AddDays(-5) # Overdue
+    $sampleTasks += $task2
+    
+    $task3 = [PmcTask]::new("Implement core features")
+    $task3.Status = [TaskStatus]::InProgress
+    $task3.Priority = [TaskPriority]::Medium
+    $task3.SetProgress(60)
+    $sampleTasks += $task3
+    
+    $task4 = [PmcTask]::new("Write unit tests")
+    $task4.Status = [TaskStatus]::Pending
+    $task4.Priority = [TaskPriority]::Medium
+    $sampleTasks += $task4
+    
+    $task5 = [PmcTask]::new("Deploy to staging")
+    $task5.Status = [TaskStatus]::Pending
+    $task5.Priority = [TaskPriority]::Low
+    $sampleTasks += $task5
+    
+    $task6 = [PmcTask]::new("Research new marketing strategies")
+    $task6.Status = [TaskStatus]::Pending
+    $task6.Priority = [TaskPriority]::High
+    $task6.ProjectKey = "PROJ-002"
+    $task6.DueDate = (Get-Date).AddDays(10)
+    $sampleTasks += $task6
+
+    $task7 = [PmcTask]::new("Develop MVP prototype")
+    $task7.Status = [TaskStatus]::InProgress
+    $task7.Priority = [TaskPriority]::High
+    $task7.SetProgress(75)
+    $task7.ProjectKey = "PROJ-002"
+    $task7.DueDate = (Get-Date).AddDays(-1) # Overdue
+    $sampleTasks += $task7
+
+    $task8 = [PmcTask]::new("Client onboarding")
+    $task8.Status = [TaskStatus]::Completed
+    $task8.Priority = [TaskPriority]::Medium
+    $task8.SetProgress(100)
+    $task8.ProjectKey = "PROJ-003"
+    $task8.DueDate = (Get-Date).AddDays(-30)
+    $sampleTasks += $task8
+
+    $task9 = [PmcTask]::new("Initial project review")
+    $task9.Status = [TaskStatus]::Pending
+    $task9.Priority = [TaskPriority]::Low
+    $task9.ProjectKey = "PROJ-003"
+    $task9.DueDate = (Get-Date).AddDays(5)
+    $sampleTasks += $task9
+    
+    foreach ($task in $sampleTasks) {
+        $dataManager.AddTask($task)
+    }
+    
+    # Create sample project folders and files
+    Write-Host "  Creating sample project folder and files..." -ForegroundColor Gray
+    
+    $project1FolderPath = Join-Path $env:TEMP "AxiomPhoenix_Projects\PROJ-001_Example_Client"
+    if (-not (Test-Path $project1FolderPath)) {
+        New-Item -ItemType Directory -Path $project1FolderPath -Force | Out-Null
+    }
+    Set-Content -Path (Join-Path $project1FolderPath "Client_Agreement_2023.pdf") -Value "Dummy PDF Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Project_Request_Form_v2.docx") -Value "Dummy DOCX Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "T2020_Report_Final.xlsx") -Value "Dummy XLSX Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Meeting_Notes_2023-10-26.txt") -Value "Dummy TXT Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Project_Plan.md") -Value "Dummy MD Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Audit_Report.xml") -Value "Dummy XML Content" -Force | Out-Null
+
+
+    $sampleProject = [PmcProject]::new("PROJ-001", "Example Client Project")
+    $sampleProject.ID1 = "C101-ABC-XYZ"
+    $sampleProject.ID2 = "CASE-2023-A-001"
+    $sampleProject.Description = "This is a comprehensive sample project for the Example Client, involving software development lifecycle, rigorous audit compliance, and ongoing client communication. The project spans multiple fiscal periods and requires meticulous documentation and reporting."
+    $sampleProject.AssignedDate = (Get-Date).AddDays(-30)
+    $sampleProject.BFDate = (Get-Date).AddDays(15) # Due Date / Bring-Forward Date
+    $sampleProject.Owner = "John Doe"
+    $sampleProject.SetMetadata("ClientID", "BN-54321-ALPHA")
+    $sampleProject.SetMetadata("Periods", @("P1-optional: 2022-01-01 to 2022-12-31", "P2-optional: 2023-01-01 to 2023-06-30", "P3-optional: 2023-07-01 to 2023-12-31", "P4-optional: 2024-01-01 to 2024-06-30"))
+    $sampleProject.SetMetadata("AuditorName", "Jane Smith (Lead)")
+    $sampleProject.SetMetadata("AuditorPhone", "555-123-4567 Ext. 89")
+    $sampleProject.ProjectFolderPath = $project1FolderPath
+    $sampleProject.CaaFileName = "Client_Agreement_2023.pdf"
+    $sampleProject.RequestFileName = "Project_Request_Form_v2.docx"
+    $sampleProject.T2020FileName = "T2020_Report_Final.xlsx"
+    $dataManager.AddProject($sampleProject)
+
+    $project2FolderPath = Join-Path $env:TEMP "AxiomPhoenix_Projects\PROJ-002_New_Product"
+    if (-not (Test-Path $project2FolderPath)) {
+        New-Item -ItemType Directory -Path $project2FolderPath -Force | Out-Null
+    }
+    Set-Content -Path (Join-Path $project2FolderPath "Product_Roadmap_v1.md") -Value "Dummy MD Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project2FolderPath "Marketing_Plan.pdf") -Value "Dummy PDF Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project2FolderPath "Budget_Forecast.xlsx") -Value "Dummy XLSX Content" -Force | Out-Null
+
+
+    $sampleProject2 = [PmcProject]::new("PROJ-002", "New Product Initiative")
+    $sampleProject2.ID1 = "NPI-XYZ-789"
+    $sampleProject2.ID2 = "NPI-2024-B-002"
+    $sampleProject2.Description = "Developing a new product from concept to launch, focusing on market research, MVP development, and initial user testing. This project aims to capture a new market segment."
+    $sampleProject2.AssignedDate = (Get-Date).AddDays(-15)
+    $sampleProject2.BFDate = (Get-Date).AddDays(30)
+    $sampleProject2.Owner = "Jane Doe"
+    $sampleProject2.SetMetadata("ClientID", "BN-98765-BETA")
+    $sampleProject2.SetMetadata("Periods", @("Phase 1: Concept & Planning", "Phase 2: Development", "Phase 3: Launch"))
+    $sampleProject2.SetMetadata("AuditorName", "External Audit Team")
+    $sampleProject2.SetMetadata("AuditorPhone", "555-987-6543")
+    $sampleProject2.ProjectFolderPath = $project2FolderPath
+    $sampleProject2.CaaFileName = $null # No CAA for this one
+    $sampleProject2.RequestFileName = $null # No specific request form
+    $sampleProject2.T2020FileName = "NPI_Summary_2024.txt"
+    $dataManager.AddProject($sampleProject2)
+
+    $project3FolderPath = Join-Path $env:TEMP "AxiomPhoenix_Projects\PROJ-003_Client_Audit"
+    if (-not (Test-Path $project3FolderPath)) {
+        New-Item -ItemType Directory -Path $project3FolderPath -Force | Out-Null
+    }
+    Set-Content -Path (Join-Path $project3FolderPath "Audit_Checklist.docx") -Value "Dummy CheckList" -Force | Out-Null
+    Set-Content -Path (Join-Path $project3FolderPath "Final_Audit_Report.pdf") -Value "Dummy Final Report" -Force | Out-Null
+
+    $sampleProject3 = [PmcProject]::new("PROJ-003", "Annual Client Audit")
+    $sampleProject3.ID1 = "AUDIT-CLI-A"
+    $sampleProject3.ID2 = "AUDIT-2023-C-003"
+    $sampleProject3.Description = "Conducting the annual financial audit for a key client. This involves reviewing financial statements, internal controls, and ensuring compliance with regulatory requirements."
+    $sampleProject3.AssignedDate = (Get-Date).AddDays(-60)
+    $sampleProject3.BFDate = (Get-Date).AddDays(-10) # Overdue
+    $sampleProject3.Owner = "Mike Ross"
+    $sampleProject3.IsActive = $true # Set to active for demo
+    $sampleProject3.SetMetadata("ClientID", "BN-11223-GAMMA")
+    $sampleProject3.SetMetadata("Periods", @("FY 2023"))
+    $sampleProject3.SetMetadata("AuditorName", "Harvey Specter")
+    $sampleProject3.SetMetadata("AuditorPhone", "555-444-3333")
+    $sampleProject3.ProjectFolderPath = $project3FolderPath
+    $sampleProject3.CaaFileName = $null
+    $sampleProject3.RequestFileName = $null
+    $sampleProject3.T2020FileName = $null
+    $dataManager.AddProject($sampleProject3)
+
+
+    Write-Host "Sample data created!" -ForegroundColor Green
+
+    # NEW: Add Sample Time Entries for Timesheet Demo
+    Write-Host "  Adding sample time entries..." -ForegroundColor Gray
+    $today = [DateTime]::Today
+    $currentWeekMonday = $today
+    while ($currentWeekMonday.DayOfWeek -ne [DayOfWeek]::Monday) {
+        $currentWeekMonday = $currentWeekMonday.AddDays(-1)
+    }
+
+    # Entries for current week (Mon-Fri)
+    $dataManager.AddTimeEntry([TimeEntry]::new("task1_id", "PROJ-001", $currentWeekMonday.AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(4.5); $_.Description = "Reviewed project requirements"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task2_id", "PROJ-001", $currentWeekMonday.AddDays(1).AddHours(10).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.0); $_.Description = "Architecture design, phase 1"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task2_id", "PROJ-001", $currentWeekMonday.AddDays(1).AddHours(14).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(2.5); $_.Description = "Architecture design, phase 2"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task6_id", "PROJ-002", $currentWeekMonday.AddDays(2).AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.0); $_.Description = "Market research for NPI"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task7_id", "PROJ-002", $currentWeekMonday.AddDays(2).AddHours(13).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(4.0); $_.Description = "MVP prototype work"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task9_id", "PROJ-003", $currentWeekMonday.AddDays(3).AddHours(8).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.5); $_.Description = "Initial audit review"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task3_id", "PROJ-001", $currentWeekMonday.AddDays(4).AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(5.0); $_.Description = "Implemented core feature A"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task7_id", "PROJ-002", $currentWeekMonday.AddDays(4).AddHours(14).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.0); $_.Description = "Refined MVP UI"; $_ })
+    
+    # Entries for previous week (for testing date picker navigation)
+    $prevWeekMonday = $currentWeekMonday.AddDays(-7)
+    $dataManager.AddTimeEntry([TimeEntry]::new("task1_id", "PROJ-001", $prevWeekMonday.AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(6.0); $_.Description = "Previous week: Kick-off meeting"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task6_id", "PROJ-002", $prevWeekMonday.AddDays(1).AddHours(10).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(5.0); $_.Description = "Previous week: Initial research"; $_ })
+
+    # Entry on a weekend day
+    $weekendEntry = [TimeEntry]::new("task4_id", "PROJ-001", $currentWeekMonday.AddDays(5).AddHours(9).AddMinutes(0)) # Saturday
+    $weekendEntry.EndTime = $weekendEntry.StartTime.AddHours(2.0)
+    $weekendEntry.Description = "Weekend quick fix"
+    $dataManager.AddTimeEntry($weekendEntry)
+
+    Write-Host "Sample time entries added!" -ForegroundColor Green
+
+    # Launch the application
+    Write-Host "`nStarting Axiom-Phoenix v4.0..." -ForegroundColor Cyan
+    Write-Host "Press Ctrl+P to open command palette, Ctrl+Q to quit" -ForegroundColor Yellow
+    Write-Host "Press 5 from Dashboard to view Project Management Screen" -ForegroundColor Yellow
+    Write-Host "Press 6 from Dashboard to view Timesheet Screen" -ForegroundColor Yellow # New instruction
+    Start-Sleep -Seconds 1
+    
+    $dashboardScreen = [DashboardScreen]::new($container)
+    Write-Host "Initializing Dashboard screen..." -ForegroundColor Yellow
+    $dashboardScreen.Initialize()
+    Write-Host "Dashboard initialized. Starting engine..." -ForegroundColor Yellow
+    Clear-Host
+    Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
+```
+
+---
+
+### 7. **`Screens\ASC.001_DashboardScreen.ps1`** (ENHANCED)
+
+This only needs a minor adjustment for the new menu item's index.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - All Screens (Load After Components)
+# Application screens that extend Screen base class
+# ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ASC.###" to find specific sections.
+# Each section ends with "END_PAGE: ASC.###"
+# ==============================================================================
+
+using namespace System.Collections.Generic
+
+#region Screen Classes
+
+# ==============================================================================
+# CLASS: DashboardScreen (Data-Driven Dashboard with DataGridComponent)
+#
+# INHERITS:
+#   - Screen (ABC.006)
+#
+# DEPENDENCIES:
+#   Services:
+#     - NavigationService (ASE.004)
+#     - FocusManager (ASE.009)
+#     - DataManager (ASE.003)
+#     - ViewDefinitionService (ASE.011)
+#   Components:
+#     - Panel (ACO.011)
+#     - DataGridComponent (ACO.022)
+#     - LabelComponent (ACO.001)
+#
+# PURPOSE:
+#   Data-driven dashboard showing task statistics, recent tasks, and quick actions
+#   using the ViewDefinitionService pattern for consistent formatting.
+# ==============================================================================
+class DashboardScreen : Screen {
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_menuPanel
+    hidden [List[LabelComponent]] $_menuItems
+    hidden [int] $_selectedIndex = 0
+    
+    DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
+
+    [void] Initialize() {
+        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting initialization"
+        if (-not $this.ServiceContainer) { 
+            Write-Log -Level Error -Message "DashboardScreen.Initialize: ServiceContainer is null!"
+            return 
+        }
+
+        # Main panel takes full screen
+        $this._mainPanel = [Panel]::new("MainPanel")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = " Axiom-Phoenix v4.0 - Main Menu "
+        $this._mainPanel.BorderStyle = "Double"
+        $this._mainPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "background" "#0A0A0A"
+        $this.AddChild($this._mainPanel)
+
+        # Menu panel
+        $this._menuPanel = [Panel]::new("MenuPanel")
+        $this._menuPanel.X = [Math]::Floor(($this.Width - 40) / 2)
+        $this._menuPanel.Y = 5
+        $this._menuPanel.Width = 40
+        $this._menuPanel.Height = 14 # Increased height for new menu item (Timesheet)
+        $this._menuPanel.HasBorder = $true
+        $this._menuPanel.BorderStyle = "Double"
+        $this._menuPanel.Title = " Navigation "
+        $this._mainPanel.AddChild($this._menuPanel)
+        
+        # Create menu items as labels
+        $this._menuItems = [List[LabelComponent]]::new()
+        $menuTexts = @(
+            "[1] Dashboard (Current)",
+            "[2] Task List",
+            "[3] Theme Picker", 
+            "[4] Command Palette (Ctrl+P)",
+            "[5] View Project Management Screen",
+            "[6] View Timesheet", # NEW MENU ITEM
+            "",
+            "[Q] Quit"
+        )
+        
+        $yPos = 1
+        foreach ($text in $menuTexts) {
+            $label = [LabelComponent]::new("MenuItem_$yPos")
+            $label.Text = $text
+            $label.X = 2
+            $label.Y = $yPos
+            $label.ForegroundColor = Get-ThemeColor("component.text")
+            $this._menuPanel.AddChild($label)
+            $this._menuItems.Add($label)
+            $yPos++
+        }
+        
+        # Highlight first item
+        if ($this._menuItems.Count -gt 0) {
+            $this._menuItems[0].ForegroundColor = Get-ThemeColor("Primary")
+        }
+        
+        # Instructions
+        $instructions = [LabelComponent]::new("Instructions")
+        $instructions.Text = "Press the number/letter key to select an option"
+        $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
+        $instructions.Y = 21 # Adjusted Y position
+        $instructions.ForegroundColor = Get-ThemeColor("Subtle")
+        $this._mainPanel.AddChild($instructions)
+    }
+
+    [void] OnEnter() {
+        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
+        $this.RequestRedraw()
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Received key - Key: $($keyInfo.Key), KeyChar: '$($keyInfo.KeyChar)', Modifiers: $($keyInfo.Modifiers)"
+        
+        $actionService = $this.ServiceContainer?.GetService("ActionService")
+        if (-not $actionService) { 
+            Write-Log -Level Error -Message "DashboardScreen: ActionService not found!"
+            return $false 
+        }
+        
+        $handled = $false
+        
+        # Check both KeyChar and Key enum for number keys
+        $char = $keyInfo.KeyChar
+        $key = $keyInfo.Key
+        
+        # Direct character check
+        switch ($char) {
+            '1' { $handled = $true }
+            '2' { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+            '3' { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+            '4' { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+            '5' { 
+                $navService = $this.ServiceContainer.GetService("NavigationService")
+                if ($navService) {
+                    $projectListScreen = [ProjectListScreen]::new($this.ServiceContainer)
+                    $projectListScreen.Initialize()
+                    $navService.NavigateTo($projectListScreen)
+                }
+                $handled = $true 
+            }
+            '6' { # NEW: Navigate to TimesheetScreen
+                $navService = $this.ServiceContainer.GetService("NavigationService")
+                if ($navService) {
+                    $timesheetScreen = [TimesheetScreen]::new($this.ServiceContainer)
+                    $timesheetScreen.Initialize()
+                    $navService.NavigateTo($timesheetScreen)
+                }
+                $handled = $true
+            }
+            'q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+            'Q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+        }
+        
+        # If not handled by character, try Key enum (for numpad etc.)
+        if (-not $handled) {
+            switch ($key) {
+                ([ConsoleKey]::D1) { $handled = $true }
+                ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                ([ConsoleKey]::D5) { 
+                    $navService = $this.ServiceContainer.GetService("NavigationService")
+                    if ($navService) {
+                        $projectListScreen = [ProjectListScreen]::new($this.ServiceContainer)
+                        $projectListScreen.Initialize()
+                        $navService.NavigateTo($projectListScreen)
+                    }
+                    $handled = $true 
+                }
+                ([ConsoleKey]::D6) { # NEW: Numpad 6 for TimesheetScreen
+                    $navService = $this.ServiceContainer.GetService("NavigationService")
+                    if ($navService) {
+                        $timesheetScreen = [TimesheetScreen]::new($this.ServiceContainer)
+                        $timesheetScreen.Initialize()
+                        $navService.NavigateTo($timesheetScreen)
+                    }
+                    $handled = $true
+                }
+                ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+            }
+        }
+        
+        # Arrow key navigation (update logic to account for new menu item)
+        switch ($key) {
+            ([ConsoleKey]::UpArrow) {
+                $targetIndex = $this._selectedIndex
+                do {
+                    $targetIndex = if ($targetIndex -gt 0) { $targetIndex - 1 } else { $this._menuItems.Count - 1 }
+                } while ($targetIndex -ne $this._selectedIndex -and [string]::IsNullOrWhiteSpace($this._menuItems[$targetIndex].Text))
+
+                if ($targetIndex -ne $this._selectedIndex) {
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("component.text")
+                    $this._selectedIndex = $targetIndex
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("Primary")
+                    $this.RequestRedraw()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                $targetIndex = $this._selectedIndex
+                do {
+                    $targetIndex = if ($targetIndex -lt $this._menuItems.Count - 1) { $targetIndex + 1 } else { 0 }
+                } while ($targetIndex -ne $this._selectedIndex -and [string]::IsNullOrWhiteSpace($this._menuItems[$targetIndex].Text))
+
+                if ($targetIndex -ne $this._selectedIndex) {
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("component.text")
+                    $this._selectedIndex = $targetIndex
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("Primary")
+                    $this.RequestRedraw()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                # Execute selected item
+                # IMPORTANT: Update indices to match `menuTexts` order after adding new item
+                switch ($this._selectedIndex) {
+                    0 { $handled = $true } # Already on dashboard
+                    1 { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                    2 { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+                    3 { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                    4 { # Project Management Screen index
+                        $navService = $this.ServiceContainer.GetService("NavigationService")
+                        if ($navService) {
+                            $projectListScreen = [ProjectListScreen]::new($this.ServiceContainer)
+                            $projectListScreen.Initialize()
+                            $navService.NavigateTo($projectListScreen)
+                        }
+                        $handled = $true 
+                    }
+                    5 { # NEW: Timesheet Screen index
+                        $navService = $this.ServiceContainer.GetService("NavigationService")
+                        if ($navService) {
+                            $timesheetScreen = [TimesheetScreen]::new($this.ServiceContainer)
+                            $timesheetScreen.Initialize()
+                            $navService.NavigateTo($timesheetScreen)
+                        }
+                        $handled = $true
+                    }
+                    7 { $actionService.ExecuteAction("app.exit", @{}); $handled = $true } # Quit index
+                }
+            }
+        }
+        
+        return $handled
+    }
+}
+
+#endregion
+#<!-- END_PAGE: ASC.001 -->
+```

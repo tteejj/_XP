@@ -1,0 +1,1603 @@
+You are absolutely correct. My profound apologies. I am genuinely sorry for repeatedly falling into that loop and failing to provide the level of integrated, working solution you expect. This is a critical failure on my part to learn from previous interactions.
+
+My understanding now is that the problem isn't just "adding the code" but ensuring it **integrates seamlessly** with the existing Axiom-Phoenix framework's service-oriented architecture, dependency injection, UI lifecycle, and focus management, as evidenced by `All.txt`.
+
+I will now provide the **full and complete code** for the `FileSystemService`, `ClipboardService`, and `FileExplorerScreen`, with explicit attention to how they interact with the existing framework components and services.
+
+---
+
+### **FULL AND COMPLETE DOCUMENT: Axiom-Phoenix File System and Clipboard Integration**
+
+This document outlines the implementation of the `FileSystemService`, `ClipboardService`, and `FileExplorerScreen`, ensuring their proper integration into the Axiom-Phoenix framework.
+
+---
+
+### 1. **`Services\ASE.014_FileSystemService.ps1`** (NEW FILE)
+
+This service will encapsulate all direct interactions with the operating system's file system, providing a clean, testable, and centralized API for file operations (listing, creating, deleting, copying, moving, reading, writing).
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - FileSystemService
+# Centralizes all interactions with the file system.
+# ==============================================================================
+
+using namespace System.IO # For DirectoryInfo, FileInfo, Path, FileAttributes
+
+class FileSystemService {
+    [object]$Logger # Dependency injected
+    
+    FileSystemService([object]$logger) {
+        $this.Logger = $logger
+        Write-Log -Level Debug -Message "FileSystemService: Initialized."
+    }
+
+    # Lists items in a directory
+    # Returns an array of FileSystemInfo objects (DirectoryInfo or FileInfo)
+    [System.IO.FileSystemInfo[]] GetDirectoryItems([string]$path, [bool]$showHidden = $false, [string]$filter = "*") {
+        if ([string]::IsNullOrEmpty($path) -or -not (Test-Path $path -PathType Container)) {
+            $this.Logger.Log("Path '$path' is invalid or not a container. Returning empty array.", "Warning")
+            return @()
+        }
+
+        try {
+            $params = @{
+                Path = $path
+                ErrorAction = 'SilentlyContinue'
+            }
+            if ($showHidden) {
+                $params.Force = $true # Includes hidden/system files
+            }
+            if ($filter -ne "*") {
+                $params.Filter = $filter
+            }
+
+            # Get directories first, then files, for natural sorting in explorer
+            $directories = Get-ChildItem @params | Where-Object { $_.PSIsContainer }
+            $files = Get-ChildItem @params | Where-Object { -not $_.PSIsContainer }
+
+            # Sort consistently by name
+            $directories = $directories | Sort-Object Name
+            $files = $files | Sort-Object Name
+
+            return ($directories + $files)
+        } catch {
+            $this.Logger.LogException($_.Exception, "Failed to list directory contents for '$path'.")
+            return @()
+        }
+    }
+
+    # Reads the content of a text file
+    [string] ReadFileContent([string]$filePath) {
+        if ([string]::IsNullOrEmpty($filePath) -or -not (Test-Path $filePath -PathType Leaf)) {
+            throw [System.ArgumentException]::new("File path '$filePath' is invalid or not a file.", "filePath")
+        }
+        try {
+            return (Get-Content -Path $filePath -Raw -Encoding UTF8)
+        } catch {
+            $this.Logger.LogException($_.Exception, "Failed to read file content for '$filePath'.")
+            throw
+        }
+    }
+
+    # Writes content to a text file (overwrites if exists)
+    [void] WriteFileContent([string]$filePath, [string]$content) {
+        if ([string]::IsNullOrEmpty($filePath)) {
+            throw [System.ArgumentException]::new("File path cannot be null or empty.", "filePath")
+        }
+        try {
+            (Set-Content -Path $filePath -Value $content -Encoding UTF8 -Force)
+            $this.Logger.Log("Wrote content to file: '$filePath'.", "Debug")
+        } catch {
+            $this.Logger.LogException($_.Exception, "Failed to write file content to '$filePath'.")
+            throw
+        }
+    }
+
+    # Creates a new directory
+    [System.IO.DirectoryInfo] CreateDirectory([string]$path) {
+        if ([string]::IsNullOrEmpty($path)) {
+            throw [System.ArgumentException]::new("Path cannot be null or empty.", "path")
+        }
+        try {
+            $newDir = New-Item -ItemType Directory -Path $path -Force -ErrorAction Stop
+            $this.Logger.Log("Created directory: '$path'.", "Info")
+            return $newDir
+        } catch {
+            $this.Logger.LogException($_.Exception, "Failed to create directory '$path'.")
+            throw
+        }
+    }
+
+    # Deletes a file or directory
+    [void] DeleteItem([string]$path, [bool]$recurse = $false) {
+        if ([string]::IsNullOrEmpty($path) -or -not (Test-Path $path)) {
+            throw [System.ArgumentException]::new("Path '$path' does not exist.", "path")
+        }
+        try {
+            $params = @{
+                Path = $path
+                Force = $true
+                ErrorAction = 'Stop'
+            }
+            if ($recurse -or (Test-Path $path -PathType Container)) { # Recurse if explicitly asked or if it's a directory
+                $params.Recurse = $true
+            }
+            Remove-Item @params
+            $this.Logger.Log("Deleted item: '$path'.", "Info")
+        } catch {
+            $this.Logger.LogException($_.Exception, "Failed to delete item '$path'.")
+            throw
+        }
+    }
+
+    # Copies a file or directory
+    [void] CopyItem([string]$sourcePath, [string]$destinationPath, [bool]$recurse = $false) {
+        if ([string]::IsNullOrEmpty($sourcePath) -or -not (Test-Path $sourcePath)) {
+            throw [System.ArgumentException]::new("Source path '$sourcePath' does not exist.", "sourcePath")
+        }
+        if ([string]::IsNullOrEmpty($destinationPath)) {
+            throw [System.ArgumentException]::new("Destination path cannot be null or empty.", "destinationPath")
+        }
+        try {
+            $params = @{
+                Path = $sourcePath
+                Destination = $destinationPath
+                Force = $true
+                ErrorAction = 'Stop'
+            }
+            if ($recurse -or (Test-Path $sourcePath -PathType Container)) {
+                $params.Recurse = $true
+            }
+            Copy-Item @params
+            $this.Logger.Log("Copied item from '$sourcePath' to '$destinationPath'.", "Info")
+        } catch {
+            $this.Logger.LogException($_.Exception, "Failed to copy item from '$sourcePath' to '$destinationPath'.")
+            throw
+        }
+    }
+
+    # Moves a file or directory
+    [void] MoveItem([string]$sourcePath, [string]$destinationPath) {
+        if ([string]::IsNullOrEmpty($sourcePath) -or -not (Test-Path $sourcePath)) {
+            throw [System.ArgumentException]::new("Source path '$sourcePath' does not exist.", "sourcePath")
+        }
+        if ([string]::IsNullOrEmpty($destinationPath)) {
+            throw [System.ArgumentException]::new("Destination path cannot be null or empty.", "destinationPath")
+        }
+        try {
+            Move-Item -Path $sourcePath -Destination $destinationPath -Force -ErrorAction Stop
+            $this.Logger.Log("Moved item from '$sourcePath' to '$destinationPath'.", "Info")
+        } catch {
+            $this.Logger.LogException($_.Exception, "Failed to move item from '$sourcePath' to '$destinationPath'.")
+            throw
+        }
+    }
+    
+    # Cleans up the service (no-op for stateless services, but good practice)
+    [void] Cleanup() {
+        Write-Log -Level Debug -Message "FileSystemService: Cleanup complete."
+    }
+}
+```
+
+---
+
+### 2. **`Services\ASE.015_ClipboardService.ps1`** (NEW FILE)
+
+This service manages an internal application clipboard specifically for file paths, crucial for copy/cut/paste operations within our TUI file explorer.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - ClipboardService
+# Manages an internal application-specific clipboard for file paths.
+# ==============================================================================
+
+using namespace System.Collections.Generic
+
+class ClipboardService {
+    [string[]]$Items = @() # List of full paths
+    [string]$Mode = "Copy" # "Copy" or "Cut"
+    
+    ClipboardService() {
+        Write-Log -Level Debug -Message "ClipboardService: Initialized."
+    }
+
+    # Sets content on the clipboard
+    [void] Set([string[]]$paths, [string]$mode = "Copy") {
+        if ($null -eq $paths) { $paths = @() }
+        
+        $this.Items = $paths | Select-Object -Unique # Ensure unique paths
+        
+        if ($mode -ne "Copy" -and $mode -ne "Cut") {
+            $this.Mode = "Copy" # Default to copy for invalid modes
+            Write-Log -Level Warning -Message "ClipboardService: Invalid mode specified '$mode'. Defaulting to 'Copy'."
+        } else {
+            $this.Mode = $mode
+        }
+        
+        if ($this.Items.Count -gt 0) {
+            Write-Log -Level Debug -Message "ClipboardService: Set $($this.Items.Count) items to clipboard in '$($this.Mode)' mode."
+        } else {
+            Write-Log -Level Debug -Message "ClipboardService: Cleared clipboard."
+        }
+    }
+
+    # Gets content from the clipboard
+    [string[]] Get() {
+        return $this.Items
+    }
+
+    # Clears the clipboard
+    [void] Clear() {
+        $this.Items = @()
+        $this.Mode = "Copy"
+        Write-Log -Level Debug -Message "ClipboardService: Clipboard cleared."
+    }
+
+    # Checks if clipboard has content
+    [bool] HasContent() {
+        return $this.Items.Count -gt 0
+    }
+
+    # Cleans up the service (no-op for stateless services, but good practice)
+    [void] Cleanup() {
+        $this.Clear()
+        Write-Log -Level Debug -Message "ClipboardService: Cleanup complete."
+    }
+}
+```
+
+---
+
+### 3. **`Screens\ASC.011_FileExplorerScreen.ps1`** (NEW FILE)
+
+This will be a full-fledged TUI file explorer application, leveraging the new `FileSystemService` and `ClipboardService`. It handles UI drawing, user input, and orchestrates file operations via the new services.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - File Explorer Screen
+# A full-featured TUI file browser with two panes and basic file operations.
+# ==============================================================================
+
+using namespace System.Collections.Generic
+using namespace System.IO # For DirectoryInfo, FileInfo
+
+class FileExplorerScreen : Screen {
+    #region UI Components
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_leftPanel
+    hidden [Panel] $_rightPanel
+    hidden [ListBox] $_leftFileList
+    hidden [ListBox] $_rightFileList
+    hidden [LabelComponent] $_leftPathLabel
+    hidden [LabelComponent] $_rightPathLabel
+    hidden [LabelComponent] $_statusBarText
+    hidden [LabelComponent] $_functionBarText
+    #endregion
+
+    #region State & Services
+    hidden [string] $_leftPath
+    hidden [string] $_rightPath
+    hidden [bool] $_leftPanelActive = $true # True if left panel is focused
+    hidden [System.IO.FileSystemInfo[]] $_leftItems = @()
+    hidden [System.IO.FileSystemInfo[]] $_rightItems = @()
+    
+    hidden [FileSystemService] $_fileSystemService # Injected
+    hidden [ClipboardService] $_clipboardService # Injected
+    hidden [DialogManager] $_dialogManager # Injected
+    hidden [FocusManager] $_focusManager # Injected
+    hidden [NavigationService] $_navService # Injected
+    hidden [ActionService] $_actionService # Injected
+
+    hidden [hashtable] $_fileTypeIcons = @{ # Keep consistent icons
+        "folder" = "📁"
+        "folderup" = "📂" # For ".." entry
+        ".txt" = "📄"
+        ".md" = "📝"
+        ".ps1" = "💻" # Powershell script icon
+        ".json" = "📦"
+        ".xml" = "📋"
+        ".xlsx" = "📊"
+        ".docx" = "📘"
+        ".pdf" = "📕"
+        ".exe" = "⚡"
+        ".dll" = "⚙️"
+        ".zip" = "🗜️"
+        "default" = "❓" # Unknown file type
+    }
+    #endregion
+
+    FileExplorerScreen([object]$serviceContainer) : base("FileExplorerScreen", $serviceContainer) {
+        $this._fileSystemService = $serviceContainer.GetService("FileSystemService")
+        $this._clipboardService = $serviceContainer.GetService("ClipboardService")
+        $this._dialogManager = $serviceContainer.GetService("DialogManager")
+        $this._focusManager = $serviceContainer.GetService("FocusManager")
+        $this._navService = $serviceContainer.GetService("NavigationService")
+        $this._actionService = $serviceContainer.GetService("ActionService")
+        $this.Title = " File Explorer "
+    }
+
+    [void] Initialize() {
+        # Main panel
+        $this._mainPanel = [Panel]::new("FileCommanderMain")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.HasBorder = $false # Main panel is borderless, sub-panels have borders
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Background"
+        $this.AddChild($this._mainPanel)
+
+        # Calculate panel dimensions
+        $halfWidth = [Math]::Floor($this.Width / 2)
+        $panelHeight = $this.Height - 4  # Room for status and function bar
+
+        # Left file panel
+        $this._leftPanel = [Panel]::new("LeftPanel")
+        $this._leftPanel.X = 0
+        $this._leftPanel.Y = 0
+        $this._leftPanel.Width = $halfWidth
+        $this._leftPanel.Height = $panelHeight
+        $this._leftPanel.HasBorder = $true
+        $this._leftPanel.BorderStyle = "Single"
+        $this._leftPanel.BorderColor = Get-ThemeColor "border.active" # Default active
+        $this._mainPanel.AddChild($this._leftPanel)
+
+        # Left path label
+        $this._leftPathLabel = [LabelComponent]::new("LeftPath")
+        $this._leftPathLabel.X = 1
+        $this._leftPathLabel.Y = 0
+        $this._leftPathLabel.Width = $halfWidth - 2
+        $this._leftPathLabel.Height = 1
+        $this._leftPathLabel.ForegroundColor = Get-ThemeColor "path"
+        $this._leftPathLabel.BackgroundColor = Get-ThemeColor "panel.header"
+        $this._leftPanel.AddChild($this._leftPathLabel)
+
+        # Left file list
+        $this._leftFileList = [ListBox]::new("LeftFiles")
+        $this._leftFileList.X = 1
+        $this._leftFileList.Y = 1
+        $this._leftFileList.Width = $halfWidth - 2
+        $this._leftFileList.Height = $panelHeight - 2
+        $this._leftFileList.HasBorder = $false # ListBox draws content, parent panel provides border
+        $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
+        $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
+        $this._leftFileList.ItemForegroundColor = Get-ThemeColor "list.item.fg"
+        $this._leftFileList.IsFocusable = $true # Make listbox focusable for navigation
+        $currentScreenRef = $this
+        $this._leftFileList.SelectedIndexChanged = {
+            param($sender, $index)
+            if ($currentScreenRef._leftPanelActive -and $index -ge 0 -and $index -lt $currentScreenRef._leftItems.Count) {
+                $currentScreenRef._UpdateStatusBar($currentScreenRef._leftItems[$index])
+            }
+        }.GetNewClosure()
+        $this._leftPanel.AddChild($this._leftFileList)
+
+        # Right file panel
+        $this._rightPanel = [Panel]::new("RightPanel")
+        $this._rightPanel.X = $halfWidth
+        $this._rightPanel.Y = 0
+        $this._rightPanel.Width = $this.Width - $halfWidth
+        $this._rightPanel.Height = $panelHeight
+        $this._rightPanel.HasBorder = $true
+        $this._rightPanel.BorderStyle = "Single"
+        $this._rightPanel.BorderColor = Get-ThemeColor "border.inactive" # Default inactive
+        $this._mainPanel.AddChild($this._rightPanel)
+
+        # Right path label
+        $this._rightPathLabel = [LabelComponent]::new("RightPath")
+        $this._rightPathLabel.X = 1
+        $this._rightPathLabel.Y = 0
+        $this._rightPathLabel.Width = $this._rightPanel.Width - 2
+        $this._rightPathLabel.Height = 1
+        $this._rightPathLabel.ForegroundColor = Get-ThemeColor "path"
+        $this._rightPathLabel.BackgroundColor = Get-ThemeColor "panel.header"
+        $this._rightPanel.AddChild($this._rightPathLabel)
+
+        # Right file list
+        $this._rightFileList = [ListBox]::new("RightFiles")
+        $this._rightFileList.X = 1
+        $this._rightFileList.Y = 1
+        $this._rightFileList.Width = $this._rightPanel.Width - 2
+        $this._rightFileList.Height = $panelHeight - 2
+        $this._rightFileList.HasBorder = $false
+        $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
+        $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
+        $this._rightFileList.ItemForegroundColor = Get-ThemeColor "list.item.fg"
+        $this._rightFileList.IsFocusable = $true
+        $this._rightFileList.SelectedIndexChanged = {
+            param($sender, $index)
+            if (-not $currentScreenRef._leftPanelActive -and $index -ge 0 -and $index -lt $currentScreenRef._rightItems.Count) {
+                $currentScreenRef._UpdateStatusBar($currentScreenRef._rightItems[$index])
+            }
+        }.GetNewClosure()
+        $this._rightPanel.AddChild($this._rightFileList)
+
+        # Status bar (bottom-most row for messages)
+        $statusBarY = $this.Height - 2
+        $this._statusBarText = [LabelComponent]::new("StatusBar")
+        $this._statusBarText.X = 0
+        $this._statusBarText.Y = $statusBarY
+        $this._statusBarText.Width = $this.Width
+        $this._statusBarText.Height = 1
+        $this._statusBarText.BackgroundColor = Get-ThemeColor "statusbar.bg"
+        $this._statusBarText.ForegroundColor = Get-ThemeColor "statusbar.text"
+        $this._mainPanel.AddChild($this._statusBarText)
+
+        # Function key bar (above status bar, for hotkey hints)
+        $functionBarY = $this.Height - 3 # Adjusted Y
+        $this._functionBarText = [LabelComponent]::new("FunctionBar")
+        $this._functionBarText.X = 0
+        $this._functionBarText.Y = $functionBarY
+        $this._functionBarText.Width = $this.Width
+        $this._functionBarText.Height = 1
+        $this._functionBarText.BackgroundColor = Get-ThemeColor "function.bg"
+        $this._functionBarText.ForegroundColor = Get-ThemeColor "function.text"
+        $this._mainPanel.AddChild($this._functionBarText)
+
+        $this._UpdateFunctionBar() # Populate initial function bar text
+    }
+
+    [void] OnEnter() {
+        Write-Log -Level Debug -Message "FileExplorerScreen.OnEnter: Activating screen."
+        
+        # Set initial paths if not set, otherwise refresh existing
+        if ([string]::IsNullOrEmpty($this._leftPath)) {
+            $this._leftPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+        }
+        if ([string]::IsNullOrEmpty($this._rightPath)) {
+            $this._rightPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+        }
+
+        $this.RefreshPanels() # Initial load of directory contents
+
+        # Set initial focus to the left listbox
+        if ($this._focusManager) {
+            Write-Log -Level Debug -Message "FileExplorerScreen.OnEnter: Setting initial focus to LeftFileList."
+            $this._focusManager.SetFocus($this._leftFileList)
+        }
+        $this._SetStatusBarMessage("Ready.")
+        $this.RequestRedraw()
+        ([Screen]$this).OnEnter() # Call base OnEnter
+    }
+
+    [void] OnExit() {
+        Write-Log -Level Debug -Message "FileExplorerScreen.OnExit: Deactivating screen."
+        $this._leftFileList.ClearItems()
+        $this._rightFileList.ClearItems()
+        $this._leftItems = @()
+        $this._rightItems = @()
+        $this._clipboardService.Clear() # Clear clipboard on exit to prevent stale operations
+        $this._SetStatusBarMessage("")
+        $this._UpdateFunctionBar() # Reset function bar text
+        ([Screen]$this).OnExit() # Call base OnExit
+    }
+
+    hidden [void] RefreshPanels() {
+        $this.LoadDirectory($this._leftPath, $true)
+        $this.LoadDirectory($this._rightPath, $false)
+        $this.UpdatePathLabels()
+        $this._UpdateStatusBar($this._GetSelectedItem()) # Update status bar with currently selected item
+        $this.RequestRedraw()
+    }
+
+    hidden [void] LoadDirectory([string]$path, [bool]$isLeftPanel) {
+        if ($null -eq $this._fileSystemService) {
+            $this._SetStatusBarMessage("Error: FileSystemService not available.", "Error")
+            return
+        }
+
+        try {
+            $items = $this._fileSystemService.GetDirectoryItems($path)
+
+            # Add ".." for parent directory if not at root
+            # Using System.IO.DirectoryInfo constructor directly for robustness with roots
+            $currentDirInfo = [System.IO.DirectoryInfo]::new($path)
+            $parentDir = $currentDirInfo.Parent 
+            if ($parentDir -and $parentDir.FullName -ne $path) { # Ensure it's not the root itself (e.g., C:\)
+                $parentItem = [PSCustomObject]@{
+                    PSIsContainer = $true # Identify as directory for logic
+                    Name = ".."
+                    FullName = $parentDir.FullName
+                    Length = 0
+                    LastWriteTime = $null
+                    Extension = ""
+                    Attributes = [System.IO.FileAttributes]::Directory
+                }
+                $items = @($parentItem) + $items
+            }
+
+            # Filter out current directory entry if it somehow appears (e.g., '.' in some systems)
+            $items = $items | Where-Object { $_.Name -ne "." }
+
+            # Update the appropriate panel
+            if ($isLeftPanel) {
+                $this._leftItems = $items
+                $this._leftFileList.ClearItems()
+                foreach ($item in $items) {
+                    $this._leftFileList.AddItem($this._FormatFileItemForDisplay($item))
+                }
+                if ($items.Count -gt 0) { $this._leftFileList.SelectedIndex = 0 } else { $this._leftFileList.SelectedIndex = -1 }
+            } else {
+                $this._rightItems = $items
+                $this._rightFileList.ClearItems()
+                foreach ($item in $items) {
+                    $this._rightFileList.AddItem($this._FormatFileItemForDisplay($item))
+                }
+                if ($items.Count -gt 0) { $this._rightFileList.SelectedIndex = 0 } else { $this._rightFileList.SelectedIndex = -1 }
+            }
+        } catch {
+            $this._SetStatusBarMessage("Error loading '$path': $($_.Exception.Message)", "Error")
+            Write-Log -Level Error -Message "FileExplorerScreen: Failed to load directory '$path': $($_.Exception.Message)"
+        }
+    }
+
+    hidden [string] _FormatFileItemForDisplay([System.IO.FileSystemInfo]$item) {
+        $icon = $this._fileTypeIcons["default"]
+        $name = $item.Name
+        $size = ""
+        $date = ""
+
+        if ($item.PSIsContainer) {
+            $icon = $this._fileTypeIcons["folder"]
+            if ($item.Name -eq "..") { $icon = $this._fileTypeIcons["folderup"] }
+            $size = "<DIR>".PadLeft(10)
+        } else {
+            $ext = $item.Extension.ToLower()
+            if ($this._fileTypeIcons.ContainsKey($ext)) { $icon = $this._fileTypeIcons[$ext] }
+            $size = $this._FormatFileSize($item.Length)
+        }
+
+        if ($item.LastWriteTime) {
+            $date = $item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
+        }
+
+        # Calculate space for item name within the listbox
+        $maxNameLength = $this._leftFileList.Width - 2 - 1 - 1 - 10 - 1 - 16 # Icon, space, name, space, size, space, date
+        $maxNameLength = [Math]::Max(5, $maxNameLength) # Minimum length for name to avoid negative values
+
+        if ($name.Length -gt $maxNameLength) {
+            $name = $name.Substring(0, $maxNameLength - 3) + "..."
+        }
+        $namePadded = $name.PadRight($maxNameLength)
+
+        return "$icon $namePadded $size $date"
+    }
+
+    hidden [string] _FormatFileSize([long]$bytes) {
+        if ($bytes -lt 1KB) { return "$bytes B".PadLeft(10) }
+        if ($bytes -lt 1MB) { return "$([Math]::Round($bytes/1KB, 2)) KB".PadLeft(10) }
+        if ($bytes -lt 1GB) { return "$([Math]::Round($bytes/1MB, 2)) MB".PadLeft(10) }
+        return "$([Math]::Round($bytes/1GB, 2)) GB".PadLeft(10)
+    }
+
+    hidden [void] UpdatePathLabels() {
+        $leftPanelPathWidth = $this._leftPanel.Width - 4
+        $rightPanelPathWidth = $this._rightPanel.Width - 4
+
+        $leftDisplay = $this._leftPath
+        if ($leftDisplay.Length -gt $leftPanelPathWidth) {
+            $leftDisplay = "..." + $leftDisplay.Substring($leftDisplay.Length - $leftPanelPathWidth + 3)
+        }
+        $this._leftPathLabel.Text = " $leftDisplay "
+
+        $rightDisplay = $this._rightPath
+        if ($rightDisplay.Length -gt $rightPanelPathWidth) {
+            $rightDisplay = "..." + $rightDisplay.Substring($rightDisplay.Length - $rightPanelPathWidth + 3)
+        }
+        $this._rightPathLabel.Text = " $rightDisplay "
+        $this.RequestRedraw()
+    }
+
+    hidden [void] _UpdateStatusBar([System.IO.FileSystemInfo]$selectedItem = $null) {
+        $statusText = "Ready."
+        $itemCount = 0
+        $totalSize = 0
+
+        if ($this._leftPanelActive) {
+            $itemCount = $this._leftItems.Count
+            $totalSize = ($this._leftItems | Where-Object {-not $_.PSIsContainer} | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+        } else {
+            $itemCount = $this._rightItems.Count
+            $totalSize = ($this._rightItems | Where-Object {-not $_.PSIsContainer} | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+        }
+        
+        $itemCountText = "Items: $($itemCount) | Total Size: $($this._FormatFileSize($totalSize))"
+
+        if ($selectedItem) {
+            $name = $selectedItem.Name
+            $type = if ($selectedItem.PSIsContainer) { "Directory" } else { "File" }
+            $size = ""
+            if (-not $selectedItem.PSIsContainer) { $size = " - Size: $($this._FormatFileSize($selectedItem.Length))" }
+            $statusText = "$type: $name$size"
+        }
+        
+        $clipboardStatus = ""
+        if ($this._clipboardService.HasContent()) {
+            $clipboardStatus = " | Clipboard: $($this._clipboardService.Mode) $($this._clipboardService.Get().Count) item(s)"
+        }
+
+        $displayMessage = "$statusText | $itemCountText$clipboardStatus"
+        $this._SetStatusBarMessage($displayMessage)
+        $this.RequestRedraw()
+    }
+
+    hidden [void] _SetStatusBarMessage([string]$message, [string]$level = "Info") {
+        $fgColor = switch ($level) {
+            "Error" { Get-ThemeColor "Error" }
+            "Warning" { Get-ThemeColor "Warning" }
+            "Success" { Get-ThemeColor "Success" }
+            default { Get-ThemeColor "statusbar.text" }
+        }
+        # Pad message to fill the bar, ensuring colors apply to entire area
+        $paddedMessage = $message.PadRight($this._statusBarText.Width) 
+        $this._statusBarText.Text = $paddedMessage
+        $this._statusBarText.ForegroundColor = $fgColor
+        $this._statusBarText.BackgroundColor = Get-ThemeColor "statusbar.bg"
+        $this.RequestRedraw()
+    }
+
+    hidden [void] _UpdateFunctionBar() {
+        # Function keys based on common file manager conventions
+        $functions = @(
+            "F1 Help", "F2 MkDir", "F3 View", "F4 Edit", 
+            "F5 Copy", "F6 Move", "F7 Paste", "F8 Delete", 
+            "F9 Menu", "F10 Quit"
+        )
+        $text = ""
+        foreach ($func in $functions) {
+            $text += "$func | "
+        }
+        $this._functionBarText.Text = $text.TrimEnd(" | ").PadRight($this._functionBarText.Width)
+        $this.RequestRedraw()
+    }
+
+    hidden [System.IO.FileSystemInfo] _GetSelectedItem() {
+        if ($this._leftPanelActive) {
+            $selectedIndex = $this._leftFileList.SelectedIndex
+            if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._leftItems.Count) {
+                return $this._leftItems[$selectedIndex]
+            }
+        } else {
+            $selectedIndex = $this._rightFileList.SelectedIndex
+            if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._rightItems.Count) {
+                return $this._rightItems[$selectedIndex]
+            }
+        }
+        return $null
+    }
+    
+    hidden [string] _GetActivePath() {
+        return if ($this._leftPanelActive) { $this._leftPath } else { $this._rightPath }
+    }
+
+    hidden [string] _GetInactivePath() {
+        return if ($this._leftPanelActive) { $this._rightPath } else { $this._leftPath }
+    }
+
+    hidden [void] _SetActivePath([string]$newPath) {
+        if ($this._leftPanelActive) { $this._leftPath = $newPath } else { $this._rightPath = $newPath }
+    }
+
+    hidden [void] _LoadActivePanel() {
+        $this.LoadDirectory($this._GetActivePath(), $this._leftPanelActive)
+        $this.UpdatePathLabels()
+        $this._UpdateStatusBar($this._GetSelectedItem())
+        $this.RequestRedraw()
+    }
+
+    hidden [void] _SwitchPanel() {
+        $this._leftPanelActive = -not $this._leftPanelActive
+        
+        # Update borders to reflect active panel
+        $this._leftPanel.BorderColor = if ($this._leftPanelActive) { Get-ThemeColor "border.active" } else { Get-ThemeColor "border.inactive" }
+        $this._rightPanel.BorderColor = if ($this._leftPanelActive) { Get-ThemeColor "border.inactive" } else { Get-ThemeColor "border.active" }
+        
+        # Set focus to the newly active listbox
+        if ($this._leftPanelActive) {
+            $this._focusManager.SetFocus($this._leftFileList)
+        } else {
+            $this._focusManager.SetFocus($this._rightFileList)
+        }
+        $this.RequestRedraw()
+    }
+
+    hidden [void] _NavigateToDirectory([string]$path) {
+        if ($null -eq $this._fileSystemService) { return }
+        
+        $resolvedPath = $null
+        try {
+            $resolvedPath = (Resolve-Path $path -ErrorAction Stop).Path
+            if (-not (Test-Path $resolvedPath -PathType Container)) {
+                $this._SetStatusBarMessage("Error: Path is not a directory: '$resolvedPath'", "Error")
+                return
+            }
+        } catch {
+            $this._SetStatusBarMessage("Error: Invalid path: '$path' ($($_.Exception.Message))", "Error")
+            return
+        }
+
+        $this._SetActivePath($resolvedPath)
+        $this._LoadActivePanel()
+    }
+
+    hidden [void] _EnterDirectory() {
+        $selectedItem = $this._GetSelectedItem()
+        if ($selectedItem) {
+            if ($selectedItem.PSIsContainer -or $selectedItem.Name -eq "..") {
+                $this._NavigateToDirectory($selectedItem.FullName)
+            } else {
+                # This is a file. In future, open it with NotepadScreen or similar.
+                $this._SetStatusBarMessage("File selected: $($selectedItem.Name). Open action not implemented yet.", "Info")
+                # TODO: Integrate with NotepadScreen/EditorScreen
+            }
+        }
+    }
+
+    hidden [void] _GoToParentDirectory() {
+        $currentPath = $this._GetActivePath()
+        $currentDirInfo = [System.IO.DirectoryInfo]::new($currentPath)
+        $parentDir = $currentDirInfo.Parent
+        if ($parentDir) {
+            $this._NavigateToDirectory($parentDir.FullName)
+        } else {
+            $this._SetStatusBarMessage("Already at the root of the drive.", "Info")
+        }
+    }
+    
+    hidden [void] _CopyMoveItem([bool]$isMove) {
+        $selectedItem = $this._GetSelectedItem()
+        if (-not $selectedItem -or $selectedItem.Name -eq "..") {
+            $this._SetStatusBarMessage("No item selected for copy/move.", "Warning")
+            return
+        }
+        
+        # Clipboard can hold multiple items in the future, for now just one.
+        $this._clipboardService.Set(@($selectedItem.FullName), if ($isMove) { "Cut" } else { "Copy" })
+        $this._SetStatusBarMessage("Marked '$($selectedItem.Name)' for $($this._clipboardService.Mode).")
+    }
+
+    hidden [void] _PasteItems() {
+        if (-not $this._clipboardService.HasContent()) {
+            $this._SetStatusBarMessage("Clipboard is empty.", "Warning")
+            return
+        }
+        if ($null -eq $this._fileSystemService) { return }
+
+        $itemsToPaste = $this._clipboardService.Get()
+        $targetPath = $this._GetActivePath() # Paste into the *active* panel's current directory
+        $operation = $this._clipboardService.Mode
+
+        $currentScreenRef = $this # Capture $this for the confirmation dialog callbacks
+
+        $this._dialogManager.ShowConfirm("Confirm Paste", "Do you want to $($operation) $($itemsToPaste.Count) item(s) to '$targetPath'?", {
+            # OnConfirm handler (inside the callback for ShowConfirm)
+            $successCount = 0
+            $errorCount = 0
+            foreach ($itemPath in $itemsToPaste) {
+                $itemName = [System.IO.Path]::GetFileName($itemPath)
+                $destFullPath = Join-Path $targetPath $itemName
+                try {
+                    if ($operation -eq "Copy") {
+                        $currentScreenRef._fileSystemService.CopyItem($itemPath, $destFullPath, $true) # recurse for folders
+                    } else { # Cut
+                        $currentScreenRef._fileSystemService.MoveItem($itemPath, $destFullPath)
+                    }
+                    $successCount++
+                } catch {
+                    $errorCount++
+                    Write-Log -Level Error -Message "FileExplorerScreen: Failed to $($operation) '$itemName': $($_.Exception.Message)"
+                }
+            }
+            $currentScreenRef._SetStatusBarMessage("$($operation)ed $($successCount) item(s). Errors: $($errorCount).", if($errorCount -eq 0) {"Success"} else {"Error"})
+            $currentScreenRef._clipboardService.Clear() # Clear clipboard after paste
+            $currentScreenRef.RefreshPanels() # Refresh both panels
+        }.GetNewClosure(), {
+            # OnCancel handler
+            $currentScreenRef._SetStatusBarMessage("Paste operation cancelled.", "Info")
+        }.GetNewClosure())
+    }
+
+    hidden [void] _DeleteSelectedItem() {
+        $selectedItem = $this._GetSelectedItem()
+        if (-not $selectedItem -or $selectedItem.Name -eq "..") {
+            $this._SetStatusBarMessage("No item selected for deletion.", "Warning")
+            return
+        }
+        if ($null -eq $this._fileSystemService) { return }
+
+        $itemName = $selectedItem.Name
+        $isContainer = $selectedItem.PSIsContainer
+
+        $currentScreenRef = $this # Capture $this for the confirmation dialog callbacks
+        $this._dialogManager.ShowConfirm("Confirm Delete", "Are you sure you want to delete '$itemName'$((if($isContainer){' and its contents'}else{''}))? This cannot be undone.", {
+            # OnConfirm handler
+            try {
+                $currentScreenRef._fileSystemService.DeleteItem($selectedItem.FullName, $isContainer)
+                $currentScreenRef._SetStatusBarMessage("Deleted '$itemName' successfully.", "Success")
+                $currentScreenRef._LoadActivePanel() # Reload active panel after deletion
+            } catch {
+                $currentScreenRef._SetStatusBarMessage("Failed to delete '$itemName': $($_.Exception.Message)", "Error")
+                Write-Log -Level Error -Message "FileExplorerScreen: Delete failed for '$itemName': $($_.Exception.Message)"
+            }
+        }.GetNewClosure(), {
+            # OnCancel handler
+            $currentScreenRef._SetStatusBarMessage("Delete operation cancelled.", "Info")
+        }.GetNewClosure())
+    }
+
+    hidden [void] _CreateDirectory() {
+        $currentPath = $this._GetActivePath()
+        $currentScreenRef = $this # Capture $this for the input dialog callback
+
+        $this._dialogManager.ShowInput("Create Directory", "Enter new directory name in '$currentPath':", "") | ForEach-Object {
+            param($result) # $result is the string entered by user from the InputDialog
+            if ($result -and -not [string]::IsNullOrWhiteSpace($result)) {
+                try {
+                    $newFullPath = Join-Path $currentPath $result
+                    $currentScreenRef._fileSystemService.CreateDirectory($newFullPath)
+                    $currentScreenRef._SetStatusBarMessage("Created directory '$result'.", "Success")
+                    $currentScreenRef._LoadActivePanel()
+                } catch {
+                    $currentScreenRef._SetStatusBarMessage("Failed to create directory: $($_.Exception.Message)", "Error")
+                }
+            } else {
+                $currentScreenRef._SetStatusBarMessage("Directory creation cancelled.", "Info")
+            }
+        }
+    }
+
+    hidden [void] _ViewFile() {
+        $selectedItem = $this._GetSelectedItem()
+        if (-not $selectedItem -or $selectedItem.PSIsContainer) {
+            $this._SetStatusBarMessage("No file selected to view.", "Warning")
+            return
+        }
+        # TODO: Integrate with NotepadScreen/TextEditorScreen once implemented
+        $this._dialogManager.ShowAlert("View File", "Viewing file: $($selectedItem.Name)`n(Feature coming soon!)")
+        $this._SetStatusBarMessage("View action triggered for $($selectedItem.Name).", "Info")
+    }
+
+    hidden [void] _EditFile() {
+        $selectedItem = $this._GetSelectedItem()
+        if (-not $selectedItem -or $selectedItem.PSIsContainer) {
+            $this._SetStatusBarMessage("No file selected to edit.", "Warning")
+            return
+        }
+        # TODO: Integrate with NotepadScreen/TextEditorScreen once implemented
+        $this._dialogManager.ShowAlert("Edit File", "Editing file: $($selectedItem.Name)`n(Feature coming soon!)")
+        $this._SetStatusBarMessage("Edit action triggered for $($selectedItem.Name).", "Info")
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
+        
+        $handled = $false
+        $focusedComponent = $this._focusManager.FocusedComponent
+
+        # --- Global Explorer Hotkeys ---
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                Write-Log -Level Debug -Message "FileExplorerScreen.HandleInput: ESC pressed, navigating back."
+                if ($this._navService.CanGoBack()) {
+                    $this._navService.GoBack()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::Tab) {
+                $this._SwitchPanel()
+                $handled = $true
+            }
+            ([ConsoleKey]::Enter) {
+                # Only handle Enter if a listbox is focused
+                if ($focusedComponent -eq $this._leftFileList -or $focusedComponent -eq $this._rightFileList) {
+                    $this._EnterDirectory()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::Backspace) {
+                $this._GoToParentDirectory()
+                $handled = $true
+            }
+            ([ConsoleKey]::F2) { # Make Directory
+                $this._CreateDirectory()
+                $handled = $true
+            }
+            ([ConsoleKey]::F3) { # View
+                $this._ViewFile()
+                $handled = $true
+            }
+            ([ConsoleKey]::F4) { # Edit
+                $this._EditFile()
+                $handled = $true
+            }
+            ([ConsoleKey]::F5) { # Copy
+                $this._CopyMoveItem($false)
+                $handled = $true
+            }
+            ([ConsoleKey]::F6) { # Move (Cut & Paste)
+                $this._CopyMoveItem($true)
+                $handled = $true
+            }
+            ([ConsoleKey]::F7) { # Paste
+                $this._PasteItems()
+                $handled = $true
+            }
+            ([ConsoleKey]::F8) { # Delete
+                $this._DeleteSelectedItem()
+                $handled = $true
+            }
+            ([ConsoleKey]::F10) { # Quit
+                Write-Log -Level Debug -Message "FileExplorerScreen.HandleInput: F10 pressed, navigating back."
+                if ($this._navService.CanGoBack()) {
+                    $this._navService.GoBack()
+                } else {
+                    # If this is the root screen, exit app
+                    $this._actionService.ExecuteAction("app.exit")
+                }
+                $handled = $true
+            }
+            ([ConsoleKey]::R) { # R for Refresh (Ctrl+R is common, but simple R for now)
+                if (-not ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) { # Not Ctrl+R
+                    $this._LoadActivePanel()
+                    $this._SetStatusBarMessage("Refreshed active panel.")
+                    $handled = $true
+                }
+            }
+        }
+        
+        if ($handled) { return $true }
+
+        # --- Route to Focused Component (ListBox scrolling) ---
+        if ($focusedComponent) {
+            $handled = $focusedComponent.HandleInput($keyInfo)
+        }
+        
+        return $handled
+    }
+}
+```
+
+---
+
+### 4. **`Start.ps1`** (ENHANCED)
+
+This file needs updates to register the new services and to update the Dashboard menu options.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Application Startup (Generated from Split Structure)
+# This script loads the framework from its organized file structure.
+# ==============================================================================
+
+param(
+    [string]$Theme = "Synthwave",
+    [switch]$Debug
+)
+
+# Set error action preference
+$ErrorActionPreference = 'Stop'
+$VerbosePreference = if ($env:AXIOM_VERBOSE -eq '1') { 'Continue' } else { 'SilentlyContinue' }
+$WarningPreference = $VerbosePreference
+
+try {
+    Write-Host "Loading Axiom-Phoenix v4.0 (Split Architecture)..." -ForegroundColor Cyan
+    
+    $scriptDir = $PSScriptRoot
+    if ([string]::IsNullOrEmpty($scriptDir)) {
+        $scriptDir = Get-Location
+    }
+
+    # Define the correct loading order for the framework directories
+    $loadOrder = @(
+        "Base",
+        "Models", 
+        "Functions",
+        "Components",
+        "Screens",
+        "Services",
+        "Runtime"
+    )
+
+    # Load all framework files in the correct order
+    foreach ($folder in $loadOrder) {
+        $folderPath = Join-Path $scriptDir $folder
+        if (-not (Test-Path $folderPath)) { 
+            Write-Warning "Folder not found: $folder"
+            continue 
+        }
+
+        Write-Host "Loading $folder..." -ForegroundColor Gray
+        $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Sort-Object Name
+        foreach ($file in $files) {
+            Write-Verbose "  - Dot-sourcing $($file.Name)"
+            try {
+                . $file.FullName
+            } catch {
+                Write-Error "Failed to load $($file.Name): $($_.Exception.Message)"
+                throw
+            }
+        }
+    }
+
+    Write-Host "`nFramework loaded successfully!`n" -ForegroundColor Green
+
+    # Service container setup and application startup
+    Write-Host "Initializing services..." -ForegroundColor Cyan
+    $container = [ServiceContainer]::new()
+    
+    # Register core services
+    Write-Host "  • Registering Logger..." -ForegroundColor Gray
+    $container.Register("Logger", [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")))
+    
+    Write-Host "  • Registering EventManager..." -ForegroundColor Gray  
+    $container.Register("EventManager", [EventManager]::new())
+    
+    Write-Host "  • Registering ThemeManager..." -ForegroundColor Gray
+    $container.Register("ThemeManager", [ThemeManager]::new())
+    
+    Write-Host "  • Registering DataManager..." -ForegroundColor Gray
+    $container.Register("DataManager", [DataManager]::new((Join-Path $env:TEMP "axiom-data.json"), $container.GetService("EventManager")))
+    
+    Write-Host "  • Registering ActionService..." -ForegroundColor Gray
+    $container.Register("ActionService", [ActionService]::new($container.GetService("EventManager")))
+    
+    Write-Host "  • Registering KeybindingService..." -ForegroundColor Gray
+    $container.Register("KeybindingService", [KeybindingService]::new($container.GetService("ActionService")))
+    
+    Write-Host "  • Registering NavigationService..." -ForegroundColor Gray
+    $container.Register("NavigationService", [NavigationService]::new($container))
+    
+    Write-Host "  • Registering FocusManager..." -ForegroundColor Gray
+    $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
+    
+    Write-Host "  • Registering DialogManager..." -ForegroundColor Gray
+    $container.Register("DialogManager", [DialogManager]::new($container))
+    
+    Write-Host "  • Registering ViewDefinitionService..." -ForegroundColor Gray
+    $container.Register("ViewDefinitionService", [ViewDefinitionService]::new())
+    
+    Write-Host "  • Registering TimesheetService..." -ForegroundColor Gray
+    $container.Register("TimeSheetService", [TimeSheetService]::new($container.GetService("DataManager")))
+    
+    Write-Host "  • Registering FileSystemService..." -ForegroundColor Gray # NEW SERVICE
+    $container.Register("FileSystemService", [FileSystemService]::new($container.GetService("Logger"))) # NEW SERVICE
+    
+    Write-Host "  • Registering ClipboardService..." -ForegroundColor Gray # NEW SERVICE
+    $container.Register("ClipboardService", [ClipboardService]::new()) # NEW SERVICE
+    
+    Write-Host "Services initialized successfully!" -ForegroundColor Green
+
+    # Initialize global state
+    $global:TuiState.ServiceContainer = $container
+    $global:TuiState.Services = @{
+        Logger = $container.GetService("Logger")
+        EventManager = $container.GetService("EventManager") 
+        ThemeManager = $container.GetService("ThemeManager")
+        DataManager = $container.GetService("DataManager")
+        ActionService = $container.GetService("ActionService")
+        KeybindingService = $container.GetService("KeybindingService")
+        NavigationService = $container.GetService("NavigationService")
+        FocusManager = $container.GetService("FocusManager")
+        DialogManager = $container.GetService("DialogManager")
+        ViewDefinitionService = $container.GetService("ViewDefinitionService")
+        TimeSheetService = $container.GetService("TimeSheetService") 
+        FileSystemService = $container.GetService("FileSystemService") # NEW SERVICE
+        ClipboardService = $container.GetService("ClipboardService") # NEW SERVICE
+    }
+    $global:TuiState.ServiceContainer = $container
+
+    # Apply theme and register default actions
+    $themeManager = $container.GetService("ThemeManager")
+    if ($themeManager -and $Theme) { 
+        $themeManager.LoadTheme($Theme)
+        Write-Host "Theme '$Theme' activated!" -ForegroundColor Magenta 
+    }
+    
+    $actionService = $container.GetService("ActionService")
+    if ($actionService) { 
+        $actionService.RegisterDefaultActions()
+        Write-Host "Default actions registered!" -ForegroundColor Green 
+    }
+
+    # Create sample data
+    Write-Host "Generating sample data..." -ForegroundColor Cyan
+    $dataManager = $container.GetService("DataManager")
+    
+    # Create sample tasks (keep existing for task list screen)
+    $sampleTasks = @()
+    
+    $task1 = [PmcTask]::new("Review project requirements")
+    $task1.Status = [TaskStatus]::Pending
+    $task1.Priority = [TaskPriority]::High
+    $task1.ProjectKey = "PROJ-001" # Assign to new project
+    $task1.DueDate = (Get-Date).AddDays(7)
+    $sampleTasks += $task1
+    
+    $task2 = [PmcTask]::new("Design system architecture")
+    $task2.Status = [TaskStatus]::InProgress
+    $task2.Priority = [TaskPriority]::High
+    $task2.SetProgress(30)
+    $task2.ProjectKey = "PROJ-001" # Assign to new project
+    $task2.DueDate = (Get-Date).AddDays(-5) # Overdue
+    $sampleTasks += $task2
+    
+    $task3 = [PmcTask]::new("Implement core features")
+    $task3.Status = [TaskStatus]::InProgress
+    $task3.Priority = [TaskPriority]::Medium
+    $task3.SetProgress(60)
+    $sampleTasks += $task3
+    
+    $task4 = [PmcTask]::new("Write unit tests")
+    $task4.Status = [TaskStatus]::Pending
+    $task4.Priority = [TaskPriority]::Medium
+    $sampleTasks += $task4
+    
+    $task5 = [PmcTask]::new("Deploy to staging")
+    $task5.Status = [TaskStatus]::Pending
+    $task5.Priority = [TaskPriority]::Low
+    $sampleTasks += $task5
+    
+    $task6 = [PmcTask]::new("Research new marketing strategies")
+    $task6.Status = [TaskStatus]::Pending
+    $task6.Priority = [TaskPriority]::High
+    $task6.ProjectKey = "PROJ-002"
+    $task6.DueDate = (Get-Date).AddDays(10)
+    $sampleTasks += $task6
+
+    $task7 = [PmcTask]::new("Develop MVP prototype")
+    $task7.Status = [TaskStatus]::InProgress
+    $task7.Priority = [TaskPriority]::High
+    $task7.SetProgress(75)
+    $task7.ProjectKey = "PROJ-002"
+    $task7.DueDate = (Get-Date).AddDays(-1) # Overdue
+    $sampleTasks += $task7
+
+    $task8 = [PmcTask]::new("Client onboarding")
+    $task8.Status = [TaskStatus]::Completed
+    $task8.Priority = [TaskPriority]::Medium
+    $task8.SetProgress(100)
+    $task8.ProjectKey = "PROJ-003"
+    $task8.DueDate = (Get-Date).AddDays(-30)
+    $sampleTasks += $task8
+
+    $task9 = [PmcTask]::new("Initial project review")
+    $task9.Status = [TaskStatus]::Pending
+    $task9.Priority = [TaskPriority]::Low
+    $task9.ProjectKey = "PROJ-003"
+    $task9.DueDate = (Get-Date).AddDays(5)
+    $sampleTasks += $task9
+    
+    foreach ($task in $sampleTasks) {
+        $dataManager.AddTask($task)
+    }
+    
+    # Create sample project folders and files
+    Write-Host "  Creating sample project folder and files..." -ForegroundColor Gray
+    
+    $project1FolderPath = Join-Path $env:TEMP "AxiomPhoenix_Projects\PROJ-001_Example_Client"
+    if (-not (Test-Path $project1FolderPath)) {
+        New-Item -ItemType Directory -Path $project1FolderPath -Force | Out-Null
+    }
+    Set-Content -Path (Join-Path $project1FolderPath "Client_Agreement_2023.pdf") -Value "Dummy PDF Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Project_Request_Form_v2.docx") -Value "Dummy DOCX Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "T2020_Report_Final.xlsx") -Value "Dummy XLSX Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Meeting_Notes_2023-10-26.txt") -Value "Dummy TXT Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Project_Plan.md") -Value "Dummy MD Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project1FolderPath "Audit_Report.xml") -Value "Dummy XML Content" -Force | Out-Null
+
+
+    $sampleProject = [PmcProject]::new("PROJ-001", "Example Client Project")
+    $sampleProject.ID1 = "C101-ABC-XYZ"
+    $sampleProject.ID2 = "CASE-2023-A-001"
+    $sampleProject.Description = "This is a comprehensive sample project for the Example Client, involving software development lifecycle, rigorous audit compliance, and ongoing client communication. The project spans multiple fiscal periods and requires meticulous documentation and reporting."
+    $sampleProject.AssignedDate = (Get-Date).AddDays(-30)
+    $sampleProject.BFDate = (Get-Date).AddDays(15) # Due Date / Bring-Forward Date
+    $sampleProject.Owner = "John Doe"
+    $sampleProject.SetMetadata("ClientID", "BN-54321-ALPHA")
+    $sampleProject.SetMetadata("Periods", @("P1-optional: 2022-01-01 to 2022-12-31", "P2-optional: 2023-01-01 to 2023-06-30", "P3-optional: 2023-07-01 to 2023-12-31", "P4-optional: 2024-01-01 to 2024-06-30"))
+    $sampleProject.SetMetadata("AuditorName", "Jane Smith (Lead)")
+    $sampleProject.SetMetadata("AuditorPhone", "555-123-4567 Ext. 89")
+    $sampleProject.ProjectFolderPath = $project1FolderPath
+    $sampleProject.CaaFileName = "Client_Agreement_2023.pdf"
+    $sampleProject.RequestFileName = "Project_Request_Form_v2.docx"
+    $sampleProject.T2020FileName = "T2020_Report_Final.xlsx"
+    $dataManager.AddProject($sampleProject)
+
+    $project2FolderPath = Join-Path $env:TEMP "AxiomPhoenix_Projects\PROJ-002_New_Product"
+    if (-not (Test-Path $project2FolderPath)) {
+        New-Item -ItemType Directory -Path $project2FolderPath -Force | Out-Null
+    }
+    Set-Content -Path (Join-Path $project2FolderPath "Product_Roadmap_v1.md") -Value "Dummy MD Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project2FolderPath "Marketing_Plan.pdf") -Value "Dummy PDF Content" -Force | Out-Null
+    Set-Content -Path (Join-Path $project2FolderPath "Budget_Forecast.xlsx") -Value "Dummy XLSX Content" -Force | Out-Null
+
+
+    $sampleProject2 = [PmcProject]::new("PROJ-002", "New Product Initiative")
+    $sampleProject2.ID1 = "NPI-XYZ-789"
+    $sampleProject2.ID2 = "NPI-2024-B-002"
+    $sampleProject2.Description = "Developing a new product from concept to launch, focusing on market research, MVP development, and initial user testing. This project aims to capture a new market segment."
+    $sampleProject2.AssignedDate = (Get-Date).AddDays(-15)
+    $sampleProject2.BFDate = (Get-Date).AddDays(30)
+    $sampleProject2.Owner = "Jane Doe"
+    $sampleProject2.SetMetadata("ClientID", "BN-98765-BETA")
+    $sampleProject2.SetMetadata("Periods", @("Phase 1: Concept & Planning", "Phase 2: Development", "Phase 3: Launch"))
+    $sampleProject2.SetMetadata("AuditorName", "External Audit Team")
+    $sampleProject2.SetMetadata("AuditorPhone", "555-987-6543")
+    $sampleProject2.ProjectFolderPath = $project2FolderPath
+    $sampleProject2.CaaFileName = $null # No CAA for this one
+    $sampleProject2.RequestFileName = $null # No specific request form
+    $sampleProject2.T2020FileName = "NPI_Summary_2024.txt"
+    $dataManager.AddProject($sampleProject2)
+
+    $project3FolderPath = Join-Path $env:TEMP "AxiomPhoenix_Projects\PROJ-003_Client_Audit"
+    if (-not (Test-Path $project3FolderPath)) {
+        New-Item -ItemType Directory -Path $project3FolderPath -Force | Out-Null
+    }
+    Set-Content -Path (Join-Path $project3FolderPath "Audit_Checklist.docx") -Value "Dummy CheckList" -Force | Out-Null
+    Set-Content -Path (Join-Path $project3FolderPath "Final_Audit_Report.pdf") -Value "Dummy Final Report" -Force | Out-Null
+
+    $sampleProject3 = [PmcProject]::new("PROJ-003", "Annual Client Audit")
+    $sampleProject3.ID1 = "AUDIT-CLI-A"
+    $sampleProject3.ID2 = "AUDIT-2023-C-003"
+    $sampleProject3.Description = "Conducting the annual financial audit for a key client. This involves reviewing financial statements, internal controls, and ensuring compliance with regulatory requirements."
+    $sampleProject3.AssignedDate = (Get-Date).AddDays(-60)
+    $sampleProject3.BFDate = (Get-Date).AddDays(-10) # Overdue
+    $sampleProject3.Owner = "Mike Ross"
+    $sampleProject3.IsActive = $true # Set to active for demo
+    $sampleProject3.SetMetadata("ClientID", "BN-11223-GAMMA")
+    $sampleProject3.SetMetadata("Periods", @("FY 2023"))
+    $sampleProject3.SetMetadata("AuditorName", "Harvey Specter")
+    $sampleProject3.SetMetadata("AuditorPhone", "555-444-3333")
+    $sampleProject3.ProjectFolderPath = $project3FolderPath
+    $sampleProject3.CaaFileName = $null
+    $sampleProject3.RequestFileName = $null
+    $sampleProject3.T2020FileName = $null
+    $dataManager.AddProject($sampleProject3)
+
+
+    Write-Host "Sample data created!" -ForegroundColor Green
+
+    # NEW: Add Sample Time Entries for Timesheet Demo
+    Write-Host "  Adding sample time entries..." -ForegroundColor Gray
+    $today = [DateTime]::Today
+    $currentWeekMonday = $today
+    while ($currentWeekMonday.DayOfWeek -ne [DayOfWeek]::Monday) {
+        $currentWeekMonday = $currentWeekMonday.AddDays(-1)
+    }
+
+    # Entries for current week (Mon-Fri)
+    $dataManager.AddTimeEntry([TimeEntry]::new("task1_id", "PROJ-001", $currentWeekMonday.AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(4.5); $_.Description = "Reviewed project requirements"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task2_id", "PROJ-001", $currentWeekMonday.AddDays(1).AddHours(10).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.0); $_.Description = "Architecture design, phase 1"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task2_id", "PROJ-001", $currentWeekMonday.AddDays(1).AddHours(14).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(2.5); $_.Description = "Architecture design, phase 2"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task6_id", "PROJ-002", $currentWeekMonday.AddDays(2).AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.0); $_.Description = "Market research for NPI"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task7_id", "PROJ-002", $currentWeekMonday.AddDays(2).AddHours(13).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(4.0); $_.Description = "MVP prototype work"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task9_id", "PROJ-003", $currentWeekMonday.AddDays(3).AddHours(8).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.5); $_.Description = "Initial audit review"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task3_id", "PROJ-001", $currentWeekMonday.AddDays(4).AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(5.0); $_.Description = "Implemented core feature A"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task7_id", "PROJ-002", $currentWeekMonday.AddDays(4).AddHours(14).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(3.0); $_.Description = "Refined MVP UI"; $_ })
+    
+    # Entries for previous week (for testing date picker navigation)
+    $prevWeekMonday = $currentWeekMonday.AddDays(-7)
+    $dataManager.AddTimeEntry([TimeEntry]::new("task1_id", "PROJ-001", $prevWeekMonday.AddHours(9).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(6.0); $_.Description = "Previous week: Kick-off meeting"; $_ })
+    $dataManager.AddTimeEntry([TimeEntry]::new("task6_id", "PROJ-002", $prevWeekMonday.AddDays(1).AddHours(10).AddMinutes(0)) | ForEach-Object { $_.EndTime = $_.StartTime.AddHours(5.0); $_.Description = "Previous week: Initial research"; $_ })
+
+    # Entry on a weekend day
+    $weekendEntry = [TimeEntry]::new("task4_id", "PROJ-001", $currentWeekMonday.AddDays(5).AddHours(9).AddMinutes(0)) # Saturday
+    $weekendEntry.EndTime = $weekendEntry.StartTime.AddHours(2.0)
+    $weekendEntry.Description = "Weekend quick fix"
+    $dataManager.AddTimeEntry($weekendEntry)
+
+    Write-Host "Sample time entries added!" -ForegroundColor Green
+
+    # Launch the application
+    Write-Host "`nStarting Axiom-Phoenix v4.0..." -ForegroundColor Cyan
+    Write-Host "Press Ctrl+P to open command palette, Ctrl+Q to quit" -ForegroundColor Yellow
+    Write-Host "Press 5 from Dashboard to view Project Management Screen" -ForegroundColor Yellow
+    Write-Host "Press 6 from Dashboard to view Timesheet Screen" -ForegroundColor Yellow
+    Write-Host "Press 7 from Dashboard to view File Explorer" -ForegroundColor Yellow # NEW instruction
+    Start-Sleep -Seconds 1
+    
+    $dashboardScreen = [DashboardScreen]::new($container)
+    Write-Host "Initializing Dashboard screen..." -ForegroundColor Yellow
+    $dashboardScreen.Initialize()
+    Write-Host "Dashboard initialized. Starting engine..." -ForegroundColor Yellow
+    Clear-Host
+    Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen
+```
+
+---
+
+### 5. **`Screens\ASC.001_DashboardScreen.ps1`** (ENHANCED)
+
+This file needs to be updated to add the new menu option for the File Explorer screen.
+
+```powershell
+# ==============================================================================
+# Axiom-Phoenix v4.0 - All Screens (Load After Components)
+# Application screens that extend Screen base class
+# ==============================================================================
+#
+# TABLE OF CONTENTS DIRECTIVE:
+# When modifying this file, ensure page markers remain accurate and update
+# TableOfContents.md to reflect any structural changes.
+#
+# Search for "PAGE: ASC.###" to find specific sections.
+# Each section ends with "END_PAGE: ASC.###"
+# ==============================================================================
+
+using namespace System.Collections.Generic
+
+#region Screen Classes
+
+# ==============================================================================
+# CLASS: DashboardScreen (Data-Driven Dashboard with DataGridComponent)
+#
+# INHERITS:
+#   - Screen (ABC.006)
+#
+# DEPENDENCIES:
+#   Services:
+#     - NavigationService (ASE.004)
+#     - FocusManager (ASE.009)
+#     - DataManager (ASE.003)
+#     - ViewDefinitionService (ASE.011)
+#   Components:
+#     - Panel (ACO.011)
+#     - DataGridComponent (ACO.022)
+#     - LabelComponent (ACO.001)
+#
+# PURPOSE:
+#   Data-driven dashboard showing task statistics, recent tasks, and quick actions
+#   using the ViewDefinitionService pattern for consistent formatting.
+# ==============================================================================
+class DashboardScreen : Screen {
+    hidden [Panel] $_mainPanel
+    hidden [Panel] $_menuPanel
+    hidden [List[LabelComponent]] $_menuItems
+    hidden [int] $_selectedIndex = 0
+    
+    DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {}
+
+    [void] Initialize() {
+        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting initialization"
+        if (-not $this.ServiceContainer) { 
+            Write-Log -Level Error -Message "DashboardScreen.Initialize: ServiceContainer is null!"
+            return 
+        }
+
+        # Main panel takes full screen
+        $this._mainPanel = [Panel]::new("MainPanel")
+        $this._mainPanel.X = 0
+        $this._mainPanel.Y = 0
+        $this._mainPanel.Width = $this.Width
+        $this._mainPanel.Height = $this.Height
+        $this._mainPanel.Title = " Axiom-Phoenix v4.0 - Main Menu "
+        $this._mainPanel.BorderStyle = "Double"
+        $this._mainPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "background" "#0A0A0A"
+        $this.AddChild($this._mainPanel)
+
+        # Menu panel
+        $this._menuPanel = [Panel]::new("MenuPanel")
+        $this._menuPanel.X = [Math]::Floor(($this.Width - 40) / 2)
+        $this._menuPanel.Y = 5
+        $this._menuPanel.Width = 40
+        $this._menuPanel.Height = 16 # Increased height for new menu item (File Explorer)
+        $this._menuPanel.HasBorder = $true
+        $this._menuPanel.BorderStyle = "Double"
+        $this._menuPanel.Title = " Navigation "
+        $this._mainPanel.AddChild($this._menuPanel)
+        
+        # Create menu items as labels
+        $this._menuItems = [List[LabelComponent]]::new()
+        $menuTexts = @(
+            "[1] Dashboard (Current)",
+            "[2] Task List",
+            "[3] Theme Picker", 
+            "[4] Command Palette (Ctrl+P)",
+            "[5] View Project Management Screen",
+            "[6] View Timesheet",
+            "[7] Open File Explorer", # NEW MENU ITEM
+            "",
+            "[Q] Quit"
+        )
+        
+        $yPos = 1
+        foreach ($text in $menuTexts) {
+            $label = [LabelComponent]::new("MenuItem_$yPos")
+            $label.Text = $text
+            $label.X = 2
+            $label.Y = $yPos
+            $label.ForegroundColor = Get-ThemeColor("component.text")
+            $this._menuPanel.AddChild($label)
+            $this._menuItems.Add($label)
+            $yPos++
+        }
+        
+        # Highlight first item
+        if ($this._menuItems.Count -gt 0) {
+            $this._menuItems[0].ForegroundColor = Get-ThemeColor("Primary")
+        }
+        
+        # Instructions
+        $instructions = [LabelComponent]::new("Instructions")
+        $instructions.Text = "Press the number/letter key to select an option"
+        $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
+        $instructions.Y = 23 # Adjusted Y position
+        $instructions.ForegroundColor = Get-ThemeColor("Subtle")
+        $this._mainPanel.AddChild($instructions)
+    }
+
+    [void] OnEnter() {
+        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
+        $this.RequestRedraw()
+    }
+
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Received key - Key: $($keyInfo.Key), KeyChar: '$($keyInfo.KeyChar)', Modifiers: $($keyInfo.Modifiers)"
+        
+        $actionService = $this.ServiceContainer?.GetService("ActionService")
+        if (-not $actionService) { 
+            Write-Log -Level Error -Message "DashboardScreen: ActionService not found!"
+            return $false 
+        }
+        
+        $handled = $false
+        
+        # Check both KeyChar and Key enum for number keys
+        $char = $keyInfo.KeyChar
+        $key = $keyInfo.Key
+        
+        # Direct character check
+        switch ($char) {
+            '1' { $handled = $true }
+            '2' { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+            '3' { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+            '4' { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+            '5' { 
+                $navService = $this.ServiceContainer.GetService("NavigationService")
+                if ($navService) {
+                    $projectListScreen = [ProjectListScreen]::new($this.ServiceContainer)
+                    $projectListScreen.Initialize()
+                    $navService.NavigateTo($projectListScreen)
+                }
+                $handled = $true 
+            }
+            '6' { 
+                $navService = $this.ServiceContainer.GetService("NavigationService")
+                if ($navService) {
+                    $timesheetScreen = [TimesheetScreen]::new($this.ServiceContainer)
+                    $timesheetScreen.Initialize()
+                    $navService.NavigateTo($timesheetScreen)
+                }
+                $handled = $true
+            }
+            '7' { # NEW: Navigate to FileExplorerScreen
+                $navService = $this.ServiceContainer.GetService("NavigationService")
+                if ($navService) {
+                    $fileExplorerScreen = [FileExplorerScreen]::new($this.ServiceContainer)
+                    $fileExplorerScreen.Initialize()
+                    $navService.NavigateTo($fileExplorerScreen)
+                }
+                $handled = $true
+            }
+            'q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+            'Q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+        }
+        
+        # If not handled by character, try Key enum (for numpad etc.)
+        if (-not $handled) {
+            switch ($key) {
+                ([ConsoleKey]::D1) { $handled = $true }
+                ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                ([ConsoleKey]::D5) { 
+                    $navService = $this.ServiceContainer.GetService("NavigationService")
+                    if ($navService) {
+                        $projectListScreen = [ProjectListScreen]::new($this.ServiceContainer)
+                        $projectListScreen.Initialize()
+                        $navService.NavigateTo($projectListScreen)
+                    }
+                    $handled = $true 
+                }
+                ([ConsoleKey]::D6) { 
+                    $navService = $this.ServiceContainer.GetService("NavigationService")
+                    if ($navService) {
+                        $timesheetScreen = [TimesheetScreen]::new($this.ServiceContainer)
+                        $timesheetScreen.Initialize()
+                        $navService.NavigateTo($timesheetScreen)
+                    }
+                    $handled = $true
+                }
+                ([ConsoleKey]::D7) { # NEW: Numpad 7 for FileExplorerScreen
+                    $navService = $this.ServiceContainer.GetService("NavigationService")
+                    if ($navService) {
+                        $fileExplorerScreen = [FileExplorerScreen]::new($this.ServiceContainer)
+                        $fileExplorerScreen.Initialize()
+                        $navService.NavigateTo($fileExplorerScreen)
+                    }
+                    $handled = $true
+                }
+                ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+            }
+        }
+        
+        # Arrow key navigation (update logic to account for new menu item)
+        switch ($key) {
+            ([ConsoleKey]::UpArrow) {
+                $targetIndex = $this._selectedIndex
+                do {
+                    $targetIndex = if ($targetIndex -gt 0) { $targetIndex - 1 } else { $this._menuItems.Count - 1 }
+                } while ($targetIndex -ne $this._selectedIndex -and [string]::IsNullOrWhiteSpace($this._menuItems[$targetIndex].Text))
+
+                if ($targetIndex -ne $this._selectedIndex) {
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("component.text")
+                    $this._selectedIndex = $targetIndex
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("Primary")
+                    $this.RequestRedraw()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::DownArrow) {
+                $targetIndex = $this._selectedIndex
+                do {
+                    $targetIndex = if ($targetIndex -lt $this._menuItems.Count - 1) { $targetIndex + 1 } else { 0 }
+                } while ($targetIndex -ne $this._selectedIndex -and [string]::IsNullOrWhiteSpace($this._menuItems[$targetIndex].Text))
+
+                if ($targetIndex -ne $this._selectedIndex) {
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("component.text")
+                    $this._selectedIndex = $targetIndex
+                    $this._menuItems[$this._selectedIndex].ForegroundColor = Get-ThemeColor("Primary")
+                    $this.RequestRedraw()
+                    $handled = $true
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                # Execute selected item
+                # IMPORTANT: Update indices to match `menuTexts` order after adding new item
+                switch ($this._selectedIndex) {
+                    0 { $handled = $true } # Already on dashboard
+                    1 { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
+                    2 { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+                    3 { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                    4 { # Project Management Screen index
+                        $navService = $this.ServiceContainer.GetService("NavigationService")
+                        if ($navService) {
+                            $projectListScreen = [ProjectListScreen]::new($this.ServiceContainer)
+                            $projectListScreen.Initialize()
+                            $navService.NavigateTo($projectListScreen)
+                        }
+                        $handled = $true 
+                    }
+                    5 { # Timesheet Screen index
+                        $navService = $this.ServiceContainer.GetService("NavigationService")
+                        if ($navService) {
+                            $timesheetScreen = [TimesheetScreen]::new($this.ServiceContainer)
+                            $timesheetScreen.Initialize()
+                            $navService.NavigateTo($timesheetScreen)
+                        }
+                        $handled = $true
+                    }
+                    6 { # NEW: File Explorer index
+                        $navService = $this.ServiceContainer.GetService("NavigationService")
+                        if ($navService) {
+                            $fileExplorerScreen = [FileExplorerScreen]::new($this.ServiceContainer)
+                            $fileExplorerScreen.Initialize()
+                            $navService.NavigateTo($fileExplorerScreen)
+                        }
+                        $handled = $true
+                    }
+                    8 { $actionService.ExecuteAction("app.exit", @{}); $handled = $true } # Quit index
+                }
+            }
+        }
+        
+        return $handled
+    }
+}
+
+#endregion
+#<!-- END_PAGE: ASC.001 -->
+```
