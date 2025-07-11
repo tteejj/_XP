@@ -1,135 +1,140 @@
+# Fix 1: Update NewTaskScreen to handle ESC properly and fix text input visibility
+$newTaskScreenContent = @'
 # ===== CLASS: NewTaskScreen =====
 # Purpose: Full screen for creating new tasks
 class NewTaskScreen : Screen {
     hidden [Panel]$_formPanel
+    hidden [SidebarMenu]$_menu
     hidden [TextBoxComponent]$_titleBox
     hidden [TextBoxComponent]$_descriptionBox
     hidden [ListBox]$_priorityList
     hidden [ListBox]$_projectList
+    hidden [ButtonComponent]$_saveButton
+    hidden [ButtonComponent]$_cancelButton
     hidden [LabelComponent]$_statusLabel
     
     NewTaskScreen([object]$serviceContainer) : base("NewTaskScreen", $serviceContainer) {}
     
     [void] Initialize() {
-        # Main form panel - full screen
+        # Create menu
+        $this._menu = [SidebarMenu]::new("MainMenu")
+        $this._menu.X = 0
+        $this._menu.Y = 0
+        $this._menu.Height = $this.Height
+        $this._menu.Width = 22
+        $this._menu.Title = "Navigation"
+        
+        $this._menu.AddMenuItem("1", "Dashboard", "navigation.dashboard")
+        $this._menu.AddMenuItem("2", "Task List", "navigation.taskList")
+        $this._menu.AddMenuItem("-", "", "")
+        $this._menu.AddMenuItem("S", "Save Task", "task.save.current")
+        $this._menu.AddMenuItem("C", "Cancel", "navigation.back")
+        $this._menu.AddMenuItem("-", "", "")
+        $this._menu.AddMenuItem("Q", "Quit", "app.exit")
+        
+        $this.AddChild($this._menu)
+        
+        # Create form panel
         $this._formPanel = [Panel]::new("NewTaskForm")
-        $this._formPanel.X = 0
+        $this._formPanel.X = 23
         $this._formPanel.Y = 0
-        $this._formPanel.Width = $this.Width
+        $this._formPanel.Width = $this.Width - 24
         $this._formPanel.Height = $this.Height
-        $this._formPanel.Title = " New Task "
+        $this._formPanel.Title = "Create New Task"
         $this._formPanel.BorderStyle = "Double"
         $this._formPanel.BorderColor = Get-ThemeColor "Primary"
-        $this._formPanel.BackgroundColor = Get-ThemeColor "Background"
+        $this._formPanel.BackgroundColor = Get-ThemeColor "Background" 
         $this.AddChild($this._formPanel)
         
-        # Use generous spacing - we have the room!
-        $leftMargin = 5
-        $topMargin = 3
-        $componentSpacing = 2  # Space between label and input
-        $sectionSpacing = 6    # Space between sections
-        $contentWidth = [Math]::Min(100, $this._formPanel.Width - ($leftMargin * 2))
-        
-        # Title Section
-        $y = $topMargin
+        # Title input
         $titleLabel = [LabelComponent]::new("TitleLabel")
         $titleLabel.Text = "Task Title:"
-        $titleLabel.X = $leftMargin
-        $titleLabel.Y = $y
-        $titleLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $titleLabel.X = 2
+        $titleLabel.Y = 2
         $this._formPanel.AddChild($titleLabel)
         
-        $y += $componentSpacing
         $this._titleBox = [TextBoxComponent]::new("TitleInput")
-        $this._titleBox.X = $leftMargin
-        $this._titleBox.Y = $y
-        $this._titleBox.Width = $contentWidth
+        $this._titleBox.X = 2
+        $this._titleBox.Y = 3
+        $this._titleBox.Width = [Math]::Min(50, $this._formPanel.Width - 6)
         $this._titleBox.Height = 3
         $this._titleBox.Placeholder = "Enter task title..."
         $this._titleBox.IsFocusable = $true
+        $this._titleBox.BackgroundColor = Get-ThemeColor "Background"
+        $this._titleBox.ForegroundColor = Get-ThemeColor "Foreground"
         $this._formPanel.AddChild($this._titleBox)
         
-        # Description Section - with proper spacing
-        $y += $this._titleBox.Height + $sectionSpacing
+        # Description input
         $descLabel = [LabelComponent]::new("DescLabel")
         $descLabel.Text = "Description:"
-        $descLabel.X = $leftMargin
-        $descLabel.Y = $y
-        $descLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $descLabel.X = 2
+        $descLabel.Y = 7
         $this._formPanel.AddChild($descLabel)
         
-        $y += $componentSpacing
         $this._descriptionBox = [TextBoxComponent]::new("DescInput")
-        $this._descriptionBox.X = $leftMargin
-        $this._descriptionBox.Y = $y
-        $this._descriptionBox.Width = $contentWidth
+        $this._descriptionBox.X = 2
+        $this._descriptionBox.Y = 8
+        $this._descriptionBox.Width = [Math]::Min(50, $this._formPanel.Width - 6)
         $this._descriptionBox.Height = 3
         $this._descriptionBox.Placeholder = "Enter description..."
         $this._descriptionBox.IsFocusable = $true
+        $this._descriptionBox.BackgroundColor = Get-ThemeColor "Background"
+        $this._descriptionBox.ForegroundColor = Get-ThemeColor "Foreground"
         $this._formPanel.AddChild($this._descriptionBox)
         
-        # Priority and Project side by side
-        $y += $this._descriptionBox.Height + $sectionSpacing
-        $halfWidth = [Math]::Floor($contentWidth / 2) - 2
-        
-        # Priority
+        # Priority selection
         $priorityLabel = [LabelComponent]::new("PriorityLabel")
-        $priorityLabel.Text = "Priority:"
-        $priorityLabel.X = $leftMargin
-        $priorityLabel.Y = $y
-        $priorityLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $priorityLabel.Text = "Priority: [Low/Medium/High]"
+        $priorityLabel.X = 2
+        $priorityLabel.Y = 12
         $this._formPanel.AddChild($priorityLabel)
         
         $this._priorityList = [ListBox]::new("PriorityList")
-        $this._priorityList.X = $leftMargin
-        $this._priorityList.Y = $y + $componentSpacing
-        $this._priorityList.Width = $halfWidth
+        $this._priorityList.X = 2
+        $this._priorityList.Y = 13
+        $this._priorityList.Width = 20
         $this._priorityList.Height = 5
-        $this._priorityList.HasBorder = $true
-        $this._priorityList.BorderStyle = "Single"
         $this._priorityList.AddItem("Low")
         $this._priorityList.AddItem("Medium")
         $this._priorityList.AddItem("High")
-        $this._priorityList.SelectedIndex = 1
+        $this._priorityList.SelectedIndex = 1  # Default to Medium
         $this._priorityList.IsFocusable = $true
+        $this._priorityList.SelectedBackgroundColor = Get-ThemeColor "Primary"
+        $this._priorityList.SelectedForegroundColor = Get-ThemeColor "Background"
         $this._formPanel.AddChild($this._priorityList)
         
-        # Project - with more spacing between columns
-        $projectX = $leftMargin + $halfWidth + 8
+        # Project selection
         $projectLabel = [LabelComponent]::new("ProjectLabel")
-        $projectLabel.Text = "Project:"
-        $projectLabel.X = $projectX
-        $projectLabel.Y = $y
-        $projectLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $projectLabel.Text = "Project: [General]"
+        $projectLabel.X = 25
+        $projectLabel.Y = 12
         $this._formPanel.AddChild($projectLabel)
         
         $this._projectList = [ListBox]::new("ProjectList")
-        $this._projectList.X = $projectX
-        $this._projectList.Y = $y + $componentSpacing
-        $this._projectList.Width = $halfWidth
+        $this._projectList.X = 25
+        $this._projectList.Y = 13
+        $this._projectList.Width = 20
         $this._projectList.Height = 5
-        $this._projectList.HasBorder = $true
-        $this._projectList.BorderStyle = "Single"
         $this._projectList.AddItem("General")
         $this._projectList.SelectedIndex = 0
         $this._projectList.IsFocusable = $true
+        $this._projectList.SelectedBackgroundColor = Get-ThemeColor "Primary"
+        $this._projectList.SelectedForegroundColor = Get-ThemeColor "Background"
         $this._formPanel.AddChild($this._projectList)
         
-        # Status and instructions at bottom - with proper spacing from form elements
-        $bottomMargin = 3
-        $y = $this._formPanel.Height - ($bottomMargin + 3)  # 3 lines for status and instructions
-        
+        # Status label
         $this._statusLabel = [LabelComponent]::new("StatusLabel")
-        $this._statusLabel.X = $leftMargin
-        $this._statusLabel.Y = $y
+        $this._statusLabel.X = 2
+        $this._statusLabel.Y = 19
         $this._statusLabel.Text = "Ready to create task"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Info"
+        $this._statusLabel.ForegroundColor = (Get-ThemeColor "Info")
         $this._formPanel.AddChild($this._statusLabel)
         
+        # Instruction label
         $instructLabel = [LabelComponent]::new("InstructLabel")
-        $instructLabel.X = $leftMargin
-        $instructLabel.Y = $y + 2
-        $instructLabel.Text = "Tab: Next field | Ctrl+S: Save | ESC: Cancel"
+        $instructLabel.X = 2
+        $instructLabel.Y = 21
+        $instructLabel.Text = "Tab: Next field | S: Save | ESC: Cancel"
         $instructLabel.ForegroundColor = Get-ThemeColor "Subtle"
         $this._formPanel.AddChild($instructLabel)
     }
@@ -149,6 +154,15 @@ class NewTaskScreen : Screen {
         # Set initial focus
         $focusManager = $this.Services.FocusManager
         $focusManager.SetFocus($this._titleBox)
+        
+        # Register save action
+        $actionService = $this.Services.ActionService
+        $actionService.RegisterAction("task.save.current", {
+            $currentScreen = $global:TuiState.CurrentScreen
+            if ($currentScreen -is [NewTaskScreen]) {
+                $currentScreen.SaveTask()
+            }
+        }, @{ Category = "Tasks"; Description = "Save current task" })
     }
     
     [void] OnExit() {
@@ -161,7 +175,7 @@ class NewTaskScreen : Screen {
         # Validate input
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
             $this._statusLabel.Text = "Error: Title is required"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "Error"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Error")
             return
         }
         
@@ -182,7 +196,7 @@ class NewTaskScreen : Screen {
         if ($this._projectList.SelectedIndex -gt 0) {
             $dataManager = $this.Services.DataManager
             $projects = $dataManager.GetProjects()
-            if (($this._projectList.SelectedIndex - 1) -lt $projects.Count) {
+            if ($this._projectList.SelectedIndex -le $projects.Count) {
                 $task.ProjectKey = $projects[$this._projectList.SelectedIndex - 1].Key
             }
         }
@@ -191,10 +205,18 @@ class NewTaskScreen : Screen {
         try {
             $dataManager = $this.Services.DataManager
             $dataManager.AddTask($task)
-            $dataManager.SaveData()  # Force save to disk
+            
+            # Force save to disk
+            $dataManager.SaveData()
             
             $this._statusLabel.Text = "Task created successfully!"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Success")
+            
+            # Clear form
+            $this._titleBox.Text = ""
+            $this._descriptionBox.Text = ""
+            $this._priorityList.SelectedIndex = 1
+            $this._projectList.SelectedIndex = 0
             
             # Navigate back after short delay
             Start-Sleep -Milliseconds 500
@@ -203,23 +225,26 @@ class NewTaskScreen : Screen {
         }
         catch {
             $this._statusLabel.Text = "Error: $($_.Exception.Message)"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "Error"
+            $this._statusLabel.ForegroundColor = (Get-ThemeColor "Error")
         }
     }
     
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if ($null -eq $keyInfo) { return $false }
-        
-        # Handle ESC to cancel
+        # Handle ESC first - before menu gets it
         if ($keyInfo.Key -eq [ConsoleKey]::Escape) {
             $navService = $this.Services.NavigationService
             $navService.GoBack()
             return $true
         }
         
-        # Handle Ctrl+S to save
-        if ($keyInfo.Key -eq [ConsoleKey]::S -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+        # Handle save shortcut
+        if ($keyInfo.Key -eq [ConsoleKey]::S -and -not ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
             $this.SaveTask()
+            return $true
+        }
+        
+        # Let menu handle its keys
+        if ($this._menu.HandleKey($keyInfo)) {
             return $true
         }
         
@@ -227,3 +252,19 @@ class NewTaskScreen : Screen {
         return ([Screen]$this).HandleInput($keyInfo)
     }
 }
+'@
+
+# Fix 2: Update TextBoxComponent for better visibility
+$textBoxComponentContent = @'
+# ===== CLASS: TextBoxComponent =====
+# Module: tui-components
+# Dependencies: UIElement, TuiCell
+# Purpose: Text input with viewport scrolling, non-destructive cursor
+class TextBoxComponent : UIElement {
+    [string]$Text = ""
+    [string]$Placeholder = ""
+    [ValidateRange(1, [int]::MaxValue)][int]$MaxLength = 100
+    [int]$CursorPosition = 0
+    [scriptblock]$OnChange
+    hidden [int]$_scrollOffset = 0
+    [string

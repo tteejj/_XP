@@ -139,8 +139,9 @@ class TaskListScreen : Screen {
         $this._filterBox.X = 5
         $this._filterBox.Y = 1
         $this._filterBox.Width = [Math]::Floor($detailWidth * 0.5)
-        $this._filterBox.Height = 1
+        $this._filterBox.Height = 3
         $thisScreen = $this
+        $this._filterBox.IsFocusable = $true  # Make sure filter box is focusable
         $this._filterBox.OnChange = {
             param($sender, $newText)
             $thisScreen._filterText = $newText
@@ -156,11 +157,11 @@ class TaskListScreen : Screen {
         $this._sortLabel.ForegroundColor = Get-ThemeColor "muted" "#888888"
         $this._contextPanel.AddChild($this._sortLabel)
 
-        # Help text
+        # Help text - with full text, no truncation
         $this._helpLabel = [LabelComponent]::new("HelpLabel")
         $this._helpLabel.X = 2
-        $this._helpLabel.Y = 3
-        $this._helpLabel.Text = "↑↓ Navigate │ Enter Edit │ Space Toggle │ N New │ D Delete │ C Complete"
+        $this._helpLabel.Y = 4
+        $this._helpLabel.Text = "↑↓ Navigate | Enter: Edit | Space: Toggle | N: New | D: Delete"
         $this._helpLabel.ForegroundColor = Get-ThemeColor "help" "#666666"
         $this._contextPanel.AddChild($this._helpLabel)
 
@@ -886,6 +887,18 @@ class TaskListScreen : Screen {
                     $this._ShowEditTaskDialog()
                     return $true
                 }
+            }
+            ([ConsoleKey]::Tab) {
+                # Cycle focus between components
+                $focusManager = $this.ServiceContainer.GetService("FocusManager")
+                if ($focusManager) {
+                    if ($this._taskListBox.IsFocused) {
+                        $focusManager.SetFocus($this._filterBox)
+                    } else {
+                        $focusManager.SetFocus($this._taskListBox)
+                    }
+                }
+                return $true
             }
             ([ConsoleKey]::Spacebar) {
                 if ($this._selectedTask) {

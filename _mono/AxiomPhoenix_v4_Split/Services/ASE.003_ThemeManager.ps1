@@ -227,8 +227,35 @@ class ThemeManager {
         return $defaultColor
     }
     
-    [void] SetColor([string]$colorName, [string]$colorValue) {
+    [void] SetColor([string]$colorName, $colorValue) {
+        # Convert ConsoleColor to hex if needed
+        if ($colorValue -is [ConsoleColor]) {
+            $consoleColorMap = @{
+                [ConsoleColor]::Black = "#000000"
+                [ConsoleColor]::DarkBlue = "#000080"
+                [ConsoleColor]::DarkGreen = "#008000"
+                [ConsoleColor]::DarkCyan = "#008080"
+                [ConsoleColor]::DarkRed = "#800000"
+                [ConsoleColor]::DarkMagenta = "#800080"
+                [ConsoleColor]::DarkYellow = "#808000"
+                [ConsoleColor]::Gray = "#C0C0C0"
+                [ConsoleColor]::DarkGray = "#808080"
+                [ConsoleColor]::Blue = "#0000FF"
+                [ConsoleColor]::Green = "#00FF00"
+                [ConsoleColor]::Cyan = "#00FFFF"
+                [ConsoleColor]::Red = "#FF0000"
+                [ConsoleColor]::Magenta = "#FF00FF"
+                [ConsoleColor]::Yellow = "#FFFF00"
+                [ConsoleColor]::White = "#FFFFFF"
+            }
+            $colorValue = $consoleColorMap[$colorValue]
+        }
+        
         $this.CurrentTheme[$colorName] = $colorValue
+        # Force redraw when colors change
+        if ($global:TuiState) {
+            $global:TuiState.IsDirty = $true
+        }
     }
     
     [string[]] GetAvailableThemes() {

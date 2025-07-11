@@ -1,3 +1,24 @@
+# COMPLETE FIXES FOR AXIOM-PHOENIX v4.0
+# Applying all fixes from REAL_FIX.ps1 plus additional syntax fixes
+
+Write-Host "Applying ALL fixes to Axiom-Phoenix v4.0..." -ForegroundColor Yellow
+
+# FIX 1: Fix syntax errors in TaskListScreen first
+Write-Host "`nFixing TaskListScreen syntax errors..." -ForegroundColor Cyan
+$taskListPath = "C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.002_TaskListScreen.ps1"
+$content = Get-Content $taskListPath -Raw
+
+# Fix all HandleInput method signatures missing closing parenthesis
+$content = $content -replace '\[bool\]\s+HandleInput\(\[System\.ConsoleKeyInfo\]\$keyInfo\s*$', '[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {'
+
+# Save fixed content
+Set-Content -Path $taskListPath -Value $content -Force
+Write-Host "  - Fixed HandleInput method signatures" -ForegroundColor Green
+
+# FIX 2: Apply the Theme Screen from REAL_FIX.ps1
+Write-Host "`nApplying Theme Screen fix..." -ForegroundColor Cyan
+$themeScreenPath = "C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.003_ThemeScreen.ps1"
+$themeScreenContent = @'
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Theme Selection Screen - FIXED VERSION
 # ==============================================================================
@@ -297,3 +318,193 @@ class ThemeScreen : Screen {
         return ([Screen]$this).HandleInput($key)
     }
 }
+'@
+
+Set-Content -Path $themeScreenPath -Value $themeScreenContent -Force
+Write-Host "  - Theme Screen completely replaced with FIXED VERSION" -ForegroundColor Green
+
+# FIX 3: Add Tab navigation to TaskListScreen if missing
+Write-Host "`nAdding Tab navigation to TaskListScreen..." -ForegroundColor Cyan
+$content = Get-Content $taskListPath -Raw
+
+# Find the main TaskListScreen HandleInput method
+$pattern = '(class TaskListScreen : Screen[\s\S]+?)\[bool\]\s+HandleInput\(\[System\.ConsoleKeyInfo\]\$keyInfo\)\s*\{([^}]+switch\s*\(\$keyInfo\.Key\)\s*\{[^}]+)(\}\s*return\s+\(\[Screen\]\$this\)\.HandleInput)'
+
+if ($content -match $pattern) {
+    $beforeMethod = $matches[1]
+    $methodContent = $matches[2]
+    $afterMethod = $matches[3]
+    
+    # Check if Tab handling already exists
+    if ($methodContent -notmatch 'ConsoleKey.*Tab') {
+        # Add Tab handling before the closing brace
+        $tabHandling = @'
+            ([ConsoleKey]::Tab) {
+                # Cycle focus between components
+                $focusManager = $this.ServiceContainer.GetService("FocusManager")
+                if ($focusManager) {
+                    if ($this._taskListBox.IsFocused) {
+                        $focusManager.SetFocus($this._filterBox)
+                    } else {
+                        $focusManager.SetFocus($this._taskListBox)
+                    }
+                }
+                return $true
+            }
+'@
+        $newMethodContent = $methodContent + "`n" + $tabHandling + "`n        }"
+        $newContent = $beforeMethod + "[bool] HandleInput([System.ConsoleKeyInfo]`$keyInfo) {" + $newMethodContent + "`n" + $afterMethod
+        Set-Content -Path $taskListPath -Value $newContent -Force
+        Write-Host "  - Tab navigation added to TaskListScreen" -ForegroundColor Green
+    } else {
+        Write-Host "  - Tab navigation already exists in TaskListScreen" -ForegroundColor Yellow
+    }
+}
+
+# FIX 4: Apply New Task Screen spacing fix from REAL_FIX.ps1
+Write-Host "`nApplying New Task Screen spacing fix..." -ForegroundColor Cyan
+$newTaskPath = "C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.004_NewTaskScreen.ps1"
+$newTaskContent = Get-Content $newTaskPath -Raw
+
+# Replace the Initialize method
+$initPattern = '(\[void\]\s+Initialize\(\)\s*\{)([^}]+\})'
+$newInitializeBody = @'
+        # Main form panel - full screen
+        $this._formPanel = [Panel]::new("NewTaskForm")
+        $this._formPanel.X = 0
+        $this._formPanel.Y = 0
+        $this._formPanel.Width = $this.Width
+        $this._formPanel.Height = $this.Height
+        $this._formPanel.Title = " New Task "
+        $this._formPanel.BorderStyle = "Double"
+        $this._formPanel.BorderColor = Get-ThemeColor "Primary"
+        $this._formPanel.BackgroundColor = Get-ThemeColor "Background"
+        $this.AddChild($this._formPanel)
+        
+        # Layout with generous spacing
+        $leftMargin = 5
+        $topMargin = 3
+        $labelHeight = 1
+        $inputHeight = 3
+        $sectionGap = 3  # Gap between sections
+        $contentWidth = [Math]::Min(100, $this._formPanel.Width - ($leftMargin * 2))
+        
+        $currentY = $topMargin
+        
+        # Title Section
+        $titleLabel = [LabelComponent]::new("TitleLabel")
+        $titleLabel.Text = "Task Title:"
+        $titleLabel.X = $leftMargin
+        $titleLabel.Y = $currentY
+        $titleLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $this._formPanel.AddChild($titleLabel)
+        
+        $currentY += $labelHeight + 1
+        
+        $this._titleBox = [TextBoxComponent]::new("TitleInput")
+        $this._titleBox.X = $leftMargin
+        $this._titleBox.Y = $currentY
+        $this._titleBox.Width = $contentWidth
+        $this._titleBox.Height = $inputHeight
+        $this._titleBox.Placeholder = "Enter task title..."
+        $this._titleBox.IsFocusable = $true
+        $this._formPanel.AddChild($this._titleBox)
+        
+        $currentY += $inputHeight + $sectionGap
+        
+        # Description Section
+        $descLabel = [LabelComponent]::new("DescLabel")
+        $descLabel.Text = "Description:"
+        $descLabel.X = $leftMargin
+        $descLabel.Y = $currentY
+        $descLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $this._formPanel.AddChild($descLabel)
+        
+        $currentY += $labelHeight + 1
+        
+        $this._descriptionBox = [TextBoxComponent]::new("DescInput")
+        $this._descriptionBox.X = $leftMargin
+        $this._descriptionBox.Y = $currentY
+        $this._descriptionBox.Width = $contentWidth
+        $this._descriptionBox.Height = $inputHeight
+        $this._descriptionBox.Placeholder = "Enter description..."
+        $this._descriptionBox.IsFocusable = $true
+        $this._formPanel.AddChild($this._descriptionBox)
+        
+        $currentY += $inputHeight + $sectionGap
+        
+        # Priority and Project side by side
+        $halfWidth = [Math]::Floor(($contentWidth - 10) / 2)
+        
+        # Priority
+        $priorityLabel = [LabelComponent]::new("PriorityLabel")
+        $priorityLabel.Text = "Priority:"
+        $priorityLabel.X = $leftMargin
+        $priorityLabel.Y = $currentY
+        $priorityLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $this._formPanel.AddChild($priorityLabel)
+        
+        $this._priorityList = [ListBox]::new("PriorityList")
+        $this._priorityList.X = $leftMargin
+        $this._priorityList.Y = $currentY + $labelHeight + 1
+        $this._priorityList.Width = $halfWidth
+        $this._priorityList.Height = 5
+        $this._priorityList.HasBorder = $true
+        $this._priorityList.BorderStyle = "Single"
+        $this._priorityList.AddItem("Low")
+        $this._priorityList.AddItem("Medium")
+        $this._priorityList.AddItem("High")
+        $this._priorityList.SelectedIndex = 1
+        $this._priorityList.IsFocusable = $true
+        $this._formPanel.AddChild($this._priorityList)
+        
+        # Project
+        $projectX = $leftMargin + $halfWidth + 10
+        $projectLabel = [LabelComponent]::new("ProjectLabel")
+        $projectLabel.Text = "Project:"
+        $projectLabel.X = $projectX
+        $projectLabel.Y = $currentY
+        $projectLabel.ForegroundColor = Get-ThemeColor "Foreground"
+        $this._formPanel.AddChild($projectLabel)
+        
+        $this._projectList = [ListBox]::new("ProjectList")
+        $this._projectList.X = $projectX
+        $this._projectList.Y = $currentY + $labelHeight + 1
+        $this._projectList.Width = $halfWidth
+        $this._projectList.Height = 5
+        $this._projectList.HasBorder = $true
+        $this._projectList.BorderStyle = "Single"
+        $this._projectList.AddItem("General")
+        $this._projectList.SelectedIndex = 0
+        $this._projectList.IsFocusable = $true
+        $this._formPanel.AddChild($this._projectList)
+        
+        # Status at bottom
+        $bottomY = $this._formPanel.Height - 5
+        
+        $this._statusLabel = [LabelComponent]::new("StatusLabel")
+        $this._statusLabel.X = $leftMargin
+        $this._statusLabel.Y = $bottomY
+        $this._statusLabel.Text = "Ready to create task"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Info"
+        $this._formPanel.AddChild($this._statusLabel)
+        
+        $instructLabel = [LabelComponent]::new("InstructLabel")
+        $instructLabel.X = $leftMargin
+        $instructLabel.Y = $bottomY + 2
+        $instructLabel.Text = "Tab: Next field | Ctrl+S: Save | ESC: Cancel"
+        $instructLabel.ForegroundColor = Get-ThemeColor "Subtle"
+        $this._formPanel.AddChild($instructLabel)
+    }
+'@
+
+$newTaskContent = $newTaskContent -replace $initPattern, "`$1`n$newInitializeBody"
+Set-Content -Path $newTaskPath -Value $newTaskContent -Force
+Write-Host "  - New Task Screen spacing completely fixed" -ForegroundColor Green
+
+Write-Host "`nAll fixes have been applied!" -ForegroundColor Green
+Write-Host "`nNext steps:" -ForegroundColor Yellow
+Write-Host "1. Run .\Start.ps1 to test the application" -ForegroundColor White
+Write-Host "2. Test Theme Selection (should apply immediately)" -ForegroundColor White
+Write-Host "3. Test New Task screen (all fields should be visible)" -ForegroundColor White
+Write-Host "4. Test Tab navigation in Task List screen" -ForegroundColor White
