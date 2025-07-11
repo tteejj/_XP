@@ -161,6 +161,10 @@ class KeybindingService {
         $this.SetBinding("F1", "app.help", "Global")
         $this.SetBinding("Ctrl+P", "app.commandPalette", "Global")
         
+        # Tools
+        $this.SetBinding("F9", "tools.fileCommander", "Global")
+        $this.SetBinding("Ctrl+E", "tools.textEditor", "Global")
+        
         # Component navigation
         $this.SetBinding("Tab", "navigation.nextComponent", "Global")
         $this.SetBinding("Shift+Tab", "navigation.previousComponent", "Global")
