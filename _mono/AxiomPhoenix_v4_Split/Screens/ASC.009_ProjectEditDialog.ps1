@@ -11,8 +11,8 @@ class ProjectEditDialog : Dialog {
     hidden [Panel] $_formPanel
     hidden [ScrollablePanel] $_scrollPanel
     hidden [Dictionary[string, Component]] $_fields
-    hidden [DataManager] $_dataManager
-    hidden [FileSystemService] $_fileSystemService
+    hidden [object] $_dataManager
+    hidden [object] $_fileSystemService
     hidden [string] $_baseProjectPath
     
     ProjectEditDialog([string]$name, [object]$serviceContainer, [PmcProject]$project = $null) : base($name, $serviceContainer) {

@@ -15,7 +15,7 @@ class ProjectsListScreen : Screen {
     hidden [List[PmcProject]] $_allProjects
     hidden [List[PmcProject]] $_filteredProjects
     hidden [LabelComponent] $_statusLabel
-    hidden [DataManager] $_dataManager
+    hidden [object] $_dataManager
     hidden [string] $_currentFilter = ""
     
     # Detail panel components
@@ -461,14 +461,14 @@ class ProjectsListScreen : Screen {
         $navService = $this.ServiceContainer.GetService("NavigationService")
         
         if ($navService) {
-            $projectInfoScreen = [ProjectInfoScreen]::new($this.ServiceContainer, $project)
+            $projectInfoScreen = New-Object -TypeName "ProjectInfoScreen" -ArgumentList $this.ServiceContainer, $project
             $projectInfoScreen.Initialize()
             $navService.NavigateTo($projectInfoScreen)
         }
     }
     
     hidden [void] ShowNewProjectDialog() {
-        $dialog = [ProjectEditDialog]::new("NewProjectDialog", $this.ServiceContainer, $null)
+        $dialog = New-Object -TypeName "ProjectEditDialog" -ArgumentList "NewProjectDialog", $this.ServiceContainer, $null
         $dialog.Initialize()
         $dialog.Show()
         
@@ -493,7 +493,7 @@ class ProjectsListScreen : Screen {
         }
         
         $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
-        $dialog = [ProjectEditDialog]::new("EditProjectDialog", $this.ServiceContainer, $project)
+        $dialog = New-Object -TypeName "ProjectEditDialog" -ArgumentList "EditProjectDialog", $this.ServiceContainer, $project
         $dialog.Initialize()
         $dialog.Show()
         

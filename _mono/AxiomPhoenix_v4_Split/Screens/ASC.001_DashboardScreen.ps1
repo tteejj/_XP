@@ -140,7 +140,7 @@ class DashboardScreen : Screen {
             '3' { 
                 $navService = $this.ServiceContainer.GetService("NavigationService")
                 if ($navService) {
-                    $projectsScreen = [ProjectsListScreen]::new($this.ServiceContainer)
+                    $projectsScreen = New-Object -TypeName "ProjectsListScreen" -ArgumentList $this.ServiceContainer
                     $projectsScreen.Initialize()
                     $navService.NavigateTo($projectsScreen)
                 }
@@ -162,7 +162,7 @@ class DashboardScreen : Screen {
                 ([ConsoleKey]::D3) { 
                     $navService = $this.ServiceContainer.GetService("NavigationService")
                     if ($navService) {
-                        $projectsScreen = [ProjectsListScreen]::new($this.ServiceContainer)
+                        $projectsScreen = New-Object -TypeName "ProjectsListScreen" -ArgumentList $this.ServiceContainer
                         $projectsScreen.Initialize()
                         $navService.NavigateTo($projectsScreen)
                     }
@@ -216,7 +216,7 @@ class DashboardScreen : Screen {
                     2 { 
                         $navService = $this.ServiceContainer.GetService("NavigationService")
                         if ($navService) {
-                            $projectsScreen = [ProjectsListScreen]::new($this.ServiceContainer)
+                            $projectsScreen = New-Object -TypeName "ProjectsListScreen" -ArgumentList $this.ServiceContainer
                             $projectsScreen.Initialize()
                             $navService.NavigateTo($projectsScreen)
                         }
