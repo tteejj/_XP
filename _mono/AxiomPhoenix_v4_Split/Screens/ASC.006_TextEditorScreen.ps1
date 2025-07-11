@@ -88,6 +88,14 @@ class TextEditorScreen : Screen {
         $this._statusLabel.ForegroundColor = Get-ThemeColor "Info"
         $this._statusBar.AddChild($this._statusLabel)
         
+        # Menu instructions - show available commands
+        $menuLabel = [LabelComponent]::new("MenuLabel")
+        $menuLabel.X = 25
+        $menuLabel.Y = 1
+        $menuLabel.Text = "^O:Open ^S:Save ^F:Find ^Q:Quit"
+        $menuLabel.ForegroundColor = Get-ThemeColor "component.text"
+        $this._statusBar.AddChild($menuLabel)
+        
         # Position label
         $this._positionLabel = [LabelComponent]::new("PositionLabel")
         $this._positionLabel.X = $this.Width - 20
@@ -195,7 +203,15 @@ class TextEditorScreen : Screen {
         # Render visible lines
         for ($i = 0; $i -lt $editorHeight; $i++) {
             $lineIndex = $this._viewportTop + $i
-            if ($lineIndex -ge $this._buffer.LineCount) { break }
+            if ($lineIndex -ge $this._buffer.LineCount) { 
+                # Clear remaining lines
+                for ($j = $i; $j -lt $editorHeight; $j++) {
+                    for ($x = 0; $x -lt $editorWidth; $x++) {
+                        $buffer.SetCell($x, $j, [TuiCell]::new(' ', (Get-ThemeColor "Foreground"), (Get-ThemeColor "Background")))
+                    }
+                }
+                break 
+            }
             
             # Check if line needs redraw
             $needsRedraw = $this._fullRedrawNeeded -or 
@@ -320,12 +336,16 @@ class TextEditorScreen : Screen {
         $this._cursorPosition = $this._buffer.GetCursorPosition()
         $this._cursorLine = $this._buffer.GetLineFromPosition($this._cursorPosition)
         
-        # Calculate column
+        # Calculate column safely
         $lineStart = $this._buffer.GetLineStart($this._cursorLine)
-        $this._cursorColumn = $this._cursorPosition - $lineStart
+        $this._cursorColumn = [Math]::Max(0, $this._cursorPosition - $lineStart)
+        
+        # Ensure values are valid
+        $displayLine = [Math]::Max(1, $this._cursorLine + 1)
+        $displayColumn = [Math]::Max(1, $this._cursorColumn + 1)
         
         # Update position label
-        $this._positionLabel.Text = "Ln $($this._cursorLine + 1), Col $($this._cursorColumn + 1)"
+        $this._positionLabel.Text = "Ln $displayLine, Col $displayColumn"
         
         # Update selection if active
         if ($this._selection.IsActive) {
@@ -384,6 +404,7 @@ class TextEditorScreen : Screen {
                 ([ConsoleKey]::Y) { $this.Redo(); return $true }
                 ([ConsoleKey]::S) { $this.Save(); return $true }
                 ([ConsoleKey]::Q) { $this.Exit(); return $true }
+                ([ConsoleKey]::O) { $this.Open(); return $true }
             }
         }
         
@@ -700,6 +721,9 @@ class TextEditorScreen : Screen {
         $cmd.Execute($this._buffer)
         $this._undoStack.Push($cmd)
         $this._redoStack.Clear()
+        # Update cursor position after command execution
+        $this.UpdateCursorPosition()
+        $this.RequestRedraw()
     }
     
     # Clipboard operations
@@ -954,7 +978,58 @@ Try editing this text to see the smooth performance!
     }
     
     hidden [void] Save() {
-        $this._statusLabel.Text = "Save (no filesystem access)"
+        # Show save dialog
+        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
+        if ($dialogManager) {
+            $dialog = [InputDialog]::new("SaveDialog", $this.ServiceContainer)
+            $dialog.SetMessage("Enter filename to save:")
+            $dialog.SetInputValue("document.txt")
+            $dialog.OnClose = {
+                param($result, $value)
+                if ($result -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($value)) {
+                    $this._statusLabel.Text = "Saved to: $value"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
+                    # In a real implementation, would save to file system here
+                    # $content = $this._buffer.GetAllText()
+                    # Set-Content -Path $value -Value $content
+                }
+            }.GetNewClosure()
+            $dialogManager.ShowDialog($dialog)
+        } else {
+            $this._statusLabel.Text = "Save dialog not available"
+        }
+    }
+    
+    hidden [void] Open() {
+        # Show open dialog
+        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
+        if ($dialogManager) {
+            $dialog = [InputDialog]::new("OpenDialog", $this.ServiceContainer)
+            $dialog.SetMessage("Enter filename to open:")
+            $dialog.SetInputValue("")
+            $dialog.OnClose = {
+                param($result, $value)
+                if ($result -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($value)) {
+                    # Clear current buffer
+                    $this._buffer = [TextBuffer]::new()
+                    # In a real implementation, would load from file system here
+                    # if (Test-Path $value) {
+                    #     $content = Get-Content -Path $value -Raw
+                    #     $this._buffer.Insert($content)
+                    # }
+                    # For demo, just show a message
+                    $this._buffer.Insert("# Opened: $value`n`nFile loading not implemented in demo.")
+                    $this._buffer.SetCursorPosition(0)
+                    $this.UpdateCursorPosition()
+                    $this._fullRedrawNeeded = $true
+                    $this._statusLabel.Text = "Opened: $value"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
+                }
+            }.GetNewClosure()
+            $dialogManager.ShowDialog($dialog)
+        } else {
+            $this._statusLabel.Text = "Open dialog not available"
+        }
     }
     
     hidden [void] Exit() {

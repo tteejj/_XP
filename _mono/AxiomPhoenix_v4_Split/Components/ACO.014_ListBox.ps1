@@ -23,16 +23,16 @@ using namespace System.Management.Automation
 class ListBox : UIElement {
     [List[object]]$Items
     [int]$SelectedIndex = -1
-    [string]$ForegroundColor = "#FFFFFF" # Changed from ConsoleColor to hex string
-    [string]$BackgroundColor = "#000000" # Changed from ConsoleColor to hex string
-    [string]$SelectedForegroundColor = "#000000" # Changed from ConsoleColor to hex string
-    [string]$SelectedBackgroundColor = "#00FFFF" # Changed from ConsoleColor to hex string
-    [string]$BorderColor = "#808080" # Changed from ConsoleColor to hex string
+    [string]$ForegroundColor = "" # Will use theme default
+    [string]$BackgroundColor = "" # Will use theme default
+    [string]$SelectedForegroundColor = "" # Will use theme default
+    [string]$SelectedBackgroundColor = "" # Will use theme default
+    [string]$BorderColor = "" # Will use theme default
     [bool]$HasBorder = $true
     [string]$BorderStyle = "Single"
     [string]$Title = ""
     [scriptblock]$SelectedIndexChanged = $null
-    [string]$ItemForegroundColor = "#E0E0E0" # Default item text color
+    [string]$ItemForegroundColor = "" # Will use theme default
     hidden [int]$ScrollOffset = 0
 
     ListBox([string]$name) : base($name) {
@@ -93,19 +93,23 @@ class ListBox : UIElement {
                 }
                 
                 $isSelected = ($itemIndex -eq $this.SelectedIndex)
+                
+                # Use theme colors with fallbacks
                 if ($isSelected) { 
-                    $fgColor = $this.SelectedForegroundColor
+                    $fgColor = if ($this.SelectedForegroundColor) { $this.SelectedForegroundColor } else { Get-ThemeColor "list.item.selected" "#0a0e27" }
+                    $itemBgColor = if ($this.SelectedBackgroundColor) { $this.SelectedBackgroundColor } else { Get-ThemeColor "list.item.selected.background" "#ff6ac1" }
                 } else { 
-                    $fgColor = $this.ItemForegroundColor
-                }
-                if ($isSelected) { 
-                    $itemBgColor = $this.SelectedBackgroundColor
-                } else { 
-                    $itemBgColor = $bgColor 
+                    $fgColor = if ($this.ItemForegroundColor) { $this.ItemForegroundColor } else { Get-ThemeColor "list.item.normal" "#f92aad" }
+                    $itemBgColor = $bgColor
                 }
                 
-                # Draw item background
-                $this._private_buffer.FillRect(1, $contentY + $i, $this.Width - 2, 1, ' ', @{ BG = $itemBgColor })
+                # Draw item with proper padding to ensure text is visible
+                if ($isSelected) {
+                    # Draw selection background only for the text area
+                    for ($x = $contentX; $x -lt ($contentX + $contentWidth); $x++) {
+                        $this._private_buffer.SetCell($x, $contentY + $i, [TuiCell]::new(' ', $fgColor, $itemBgColor))
+                    }
+                }
                 
                 # Draw item text
                 Write-TuiText -Buffer $this._private_buffer -X $contentX -Y ($contentY + $i) -Text $itemText `

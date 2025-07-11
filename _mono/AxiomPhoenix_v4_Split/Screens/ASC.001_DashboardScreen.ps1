@@ -231,6 +231,11 @@ class DashboardScreen : Screen {
             }
         }
         
+        # If not handled, let base class check global keybindings
+        if (-not $handled) {
+            return ([Screen]$this).HandleInput($keyInfo)
+        }
+        
         return $handled
     }
 }

@@ -26,8 +26,9 @@ class NewTaskScreen : Screen {
         # Use generous spacing - we have the room!
         $leftMargin = 5
         $topMargin = 3
-        $componentSpacing = 2  # Space between label and input
-        $sectionSpacing = 6    # Space between sections
+        $labelHeight = 1     # Height of each label
+        $componentSpacing = 1  # Space between label and input
+        $sectionSpacing = 2    # Space between sections
         $contentWidth = [Math]::Min(100, $this._formPanel.Width - ($leftMargin * 2))
         
         # Title Section
@@ -39,12 +40,12 @@ class NewTaskScreen : Screen {
         $titleLabel.ForegroundColor = Get-ThemeColor "Foreground"
         $this._formPanel.AddChild($titleLabel)
         
-        $y += $componentSpacing
+        $y += $labelHeight + $componentSpacing
         $this._titleBox = [TextBoxComponent]::new("TitleInput")
         $this._titleBox.X = $leftMargin
         $this._titleBox.Y = $y
         $this._titleBox.Width = $contentWidth
-        $this._titleBox.Height = 3
+        $this._titleBox.Height = 1
         $this._titleBox.Placeholder = "Enter task title..."
         $this._titleBox.IsFocusable = $true
         $this._formPanel.AddChild($this._titleBox)
@@ -58,12 +59,12 @@ class NewTaskScreen : Screen {
         $descLabel.ForegroundColor = Get-ThemeColor "Foreground"
         $this._formPanel.AddChild($descLabel)
         
-        $y += $componentSpacing
+        $y += $labelHeight + $componentSpacing
         $this._descriptionBox = [TextBoxComponent]::new("DescInput")
         $this._descriptionBox.X = $leftMargin
         $this._descriptionBox.Y = $y
         $this._descriptionBox.Width = $contentWidth
-        $this._descriptionBox.Height = 3
+        $this._descriptionBox.Height = 1
         $this._descriptionBox.Placeholder = "Enter description..."
         $this._descriptionBox.IsFocusable = $true
         $this._formPanel.AddChild($this._descriptionBox)
@@ -82,7 +83,7 @@ class NewTaskScreen : Screen {
         
         $this._priorityList = [ListBox]::new("PriorityList")
         $this._priorityList.X = $leftMargin
-        $this._priorityList.Y = $y + $componentSpacing
+        $this._priorityList.Y = $y + $labelHeight + $componentSpacing
         $this._priorityList.Width = $halfWidth
         $this._priorityList.Height = 5
         $this._priorityList.HasBorder = $true
@@ -105,7 +106,7 @@ class NewTaskScreen : Screen {
         
         $this._projectList = [ListBox]::new("ProjectList")
         $this._projectList.X = $projectX
-        $this._projectList.Y = $y + $componentSpacing
+        $this._projectList.Y = $y + $labelHeight + $componentSpacing
         $this._projectList.Width = $halfWidth
         $this._projectList.Height = 5
         $this._projectList.HasBorder = $true

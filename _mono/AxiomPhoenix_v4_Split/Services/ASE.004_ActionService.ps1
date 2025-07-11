@@ -393,6 +393,18 @@ class ActionService {
             Description = "Go Back"
         })
         
+        # Add missing navigation.nextComponent action
+        $this.RegisterAction("navigation.nextComponent", {
+            $focusManager = $global:TuiState.Services.FocusManager
+            if ($focusManager) {
+                $focusManager.FocusNext()
+            }
+        }, @{
+            Category = "Navigation"
+            Description = "Focus Next Component"
+            Hotkey = "Tab"
+        })
+        
         # Task CRUD actions (placeholders for now)
         $this.RegisterAction("task.edit.selected", {
             Write-Log -Level Info -Message "Edit task not implemented yet"

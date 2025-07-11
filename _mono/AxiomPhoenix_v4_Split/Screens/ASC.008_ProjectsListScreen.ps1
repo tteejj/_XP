@@ -62,10 +62,11 @@ class ProjectsListScreen : Screen {
         $this._searchBox.Width = $this._listPanel.Width - 4
         $this._searchBox.Height = 1
         $this._searchBox.Placeholder = "🔍 Search projects..."
+        $thisScreen = $this
         $this._searchBox.OnChange = {
             param($sender, $text)
-            $this.FilterProjects($text)
-        }
+            $thisScreen.FilterProjects($text)
+        }.GetNewClosure()
         $this._listPanel.AddChild($this._searchBox)
         
         # Project list
@@ -461,28 +462,78 @@ class ProjectsListScreen : Screen {
         $navService = $this.ServiceContainer.GetService("NavigationService")
         
         if ($navService) {
-            $projectInfoScreen = New-Object -TypeName "ProjectInfoScreen" -ArgumentList $this.ServiceContainer, $project
+            $projectInfoScreen = [ProjectInfoScreen]::new($this.ServiceContainer, $project)
             $projectInfoScreen.Initialize()
             $navService.NavigateTo($projectInfoScreen)
         }
     }
     
     hidden [void] ShowNewProjectDialog() {
-        $dialog = New-Object -TypeName "ProjectEditDialog" -ArgumentList "NewProjectDialog", $this.ServiceContainer, $null
-        $dialog.Initialize()
-        $dialog.Show()
-        
-        # Check if a project was created
-        if ($dialog.DialogResult) {
-            # Refresh the project list
-            $this._allProjects.Add($dialog.DialogResult)
-            $this.FilterProjects($this._currentFilter)
+        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
+        if ($dialogManager) {
+            # Use InputDialog for project key
+            $keyDialog = [InputDialog]::new("NewProjectKeyDialog", $this.ServiceContainer)
             
-            # Select the new project
-            $index = $this._filteredProjects.IndexOf($dialog.DialogResult)
-            if ($index -ge 0) {
-                $this._projectListBox.SelectedIndex = $index
-            }
+            $currentScreen = $this
+            $dataManager = $this._dataManager
+            
+            # Store OnClose before showing
+            $keyDialog.OnClose = {
+                param($result, $key)
+                if ($result -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($key)) {
+                    # Check if key already exists
+                    $existing = $dataManager.GetProject($key)
+                    if ($existing) {
+                        $dialogManager.ShowAlert("Error", "Project key '$key' already exists!")
+                        return
+                    }
+                    
+                    # Get project name
+                    $nameDialog = [InputDialog]::new("NewProjectNameDialog", $currentScreen.ServiceContainer)
+                    
+                    $nameDialog.OnClose = {
+                        param($result2, $name)
+                        if ($result2 -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($name)) {
+                            # Create the project
+                            $newProject = [PmcProject]::new($key, $name)
+                            $newProject.Owner = "Current User"  # Would get from session in real app
+                            $newProject.IsActive = $true
+                            
+                            # Save the project
+                            $dataManager.AddProject($newProject)
+                            $dataManager.SaveData()
+                            
+                            # Refresh the display
+                            $currentScreen._allProjects.Add($newProject)
+                            $currentScreen.FilterProjects($currentScreen._currentFilter)
+                            
+                            # Select the new project
+                            for ($i = 0; $i -lt $currentScreen._filteredProjects.Count; $i++) {
+                                if ($currentScreen._filteredProjects[$i].Key -eq $newProject.Key) {
+                                    $currentScreen._projectListBox.SelectedIndex = $i
+                                    break
+                                }
+                            }
+                            
+                            $currentScreen._statusLabel.Text = "Project created: $key"
+                            $currentScreen._statusLabel.ForegroundColor = Get-ThemeColor "success"
+                        }
+                    }.GetNewClosure()
+                    
+                    # Show the name dialog with correct method signature
+                    $nameDialog.Show("New Project", "Enter project name:", "")
+                    $navService = $currentScreen.ServiceContainer.GetService("NavigationService")
+                    if ($navService) {
+                        $navService.NavigateTo($nameDialog)
+                    }
+                }
+            }.GetNewClosure()
+            
+            # Show the key dialog with correct method signature
+            $keyDialog.Show("New Project", "Enter project key (e.g., PROJ-005):", "PROJ-")
+            $dialogManager.ShowDialog($keyDialog)
+        } else {
+            $this._statusLabel.Text = "Dialog manager not available"
         }
     }
     
@@ -493,15 +544,17 @@ class ProjectsListScreen : Screen {
         }
         
         $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
-        $dialog = New-Object -TypeName "ProjectEditDialog" -ArgumentList "EditProjectDialog", $this.ServiceContainer, $project
-        $dialog.Initialize()
-        $dialog.Show()
-        
-        # Refresh display if project was updated
-        if ($dialog.DialogResult) {
-            $this.FilterProjects($this._currentFilter)
-            $this.UpdateDetailPanel()
-        }
+        # Edit project dialog - commented out until ProjectEditDialog is implemented
+        # $dialog = [ProjectEditDialog]::new("EditProjectDialog", $this.ServiceContainer, $project)
+        # $dialog.Initialize()
+        # $dialog.Show()
+        # 
+        # # Refresh display if project was updated
+        # if ($dialog.DialogResult) {
+        #     $this.FilterProjects($this._currentFilter)
+        #     $this.UpdateDetailPanel()
+        # }
+        $this._statusLabel.Text = "Edit project dialog not implemented yet"
     }
     
     hidden [void] DeleteProject() {

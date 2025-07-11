@@ -103,15 +103,17 @@ class TextBoxComponent : UIElement {
                 if ($cursorScreenPos -ge 0 -and $cursorScreenPos -lt $contentWidth) {
                     $cursorX = $contentStartX + $cursorScreenPos
                     
-                    # Get the cell at cursor position
-                    $cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
-                    
-                    # Invert its colors to represent the cursor
-                    $cursorFg = $cellUnderCursor.BackgroundColor
-                    $cursorBg = $cellUnderCursor.ForegroundColor
-                    # Use the 4-parameter constructor for bold cursor
-                    $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true)
-                    $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
+                    # Get the cell at cursor position with bounds checking
+                    if ($cursorX -ge 0 -and $cursorX -lt $this._private_buffer.Width -and $contentY -ge 0 -and $contentY -lt $this._private_buffer.Height) {
+                        $cellUnderCursor = $this._private_buffer.GetCell($cursorX, $contentY)
+                        
+                        # Invert its colors to represent the cursor
+                        $cursorFg = $cellUnderCursor.BackgroundColor
+                        $cursorBg = $cellUnderCursor.ForegroundColor
+                        # Use the 4-parameter constructor for bold cursor
+                        $newCell = [TuiCell]::new($cellUnderCursor.Char, $cursorBg, $cursorFg, $true)
+                        $this._private_buffer.SetCell($cursorX, $contentY, $newCell)
+                    }
                 }
             }
         }

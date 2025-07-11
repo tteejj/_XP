@@ -260,8 +260,12 @@ class ThemeScreen : Screen {
                 $this.RequestRedraw()
                 
                 # Force immediate redraw
-                if ($global:TuiState.RenderEngine) {
-                    $global:TuiState.RenderEngine.Render()
+                try {
+                    if ($global:TuiState -and $global:TuiState.RenderEngine) {
+                        $global:TuiState.RenderEngine.Render()
+                    }
+                } catch {
+                    # Ignore render engine errors
                 }
                 
                 # Return after delay

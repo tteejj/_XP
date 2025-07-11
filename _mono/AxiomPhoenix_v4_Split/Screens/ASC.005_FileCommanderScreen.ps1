@@ -25,9 +25,9 @@ class FileCommanderScreen : Screen {
     hidden [string] $_leftPath
     hidden [string] $_rightPath
     hidden [bool] $_leftPanelActive = $true
-    hidden [System.IO.FileSystemInfo[]] $_leftItems = @()
-    hidden [System.IO.FileSystemInfo[]] $_rightItems = @()
-    hidden [System.IO.FileSystemInfo] $_selectedItem
+    hidden [object[]] $_leftItems = @()
+    hidden [object[]] $_rightItems = @()
+    hidden [object] $_selectedItem
     hidden [hashtable] $_fileTypeIcons = @{
         ".ps1" = "🔧"
         ".txt" = "📄"
@@ -64,9 +64,14 @@ class FileCommanderScreen : Screen {
     #endregion
 
     FileCommanderScreen([ServiceContainer]$container) : base("FileCommanderScreen", $container) {
-        # Initialize paths
-        $this._leftPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
-        $this._rightPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+        # Initialize paths safely
+        try {
+            $this._leftPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+            $this._rightPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+        } catch {
+            $this._leftPath = "C:\"
+            $this._rightPath = "C:\"
+        }
     }
 
     [void] Initialize() {
@@ -112,8 +117,9 @@ class FileCommanderScreen : Screen {
         $this._leftFileList.Width = $halfWidth - 2
         $this._leftFileList.Height = $panelHeight - 2
         $this._leftFileList.HasBorder = $false
-        $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "selection.active" "#0066CC"
-        $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "selection.text" "#FFFFFF"
+        # Use theme colors for selection - remove hardcoded colors
+        $this._leftFileList.SelectedBackgroundColor = ""
+        $this._leftFileList.SelectedForegroundColor = ""
         $this._leftFileList.ItemForegroundColor = Get-ThemeColor "file.normal" "#E0E0E0"
         $this._leftPanel.AddChild($this._leftFileList)
 
@@ -145,8 +151,9 @@ class FileCommanderScreen : Screen {
         $this._rightFileList.Width = $this._rightPanel.Width - 2
         $this._rightFileList.Height = $panelHeight - 2
         $this._rightFileList.HasBorder = $false
-        $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "selection.inactive" "#404040"
-        $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "selection.text" "#FFFFFF"
+        # Use theme colors for selection - remove hardcoded colors  
+        $this._rightFileList.SelectedBackgroundColor = ""
+        $this._rightFileList.SelectedForegroundColor = ""
         $this._rightFileList.ItemForegroundColor = Get-ThemeColor "file.normal" "#E0E0E0"
         $this._rightPanel.AddChild($this._rightFileList)
 
@@ -218,8 +225,9 @@ class FileCommanderScreen : Screen {
             $keyLabel.Width = 9
             $keyLabel.Height = 1
             $keyLabel.Text = "$($func.Key):$($func.Text)"
-            $keyLabel.ForegroundColor = Get-ThemeColor "function.text" "#FFFFFF"
-            $keyLabel.BackgroundColor = Get-ThemeColor "function.key.bg" "#1976D2"
+            # Only set foreground color - let the panel's background show through
+            $keyLabel.ForegroundColor = Get-ThemeColor "foreground" "#FFFFFF"
+            # Don't set background color for labels
             $this._functionBar.AddChild($keyLabel)
         }
 
@@ -268,12 +276,12 @@ class FileCommanderScreen : Screen {
             $parentDir = Split-Path $path -Parent
             if ($parentDir) {
                 $parentItem = [PSCustomObject]@{
-                    PSTypeName = 'System.IO.DirectoryInfo'
                     Name = ".."
                     FullName = $parentDir
                     Length = 0
                     LastWriteTime = $null
                     Attributes = [System.IO.FileAttributes]::Directory
+                    PSIsContainer = $true
                 }
                 $items += $parentItem
             }
@@ -345,7 +353,7 @@ class FileCommanderScreen : Screen {
         }
     }
 
-    hidden [string] FormatFileItem([System.IO.FileSystemInfo]$item) {
+    hidden [string] FormatFileItem([object]$item) {
         # Special case for parent directory
         if ($item.Name -eq "..") {
             return "📂 .."
@@ -468,8 +476,9 @@ class FileCommanderScreen : Screen {
         if ($this._leftPanelActive) {
             $this._leftPanel.BorderColor = Get-ThemeColor "border.active" "#00D4FF"
             $this._rightPanel.BorderColor = Get-ThemeColor "border.inactive" "#666666"
-            $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "selection.active" "#0066CC"
-            $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "selection.inactive" "#404040"
+            # Let ListBox use theme colors
+            $this._leftFileList.SelectedBackgroundColor = ""
+            $this._rightFileList.SelectedBackgroundColor = ""
             
             # Update selected item
             if ($this._leftFileList.SelectedIndex -ge 0 -and $this._leftFileList.SelectedIndex -lt $this._leftItems.Count) {
@@ -484,8 +493,9 @@ class FileCommanderScreen : Screen {
         } else {
             $this._leftPanel.BorderColor = Get-ThemeColor "border.inactive" "#666666"
             $this._rightPanel.BorderColor = Get-ThemeColor "border.active" "#00D4FF"
-            $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "selection.inactive" "#404040"
-            $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "selection.active" "#0066CC"
+            # Let ListBox use theme colors
+            $this._leftFileList.SelectedBackgroundColor = ""
+            $this._rightFileList.SelectedBackgroundColor = ""
             
             # Update selected item
             if ($this._rightFileList.SelectedIndex -ge 0 -and $this._rightFileList.SelectedIndex -lt $this._rightItems.Count) {
@@ -531,8 +541,16 @@ class FileCommanderScreen : Screen {
         }
         
         if ($item -and -not ($item.PSIsContainer -or $item.Attributes -band [System.IO.FileAttributes]::Directory) -and $item.Name -ne "..") {
-            # For now, just show file info. In a full implementation, you'd create a file viewer screen
-            $this._statusLabel.Text = "View: $($item.Name) (Press any key)"
+            # Navigate to text editor with the file
+            $navService = $this.ServiceContainer.GetService("NavigationService")
+            $actionService = $this.ServiceContainer.GetService("ActionService")
+            if ($actionService) {
+                # Store the file path for the editor to open (in a real implementation)
+                $this._statusLabel.Text = "Opening: $($item.Name)"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "info"
+                # Navigate to text editor
+                $actionService.ExecuteAction("tools.textEditor", @{FilePath = $item.FullName})
+            }
         }
     }
 
@@ -545,15 +563,64 @@ class FileCommanderScreen : Screen {
         }
         
         if ($item -and $item.Name -ne "..") {
-            # In a real implementation, you'd show a confirmation dialog
-            $this._statusLabel.Text = "Delete: $($item.Name)? (Y/N)"
-            # For now, just show the message
+            $dialogManager = $this.ServiceContainer.GetService("DialogManager")
+            if ($dialogManager) {
+                $itemType = if ($item.PSIsContainer -or $item.Attributes -band [System.IO.FileAttributes]::Directory) { "directory" } else { "file" }
+                $message = "Delete $itemType '$($item.Name)'?"
+                
+                $thisScreen = $this
+                $dialogManager.ShowConfirm("Confirm Delete", $message, {
+                    # Delete the item
+                    try {
+                        Remove-Item -Path $item.FullName -Recurse -Force
+                        $thisScreen._statusLabel.Text = "Deleted: $($item.Name)"
+                        $thisScreen._statusLabel.ForegroundColor = Get-ThemeColor "warning"
+                        # Refresh panels
+                        $thisScreen.RefreshPanels()
+                    } catch {
+                        $thisScreen._statusLabel.Text = "Error: $($_.Exception.Message)"
+                        $thisScreen._statusLabel.ForegroundColor = Get-ThemeColor "error"
+                    }
+                }.GetNewClosure(), {
+                    # Cancel - do nothing
+                })
+            } else {
+                $this._statusLabel.Text = "Delete: $($item.Name) (dialog not available)"
+            }
         }
     }
 
     hidden [void] CreateDirectory() {
-        # In a real implementation, you'd show an input dialog
-        $this._statusLabel.Text = "Create directory (not implemented)"
+        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
+        if ($dialogManager) {
+            $dialog = [InputDialog]::new("CreateDirDialog", $this.ServiceContainer)
+            $dialog.SetMessage("Enter directory name:")
+            $dialog.SetInputValue("")
+            
+            $currentPath = if ($this._leftPanelActive) { $this._leftPath } else { $this._rightPath }
+            $thisScreen = $this
+            
+            $dialog.OnClose = {
+                param($result, $dirName)
+                if ($result -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($dirName)) {
+                    $newPath = Join-Path $currentPath $dirName
+                    try {
+                        New-Item -Path $newPath -ItemType Directory -Force | Out-Null
+                        $thisScreen._statusLabel.Text = "Created: $dirName"
+                        $thisScreen._statusLabel.ForegroundColor = Get-ThemeColor "success"
+                        # Refresh the panels
+                        $thisScreen.RefreshPanels()
+                    } catch {
+                        $thisScreen._statusLabel.Text = "Error: $($_.Exception.Message)"
+                        $thisScreen._statusLabel.ForegroundColor = Get-ThemeColor "error"
+                    }
+                }
+            }.GetNewClosure()
+            
+            $dialogManager.ShowDialog($dialog)
+        } else {
+            $this._statusLabel.Text = "Create directory (dialog not available)"
+        }
     }
 
     hidden [void] ShowHelp() {
