@@ -1,14 +1,6 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Services (Load After Components)
+# Axiom-Phoenix v4.0 - ThemeManager with Palette-Based Architecture
 # Core application services: action, navigation, data, theming, logging, events
-# ==============================================================================
-#
-# TABLE OF CONTENTS DIRECTIVE:
-# When modifying this file, ensure page markers remain accurate and update
-# TableOfContents.md to reflect any structural changes.
-#
-# Search for "PAGE: ASE.###" to find specific sections.
-# Each section ends with "END_PAGE: ASE.###"
 # ==============================================================================
 
 #region ThemeManager Class
@@ -16,7 +8,7 @@
 # ===== CLASS: ThemeManager =====
 # Module: theme-manager (from axiom)
 # Dependencies: None
-# Purpose: Visual theming system with consistent hex color output
+# Purpose: Visual theming system with palette-based architecture
 class ThemeManager {
     [hashtable]$CurrentTheme = @{}
     [string]$ThemeName = "Synthwave"
@@ -30,225 +22,201 @@ class ThemeManager {
     [void] InitializeThemes() {
         # Synthwave Theme - Neon cyberpunk aesthetic
         $this.Themes["Synthwave"] = @{
-            # Base colors
-            "Background" = "#0a0e27"
-            "Foreground" = "#f92aad"
-            "Subtle" = "#72f1b8"
-            "Primary" = "#ff6ac1"
-            "Accent" = "#ffcc00"
-            "Secondary" = "#5a189a"
-            "Error" = "#ff006e"
-            "Warning" = "#ffbe0b"
-            "Success" = "#3bf4fb"
-            "Info" = "#8338ec"
+            Palette = @{
+                # Base colors
+                Black = "#0a0e27"
+                White = "#ffffff"
+                Primary = "#f92aad"
+                Secondary = "#5a189a"
+                Accent = "#ffcc00"
+                Success = "#3bf4fb"
+                Warning = "#ffbe0b"
+                Error = "#ff006e"
+                Info = "#8338ec"
+                Subtle = "#72f1b8"
+                
+                # Grays
+                Background = "#0a0e27"
+                Surface = "#1a1e3a"
+                Border = "#2a2e4a"
+                TextPrimary = "#f92aad"
+                TextSecondary = "#72f1b8"
+                TextDisabled = "#555555"
+            }
             
-            # Component specific
-            "component.background" = "#0a0e27"
-            "component.border" = "#f92aad"
-            "component.title" = "#ffcc00"
-            "component.text" = "#f92aad"  # ADDED
-            
-            # Input
-            "input.background" = "#1a1e3a"
-            "input.foreground" = "#f92aad"
-            "input.placeholder" = "#72f1b8"
-            
-            # Button states
-            "button.normal.fg" = "#0a0e27"
-            "button.normal.bg" = "#f92aad"
-            "button.focused.fg" = "#0a0e27"
-            "button.focused.bg" = "#ff6ac1"
-            "button.pressed.fg" = "#0a0e27"
-            "button.pressed.bg" = "#ffcc00"
-            "button.disabled.fg" = "#555555"
-            "button.disabled.bg" = "#2a2e4a"
-            
-            # List/Table
-            "list.header.fg" = "#ffcc00"
-            "list.header.bg" = "#1a1e3a"
-            "list.item.normal" = "#f92aad"
-            "list.item.selected" = "#0a0e27"
-            "list.item.selected.background" = "#ff6ac1"
-            "list.scrollbar" = "#72f1b8"
-            
-            # Overlay
-            "overlay.background" = "#0a0e27"  # ADDED
-        }
-        
-        # Aurora Theme - Northern lights inspired
-        $this.Themes["Aurora"] = @{
-            # Base colors
-            "Background" = "#011627"
-            "Foreground" = "#d6deeb"
-            "Subtle" = "#7fdbca"
-            "Primary" = "#82aaff"
-            "Accent" = "#21c7a8"
-            "Secondary" = "#c792ea"
-            "Error" = "#ef5350"
-            "Warning" = "#ffeb95"
-            "Success" = "#22da6e"
-            "Info" = "#82aaff"
-            
-            # Component specific
-            "component.background" = "#011627"
-            "component.border" = "#5f7e97"
-            "component.title" = "#21c7a8"
-            
-            # Input
-            "input.background" = "#0e293f"
-            "input.foreground" = "#d6deeb"
-            "input.placeholder" = "#637777"
-            
-            # Button states
-            "button.normal.fg" = "#011627"
-            "button.normal.bg" = "#82aaff"
-            "button.focused.fg" = "#011627"
-            "button.focused.bg" = "#21c7a8"
-            "button.pressed.fg" = "#011627"
-            "button.pressed.bg" = "#c792ea"
-            "button.disabled.fg" = "#444444"
-            "button.disabled.bg" = "#1d3b53"
-            
-            # List/Table
-            "list.header.fg" = "#21c7a8"
-            "list.header.bg" = "#0e293f"
-            "list.item.normal" = "#d6deeb"
-            "list.item.selected" = "#011627"
-            "list.item.selected.background" = "#82aaff"
-            "list.scrollbar" = "#5f7e97"
-        }
-        
-        # Ocean Theme - Deep sea aesthetics
-        $this.Themes["Ocean"] = @{
-            # Base colors
-            "Background" = "#0f111a"
-            "Foreground" = "#8f93a2"
-            "Subtle" = "#4b526d"
-            "Primary" = "#00bcd4"
-            "Accent" = "#00e676"
-            "Secondary" = "#536dfe"
-            "Error" = "#ff5252"
-            "Warning" = "#ffb74d"
-            "Success" = "#00e676"
-            "Info" = "#448aff"
-            
-            # Component specific
-            "component.background" = "#0f111a"
-            "component.border" = "#1f2937"
-            "component.title" = "#00bcd4"
-            
-            # Input
-            "input.background" = "#1a1f2e"
-            "input.foreground" = "#8f93a2"
-            "input.placeholder" = "#4b526d"
-            
-            # Button states
-            "button.normal.fg" = "#0f111a"
-            "button.normal.bg" = "#00bcd4"
-            "button.focused.fg" = "#0f111a"
-            "button.focused.bg" = "#00e676"
-            "button.pressed.fg" = "#0f111a"
-            "button.pressed.bg" = "#536dfe"
-            "button.disabled.fg" = "#333333"
-            "button.disabled.bg" = "#1a1f2e"
-            
-            # List/Table
-            "list.header.fg" = "#00e676"
-            "list.header.bg" = "#1a1f2e"
-            "list.item.normal" = "#8f93a2"
-            "list.item.selected" = "#0f111a"
-            "list.item.selected.background" = "#00bcd4"
-            "list.scrollbar" = "#4b526d"
-        }
-        
-        # Forest Theme - Nature inspired
-        $this.Themes["Forest"] = @{
-            # Base colors
-            "Background" = "#0d1117"
-            "Foreground" = "#c9d1d9"
-            "Subtle" = "#8b949e"
-            "Primary" = "#58a6ff"
-            "Accent" = "#56d364"
-            "Secondary" = "#d29922"
-            "Error" = "#f85149"
-            "Warning" = "#f0883e"
-            "Success" = "#56d364"
-            "Info" = "#58a6ff"
-            
-            # Component specific
-            "component.background" = "#0d1117"
-            "component.border" = "#30363d"
-            "component.title" = "#56d364"
-            
-            # Input
-            "input.background" = "#161b22"
-            "input.foreground" = "#c9d1d9"
-            "input.placeholder" = "#484f58"
-            
-            # Button states
-            "button.normal.fg" = "#0d1117"
-            "button.normal.bg" = "#58a6ff"
-            "button.focused.fg" = "#0d1117"
-            "button.focused.bg" = "#56d364"
-            "button.pressed.fg" = "#0d1117"
-            "button.pressed.bg" = "#d29922"
-            "button.disabled.fg" = "#484f58"
-            "button.disabled.bg" = "#21262d"
-            
-            # List/Table
-            "list.header.fg" = "#56d364"
-            "list.header.bg" = "#161b22"
-            "list.item.normal" = "#c9d1d9"
-            "list.item.selected" = "#0d1117"
-            "list.item.selected.background" = "#58a6ff"
-            "list.scrollbar" = "#8b949e"
+            Components = @{
+                # Screen/Window
+                Screen = @{
+                    Background = '$Palette.Background'
+                    Foreground = '$Palette.TextPrimary'
+                }
+                
+                # Panel
+                Panel = @{
+                    Background = '$Palette.Background'
+                    Border = '$Palette.Border'
+                    Title = '$Palette.Accent'
+                    Header = '$Palette.Surface'
+                }
+                
+                # Labels and Text
+                Label = @{
+                    Foreground = '$Palette.TextPrimary'
+                    Disabled = '$Palette.TextDisabled'
+                }
+                
+                # Buttons
+                Button = @{
+                    Normal = @{
+                        Foreground = '$Palette.Black'
+                        Background = '$Palette.Primary'
+                    }
+                    Focused = @{
+                        Foreground = '$Palette.Black'
+                        Background = '$Palette.Accent'
+                    }
+                    Pressed = @{
+                        Foreground = '$Palette.Black'
+                        Background = '$Palette.Secondary'
+                    }
+                    Disabled = @{
+                        Foreground = '$Palette.TextDisabled'
+                        Background = '$Palette.Border'
+                    }
+                }
+                
+                # Input fields
+                Input = @{
+                    Background = '$Palette.Surface'
+                    Foreground = '$Palette.TextPrimary'
+                    Placeholder = '$Palette.TextSecondary'
+                    Border = '$Palette.Border'
+                    FocusedBorder = '$Palette.Accent'
+                }
+                
+                # Lists and Tables
+                List = @{
+                    Background = '$Palette.Background'
+                    ItemNormal = '$Palette.TextPrimary'
+                    ItemSelected = '$Palette.Black'
+                    ItemSelectedBackground = '$Palette.Primary'
+                    ItemFocused = '$Palette.Black'
+                    ItemFocusedBackground = '$Palette.Accent'
+                    HeaderForeground = '$Palette.Accent'
+                    HeaderBackground = '$Palette.Surface'
+                    Scrollbar = '$Palette.Subtle'
+                }
+                
+                # Status
+                Status = @{
+                    Success = '$Palette.Success'
+                    Warning = '$Palette.Warning'
+                    Error = '$Palette.Error'
+                    Info = '$Palette.Info'
+                }
+                
+                # Overlay/Dialog
+                Overlay = @{
+                    Background = '$Palette.Black'
+                    DialogBackground = '$Palette.Surface'
+                }
+            }
         }
         
         # Green Theme - Classic terminal green
         $this.Themes["Green"] = @{
-            # Base colors
-            "Background" = "#000000"
-            "Foreground" = "#00FF00"
-            "Subtle" = "#008000"
-            "Primary" = "#00FF00"
-            "Accent" = "#FFFF00"
-            "Secondary" = "#008000"
-            "Error" = "#FF0000"
-            "Warning" = "#FFFF00"
-            "Success" = "#00FF00"
-            "Info" = "#00FFFF"
+            Palette = @{
+                # Base colors
+                Black = "#000000"
+                White = "#ffffff"
+                Primary = "#00ff00"
+                Secondary = "#008000"
+                Accent = "#ffff00"
+                Success = "#00ff00"
+                Warning = "#ffff00"
+                Error = "#ff0000"
+                Info = "#00ffff"
+                Subtle = "#008000"
+                
+                # Grays
+                Background = "#000000"
+                Surface = "#001100"
+                Border = "#00ff00"
+                TextPrimary = "#00ff00"
+                TextSecondary = "#008000"
+                TextDisabled = "#004400"
+            }
             
-            # Component specific
-            "component.background" = "#000000"
-            "component.border" = "#00FF00"
-            "component.title" = "#00FF00"
-            "component.text" = "#00FF00"
-            
-            # Input
-            "input.background" = "#001100"
-            "input.foreground" = "#00FF00"
-            "input.placeholder" = "#008000"
-            
-            # Button states
-            "button.normal.fg" = "#000000"
-            "button.normal.bg" = "#00FF00"
-            "button.focused.fg" = "#000000"
-            "button.focused.bg" = "#00FF00"
-            "button.pressed.fg" = "#000000"
-            "button.pressed.bg" = "#FFFF00"
-            "button.disabled.fg" = "#004400"
-            "button.disabled.bg" = "#002200"
-            
-            # List/Table
-            "list.header.fg" = "#00FF00"
-            "list.header.bg" = "#001100"
-            "list.item.normal" = "#00FF00"
-            "list.item.selected" = "#000000"
-            "list.item.selected.background" = "#00FF00"
-            "list.scrollbar" = "#008000"
-            
-            # Overlay
-            "overlay.background" = "#000000"
+            Components = @{
+                # Copy structure from Synthwave, all values reference $Palette
+                Screen = @{
+                    Background = '$Palette.Background'
+                    Foreground = '$Palette.TextPrimary'
+                }
+                
+                Panel = @{
+                    Background = '$Palette.Background'
+                    Border = '$Palette.Border'
+                    Title = '$Palette.Primary'
+                    Header = '$Palette.Surface'
+                }
+                
+                Label = @{
+                    Foreground = '$Palette.TextPrimary'
+                    Disabled = '$Palette.TextDisabled'
+                }
+                
+                Button = @{
+                    Normal = @{
+                        Foreground = '$Palette.Black'
+                        Background = '$Palette.Primary'
+                    }
+                    Focused = @{
+                        Foreground = '$Palette.Black'
+                        Background = '$Palette.Accent'
+                    }
+                    Pressed = @{
+                        Foreground = '$Palette.Black'
+                        Background = '$Palette.Secondary'
+                    }
+                    Disabled = @{
+                        Foreground = '$Palette.TextDisabled'
+                        Background = '$Palette.Surface'
+                    }
+                }
+                
+                Input = @{
+                    Background = '$Palette.Surface'
+                    Foreground = '$Palette.TextPrimary'
+                    Placeholder = '$Palette.TextSecondary'
+                    Border = '$Palette.Border'
+                    FocusedBorder = '$Palette.Primary'
+                }
+                
+                List = @{
+                    Background = '$Palette.Background'
+                    ItemNormal = '$Palette.TextPrimary'
+                    ItemSelected = '$Palette.Black'
+                    ItemSelectedBackground = '$Palette.Primary'
+                    ItemFocused = '$Palette.Black'
+                    ItemFocusedBackground = '$Palette.Accent'
+                    HeaderForeground = '$Palette.Primary'
+                    HeaderBackground = '$Palette.Surface'
+                    Scrollbar = '$Palette.Secondary'
+                }
+                
+                Status = @{
+                    Success = '$Palette.Success'
+                    Warning = '$Palette.Warning'
+                    Error = '$Palette.Error'
+                    Info = '$Palette.Info'
+                }
+                
+                Overlay = @{
+                    Background = '$Palette.Black'
+                    DialogBackground = '$Palette.Surface'
+                }
+            }
         }
     }
     
@@ -256,6 +224,10 @@ class ThemeManager {
         if ($this.Themes.ContainsKey($themeName)) {
             $this.CurrentTheme = $this.Themes[$themeName].Clone()
             $this.ThemeName = $themeName
+            # Force redraw
+            if ($global:TuiState) {
+                $global:TuiState.IsDirty = $true
+            }
         }
     }
     
@@ -263,46 +235,96 @@ class ThemeManager {
         $this.LoadTheme("Synthwave")
     }
     
+    # Get any theme value (not just colors)
+    [string] GetThemeValue([string]$path) {
+        return $this.GetThemeValue($path, "#FFFFFF")
+    }
+    
+    [string] GetThemeValue([string]$path, [string]$defaultValue) {
+        # Split the path (e.g., "List.ItemSelected" -> ["List", "ItemSelected"])
+        $parts = $path -split '\.'
+        
+        # Navigate through the theme structure
+        $current = $this.CurrentTheme.Components
+        foreach ($part in $parts) {
+            if ($current -is [hashtable] -and $current.ContainsKey($part)) {
+                $current = $current[$part]
+            } else {
+                return $defaultValue
+            }
+        }
+        
+        # If we found a value, check if it's a palette reference
+        if ($current -is [string] -and $current.StartsWith('$Palette.')) {
+            # Extract the palette key
+            $paletteKey = $current.Substring(9) # Remove '$Palette.'
+            if ($this.CurrentTheme.Palette.ContainsKey($paletteKey)) {
+                return $this.CurrentTheme.Palette[$paletteKey]
+            }
+        }
+        
+        # Return the value as-is if it's not a palette reference
+        return $current
+    }
+    
+    # Backward compatibility
     [string] GetColor([string]$colorName) {
-        return $this.GetColor($colorName, "#FFFFFF")
+        # Map old color names to new paths
+        $mappings = @{
+            "Background" = "Screen.Background"
+            "Foreground" = "Screen.Foreground"
+            "Primary" = "Screen.Foreground"
+            "border.active" = "Panel.Border"
+            "border.inactive" = "Panel.Border"
+            "component.background" = "Panel.Background"
+            "component.border" = "Panel.Border"
+            "component.title" = "Panel.Title"
+            "component.text" = "Label.Foreground"
+            "list.selected.bg" = "List.ItemSelectedBackground"
+            "list.selected.fg" = "List.ItemSelected"
+            "list.item.selected" = "List.ItemSelected"
+            "list.item.selected.background" = "List.ItemSelectedBackground"
+            "list.item.normal" = "List.ItemNormal"
+            "list.scrollbar" = "List.Scrollbar"
+            "label" = "Label.Foreground"
+            "primary.accent" = "Panel.Title"
+            "primary.text" = "Label.Foreground"
+            "overlay.background" = "Overlay.Background"
+            "Info" = "Status.Info"
+            "Success" = "Status.Success"
+            "Warning" = "Status.Warning"
+            "Error" = "Status.Error"
+            "Subtle" = "Label.Foreground"
+        }
+        
+        if ($mappings.ContainsKey($colorName)) {
+            return $this.GetThemeValue($mappings[$colorName], "#FFFFFF")
+        }
+        
+        # Check if it's already a path
+        if ($colorName -match '\.') {
+            return $this.GetThemeValue($colorName, "#FFFFFF")
+        }
+        
+        # Check palette directly
+        if ($this.CurrentTheme.Palette.ContainsKey($colorName)) {
+            return $this.CurrentTheme.Palette[$colorName]
+        }
+        
+        return "#FFFFFF"
     }
     
     [string] GetColor([string]$colorName, [string]$defaultColor) {
-        if ($this.CurrentTheme.ContainsKey($colorName)) {
-            return $this.CurrentTheme[$colorName]
+        $color = $this.GetColor($colorName)
+        if ($color -eq "#FFFFFF" -and $defaultColor -ne "#FFFFFF") {
+            return $defaultColor
         }
-        return $defaultColor
+        return $color
     }
     
     [void] SetColor([string]$colorName, $colorValue) {
-        # Convert ConsoleColor to hex if needed
-        if ($colorValue -is [ConsoleColor]) {
-            $consoleColorMap = @{
-                [ConsoleColor]::Black = "#000000"
-                [ConsoleColor]::DarkBlue = "#000080"
-                [ConsoleColor]::DarkGreen = "#008000"
-                [ConsoleColor]::DarkCyan = "#008080"
-                [ConsoleColor]::DarkRed = "#800000"
-                [ConsoleColor]::DarkMagenta = "#800080"
-                [ConsoleColor]::DarkYellow = "#808000"
-                [ConsoleColor]::Gray = "#C0C0C0"
-                [ConsoleColor]::DarkGray = "#808080"
-                [ConsoleColor]::Blue = "#0000FF"
-                [ConsoleColor]::Green = "#00FF00"
-                [ConsoleColor]::Cyan = "#00FFFF"
-                [ConsoleColor]::Red = "#FF0000"
-                [ConsoleColor]::Magenta = "#FF00FF"
-                [ConsoleColor]::Yellow = "#FFFF00"
-                [ConsoleColor]::White = "#FFFFFF"
-            }
-            $colorValue = $consoleColorMap[$colorValue]
-        }
-        
-        $this.CurrentTheme[$colorName] = $colorValue
-        # Force redraw when colors change
-        if ($global:TuiState) {
-            $global:TuiState.IsDirty = $true
-        }
+        # This is deprecated in the new system
+        Write-Warning "SetColor is deprecated. Themes should be modified through the palette."
     }
     
     [string[]] GetAvailableThemes() {
@@ -318,4 +340,4 @@ class ThemeManager {
 }
 
 #endregion
-#<!-- END_PAGE: ASE.005 -->
+#<!-- END_PAGE: ASE.003 -->

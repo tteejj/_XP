@@ -104,7 +104,26 @@ class Screen : UIElement {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Base implementation - screens should override this
+        # Base implementation - check global keybindings first
+        if ($null -ne $this.ServiceContainer) {
+            $keybindingService = $this.ServiceContainer.GetService("KeybindingService")
+            if ($keybindingService) {
+                $action = $keybindingService.GetAction($keyInfo)
+                if ($action) {
+                    $actionService = $this.ServiceContainer.GetService("ActionService")
+                    if ($actionService) {
+                        try {
+                            $actionService.ExecuteAction($action, @{})
+                            return $true
+                        }
+                        catch {
+                            Write-Log -Level Error -Message "Failed to execute action '$action': $($_.Exception.Message)"
+                        }
+                    }
+                }
+            }
+        }
+        # If no global keybinding handled it, return false
         return $false
     }
 
