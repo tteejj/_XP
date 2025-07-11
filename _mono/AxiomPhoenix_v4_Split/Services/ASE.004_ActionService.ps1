@@ -256,6 +256,50 @@ class ActionService {
             Description = "View All Tasks"
         })
         
+        # File browser action
+        $this.RegisterAction("tools.fileCommander", {
+            Write-Log -Level Info -Message "Navigating to File Commander screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    $fileCommander = [FileCommanderScreen]::new($container)
+                    $fileCommander.Initialize()
+                    $navService.NavigateTo($fileCommander)
+                    Write-Log -Level Info -Message "Successfully navigated to FileCommanderScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to FileCommanderScreen: $_"
+                }
+            }
+        }, @{
+            Category = "Tools"
+            Description = "File Browser"
+            Hotkey = "F9"
+        })
+        
+        # Text editor action
+        $this.RegisterAction("tools.textEditor", {
+            Write-Log -Level Info -Message "Navigating to Text Editor screen"
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            if ($navService -and $container) {
+                try {
+                    $editor = [TextEditorScreen]::new($container)
+                    $editor.Initialize()
+                    $navService.NavigateTo($editor)
+                    Write-Log -Level Info -Message "Successfully navigated to TextEditorScreen"
+                }
+                catch {
+                    Write-Log -Level Error -Message "Failed to navigate to TextEditorScreen: $_"
+                }
+            }
+        }, @{
+            Category = "Tools"
+            Description = "Text Editor"
+            Hotkey = "Ctrl+E"
+        })
+        
         # Navigation actions
         $this.RegisterAction("navigation.taskList", {
             Write-Log -Level Info -Message "Navigating to Task List screen"

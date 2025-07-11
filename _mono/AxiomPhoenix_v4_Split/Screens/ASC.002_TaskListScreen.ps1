@@ -161,7 +161,7 @@ class TaskListScreen : Screen {
         $this._helpLabel = [LabelComponent]::new("HelpLabel")
         $this._helpLabel.X = 2
         $this._helpLabel.Y = 4
-        $this._helpLabel.Text = "↑↓ Navigate | Enter: Edit | Space: Toggle | N: New | D: Delete"
+        $this._helpLabel.Text = "↑↓ Navigate | Enter: Edit | Space: Toggle | N: New | Esc: Back"
         $this._helpLabel.ForegroundColor = Get-ThemeColor "help" "#666666"
         $this._contextPanel.AddChild($this._helpLabel)
 
@@ -793,8 +793,13 @@ class TaskListScreen : Screen {
         # Check if focus is on filter box - let it handle input first
         $focusManager = $this.ServiceContainer?.GetService("FocusManager")
         if ($focusManager -and $focusManager.FocusedComponent -eq $this._filterBox) {
-            # Only handle escape to unfocus
+            # Handle escape to unfocus
             if ($keyInfo.Key -eq [ConsoleKey]::Escape) {
+                $focusManager.SetFocus($this._taskListBox)
+                return $true
+            }
+            # Handle Tab to cycle back to task list
+            if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
                 $focusManager.SetFocus($this._taskListBox)
                 return $true
             }
@@ -919,6 +924,20 @@ class TaskListScreen : Screen {
             ([ConsoleKey]::F5) {
                 # Refresh data
                 $this._RefreshTasks()
+                return $true
+            }
+            ([ConsoleKey]::Escape) {
+                # Go back to dashboard
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                } else {
+                    # If no back history, go to dashboard
+                    $actionService = $this.ServiceContainer?.GetService("ActionService")
+                    if ($actionService) {
+                        $actionService.ExecuteAction("navigation.dashboard", @{})
+                    }
+                }
                 return $true
             }
         }

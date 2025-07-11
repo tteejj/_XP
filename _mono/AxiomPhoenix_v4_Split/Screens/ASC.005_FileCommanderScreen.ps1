@@ -564,6 +564,9 @@ class FileCommanderScreen : Screen {
     [void] OnEnter() {
         ([Screen]$this).OnEnter()
         
+        # Load initial directories
+        $this.RefreshPanels()
+        
         # Set initial focus
         $focusManager = $this.ServiceContainer.GetService("FocusManager")
         if ($focusManager) {

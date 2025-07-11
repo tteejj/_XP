@@ -67,7 +67,7 @@ class DashboardScreen : Screen {
         $this._menuPanel.X = [Math]::Floor(($this.Width - 40) / 2)
         $this._menuPanel.Y = 5
         $this._menuPanel.Width = 40
-        $this._menuPanel.Height = 10
+        $this._menuPanel.Height = 11  # Adjusted after removing F9 line
         $this._menuPanel.HasBorder = $true
         $this._menuPanel.BorderStyle = "Double"
         $this._menuPanel.Title = " Navigation "
@@ -78,8 +78,10 @@ class DashboardScreen : Screen {
         $menuTexts = @(
             "[1] Dashboard (Current)",
             "[2] Task List",
-            "[3] Theme Picker", 
-            "[4] Command Palette (Ctrl+P)",
+            "[3] File Browser",
+            "[4] Text Editor",
+            "[5] Theme Picker", 
+            "[6] Command Palette (Ctrl+P)",
             "",
             "[Q] Quit"
         )
@@ -105,7 +107,7 @@ class DashboardScreen : Screen {
         $instructions = [LabelComponent]::new("Instructions")
         $instructions.Text = "Press the number/letter key to select an option"
         $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
-        $instructions.Y = 17
+        $instructions.Y = 18  # Adjusted for smaller menu
         $instructions.ForegroundColor = Get-ThemeColor("Subtle")
         $this._mainPanel.AddChild($instructions)
     }
@@ -134,8 +136,10 @@ class DashboardScreen : Screen {
         switch ($char) {
             '1' { $handled = $true }
             '2' { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
-            '3' { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
-            '4' { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+            '3' { $actionService.ExecuteAction("tools.fileCommander", @{}); $handled = $true }
+            '4' { $actionService.ExecuteAction("tools.textEditor", @{}); $handled = $true }
+            '5' { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+            '6' { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
             'q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
             'Q' { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
         }
@@ -145,8 +149,10 @@ class DashboardScreen : Screen {
             switch ($key) {
                 ([ConsoleKey]::D1) { $handled = $true }
                 ([ConsoleKey]::D2) { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
-                ([ConsoleKey]::D3) { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
-                ([ConsoleKey]::D4) { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                ([ConsoleKey]::D3) { $actionService.ExecuteAction("tools.fileCommander", @{}); $handled = $true }
+                ([ConsoleKey]::D4) { $actionService.ExecuteAction("tools.textEditor", @{}); $handled = $true }
+                ([ConsoleKey]::D5) { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+                ([ConsoleKey]::D6) { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
                 ([ConsoleKey]::Q) { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
             }
         }
@@ -188,9 +194,11 @@ class DashboardScreen : Screen {
                 switch ($this._selectedIndex) {
                     0 { $handled = $true } # Already on dashboard
                     1 { $actionService.ExecuteAction("navigation.taskList", @{}); $handled = $true }
-                    2 { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
-                    3 { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
-                    5 { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
+                    2 { $actionService.ExecuteAction("tools.fileCommander", @{}); $handled = $true }
+                    3 { $actionService.ExecuteAction("tools.textEditor", @{}); $handled = $true }
+                    4 { $actionService.ExecuteAction("navigation.themePicker", @{}); $handled = $true }
+                    5 { $actionService.ExecuteAction("app.commandPalette", @{}); $handled = $true }
+                    7 { $actionService.ExecuteAction("app.exit", @{}); $handled = $true }
                 }
             }
         }

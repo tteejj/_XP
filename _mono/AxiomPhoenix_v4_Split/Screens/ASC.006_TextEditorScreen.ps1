@@ -157,6 +157,13 @@ class TextEditorScreen : Screen {
     
     [void] OnEnter() {
         ([Screen]$this).OnEnter()
+        
+        # Set focus to this screen so it receives keyboard input
+        $focusManager = $this.ServiceContainer.GetService("FocusManager")
+        if ($focusManager) {
+            $focusManager.SetFocus($this)
+        }
+        
         $this.RequestRedraw()
         $this._fullRedrawNeeded = $true
     }
@@ -302,8 +309,8 @@ class TextEditorScreen : Screen {
             if ($cell) {
                 # Invert colors for cursor
                 $cursorCell = [TuiCell]::new($cell.Char, 
-                    Get-ThemeColor "Background", 
-                    Get-ThemeColor "Foreground")
+                    (Get-ThemeColor "Background"), 
+                    (Get-ThemeColor "Foreground"))
                 $buffer.SetCell($cursorScreenX, $cursorScreenY, $cursorCell)
             }
         }

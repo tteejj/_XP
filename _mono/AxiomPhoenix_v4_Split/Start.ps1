@@ -4,7 +4,7 @@
 # ==============================================================================
 
 param(
-    [string]$Theme = "Synthwave",
+    [string]$Theme = "Green",
     [switch]$Debug
 )
 

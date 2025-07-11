@@ -203,6 +203,53 @@ class ThemeManager {
             "list.item.selected.background" = "#58a6ff"
             "list.scrollbar" = "#8b949e"
         }
+        
+        # Green Theme - Classic terminal green
+        $this.Themes["Green"] = @{
+            # Base colors
+            "Background" = "#000000"
+            "Foreground" = "#00FF00"
+            "Subtle" = "#008000"
+            "Primary" = "#00FF00"
+            "Accent" = "#FFFF00"
+            "Secondary" = "#008000"
+            "Error" = "#FF0000"
+            "Warning" = "#FFFF00"
+            "Success" = "#00FF00"
+            "Info" = "#00FFFF"
+            
+            # Component specific
+            "component.background" = "#000000"
+            "component.border" = "#00FF00"
+            "component.title" = "#00FF00"
+            "component.text" = "#00FF00"
+            
+            # Input
+            "input.background" = "#001100"
+            "input.foreground" = "#00FF00"
+            "input.placeholder" = "#008000"
+            
+            # Button states
+            "button.normal.fg" = "#000000"
+            "button.normal.bg" = "#00FF00"
+            "button.focused.fg" = "#000000"
+            "button.focused.bg" = "#00FF00"
+            "button.pressed.fg" = "#000000"
+            "button.pressed.bg" = "#FFFF00"
+            "button.disabled.fg" = "#004400"
+            "button.disabled.bg" = "#002200"
+            
+            # List/Table
+            "list.header.fg" = "#00FF00"
+            "list.header.bg" = "#001100"
+            "list.item.normal" = "#00FF00"
+            "list.item.selected" = "#000000"
+            "list.item.selected.background" = "#00FF00"
+            "list.scrollbar" = "#008000"
+            
+            # Overlay
+            "overlay.background" = "#000000"
+        }
     }
     
     [void] LoadTheme([string]$themeName) {
