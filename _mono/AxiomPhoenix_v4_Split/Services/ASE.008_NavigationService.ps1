@@ -73,14 +73,6 @@ class NavigationService {
         }
         
         try {
-            # NEW: If navigating to an overlay, save focus state
-            if ($screen.IsOverlay) {
-                $focusManager = $this.ServiceContainer.GetService("FocusManager")
-                if ($focusManager) {
-                    $focusManager.PushFocusState()
-                }
-            }
-            
             # Exit current screen if one exists
             if ($this.CurrentScreen) {
                 # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)'"
@@ -120,7 +112,9 @@ class NavigationService {
             }
             
             # Update global TUI state (CRITICAL FIX)
+            Write-Log -Level Debug -Message "NavigationService: Setting CurrentScreen to $($screen.Name)"
             $global:TuiState.CurrentScreen = $screen
+            Write-Log -Level Debug -Message "NavigationService: CurrentScreen is now $($global:TuiState.CurrentScreen?.Name)"
             $global:TuiState.IsDirty = $true # Force redraw
             $global:TuiState.FocusedComponent = $null # Clear focus, screen OnEnter should set new focus
 
@@ -157,14 +151,6 @@ class NavigationService {
                 # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($exitingScreen.Name)' (going back)"
                 $exitingScreen.OnExit()
                 $exitingScreen.Cleanup() # Clean up the screen being exited/popped
-                
-                # NEW: If exiting an overlay, restore focus state
-                if ($exitingScreen.IsOverlay) {
-                    $focusManager = $this.ServiceContainer.GetService("FocusManager")
-                    if ($focusManager) {
-                        $focusManager.PopFocusState()
-                    }
-                }
             }
             
             # Pop and resume previous screen

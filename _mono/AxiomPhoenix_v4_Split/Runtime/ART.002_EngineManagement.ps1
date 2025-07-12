@@ -30,6 +30,7 @@ function Initialize-TuiEngine {
         [Console]::InputEncoding = [System.Text.Encoding]::UTF8  # ADDED: Set input encoding
         $env:PYTHONIOENCODING = "utf-8"
         [Console]::CursorVisible = $false
+        [Console]::TreatControlCAsInput = $true  # ADDED: Allow Ctrl+C to be read as input
         $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
         
         # Clear screen and hide cursor
@@ -130,7 +131,17 @@ function Start-TuiEngine {
                 
                 # Phase 2: Process input (always process input for responsiveness)
                 Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
-                    Process-TuiInput
+                    # Read keyboard input if available
+                    if ([Console]::KeyAvailable) {
+                        $keyInfo = [Console]::ReadKey($true)  # $true = no echo
+                        if ($keyInfo) {
+                            Write-Log -Level Debug -Message "Engine: Read key - Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Modifiers=$($keyInfo.Modifiers)"
+                            Write-Log -Level Debug -Message "Engine: CurrentScreen=$($global:TuiState.CurrentScreen?.Name)"
+                            Process-TuiInput -KeyInfo $keyInfo
+                        } else {
+                            Write-Log -Level Debug -Message "Engine: ReadKey returned null"
+                        }
+                    }
                 }
                 
                 # Phase 3: Process deferred actions (execute AFTER navigation completes)

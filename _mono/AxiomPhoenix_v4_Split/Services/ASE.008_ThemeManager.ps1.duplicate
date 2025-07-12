@@ -1,0 +1,545 @@
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Theme Manager Service (Palette-Based)
+# Manages application themes with two-tier color system
+# ==============================================================================
+
+class ThemeManager {
+    hidden [hashtable]$_currentTheme = @{}
+    hidden [string]$_themeName = "Dark"
+    hidden [hashtable]$_themes = @{}
+    
+    ThemeManager() {
+        $this._InitializeThemes()
+        $this.LoadTheme("Dark")
+    }
+    
+    # Get current theme name
+    [string] get_ThemeName() {
+        return $this._themeName
+    }
+    
+    # Get current theme
+    [hashtable] get_CurrentTheme() {
+        return $this._currentTheme
+    }
+    
+    # Initialize all built-in themes
+    hidden [void] _InitializeThemes() {
+        # Dark Theme - Default professional theme
+        $this._themes["Dark"] = @{
+            Palette = @{
+                # Core colors
+                Primary = "#00D4FF"      # Bright cyan
+                Secondary = "#FF00FF"    # Magenta
+                Accent = "#FFD700"       # Gold
+                Success = "#00FF88"      # Bright green
+                Warning = "#FFA500"      # Orange
+                Danger = "#FF4444"       # Red
+                Info = "#00BFFF"         # Sky blue
+                
+                # Base colors
+                Background = "#0A0A0A"   # Near black
+                Surface = "#1A1A1A"      # Dark gray
+                SurfaceAlt = "#252525"   # Slightly lighter
+                
+                # Text colors
+                Text = "#E0E0E0"         # Light gray
+                TextSubtle = "#888888"   # Medium gray
+                TextMuted = "#666666"    # Darker gray
+                TextBright = "#FFFFFF"   # Pure white
+                
+                # UI colors
+                Border = "#333333"       # Dark border
+                BorderFocus = "#00D4FF"  # Cyan for focus
+                Shadow = "#000000"       # Pure black
+                Overlay = "#000000CC"    # Semi-transparent black
+            }
+            Components = @{
+                # Panel styling
+                "Panel.Border" = '$Palette.Border'
+                "Panel.BorderFocus" = '$Palette.BorderFocus'
+                "Panel.Background" = '$Palette.Background'
+                "Panel.Title" = '$Palette.Primary'
+                "Panel.TitleBrackets" = '$Palette.TextSubtle'
+                
+                # Button styling
+                "Button.Background" = '$Palette.Surface'
+                "Button.Foreground" = '$Palette.Text'
+                "Button.BackgroundHover" = '$Palette.SurfaceAlt'
+                "Button.BackgroundPressed" = '$Palette.Primary'
+                "Button.ForegroundPressed" = '$Palette.Background'
+                "Button.Border" = '$Palette.Border'
+                "Button.BorderFocus" = '$Palette.Primary'
+                
+                # TextBox styling
+                "TextBox.Background" = '$Palette.Surface'
+                "TextBox.Foreground" = '$Palette.Text'
+                "TextBox.Border" = '$Palette.Border'
+                "TextBox.BorderFocus" = '$Palette.Primary'
+                "TextBox.Placeholder" = '$Palette.TextMuted'
+                "TextBox.Selection" = '$Palette.Primary'
+                "TextBox.Cursor" = '$Palette.Primary'
+                
+                # List styling
+                "List.Background" = '$Palette.Background'
+                "List.Foreground" = '$Palette.Text'
+                "List.SelectedBackground" = '$Palette.Primary'
+                "List.SelectedForeground" = '$Palette.Background'
+                "List.FocusedBackground" = '$Palette.SurfaceAlt'
+                "List.FocusedForeground" = '$Palette.TextBright'
+                "List.Border" = '$Palette.Border'
+                
+                # Label styling
+                "Label.Foreground" = '$Palette.Text'
+                "Label.Background" = 'transparent'
+                
+                # Dialog styling
+                "Dialog.Background" = '$Palette.Surface'
+                "Dialog.Border" = '$Palette.Primary'
+                "Dialog.Title" = '$Palette.Primary'
+                "Dialog.Shadow" = '$Palette.Shadow'
+                
+                # Status bar
+                "StatusBar.Background" = '$Palette.Surface'
+                "StatusBar.Foreground" = '$Palette.Text'
+                "StatusBar.Border" = '$Palette.Border'
+                
+                # Scrollbar
+                "Scrollbar.Track" = '$Palette.Surface'
+                "Scrollbar.Thumb" = '$Palette.TextSubtle'
+                "Scrollbar.ThumbHover" = '$Palette.Text'
+                
+                # Special elements
+                "CommandPalette.Background" = '$Palette.Surface'
+                "CommandPalette.Border" = '$Palette.Primary'
+                "CommandPalette.Match" = '$Palette.Accent'
+                
+                # Text editor specific
+                "Editor.Background" = '$Palette.Background'
+                "Editor.Foreground" = '$Palette.Text'
+                "Editor.LineNumber" = '$Palette.TextMuted'
+                "Editor.CurrentLine" = '$Palette.SurfaceAlt'
+                "Editor.Selection" = '$Palette.Primary'
+                "Editor.Cursor" = '$Palette.Primary'
+                
+                # Progress indicators
+                "Progress.Background" = '$Palette.Surface'
+                "Progress.Foreground" = '$Palette.Primary'
+                "Progress.Complete" = '$Palette.Success'
+            }
+        }
+        
+        # Synthwave Theme - Neon aesthetic
+        $this._themes["Synthwave"] = @{
+            Palette = @{
+                Primary = "#f92aad"      # Hot pink
+                Secondary = "#fee77a"    # Yellow
+                Accent = "#00ffff"       # Cyan
+                Success = "#72f1b8"      # Mint green
+                Warning = "#fede5d"      # Golden yellow
+                Danger = "#ff5555"       # Soft red
+                Info = "#03edf9"         # Electric blue
+                
+                Background = "#241b2f"   # Deep purple
+                Surface = "#262335"      # Darker purple
+                SurfaceAlt = "#2a2139"   # Even darker
+                
+                Text = "#ffffff"         # White
+                TextSubtle = "#b893ce"   # Light purple
+                TextMuted = "#8a7c9b"    # Medium purple
+                TextBright = "#fee77a"   # Yellow
+                
+                Border = "#495495"       # Blue-purple
+                BorderFocus = "#f92aad"  # Hot pink
+                Shadow = "#16141f"       # Very dark purple
+                Overlay = "#241b2fCC"    # Semi-transparent purple
+            }
+            Components = @{
+                # Inherit component mappings but with Synthwave palette
+                "Panel.Border" = '$Palette.Border'
+                "Panel.BorderFocus" = '$Palette.BorderFocus'
+                "Panel.Background" = '$Palette.Background'
+                "Panel.Title" = '$Palette.Primary'
+                "Panel.TitleBrackets" = '$Palette.Secondary'
+                
+                "Button.Background" = '$Palette.Surface'
+                "Button.Foreground" = '$Palette.Text'
+                "Button.BackgroundHover" = '$Palette.Primary'
+                "Button.BackgroundPressed" = '$Palette.Accent'
+                "Button.ForegroundPressed" = '$Palette.Background'
+                "Button.Border" = '$Palette.Border'
+                "Button.BorderFocus" = '$Palette.Primary'
+                
+                "TextBox.Background" = '$Palette.Surface'
+                "TextBox.Foreground" = '$Palette.Text'
+                "TextBox.Border" = '$Palette.Border'
+                "TextBox.BorderFocus" = '$Palette.Primary'
+                "TextBox.Placeholder" = '$Palette.TextMuted'
+                "TextBox.Selection" = '$Palette.Primary'
+                "TextBox.Cursor" = '$Palette.Accent'
+                
+                "List.Background" = '$Palette.Background'
+                "List.Foreground" = '$Palette.Text'
+                "List.SelectedBackground" = '$Palette.Primary'
+                "List.SelectedForeground" = '$Palette.Background'
+                "List.FocusedBackground" = '$Palette.Surface'
+                "List.FocusedForeground" = '$Palette.TextBright'
+                "List.Border" = '$Palette.Border'
+                
+                "Label.Foreground" = '$Palette.Text'
+                "Label.Background" = 'transparent'
+                
+                "Dialog.Background" = '$Palette.Surface'
+                "Dialog.Border" = '$Palette.Primary'
+                "Dialog.Title" = '$Palette.Primary'
+                "Dialog.Shadow" = '$Palette.Shadow'
+                
+                "StatusBar.Background" = '$Palette.Surface'
+                "StatusBar.Foreground" = '$Palette.Text'
+                "StatusBar.Border" = '$Palette.Border'
+                
+                "Scrollbar.Track" = '$Palette.Surface'
+                "Scrollbar.Thumb" = '$Palette.TextSubtle'
+                "Scrollbar.ThumbHover" = '$Palette.Primary'
+                
+                "CommandPalette.Background" = '$Palette.Surface'
+                "CommandPalette.Border" = '$Palette.Primary'
+                "CommandPalette.Match" = '$Palette.Secondary'
+                
+                "Editor.Background" = '$Palette.Background'
+                "Editor.Foreground" = '$Palette.Text'
+                "Editor.LineNumber" = '$Palette.TextMuted'
+                "Editor.CurrentLine" = '$Palette.Surface'
+                "Editor.Selection" = '$Palette.Primary'
+                "Editor.Cursor" = '$Palette.Accent'
+                
+                "Progress.Background" = '$Palette.Surface'
+                "Progress.Foreground" = '$Palette.Primary'
+                "Progress.Complete" = '$Palette.Success'
+            }
+        }
+        
+        # Matrix Theme - Green terminal aesthetic
+        $this._themes["Matrix"] = @{
+            Palette = @{
+                Primary = "#00ff00"      # Bright green
+                Secondary = "#008f11"    # Dark green
+                Accent = "#00ff00"       # Bright green
+                Success = "#00ff00"      # Green
+                Warning = "#ffff00"      # Yellow
+                Danger = "#ff0000"       # Red
+                Info = "#00ffff"         # Cyan
+                
+                Background = "#000000"   # Pure black
+                Surface = "#0a0a0a"      # Very dark gray
+                SurfaceAlt = "#1a1a1a"   # Dark gray
+                
+                Text = "#00ff00"         # Green
+                TextSubtle = "#008f11"   # Dark green
+                TextMuted = "#005500"    # Very dark green
+                TextBright = "#00ff00"   # Bright green
+                
+                Border = "#00ff00"       # Green
+                BorderFocus = "#00ffff"  # Cyan
+                Shadow = "#000000"       # Black
+                Overlay = "#000000CC"    # Semi-transparent black
+            }
+            Components = @{
+                "Panel.Border" = '$Palette.Border'
+                "Panel.BorderFocus" = '$Palette.BorderFocus'
+                "Panel.Background" = '$Palette.Background'
+                "Panel.Title" = '$Palette.Primary'
+                "Panel.TitleBrackets" = '$Palette.TextSubtle'
+                
+                "Button.Background" = '$Palette.Surface'
+                "Button.Foreground" = '$Palette.Text'
+                "Button.BackgroundHover" = '$Palette.SurfaceAlt'
+                "Button.BackgroundPressed" = '$Palette.Primary'
+                "Button.ForegroundPressed" = '$Palette.Background'
+                "Button.Border" = '$Palette.Border'
+                "Button.BorderFocus" = '$Palette.BorderFocus'
+                
+                "TextBox.Background" = '$Palette.Background'
+                "TextBox.Foreground" = '$Palette.Text'
+                "TextBox.Border" = '$Palette.Border'
+                "TextBox.BorderFocus" = '$Palette.BorderFocus'
+                "TextBox.Placeholder" = '$Palette.TextMuted'
+                "TextBox.Selection" = '$Palette.TextSubtle'
+                "TextBox.Cursor" = '$Palette.Primary'
+                
+                "List.Background" = '$Palette.Background'
+                "List.Foreground" = '$Palette.Text'
+                "List.SelectedBackground" = '$Palette.Secondary'
+                "List.SelectedForeground" = '$Palette.TextBright'
+                "List.FocusedBackground" = '$Palette.Surface'
+                "List.FocusedForeground" = '$Palette.Primary'
+                "List.Border" = '$Palette.Border'
+                
+                "Label.Foreground" = '$Palette.Text'
+                "Label.Background" = 'transparent'
+                
+                "Dialog.Background" = '$Palette.Surface'
+                "Dialog.Border" = '$Palette.Primary'
+                "Dialog.Title" = '$Palette.Primary'
+                "Dialog.Shadow" = '$Palette.Shadow'
+                
+                "StatusBar.Background" = '$Palette.Surface'
+                "StatusBar.Foreground" = '$Palette.Text'
+                "StatusBar.Border" = '$Palette.Border'
+                
+                "Scrollbar.Track" = '$Palette.Surface'
+                "Scrollbar.Thumb" = '$Palette.TextSubtle'
+                "Scrollbar.ThumbHover" = '$Palette.Text'
+                
+                "CommandPalette.Background" = '$Palette.Surface'
+                "CommandPalette.Border" = '$Palette.Primary'
+                "CommandPalette.Match" = '$Palette.Accent'
+                
+                "Editor.Background" = '$Palette.Background'
+                "Editor.Foreground" = '$Palette.Text'
+                "Editor.LineNumber" = '$Palette.TextMuted'
+                "Editor.CurrentLine" = '$Palette.Surface'
+                "Editor.Selection" = '$Palette.Secondary'
+                "Editor.Cursor" = '$Palette.Primary'
+                
+                "Progress.Background" = '$Palette.Surface'
+                "Progress.Foreground" = '$Palette.Primary'
+                "Progress.Complete" = '$Palette.Success'
+            }
+        }
+        
+        # Light Theme - High contrast light mode
+        $this._themes["Light"] = @{
+            Palette = @{
+                Primary = "#0066cc"      # Blue
+                Secondary = "#6b46c1"    # Purple
+                Accent = "#059669"       # Green
+                Success = "#10b981"      # Light green
+                Warning = "#f59e0b"      # Amber
+                Danger = "#ef4444"       # Red
+                Info = "#3b82f6"         # Light blue
+                
+                Background = "#ffffff"   # White
+                Surface = "#f3f4f6"      # Light gray
+                SurfaceAlt = "#e5e7eb"   # Slightly darker
+                
+                Text = "#111827"         # Near black
+                TextSubtle = "#6b7280"   # Gray
+                TextMuted = "#9ca3af"    # Light gray
+                TextBright = "#000000"   # Pure black
+                
+                Border = "#d1d5db"       # Light border
+                BorderFocus = "#0066cc"  # Blue for focus
+                Shadow = "#00000022"     # Very light shadow
+                Overlay = "#00000066"    # Semi-transparent black
+            }
+            Components = @{
+                "Panel.Border" = '$Palette.Border'
+                "Panel.BorderFocus" = '$Palette.BorderFocus'
+                "Panel.Background" = '$Palette.Background'
+                "Panel.Title" = '$Palette.Primary'
+                "Panel.TitleBrackets" = '$Palette.TextSubtle'
+                
+                "Button.Background" = '$Palette.Surface'
+                "Button.Foreground" = '$Palette.Text'
+                "Button.BackgroundHover" = '$Palette.Primary'
+                "Button.BackgroundPressed" = '$Palette.Primary'
+                "Button.ForegroundPressed" = '$Palette.Background'
+                "Button.Border" = '$Palette.Border'
+                "Button.BorderFocus" = '$Palette.Primary'
+                
+                "TextBox.Background" = '$Palette.Background'
+                "TextBox.Foreground" = '$Palette.Text'
+                "TextBox.Border" = '$Palette.Border'
+                "TextBox.BorderFocus" = '$Palette.Primary'
+                "TextBox.Placeholder" = '$Palette.TextMuted'
+                "TextBox.Selection" = '$Palette.Primary'
+                "TextBox.Cursor" = '$Palette.Primary'
+                
+                "List.Background" = '$Palette.Background'
+                "List.Foreground" = '$Palette.Text'
+                "List.SelectedBackground" = '$Palette.Primary'
+                "List.SelectedForeground" = '$Palette.Background'
+                "List.FocusedBackground" = '$Palette.Surface'
+                "List.FocusedForeground" = '$Palette.Text'
+                "List.Border" = '$Palette.Border'
+                
+                "Label.Foreground" = '$Palette.Text'
+                "Label.Background" = 'transparent'
+                
+                "Dialog.Background" = '$Palette.Background'
+                "Dialog.Border" = '$Palette.Primary'
+                "Dialog.Title" = '$Palette.Primary'
+                "Dialog.Shadow" = '$Palette.Shadow'
+                
+                "StatusBar.Background" = '$Palette.Surface'
+                "StatusBar.Foreground" = '$Palette.Text'
+                "StatusBar.Border" = '$Palette.Border'
+                
+                "Scrollbar.Track" = '$Palette.Surface'
+                "Scrollbar.Thumb" = '$Palette.TextSubtle'
+                "Scrollbar.ThumbHover" = '$Palette.Text'
+                
+                "CommandPalette.Background" = '$Palette.Background'
+                "CommandPalette.Border" = '$Palette.Primary'
+                "CommandPalette.Match" = '$Palette.Accent'
+                
+                "Editor.Background" = '$Palette.Background'
+                "Editor.Foreground" = '$Palette.Text'
+                "Editor.LineNumber" = '$Palette.TextMuted'
+                "Editor.CurrentLine" = '$Palette.Surface'
+                "Editor.Selection" = '$Palette.SurfaceAlt'
+                "Editor.Cursor" = '$Palette.Primary'
+                
+                "Progress.Background" = '$Palette.Surface'
+                "Progress.Foreground" = '$Palette.Primary'
+                "Progress.Complete" = '$Palette.Success'
+            }
+        }
+    }
+    
+    # Load a theme by name
+    [void] LoadTheme([string]$themeName) {
+        if (-not $this._themes.ContainsKey($themeName)) {
+            Write-Log -Level Warning -Message "Theme '$themeName' not found. Using default."
+            $themeName = "Dark"
+        }
+        
+        $this._themeName = $themeName
+        $this._currentTheme = $this._themes[$themeName]
+        
+        Write-Log -Level Info -Message "Loaded theme: $themeName"
+    }
+    
+    # Get a color value from the current theme
+    [string] GetColor([string]$path, [string]$defaultValue = "#FFFFFF") {
+        try {
+            # Handle both old-style and new-style paths
+            $componentPath = if ($path -match '\.') { $path } else { "Components.$path" }
+            
+            # Try to get from Components first
+            if ($this._currentTheme.Components.ContainsKey($componentPath)) {
+                $value = $this._currentTheme.Components[$componentPath]
+            } elseif ($this._currentTheme.Components.ContainsKey($path)) {
+                $value = $this._currentTheme.Components[$path]
+            } else {
+                # Fallback to Palette
+                if ($this._currentTheme.Palette.ContainsKey($path)) {
+                    return $this._currentTheme.Palette[$path]
+                }
+                return $defaultValue
+            }
+            
+            # Resolve palette references
+            if ($value -match '^\$Palette\.(.+)$') {
+                $palettePath = $matches[1]
+                if ($this._currentTheme.Palette.ContainsKey($palettePath)) {
+                    return $this._currentTheme.Palette[$palettePath]
+                }
+            }
+            
+            # Handle 'transparent' special value
+            if ($value -eq 'transparent') {
+                return $null
+            }
+            
+            return $value
+        }
+        catch {
+            Write-Log -Level Warning -Message "Failed to get theme color for '$path': $_"
+            return $defaultValue
+        }
+    }
+    
+    # Set a color in the current theme (for runtime customization)
+    [void] SetColor([string]$path, [string]$value) {
+        if ($path -match '^Palette\.(.+)$') {
+            $this._currentTheme.Palette[$matches[1]] = $value
+        } else {
+            $this._currentTheme.Components[$path] = $value
+        }
+    }
+    
+    # Get list of available themes
+    [string[]] GetAvailableThemes() {
+        return $this._themes.Keys | Sort-Object
+    }
+    
+    # Add a custom theme
+    [void] AddTheme([string]$name, [hashtable]$theme) {
+        if (-not $theme.ContainsKey('Palette') -or -not $theme.ContainsKey('Components')) {
+            throw "Theme must contain both 'Palette' and 'Components' hashtables"
+        }
+        $this._themes[$name] = $theme
+    }
+    
+    # Export current theme to JSON
+    [string] ExportTheme() {
+        return $this._currentTheme | ConvertTo-Json -Depth 10
+    }
+    
+    # Import theme from JSON
+    [void] ImportTheme([string]$name, [string]$json) {
+        try {
+            $theme = $json | ConvertFrom-Json -AsHashtable
+            $this.AddTheme($name, $theme)
+        }
+        catch {
+            Write-Log -Level Error -Message "Failed to import theme: $_"
+            throw
+        }
+    }
+    
+    # Get a value from the theme (colors or other values)
+    [object] GetValue([string]$path, [object]$defaultValue = $null) {
+        try {
+            # Check Components first
+            if ($this._currentTheme.Components.ContainsKey($path)) {
+                $value = $this._currentTheme.Components[$path]
+                
+                # Resolve palette references
+                if ($value -is [string] -and $value -match '^\$Palette\.(.+)$') {
+                    $palettePath = $matches[1]
+                    if ($this._currentTheme.Palette.ContainsKey($palettePath)) {
+                        return $this._currentTheme.Palette[$palettePath]
+                    }
+                }
+                
+                return $value
+            }
+            
+            # Check Palette
+            if ($this._currentTheme.Palette.ContainsKey($path)) {
+                return $this._currentTheme.Palette[$path]
+            }
+            
+            # Check nested paths (e.g., "Panel.Border")
+            $parts = $path -split '\.'
+            if ($parts.Count -eq 2) {
+                $component = $parts[0]
+                $property = $parts[1]
+                $fullPath = "$component.$property"
+                
+                if ($this._currentTheme.Components.ContainsKey($fullPath)) {
+                    $value = $this._currentTheme.Components[$fullPath]
+                    
+                    # Resolve palette references
+                    if ($value -is [string] -and $value -match '^\$Palette\.(.+)$') {
+                        $palettePath = $matches[1]
+                        if ($this._currentTheme.Palette.ContainsKey($palettePath)) {
+                            return $this._currentTheme.Palette[$palettePath]
+                        }
+                    }
+                    
+                    return $value
+                }
+            }
+            
+            return $defaultValue
+        }
+        catch {
+            Write-Log -Level Warning -Message "Failed to get theme value for '$path': $_"
+            return $defaultValue
+        }
+    }
+}

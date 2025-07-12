@@ -100,10 +100,10 @@ class DashboardScreen : Screen {
     }
 
     [void] OnEnter() {
-        # Set focus to menu list
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._menuList) {
-            $focusManager.SetFocus($this._menuList)
+        # Manually handle focus since FocusManager was removed
+        if ($this._menuList) {
+            $this._menuList.IsFocused = $true
+            $this._menuList.RequestRedraw()
         }
         
         # Update description for selected item
@@ -127,7 +127,54 @@ class DashboardScreen : Screen {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Handle menu navigation
+        if ($null -eq $keyInfo) { return $false }
+        
+        # First, let the focused component (menu list) handle the input
+        if ($this._menuList -and $this._menuList.IsFocused) {
+            $oldIndex = $this._menuList.SelectedIndex
+            
+            # Handle arrow keys and navigation
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    if ($this._menuList.HandleInput($keyInfo)) {
+                        if ($oldIndex -ne $this._menuList.SelectedIndex) {
+                            $this._UpdateDescription()
+                        }
+                        return $true
+                    }
+                    break
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this._menuList.HandleInput($keyInfo)) {
+                        if ($oldIndex -ne $this._menuList.SelectedIndex) {
+                            $this._UpdateDescription()
+                        }
+                        return $true
+                    }
+                    break
+                }
+                ([ConsoleKey]::Home) {
+                    if ($this._menuList.HandleInput($keyInfo)) {
+                        if ($oldIndex -ne $this._menuList.SelectedIndex) {
+                            $this._UpdateDescription()
+                        }
+                        return $true
+                    }
+                    break
+                }
+                ([ConsoleKey]::End) {
+                    if ($this._menuList.HandleInput($keyInfo)) {
+                        if ($oldIndex -ne $this._menuList.SelectedIndex) {
+                            $this._UpdateDescription()
+                        }
+                        return $true
+                    }
+                    break
+                }
+            }
+        }
+        
+        # Handle action keys
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Enter) {
                 if ($this._menuList.SelectedIndex -ge 0 -and $this._menuList.SelectedIndex -lt $this._menuItems.Count) {
@@ -140,42 +187,20 @@ class DashboardScreen : Screen {
                 $this._ExecuteAction("app.exit")
                 return $true
             }
-            ([ConsoleKey]::UpArrow) {
-                if ($this._menuList.HandleInput($keyInfo)) {
-                    $this._UpdateDescription()
-                    return $true
-                }
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this._menuList.HandleInput($keyInfo)) {
-                    $this._UpdateDescription()
-                    return $true
-                }
-            }
-            ([ConsoleKey]::Home) {
-                if ($this._menuList.HandleInput($keyInfo)) {
-                    $this._UpdateDescription()
-                    return $true
-                }
-            }
-            ([ConsoleKey]::End) {
-                if ($this._menuList.HandleInput($keyInfo)) {
-                    $this._UpdateDescription()
-                    return $true
-                }
-            }
             # Quick keys
             ([ConsoleKey]::T) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     $this._ExecuteAction("navigation.taskList")
                     return $true
                 }
+                break
             }
             ([ConsoleKey]::Q) {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     $this._ExecuteAction("app.exit")
                     return $true
                 }
+                break
             }
         }
         
@@ -280,10 +305,10 @@ class TaskListScreen : Screen {
         $this._RefreshTasks()
         $this._UpdateDisplay()
         
-        # Set initial focus
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._taskList) {
-            $focusManager.SetFocus($this._taskList)
+        # Manually handle focus since FocusManager was removed
+        if ($this._taskList) {
+            $this._taskList.IsFocused = $true
+            $this._taskList.RequestRedraw()
         }
         
         # Subscribe to task change events

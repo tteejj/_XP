@@ -53,7 +53,10 @@ class Screen : UIElement {
     [System.Collections.Generic.List[UIElement]] $Panels
     [bool]$IsOverlay = $false  # NEW: Indicates if this screen renders as an overlay
     
-    $LastFocusedComponent
+    # Focus management (per-screen, ncurses model)
+    hidden [UIElement]$_focusedChild = $null
+    hidden [System.Collections.Generic.List[UIElement]]$_focusableCache = $null
+    hidden [bool]$_focusCacheValid = $false
     
     hidden [bool] $_isInitialized = $false
     hidden [System.Collections.Generic.Dictionary[string, string]] $EventSubscriptions 
@@ -94,6 +97,9 @@ class Screen : UIElement {
         # Write-Verbose "Initialize called for Screen '$($this.Name)': Default (no-op)." 
     }
     [void] OnEnter() { 
+        # Focus first focusable component when entering screen
+        $this.InvalidateFocusCache()
+        $this.FocusFirstChild()
         # Write-Verbose "OnEnter called for Screen '$($this.Name)': Default (no-op)." 
     }
     [void] OnExit() { 
@@ -103,8 +109,119 @@ class Screen : UIElement {
         # Write-Verbose "OnResume called for Screen '$($this.Name)': Default (no-op)." 
     }
 
+    # ===== FOCUS MANAGEMENT (ncurses window model) =====
+    [UIElement] GetFocusedChild() {
+        return $this._focusedChild
+    }
+    
+    [bool] SetChildFocus([UIElement]$component) {
+        if ($this._focusedChild -eq $component) { return $true }
+        
+        # Blur current component
+        if ($null -ne $this._focusedChild) {
+            $this._focusedChild.IsFocused = $false
+            $this._focusedChild.OnBlur()
+            $this._focusedChild.RequestRedraw()
+        }
+        
+        # Focus new component
+        $this._focusedChild = $component
+        if ($null -ne $component) {
+            if ($component.IsFocusable -and $component.Enabled -and $component.Visible) {
+                $component.IsFocused = $true
+                $component.OnFocus()
+                $component.RequestRedraw()
+                return $true
+            } else {
+                $this._focusedChild = $null
+                return $false
+            }
+        }
+        return $true
+    }
+    
+    [void] ClearFocus() {
+        $this.SetChildFocus($null)
+    }
+    
+    [void] FocusNextChild() {
+        $focusable = $this._GetFocusableChildren()
+        if ($focusable.Count -eq 0) { return }
+        
+        $currentIndex = -1
+        if ($null -ne $this._focusedChild) {
+            $currentIndex = $focusable.IndexOf($this._focusedChild)
+        }
+        
+        $nextIndex = ($currentIndex + 1) % $focusable.Count
+        $this.SetChildFocus($focusable[$nextIndex])
+    }
+    
+    [void] FocusPreviousChild() {
+        $focusable = $this._GetFocusableChildren()
+        if ($focusable.Count -eq 0) { return }
+        
+        $currentIndex = $focusable.Count - 1
+        if ($null -ne $this._focusedChild) {
+            $currentIndex = $focusable.IndexOf($this._focusedChild)
+        }
+        
+        $prevIndex = ($currentIndex - 1 + $focusable.Count) % $focusable.Count
+        $this.SetChildFocus($focusable[$prevIndex])
+    }
+    
+    [void] FocusFirstChild() {
+        $focusable = $this._GetFocusableChildren()
+        if ($focusable.Count -gt 0) {
+            $this.SetChildFocus($focusable[0])
+        }
+    }
+    
+    hidden [System.Collections.Generic.List[UIElement]] _GetFocusableChildren() {
+        if (-not $this._focusCacheValid -or $null -eq $this._focusableCache) {
+            $this._focusableCache = [System.Collections.Generic.List[UIElement]]::new()
+            $this._CollectFocusableRecursive($this, $this._focusableCache)
+            $this._focusCacheValid = $true
+        }
+        return $this._focusableCache
+    }
+    
+    hidden [void] _CollectFocusableRecursive([UIElement]$element, [System.Collections.Generic.List[UIElement]]$result) {
+        # Don't include the screen itself
+        if ($element -ne $this -and $element.IsFocusable -and $element.Visible -and $element.Enabled) {
+            $result.Add($element)
+        }
+        
+        foreach ($child in $element.Children) {
+            $this._CollectFocusableRecursive($child, $result)
+        }
+    }
+    
+    [void] InvalidateFocusCache() {
+        $this._focusCacheValid = $false
+    }
+
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Base implementation - check global keybindings first
+        if ($null -eq $keyInfo) { return $false }
+        
+        # Handle Tab navigation within this screen
+        if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
+                $this.FocusPreviousChild()
+            } else {
+                $this.FocusNextChild()
+            }
+            return $true
+        }
+        
+        # Route input to focused child first
+        if ($null -ne $this._focusedChild) {
+            if ($this._focusedChild.HandleInput($keyInfo)) {
+                return $true
+            }
+        }
+        
+        # Check global keybindings
         if ($null -ne $this.ServiceContainer) {
             $keybindingService = $this.ServiceContainer.GetService("KeybindingService")
             if ($keybindingService) {
@@ -123,7 +240,8 @@ class Screen : UIElement {
                 }
             }
         }
-        # If no global keybinding handled it, return false
+        
+        # Screen didn't handle the input
         return $false
     }
 
@@ -138,6 +256,11 @@ class Screen : UIElement {
     [void] Cleanup() {
         try {
             # Write-Verbose "Cleanup called for Screen '$($this.Name)'."
+            
+            # Clear focus before cleanup
+            $this.ClearFocus()
+            $this._focusableCache = $null
+            $this._focusCacheValid = $false
             
             # Screen-specific cleanup: Unsubscribe from events
             foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {
@@ -172,12 +295,28 @@ class Screen : UIElement {
         try {
             $this.Panels.Add($panel)
             $this.AddChild($panel) 
+            $this.InvalidateFocusCache()  # Invalidate focus cache when adding children
             Write-Verbose "Added panel '$($panel.Name)' to screen '$($this.Name)'."
         }
         catch {
             Write-Error "Failed to add panel '$($panel.Name)' to screen '$($this.Name)': $($_.Exception.Message)"
             throw
         }
+    }
+    
+    # Override AddChild to invalidate focus cache
+    [void] AddChild([UIElement]$child) {
+        ([UIElement]$this).AddChild($child)
+        $this.InvalidateFocusCache()
+    }
+    
+    # Override RemoveChild to invalidate focus cache  
+    [void] RemoveChild([UIElement]$child) {
+        if ($this._focusedChild -eq $child) {
+            $this.ClearFocus()
+        }
+        ([UIElement]$this).RemoveChild($child)
+        $this.InvalidateFocusCache()
     }
 
     [void] SubscribeToEvent([string]$eventName, [scriptblock]$action) {

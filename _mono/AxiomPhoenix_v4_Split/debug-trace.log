@@ -1,252 +1,42 @@
 
-=== ENGINE START - 2025-07-10 21:30:43.470 ===
-[21:30:43.477] Setting up DeferredActions queue...
-[21:30:43.487] DeferredActions queue created: True
-[21:30:43.497] EventManager found, registering DeferredAction handler...
-[21:30:43.509] DeferredAction handler registered!
-[21:30:59.836] CommandPalette calling Complete() with action: task.list
-[21:30:59.849] Dialog.Complete called for 'CommandPalette'
-[21:30:59.859] Dialog calling OnClose callback...
-[21:30:59.868] CommandPalette OnClose called!
-[21:30:59.876] Selected action: task.list
-[21:30:59.883] Publishing DeferredAction event...
-[21:30:59.895] DeferredAction handler called with sender: EventManager, data: {"ActionName":"task.list"}
-[21:30:59.903] DeferredAction received: task.list
-[21:30:59.911] DeferredAction enqueued successfully
-[21:30:59.918] DeferredAction event published!
-[21:30:59.925] OnClose callback completed
-[21:30:59.943] Found 1 deferred actions
-[21:31:00.240] Found 1 deferred actions
-[21:31:00.251] Processing deferred action: task.list
-[21:31:00.259] Executing action: task.list
+=== ENGINE START - 2025-07-11 14:52:19.622 ===
+[14:52:19.626] Setting up DeferredActions queue...
+[14:52:19.634] DeferredActions queue created: True
+[14:52:19.642] EventManager found, registering DeferredAction handler...
+[14:52:19.651] DeferredAction handler registered!
 
-=== ENGINE START - 2025-07-10 21:41:25.563 ===
-[21:41:25.579] Setting up DeferredActions queue...
-[21:41:25.589] DeferredActions queue created: True
-[21:41:25.600] EventManager found, registering DeferredAction handler...
-[21:41:25.613] DeferredAction handler registered!
+=== ENGINE START - 2025-07-11 14:53:38.547 ===
+[14:53:38.562] Setting up DeferredActions queue...
+[14:53:38.571] DeferredActions queue created: True
+[14:53:38.581] EventManager found, registering DeferredAction handler...
+[14:53:38.592] DeferredAction handler registered!
 
-=== ENGINE START - 2025-07-10 21:46:29.305 ===
-[21:46:29.320] Setting up DeferredActions queue...
-[21:46:29.329] DeferredActions queue created: True
-[21:46:29.339] EventManager found, registering DeferredAction handler...
-[21:46:29.352] DeferredAction handler registered!
-[21:46:41.156] CommandPalette calling Complete() with action: navigation.taskList
-[21:46:41.170] Dialog.Complete called for 'CommandPalette'
-[21:46:41.180] Dialog calling OnClose callback...
-[21:46:41.192] CommandPalette OnClose called!
-[21:46:41.201] Selected action: navigation.taskList
-[21:46:41.208] Publishing DeferredAction event...
-[21:46:41.221] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.taskList"}
-[21:46:41.230] DeferredAction received: navigation.taskList
-[21:46:41.238] DeferredAction enqueued successfully
-[21:46:41.246] DeferredAction event published!
-[21:46:41.252] OnClose callback completed
-[21:46:41.270] Found 1 deferred actions
-[21:46:41.503] Found 1 deferred actions
-[21:46:41.513] Processing deferred action: navigation.taskList
-[21:46:41.523] Executing action: navigation.taskList
+=== ENGINE START - 2025-07-11 15:01:08.093 ===
+[15:01:08.107] Setting up DeferredActions queue...
+[15:01:08.115] DeferredActions queue created: True
+[15:01:08.125] EventManager found, registering DeferredAction handler...
+[15:01:08.136] DeferredAction handler registered!
 
-=== ENGINE START - 2025-07-10 21:47:51.761 ===
-[21:47:51.769] Setting up DeferredActions queue...
-[21:47:51.777] DeferredActions queue created: True
-[21:47:51.784] EventManager found, registering DeferredAction handler...
-[21:47:51.790] DeferredAction handler registered!
-[21:47:58.917] CommandPalette calling Complete() with action: navigation.taskList
-[21:47:58.926] Dialog.Complete called for 'CommandPalette'
-[21:47:58.934] Dialog calling OnClose callback...
-[21:47:58.941] CommandPalette OnClose called!
-[21:47:58.948] Selected action: navigation.taskList
-[21:47:58.955] Publishing DeferredAction event...
-[21:47:58.962] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.taskList"}
-[21:47:58.969] DeferredAction received: navigation.taskList
-[21:47:58.976] DeferredAction enqueued successfully
-[21:47:58.983] DeferredAction event published!
-[21:47:58.989] OnClose callback completed
-[21:47:58.996] Found 1 deferred actions
-[21:47:59.219] Found 1 deferred actions
-[21:47:59.227] Processing deferred action: navigation.taskList
-[21:47:59.234] Executing action: navigation.taskList
+=== ENGINE START - 2025-07-11 15:01:45.479 ===
+[15:01:45.486] Setting up DeferredActions queue...
+[15:01:45.492] DeferredActions queue created: True
+[15:01:45.498] EventManager found, registering DeferredAction handler...
+[15:01:45.504] DeferredAction handler registered!
 
-=== ENGINE START - 2025-07-10 21:55:20.466 ===
-[21:55:20.481] Setting up DeferredActions queue...
-[21:55:20.491] DeferredActions queue created: True
-[21:55:20.502] EventManager found, registering DeferredAction handler...
-[21:55:20.514] DeferredAction handler registered!
-[21:55:30.159] CommandPalette calling Complete() with action: task.complete.selected
-[21:55:30.173] Dialog.Complete called for 'CommandPalette'
-[21:55:30.184] Dialog calling OnClose callback...
-[21:55:30.194] CommandPalette OnClose called!
-[21:55:30.202] Selected action: task.complete.selected
-[21:55:30.210] Publishing DeferredAction event...
-[21:55:30.226] DeferredAction handler called with sender: EventManager, data: {"ActionName":"task.complete.selected"}
-[21:55:30.236] DeferredAction received: task.complete.selected
-[21:55:30.244] DeferredAction enqueued successfully
-[21:55:30.252] DeferredAction event published!
-[21:55:30.259] OnClose callback completed
-[21:55:30.277] Found 1 deferred actions
-[21:55:30.511] Found 1 deferred actions
-[21:55:30.523] Processing deferred action: task.complete.selected
-[21:55:30.532] Executing action: task.complete.selected
-[21:55:37.314] CommandPalette calling Complete() with action: navigation.dashboard
-[21:55:37.323] Dialog.Complete called for 'CommandPalette'
-[21:55:37.331] Dialog calling OnClose callback...
-[21:55:37.338] CommandPalette OnClose called!
-[21:55:37.345] Selected action: navigation.dashboard
-[21:55:37.353] Publishing DeferredAction event...
-[21:55:37.360] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.dashboard"}
-[21:55:37.367] DeferredAction received: navigation.dashboard
-[21:55:37.374] DeferredAction enqueued successfully
-[21:55:37.381] DeferredAction event published!
-[21:55:37.388] OnClose callback completed
-[21:55:37.396] Found 1 deferred actions
-[21:55:37.618] Found 1 deferred actions
-[21:55:37.627] Processing deferred action: navigation.dashboard
-[21:55:37.634] Executing action: navigation.dashboard
+=== ENGINE START - 2025-07-11 15:22:41.253 ===
+[15:22:41.261] Setting up DeferredActions queue...
+[15:22:41.269] DeferredActions queue created: True
+[15:22:41.279] EventManager found, registering DeferredAction handler...
+[15:22:41.291] DeferredAction handler registered!
 
-=== ENGINE START - 2025-07-10 21:55:52.717 ===
-[21:55:52.726] Setting up DeferredActions queue...
-[21:55:52.734] DeferredActions queue created: True
-[21:55:52.741] EventManager found, registering DeferredAction handler...
-[21:55:52.748] DeferredAction handler registered!
-[21:56:01.116] CommandPalette calling Complete() with action: navigation.themePicker
-[21:56:01.125] Dialog.Complete called for 'CommandPalette'
-[21:56:01.134] Dialog calling OnClose callback...
-[21:56:01.141] CommandPalette OnClose called!
-[21:56:01.148] Selected action: navigation.themePicker
-[21:56:01.156] Publishing DeferredAction event...
-[21:56:01.163] DeferredAction handler called with sender: EventManager, data: {"ActionName":"navigation.themePicker"}
-[21:56:01.170] DeferredAction received: navigation.themePicker
-[21:56:01.177] DeferredAction enqueued successfully
-[21:56:01.184] DeferredAction event published!
-[21:56:01.191] OnClose callback completed
-[21:56:01.199] Found 1 deferred actions
-[21:56:01.420] Found 1 deferred actions
-[21:56:01.428] Processing deferred action: navigation.themePicker
-[21:56:01.436] Executing action: navigation.themePicker
+=== ENGINE START - 2025-07-11 15:34:06.644 ===
+[15:34:06.645] Setting up DeferredActions queue...
+[15:34:06.654] DeferredActions queue created: True
+[15:34:06.661] EventManager found, registering DeferredAction handler...
+[15:34:06.670] DeferredAction handler registered!
 
-=== ENGINE START - 2025-07-10 22:03:34.129 ===
-[22:03:34.145] Setting up DeferredActions queue...
-[22:03:34.155] DeferredActions queue created: True
-[22:03:34.166] EventManager found, registering DeferredAction handler...
-[22:03:34.179] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-10 22:05:05.159 ===
-[22:05:05.166] Setting up DeferredActions queue...
-[22:05:05.176] DeferredActions queue created: True
-[22:05:05.187] EventManager found, registering DeferredAction handler...
-[22:05:05.199] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-10 23:07:06.647 ===
-[23:07:06.662] Setting up DeferredActions queue...
-[23:07:06.671] DeferredActions queue created: True
-[23:07:06.681] EventManager found, registering DeferredAction handler...
-[23:07:06.692] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:13:09.396 ===
-[05:13:09.410] Setting up DeferredActions queue...
-[05:13:09.420] DeferredActions queue created: True
-[05:13:09.431] EventManager found, registering DeferredAction handler...
-[05:13:09.443] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:18:50.568 ===
-[05:18:50.577] Setting up DeferredActions queue...
-[05:18:50.585] DeferredActions queue created: True
-[05:18:50.593] EventManager found, registering DeferredAction handler...
-[05:18:50.601] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:43:13.577 ===
-[05:43:13.585] Setting up DeferredActions queue...
-[05:43:13.596] DeferredActions queue created: True
-[05:43:13.606] EventManager found, registering DeferredAction handler...
-[05:43:13.619] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:43:47.124 ===
-[05:43:47.140] Setting up DeferredActions queue...
-[05:43:47.150] DeferredActions queue created: True
-[05:43:47.161] EventManager found, registering DeferredAction handler...
-[05:43:47.173] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:47:48.654 ===
-[05:47:48.663] Setting up DeferredActions queue...
-[05:47:48.671] DeferredActions queue created: True
-[05:47:48.678] EventManager found, registering DeferredAction handler...
-[05:47:48.686] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:49:38.964 ===
-[05:49:38.973] Setting up DeferredActions queue...
-[05:49:38.981] DeferredActions queue created: True
-[05:49:38.988] EventManager found, registering DeferredAction handler...
-[05:49:38.995] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:56:38.667 ===
-[05:56:38.682] Setting up DeferredActions queue...
-[05:56:38.692] DeferredActions queue created: True
-[05:56:38.703] EventManager found, registering DeferredAction handler...
-[05:56:38.716] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 05:59:29.259 ===
-[05:59:29.268] Setting up DeferredActions queue...
-[05:59:29.276] DeferredActions queue created: True
-[05:59:29.284] EventManager found, registering DeferredAction handler...
-[05:59:29.290] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 09:23:32.061 ===
-[09:23:32.066] Setting up DeferredActions queue...
-[09:23:32.075] DeferredActions queue created: True
-[09:23:32.085] EventManager found, registering DeferredAction handler...
-[09:23:32.096] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 09:33:39.866 ===
-[09:33:39.881] Setting up DeferredActions queue...
-[09:33:39.891] DeferredActions queue created: True
-[09:33:39.902] EventManager found, registering DeferredAction handler...
-[09:33:39.915] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 09:48:39.106 ===
-[09:48:39.115] Setting up DeferredActions queue...
-[09:48:39.127] DeferredActions queue created: True
-[09:48:39.141] EventManager found, registering DeferredAction handler...
-[09:48:39.160] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 11:02:49.970 ===
-[11:02:49.975] Setting up DeferredActions queue...
-[11:02:49.987] DeferredActions queue created: True
-[11:02:49.999] EventManager found, registering DeferredAction handler...
-[11:02:50.012] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 11:03:56.178 ===
-[11:03:56.186] Setting up DeferredActions queue...
-[11:03:56.194] DeferredActions queue created: True
-[11:03:56.202] EventManager found, registering DeferredAction handler...
-[11:03:56.209] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 11:15:29.268 ===
-[11:15:29.275] Setting up DeferredActions queue...
-[11:15:29.286] DeferredActions queue created: True
-[11:15:29.297] EventManager found, registering DeferredAction handler...
-[11:15:29.309] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 11:22:03.710 ===
-[11:22:03.719] Setting up DeferredActions queue...
-[11:22:03.726] DeferredActions queue created: True
-[11:22:03.734] EventManager found, registering DeferredAction handler...
-[11:22:03.741] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 11:42:02.572 ===
-[11:42:02.588] Setting up DeferredActions queue...
-[11:42:02.598] DeferredActions queue created: True
-[11:42:02.608] EventManager found, registering DeferredAction handler...
-[11:42:02.621] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 11:43:37.083 ===
-[11:43:37.091] Setting up DeferredActions queue...
-[11:43:37.099] DeferredActions queue created: True
-[11:43:37.106] EventManager found, registering DeferredAction handler...
-[11:43:37.113] DeferredAction handler registered!
-
-=== ENGINE START - 2025-07-11 11:56:43.465 ===
-[11:56:43.482] Setting up DeferredActions queue...
-[11:56:43.493] DeferredActions queue created: True
-[11:56:43.505] EventManager found, registering DeferredAction handler...
-[11:56:43.518] DeferredAction handler registered!
+=== ENGINE START - 2025-07-11 15:35:26.264 ===
+[15:35:26.277] Setting up DeferredActions queue...
+[15:35:26.287] DeferredActions queue created: True
+[15:35:26.297] EventManager found, registering DeferredAction handler...
+[15:35:26.307] DeferredAction handler registered!

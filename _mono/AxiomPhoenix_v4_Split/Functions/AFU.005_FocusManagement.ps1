@@ -19,12 +19,11 @@ function Set-ComponentFocus {
         [Parameter(Mandatory)][UIElement]$Component
     )
     
-    # This function is now obsolete - use FocusManager service instead
-    $focusManager = $global:TuiState.Services.FocusManager
-    if ($focusManager) {
-        $focusManager.SetFocus($Component)
+    # Use per-screen focus management
+    if ($global:TuiState.CurrentScreen) {
+        $global:TuiState.CurrentScreen.SetChildFocus($Component)
     } else {
-        Write-Warning "Set-ComponentFocus is deprecated. FocusManager service not available."
+        Write-Warning "Set-ComponentFocus: No current screen available for focus management."
     }
 }
 

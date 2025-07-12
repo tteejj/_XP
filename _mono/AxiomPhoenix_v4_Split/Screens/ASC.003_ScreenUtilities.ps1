@@ -1,14 +1,6 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - All Screens (Load After Components)
-# Application screens that extend Screen base class
-# ==============================================================================
-#
-# TABLE OF CONTENTS DIRECTIVE:
-# When modifying this file, ensure page markers remain accurate and update
-# TableOfContents.md to reflect any structural changes.
-#
-# Search for "PAGE: ASC.###" to find specific sections.
-# Each section ends with "END_PAGE: ASC.###"
+# Axiom-Phoenix v4.0 - Screen Utilities
+# FIXED: Removed FocusManager dependency, uses direct input handling
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -17,6 +9,7 @@ using namespace System.Collections.Generic
 
 # ==============================================================================
 # CommandPaletteScreen - Full screen command palette
+# FIXED: Now handles its own focus management
 # ==============================================================================
 class CommandPaletteScreen : Screen {
     hidden [Panel] $_mainPanel
@@ -25,13 +18,23 @@ class CommandPaletteScreen : Screen {
     hidden [List[object]] $_allActions
     hidden [List[object]] $_filteredActions
     
+    # Internal focus management
+    hidden [string] $_activeComponent = "search"  # "search" or "list"
+    hidden [string] $_searchText = ""
+    
     CommandPaletteScreen([object]$serviceContainer) : base("CommandPaletteScreen", $serviceContainer) {
         $this._allActions = [List[object]]::new()
         $this._filteredActions = [List[object]]::new()
+        Write-Log -Level Debug -Message "CommandPaletteScreen: Constructor called"
     }
     
     [void] Initialize() {
-        if (-not $this.ServiceContainer) { return }
+        Write-Log -Level Debug -Message "CommandPaletteScreen.Initialize: Starting"
+        
+        if (-not $this.ServiceContainer) { 
+            Write-Log -Level Error -Message "CommandPaletteScreen.Initialize: ServiceContainer is null!"
+            return 
+        }
         
         # Main panel
         $this._mainPanel = [Panel]::new("CommandPalettePanel")
@@ -40,6 +43,8 @@ class CommandPaletteScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Command Palette "
+        $this._mainPanel.BorderStyle = "Double"
+        $this._mainPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
         $this.AddChild($this._mainPanel)
         
         # Search box
@@ -49,14 +54,9 @@ class CommandPaletteScreen : Screen {
         $this._searchBox.Width = $this.Width - 4
         $this._searchBox.Height = 1
         $this._searchBox.Placeholder = "Type to search commands... (Esc to cancel)"
-        $this._searchBox.IsFocusable = $true
+        $this._searchBox.IsFocusable = $false  # We handle input directly
         $this._searchBox.Enabled = $true
-        
-        $thisScreen = $this
-        $this._searchBox.OnChange = {
-            param($sender, $text)
-            $thisScreen.FilterActions($text)
-        }.GetNewClosure()
+        $this._searchBox.ShowCursor = $true  # Show cursor initially
         $this._mainPanel.AddChild($this._searchBox)
         
         # List box for results
@@ -65,18 +65,25 @@ class CommandPaletteScreen : Screen {
         $this._listBox.Y = 4
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 7
+        $this._listBox.IsFocusable = $false  # We handle input directly
+        $this._listBox.HasBorder = $true
+        $this._listBox.BorderStyle = "Single"
         $this._mainPanel.AddChild($this._listBox)
         
         # Help text
         $helpText = [LabelComponent]::new("HelpText")
-        $helpText.Text = "Enter: Execute | Tab: Toggle Focus | Esc: Cancel"
+        $helpText.Text = "Enter: Execute | Tab: Toggle Focus | ↑↓: Navigate | Esc: Cancel"
         $helpText.X = 2
         $helpText.Y = $this.Height - 2
-        $helpText.ForegroundColor = Get-ThemeColor -ColorName "Subtle"
+        $helpText.ForegroundColor = Get-ThemeColor "Subtle" "#808080"
         $this._mainPanel.AddChild($helpText)
+        
+        Write-Log -Level Debug -Message "CommandPaletteScreen.Initialize: Completed"
     }
     
     [void] OnEnter() {
+        Write-Log -Level Debug -Message "CommandPaletteScreen.OnEnter: Loading actions"
+        
         # Load all actions
         $actionService = $this.ServiceContainer?.GetService("ActionService")
         if ($actionService) {
@@ -91,16 +98,17 @@ class CommandPaletteScreen : Screen {
                     Hotkey = $actionData.Hotkey
                 })
             }
+            Write-Log -Level Debug -Message "CommandPaletteScreen: Loaded $($this._allActions.Count) actions"
         }
         
         # Show all actions initially
+        $this._searchText = ""
+        $this._searchBox.Text = ""
         $this.FilterActions("")
         
-        # Set focus to search box
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager -and $this._searchBox) {
-            $focusManager.SetFocus($this._searchBox)
-        }
+        # Set initial focus state
+        $this._activeComponent = "search"
+        $this._UpdateVisualFocus()
         
         $this.RequestRedraw()
     }
@@ -122,27 +130,90 @@ class CommandPaletteScreen : Screen {
         
         foreach ($action in $actionsToDisplay) {
             $this._filteredActions.Add($action)
+            
+            # Format display text with category and description
             $displayText = if ($action.Category) {
                 "[$($action.Category)] $($action.Name)"
             } else {
                 $action.Name
             }
+            
             if ($action.Description) {
-                $displayText += " - $($action.Description)"
+                $maxDescLength = $this._listBox.Width - $displayText.Length - 5
+                if ($maxDescLength -gt 10) {
+                    $desc = $action.Description
+                    if ($desc.Length -gt $maxDescLength) {
+                        $desc = $desc.Substring(0, $maxDescLength - 3) + "..."
+                    }
+                    $displayText += " - $desc"
+                }
             }
+            
+            if ($action.Hotkey) {
+                $displayText += " ($($action.Hotkey))"
+            }
+            
             $this._listBox.AddItem($displayText)
         }
         
         if ($this._filteredActions.Count -gt 0) {
             $this._listBox.SelectedIndex = 0
         }
+        
+        Write-Log -Level Debug -Message "CommandPaletteScreen: Filtered to $($this._filteredActions.Count) actions"
         $this.RequestRedraw()
     }
     
+    hidden [void] _UpdateVisualFocus() {
+        # Update visual indicators based on active component
+        if ($this._activeComponent -eq "search") {
+            $this._searchBox.ShowCursor = $true
+            $this._searchBox.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this._listBox.BorderColor = Get-ThemeColor "border" "#333333"
+        } else {
+            $this._searchBox.ShowCursor = $false
+            $this._searchBox.BorderColor = Get-ThemeColor "border" "#333333"
+            $this._listBox.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+        }
+        $this.RequestRedraw()
+    }
+    
+    hidden [void] _ExecuteSelectedAction() {
+        if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
+            $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
+            if ($selectedAction) {
+                Write-Log -Level Debug -Message "CommandPaletteScreen: Executing action '$($selectedAction.Name)'"
+                
+                $actionService = $this.ServiceContainer?.GetService("ActionService")
+                if ($actionService) {
+                    # Go back first
+                    $navService = $this.ServiceContainer?.GetService("NavigationService")
+                    if ($navService -and $navService.CanGoBack()) {
+                        $navService.GoBack()
+                    }
+                    
+                    # Then execute action (deferred to avoid navigation conflicts)
+                    $eventManager = $this.ServiceContainer?.GetService("EventManager")
+                    if ($eventManager) {
+                        $eventManager.Publish("DeferredAction", @{
+                            ActionName = $selectedAction.Name
+                        })
+                    }
+                }
+            }
+        }
+    }
+    
+    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
+        if ($null -eq $keyInfo) {
+            Write-Log -Level Warning -Message "CommandPaletteScreen.HandleInput: Null keyInfo"
+            return $false
+        }
         
+        Write-Log -Level Debug -Message "CommandPaletteScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Active=$($this._activeComponent)"
+        
+        # Global keys work regardless of focus
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Escape) {
                 # Go back
@@ -154,52 +225,103 @@ class CommandPaletteScreen : Screen {
             }
             ([ConsoleKey]::Tab) {
                 # Toggle focus between search and list
-                if ($focusManager) {
-                    if ($focusedComponent -eq $this._searchBox) {
-                        $focusManager.SetFocus($this._listBox)
-                    } else {
-                        $focusManager.SetFocus($this._searchBox)
-                    }
+                if ($this._activeComponent -eq "search") {
+                    $this._activeComponent = "list"
+                } else {
+                    $this._activeComponent = "search"
                 }
+                $this._UpdateVisualFocus()
                 return $true
             }
-            ([ConsoleKey]::Enter) {
-                # Execute selected action if list has focus
-                if ($focusedComponent -eq $this._listBox) {
-                    if ($this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
-                        $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
-                        if ($selectedAction) {
-                            $actionService = $this.ServiceContainer?.GetService("ActionService")
-                            if ($actionService) {
-                                # Go back first
-                                $navService = $this.ServiceContainer?.GetService("NavigationService")
-                                if ($navService -and $navService.CanGoBack()) {
-                                    $navService.GoBack()
-                                }
-                                # Then execute action
-                                $actionService.ExecuteAction($selectedAction.Name, @{})
-                            }
-                        }
+        }
+        
+        # Handle based on active component
+        if ($this._activeComponent -eq "search") {
+            # Search box is active - handle text input
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Backspace) {
+                    if ($this._searchText.Length -gt 0) {
+                        $this._searchText = $this._searchText.Substring(0, $this._searchText.Length - 1)
+                        $this._searchBox.Text = $this._searchText
+                        $this.FilterActions($this._searchText)
                     }
                     return $true
                 }
-                return $false
-            }
-            ([ConsoleKey]::UpArrow) {
-                # Move focus to list if on search box
-                if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    $focusManager.SetFocus($this._listBox)
-                    return $this._listBox.HandleInput($keyInfo)
+                ([ConsoleKey]::Enter) {
+                    # Execute first result if any
+                    if ($this._filteredActions.Count -gt 0) {
+                        $this._ExecuteSelectedAction()
+                    }
+                    return $true
                 }
-                return $false
-            }
-            ([ConsoleKey]::DownArrow) {
-                # Move focus to list if on search box
-                if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    $focusManager.SetFocus($this._listBox)
-                    return $this._listBox.HandleInput($keyInfo)
+                ([ConsoleKey]::DownArrow) {
+                    # Move to list if there are results
+                    if ($this._filteredActions.Count -gt 0) {
+                        $this._activeComponent = "list"
+                        $this._UpdateVisualFocus()
+                    }
+                    return $true
                 }
-                return $false
+                default {
+                    # Add character to search
+                    if ($keyInfo.KeyChar -and ([char]::IsLetterOrDigit($keyInfo.KeyChar) -or 
+                        [char]::IsPunctuation($keyInfo.KeyChar) -or 
+                        [char]::IsWhiteSpace($keyInfo.KeyChar))) {
+                        $this._searchText += $keyInfo.KeyChar
+                        $this._searchBox.Text = $this._searchText
+                        $this.FilterActions($this._searchText)
+                        return $true
+                    }
+                }
+            }
+        } else {
+            # List is active - handle navigation
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    if ($this._listBox.SelectedIndex -gt 0) {
+                        $this._listBox.SelectedIndex--
+                        $this.RequestRedraw()
+                    } elseif ($this._listBox.SelectedIndex -eq 0) {
+                        # Wrap to search box
+                        $this._activeComponent = "search"
+                        $this._UpdateVisualFocus()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this._listBox.SelectedIndex -lt $this._filteredActions.Count - 1) {
+                        $this._listBox.SelectedIndex++
+                        $this.RequestRedraw()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    $this._ExecuteSelectedAction()
+                    return $true
+                }
+                ([ConsoleKey]::Home) {
+                    $this._listBox.SelectedIndex = 0
+                    $this.RequestRedraw()
+                    return $true
+                }
+                ([ConsoleKey]::End) {
+                    if ($this._filteredActions.Count -gt 0) {
+                        $this._listBox.SelectedIndex = $this._filteredActions.Count - 1
+                        $this.RequestRedraw()
+                    }
+                    return $true
+                }
+                default {
+                    # Any other key returns focus to search
+                    if ($keyInfo.KeyChar -and [char]::IsLetterOrDigit($keyInfo.KeyChar)) {
+                        $this._activeComponent = "search"
+                        $this._searchText += $keyInfo.KeyChar
+                        $this._searchBox.Text = $this._searchText
+                        $this.FilterActions($this._searchText)
+                        $this._UpdateVisualFocus()
+                        return $true
+                    }
+                }
             }
         }
         
@@ -208,4 +330,7 @@ class CommandPaletteScreen : Screen {
 }
 
 #endregion
-#<!-- END_PAGE: ASC.003 -->
+
+# ==============================================================================
+# END OF SCREEN UTILITIES
+# ==============================================================================

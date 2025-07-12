@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Projects List Screen
-# Lists all projects with search, filtering, and detail view
+# FIXED: Removed FocusManager dependency, uses direct input handling
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -22,12 +22,19 @@ class ProjectsListScreen : Screen {
     hidden [MultilineTextBoxComponent] $_descriptionBox
     hidden [Dictionary[string, LabelComponent]] $_detailLabels
     
+    # Internal focus management
+    hidden [string] $_activeComponent = "search"  # "search", "list"
+    hidden [string] $_searchText = ""
+    
     ProjectsListScreen([object]$serviceContainer) : base("ProjectsListScreen", $serviceContainer) {
         $this._dataManager = $serviceContainer.GetService("DataManager")
         $this._detailLabels = [Dictionary[string, LabelComponent]]::new()
+        Write-Log -Level Debug -Message "ProjectsListScreen: Constructor called"
     }
     
     [void] Initialize() {
+        Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Starting"
+        
         # Main panel covering the whole screen
         $this._mainPanel = [Panel]::new("ProjectsMainPanel")
         $this._mainPanel.X = 0
@@ -62,11 +69,8 @@ class ProjectsListScreen : Screen {
         $this._searchBox.Width = $this._listPanel.Width - 4
         $this._searchBox.Height = 1
         $this._searchBox.Placeholder = "🔍 Search projects..."
-        $thisScreen = $this
-        $this._searchBox.OnChange = {
-            param($sender, $text)
-            $thisScreen.FilterProjects($text)
-        }.GetNewClosure()
+        $this._searchBox.IsFocusable = $false  # We handle input directly
+        $this._searchBox.ShowCursor = $true  # Show cursor initially
         $this._listPanel.AddChild($this._searchBox)
         
         # Project list
@@ -76,12 +80,9 @@ class ProjectsListScreen : Screen {
         $this._projectListBox.Width = $this._listPanel.Width - 2
         $this._projectListBox.Height = $this._listPanel.Height - 5
         $this._projectListBox.HasBorder = $false
+        $this._projectListBox.IsFocusable = $false  # We handle input directly
         $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
         $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
-        $this._projectListBox.SelectedIndexChanged = {
-            param($sender, $index)
-            $this.UpdateDetailPanel()
-        }
         $this._listPanel.AddChild($this._projectListBox)
         
         # Detail panel (right side)
@@ -152,6 +153,14 @@ class ProjectsListScreen : Screen {
         $archiveBtn.ForegroundColor = Get-ThemeColor "component.text"
         $this._actionPanel.AddChild($archiveBtn)
         
+        # Tab hint
+        $tabHint = [LabelComponent]::new("TabHint")
+        $tabHint.Text = "[Tab] Switch"
+        $tabHint.X = $archiveBtn.X + $buttonSpacing
+        $tabHint.Y = $buttonY
+        $tabHint.ForegroundColor = Get-ThemeColor "subtle"
+        $this._actionPanel.AddChild($tabHint)
+        
         # Status label
         $this._statusLabel = [LabelComponent]::new("StatusLabel")
         $this._statusLabel.Text = "0 projects"
@@ -167,6 +176,8 @@ class ProjectsListScreen : Screen {
         $exitLabel.Y = $buttonY
         $exitLabel.ForegroundColor = Get-ThemeColor "subtle"
         $this._actionPanel.AddChild($exitLabel)
+        
+        Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Completed"
     }
     
     hidden [void] CreateDetailComponents() {
@@ -199,7 +210,7 @@ class ProjectsListScreen : Screen {
         $this._detailLabels["Key"] = $keyValue
         $y += 2
         
-        # Name
+        # Project Name
         $nameLabel = [LabelComponent]::new("NameLabel")
         $nameLabel.Text = "Name:"
         $nameLabel.X = 2
@@ -213,21 +224,6 @@ class ProjectsListScreen : Screen {
         $nameValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($nameValue)
         $this._detailLabels["Name"] = $nameValue
-        $y += 2
-        
-        # Status
-        $statusLabel = [LabelComponent]::new("StatusLabel")
-        $statusLabel.Text = "Status:"
-        $statusLabel.X = 2
-        $statusLabel.Y = $y
-        $statusLabel.ForegroundColor = $labelStyle.ForegroundColor
-        $this._detailPanel.AddChild($statusLabel)
-        
-        $statusValue = [LabelComponent]::new("StatusValue")
-        $statusValue.X = 18
-        $statusValue.Y = $y
-        $this._detailPanel.AddChild($statusValue)
-        $this._detailLabels["Status"] = $statusValue
         $y += 2
         
         # Owner
@@ -244,6 +240,22 @@ class ProjectsListScreen : Screen {
         $ownerValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($ownerValue)
         $this._detailLabels["Owner"] = $ownerValue
+        $y += 2
+        
+        # Status
+        $statusLabel = [LabelComponent]::new("StatusLabel")
+        $statusLabel.Text = "Status:"
+        $statusLabel.X = 2
+        $statusLabel.Y = $y
+        $statusLabel.ForegroundColor = $labelStyle.ForegroundColor
+        $this._detailPanel.AddChild($statusLabel)
+        
+        $statusValue = [LabelComponent]::new("StatusValue")
+        $statusValue.X = 18
+        $statusValue.Y = $y
+        $statusValue.ForegroundColor = Get-ThemeColor "success"
+        $this._detailPanel.AddChild($statusValue)
+        $this._detailLabels["Status"] = $statusValue
         $y += 2
         
         # Client ID
@@ -273,55 +285,28 @@ class ProjectsListScreen : Screen {
         $dueDateValue = [LabelComponent]::new("DueDateValue")
         $dueDateValue.X = 18
         $dueDateValue.Y = $y
+        $dueDateValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($dueDateValue)
         $this._detailLabels["DueDate"] = $dueDateValue
-        $y += 2
+        $y += 3
         
-        # Tasks
-        $tasksLabel = [LabelComponent]::new("TasksLabel")
-        $tasksLabel.Text = "Tasks:"
-        $tasksLabel.X = 2
-        $tasksLabel.Y = $y
-        $tasksLabel.ForegroundColor = $labelStyle.ForegroundColor
-        $this._detailPanel.AddChild($tasksLabel)
-        
-        $tasksValue = [LabelComponent]::new("TasksValue")
-        $tasksValue.X = 18
-        $tasksValue.Y = $y
-        $tasksValue.ForegroundColor = Get-ThemeColor "info"
-        $this._detailPanel.AddChild($tasksValue)
-        $this._detailLabels["Tasks"] = $tasksValue
-        $y += 2
-        
-        # Separator
-        $separator = [LabelComponent]::new("Separator")
-        $separator.Text = "─" * ($this._detailPanel.Width - 4)
-        $separator.X = 2
-        $separator.Y = $y
-        $separator.ForegroundColor = Get-ThemeColor "component.border"
-        $this._detailPanel.AddChild($separator)
-        $y += 2
-        
-        # Description label
+        # Description
         $descLabel = [LabelComponent]::new("DescLabel")
         $descLabel.Text = "Description:"
         $descLabel.X = 2
         $descLabel.Y = $y
         $descLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($descLabel)
-        $y += 2
+        $y += 1
         
-        # Description box
         $this._descriptionBox = [MultilineTextBoxComponent]::new("DescriptionBox")
         $this._descriptionBox.X = 2
         $this._descriptionBox.Y = $y
         $this._descriptionBox.Width = $this._detailPanel.Width - 4
         $this._descriptionBox.Height = $this._detailPanel.Height - $y - 2
         $this._descriptionBox.ReadOnly = $true
-        $this._descriptionBox.IsFocusable = $false
-        $this._descriptionBox.BorderColor = Get-ThemeColor "component.border"
-        $this._descriptionBox.BackgroundColor = Get-ThemeColor "background"
-        $this._descriptionBox.ForegroundColor = Get-ThemeColor "foreground"
+        $this._descriptionBox.BorderStyle = "Single"
+        $this._descriptionBox.IsFocusable = $false  # Read-only, no focus needed
         $this._detailPanel.AddChild($this._descriptionBox)
     }
     
@@ -336,16 +321,15 @@ class ProjectsListScreen : Screen {
         }
         
         # Initial display
+        $this._searchText = ""
+        $this._searchBox.Text = ""
         $this.FilterProjects("")
         
-        # Set initial focus
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager) {
-            $focusManager.SetFocus($this._searchBox)
-        }
+        # Set initial focus state
+        $this._activeComponent = "search"
+        $this._UpdateVisualFocus()
         
         $this.RequestRedraw()
-        ([Screen]$this).OnEnter()
     }
     
     hidden [void] FilterProjects([string]$searchTerm) {
@@ -439,234 +423,269 @@ class ProjectsListScreen : Screen {
             $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "subtle"
         }
         
-        # Task count
-        $tasks = $this._dataManager.GetTasksByProject($project.Key)
-        $taskCount = $tasks.Count
-        $completedCount = ($tasks | Where-Object { $_.Status -eq [TaskStatus]::Completed }).Count
-        $this._detailLabels["Tasks"].Text = "$completedCount/$taskCount completed"
-        
         # Description
-        $description = if ($project.Description) { $project.Description } else { "No description available." }
-        $this._descriptionBox.SetText($description)
+        if ($project.Description) {
+            $this._descriptionBox.SetText($project.Description)
+        } else {
+            $this._descriptionBox.SetText("No description available.")
+        }
         
         $this.RequestRedraw()
     }
     
-    hidden [void] ViewProject() {
-        if ($this._projectListBox.SelectedIndex -lt 0 -or 
-            $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
-            return
+    hidden [void] _UpdateVisualFocus() {
+        # Update visual indicators based on active component
+        if ($this._activeComponent -eq "search") {
+            $this._searchBox.ShowCursor = $true
+            $this._listPanel.BorderColor = Get-ThemeColor "primary.accent"
+            $this._searchBox.BorderColor = Get-ThemeColor "primary.accent"
+        } else {
+            $this._searchBox.ShowCursor = $false
+            $this._listPanel.BorderColor = Get-ThemeColor "component.border"
+            $this._searchBox.BorderColor = Get-ThemeColor "component.border"
         }
-        
-        $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
-        $navService = $this.ServiceContainer.GetService("NavigationService")
-        
+        $this.RequestRedraw()
+    }
+    
+    hidden [void] ViewSelectedProject() {
+        if ($this._projectListBox.SelectedIndex -ge 0 -and 
+            $this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count) {
+            $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+            
+            $navService = $this.ServiceContainer?.GetService("NavigationService")
+            if ($navService) {
+                $projectInfoScreen = [ProjectInfoScreen]::new($this.ServiceContainer)
+                $projectInfoScreen.SetProject($selectedProject)
+                $projectInfoScreen.Initialize()
+                $navService.NavigateTo($projectInfoScreen)
+            }
+        }
+    }
+    
+    hidden [void] CreateNewProject() {
+        $navService = $this.ServiceContainer?.GetService("NavigationService")
         if ($navService) {
-            $projectInfoScreen = [ProjectInfoScreen]::new($this.ServiceContainer, $project)
-            $projectInfoScreen.Initialize()
-            $navService.NavigateTo($projectInfoScreen)
+            $editDialog = [ProjectEditDialog]::new($this.ServiceContainer, $null)
+            $editDialog.Initialize()
+            $navService.NavigateTo($editDialog)
         }
     }
     
-    hidden [void] ShowNewProjectDialog() {
-        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
-        if ($dialogManager) {
-            # Use InputDialog for project key
-            $keyDialog = [InputDialog]::new("NewProjectKeyDialog", $this.ServiceContainer)
+    hidden [void] EditSelectedProject() {
+        if ($this._projectListBox.SelectedIndex -ge 0 -and 
+            $this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count) {
+            $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
             
-            $currentScreen = $this
-            $dataManager = $this._dataManager
-            
-            # Store OnClose before showing
-            $keyDialog.OnClose = {
-                param($result, $key)
-                if ($result -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($key)) {
-                    # Check if key already exists
-                    $existing = $dataManager.GetProject($key)
-                    if ($existing) {
-                        $dialogManager.ShowAlert("Error", "Project key '$key' already exists!")
-                        return
-                    }
-                    
-                    # Get project name
-                    $nameDialog = [InputDialog]::new("NewProjectNameDialog", $currentScreen.ServiceContainer)
-                    
-                    $nameDialog.OnClose = {
-                        param($result2, $name)
-                        if ($result2 -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($name)) {
-                            # Create the project
-                            $newProject = [PmcProject]::new($key, $name)
-                            $newProject.Owner = "Current User"  # Would get from session in real app
-                            $newProject.IsActive = $true
-                            
-                            # Save the project
-                            $dataManager.AddProject($newProject)
-                            $dataManager.SaveData()
-                            
-                            # Refresh the display
-                            $currentScreen._allProjects.Add($newProject)
-                            $currentScreen.FilterProjects($currentScreen._currentFilter)
-                            
-                            # Select the new project
-                            for ($i = 0; $i -lt $currentScreen._filteredProjects.Count; $i++) {
-                                if ($currentScreen._filteredProjects[$i].Key -eq $newProject.Key) {
-                                    $currentScreen._projectListBox.SelectedIndex = $i
-                                    break
-                                }
-                            }
-                            
-                            $currentScreen._statusLabel.Text = "Project created: $key"
-                            $currentScreen._statusLabel.ForegroundColor = Get-ThemeColor "success"
-                        }
-                    }.GetNewClosure()
-                    
-                    # Show the name dialog with correct method signature
-                    $nameDialog.Show("New Project", "Enter project name:", "")
-                    $navService = $currentScreen.ServiceContainer.GetService("NavigationService")
-                    if ($navService) {
-                        $navService.NavigateTo($nameDialog)
-                    }
-                }
-            }.GetNewClosure()
-            
-            # Show the key dialog with correct method signature
-            $keyDialog.Show("New Project", "Enter project key (e.g., PROJ-005):", "PROJ-")
-            $dialogManager.ShowDialog($keyDialog)
-        } else {
-            $this._statusLabel.Text = "Dialog manager not available"
-        }
-    }
-    
-    hidden [void] ShowEditProjectDialog() {
-        if ($this._projectListBox.SelectedIndex -lt 0 -or 
-            $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
-            return
-        }
-        
-        $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
-        # Edit project dialog - commented out until ProjectEditDialog is implemented
-        # $dialog = [ProjectEditDialog]::new("EditProjectDialog", $this.ServiceContainer, $project)
-        # $dialog.Initialize()
-        # $dialog.Show()
-        # 
-        # # Refresh display if project was updated
-        # if ($dialog.DialogResult) {
-        #     $this.FilterProjects($this._currentFilter)
-        #     $this.UpdateDetailPanel()
-        # }
-        $this._statusLabel.Text = "Edit project dialog not implemented yet"
-    }
-    
-    hidden [void] DeleteProject() {
-        if ($this._projectListBox.SelectedIndex -lt 0 -or 
-            $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
-            return
-        }
-        
-        $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
-        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
-        $dataManager = $this._dataManager
-        $currentScreen = $this
-        
-        if ($dialogManager) {
-            $taskCount = $this._dataManager.GetTasksByProject($project.Key).Count
-            $message = "Are you sure you want to delete project '$($project.Name)'?"
-            if ($taskCount -gt 0) {
-                $message += "`n`nWARNING: This will also delete $taskCount associated task(s)!"
+            $navService = $this.ServiceContainer?.GetService("NavigationService")
+            if ($navService) {
+                $editDialog = [ProjectEditDialog]::new($this.ServiceContainer, $selectedProject)
+                $editDialog.Initialize()
+                $navService.NavigateTo($editDialog)
             }
-            if ($project.ProjectFolderPath -and (Test-Path $project.ProjectFolderPath)) {
-                $message += "`n`nNote: The project folder will NOT be deleted."
-            }
-            
-            $dialogManager.ShowConfirm("Confirm Delete", $message, {
-                # Delete the project
-                if ($dataManager.DeleteProject($project.Key)) {
-                    # Remove from local list
-                    $currentScreen._allProjects.Remove($project)
-                    $currentScreen.FilterProjects($currentScreen._currentFilter)
-                    
-                    Write-Log -Level Info -Message "Project '$($project.Name)' deleted successfully"
-                } else {
-                    $dialogManager.ShowAlert("Error", "Failed to delete project.")
-                }
-            }.GetNewClosure(), {
-                # Cancel action - do nothing
-            })
         }
     }
     
-    hidden [void] ToggleArchiveProject() {
+    hidden [void] DeleteSelectedProject() {
         if ($this._projectListBox.SelectedIndex -lt 0 -or 
             $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
             return
         }
         
-        $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+        $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
         
-        if ($project.IsActive) {
-            $project.Archive()
-        } else {
-            $project.Activate()
+        # Show confirmation dialog
+        $dialogManager = $this.ServiceContainer?.GetService("DialogManager")
+        if ($dialogManager) {
+            $dialogManager.ShowConfirmation(
+                "Delete Project",
+                "Are you sure you want to delete project '$($selectedProject.Name)'?`nThis action cannot be undone.",
+                {
+                    # On confirm
+                    $this._dataManager.DeleteProject($selectedProject.Key)
+                    $this._allProjects.Remove($selectedProject)
+                    $this.FilterProjects($this._currentFilter)
+                },
+                $null  # On cancel
+            )
         }
-        
-        # Save and refresh
-        $this._dataManager.UpdateProject($project)
-        $this.FilterProjects($this._currentFilter)
     }
     
+    hidden [void] ToggleArchiveSelectedProject() {
+        if ($this._projectListBox.SelectedIndex -ge 0 -and 
+            $this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count) {
+            $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+            
+            # Toggle archive status
+            $selectedProject.IsActive = -not $selectedProject.IsActive
+            $this._dataManager.UpdateProject($selectedProject)
+            
+            # Refresh display
+            $this.FilterProjects($this._currentFilter)
+        }
+    }
+    
+    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if ($null -eq $keyInfo) { return $false }
+        if ($null -eq $keyInfo) {
+            Write-Log -Level Warning -Message "ProjectsListScreen.HandleInput: Null keyInfo"
+            return $false
+        }
         
-        # Handle screen-level shortcuts
+        Write-Log -Level Debug -Message "ProjectsListScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Active=$($this._activeComponent)"
+        
+        # Global keys work regardless of focus
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Escape) {
-                Write-Log -Level Debug -Message "ProjectsListScreen: ESC pressed, navigating back"
+                # Go back
                 $navService = $this.ServiceContainer?.GetService("NavigationService")
                 if ($navService -and $navService.CanGoBack()) {
                     $navService.GoBack()
-                    return $true
                 }
-            }
-            ([ConsoleKey]::Enter) {
-                $this.ViewProject()
                 return $true
             }
             ([ConsoleKey]::Tab) {
-                # Toggle focus between search box and list
-                $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-                if ($focusManager) {
-                    if ($focusManager.FocusedComponent -eq $this._searchBox) {
-                        $focusManager.SetFocus($this._projectListBox)
-                    } else {
-                        $focusManager.SetFocus($this._searchBox)
-                    }
+                # Toggle between search and list
+                if ($this._activeComponent -eq "search") {
+                    $this._activeComponent = "list"
+                } else {
+                    $this._activeComponent = "search"
                 }
+                $this._UpdateVisualFocus()
                 return $true
             }
         }
         
-        # Handle character shortcuts
-        $char = [char]::ToLower($keyInfo.KeyChar)
-        switch ($char) {
+        # Handle based on active component
+        if ($this._activeComponent -eq "search") {
+            # Search box is active
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::Backspace) {
+                    if ($this._searchText.Length -gt 0) {
+                        $this._searchText = $this._searchText.Substring(0, $this._searchText.Length - 1)
+                        $this._searchBox.Text = $this._searchText
+                        $this.FilterProjects($this._searchText)
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    # View first result if any
+                    if ($this._filteredProjects.Count -gt 0) {
+                        $this.ViewSelectedProject()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) {
+                    # Move to list if there are results
+                    if ($this._filteredProjects.Count -gt 0) {
+                        $this._activeComponent = "list"
+                        $this._UpdateVisualFocus()
+                    }
+                    return $true
+                }
+                default {
+                    # Add character to search
+                    if ($keyInfo.KeyChar -and ([char]::IsLetterOrDigit($keyInfo.KeyChar) -or 
+                        [char]::IsPunctuation($keyInfo.KeyChar) -or 
+                        [char]::IsWhiteSpace($keyInfo.KeyChar))) {
+                        $this._searchText += $keyInfo.KeyChar
+                        $this._searchBox.Text = $this._searchText
+                        $this.FilterProjects($this._searchText)
+                        return $true
+                    }
+                }
+            }
+        } else {
+            # List is active
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::UpArrow) {
+                    if ($this._projectListBox.SelectedIndex -gt 0) {
+                        $this._projectListBox.SelectedIndex--
+                        $this.UpdateDetailPanel()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count - 1) {
+                        $this._projectListBox.SelectedIndex++
+                        $this.UpdateDetailPanel()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    $this.ViewSelectedProject()
+                    return $true
+                }
+                ([ConsoleKey]::Home) {
+                    if ($this._filteredProjects.Count -gt 0) {
+                        $this._projectListBox.SelectedIndex = 0
+                        $this.UpdateDetailPanel()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::End) {
+                    if ($this._filteredProjects.Count -gt 0) {
+                        $this._projectListBox.SelectedIndex = $this._filteredProjects.Count - 1
+                        $this.UpdateDetailPanel()
+                    }
+                    return $true
+                }
+            }
+        }
+        
+        # Character shortcuts (work in both modes)
+        switch ($keyInfo.KeyChar) {
             'n' {
-                $this.ShowNewProjectDialog()
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    $this.CreateNewProject()
+                    return $true
+                }
+            }
+            'N' {
+                $this.CreateNewProject()
                 return $true
             }
             'e' {
-                $this.ShowEditProjectDialog()
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    $this.EditSelectedProject()
+                    return $true
+                }
+            }
+            'E' {
+                $this.EditSelectedProject()
                 return $true
             }
             'd' {
-                $this.DeleteProject()
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    $this.DeleteSelectedProject()
+                    return $true
+                }
+            }
+            'D' {
+                $this.DeleteSelectedProject()
                 return $true
             }
             'a' {
-                $this.ToggleArchiveProject()
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    $this.ToggleArchiveSelectedProject()
+                    return $true
+                }
+            }
+            'A' {
+                $this.ToggleArchiveSelectedProject()
+                return $true
+            }
+            '/' {
+                # Jump to search
+                $this._activeComponent = "search"
+                $this._UpdateVisualFocus()
                 return $true
             }
         }
         
-        # Let base class handle input routing to focused component
-        return ([Screen]$this).HandleInput($keyInfo)
+        return $false
     }
 }
+
+# ==============================================================================
+# END OF PROJECTS LIST SCREEN
+# ==============================================================================

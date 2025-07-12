@@ -1,0 +1,224 @@
+# ==============================================================================
+# Axiom-Phoenix v4.0 - Focus Manager Service
+# Manages keyboard focus and input routing throughout the application
+# ==============================================================================
+
+class FocusManager {
+    hidden [UIElement]$_focusedElement = $null
+    hidden [System.Collections.Generic.Stack[UIElement]]$_focusStack
+    hidden [EventManager]$_eventManager
+    hidden [bool]$_capturingInput = $false
+    hidden [UIElement]$_inputCaptureElement = $null
+    
+    FocusManager([EventManager]$eventManager) {
+        $this._eventManager = $eventManager
+        $this._focusStack = [System.Collections.Generic.Stack[UIElement]]::new()
+    }
+    
+    # Get the currently focused element
+    [UIElement] get_FocusedComponent() {
+        return $this._focusedElement
+    }
+    
+    # Set focus to a specific element
+    [bool] SetFocus([UIElement]$element) {
+        if ($null -eq $element) {
+            Write-Log -Level Debug -Message "FocusManager: Attempting to set focus to null element"
+            return $false
+        }
+        
+        if (-not $element.IsFocusable -or -not $element.Enabled -or -not $element.Visible) {
+            Write-Log -Level Debug -Message "FocusManager: Element '$($element.Name)' is not focusable, enabled, or visible"
+            return $false
+        }
+        
+        # If same element already has focus, do nothing
+        if ($this._focusedElement -eq $element) {
+            Write-Log -Level Debug -Message "FocusManager: Element '$($element.Name)' already has focus"
+            return $true
+        }
+        
+        # Blur previous element
+        if ($null -ne $this._focusedElement) {
+            Write-Log -Level Debug -Message "FocusManager: Removing focus from '$($this._focusedElement.Name)'"
+            $this._focusedElement.IsFocused = $false
+            $this._focusedElement.OnBlur()
+            $this._eventManager.Publish("Focus.Lost", @{ Component = $this._focusedElement })
+        }
+        
+        # Focus new element
+        $this._focusedElement = $element
+        $element.IsFocused = $true
+        $element.OnFocus()
+        
+        Write-Log -Level Debug -Message "FocusManager: Focus set to '$($element.Name)'"
+        $this._eventManager.Publish("Focus.Gained", @{ Component = $element })
+        
+        # Request redraw
+        $element.RequestRedraw()
+        
+        return $true
+    }
+    
+    # Clear focus from all elements
+    [void] ClearFocus() {
+        if ($null -ne $this._focusedElement) {
+            Write-Log -Level Debug -Message "FocusManager: Clearing focus from '$($this._focusedElement.Name)'"
+            $this._focusedElement.IsFocused = $false
+            $this._focusedElement.OnBlur()
+            $this._eventManager.Publish("Focus.Lost", @{ Component = $this._focusedElement })
+            $this._focusedElement = $null
+        }
+    }
+    
+    # Push current focus to stack (for modal dialogs)
+    [void] PushFocus() {
+        if ($null -ne $this._focusedElement) {
+            Write-Log -Level Debug -Message "FocusManager: Pushing focus '$($this._focusedElement.Name)' to stack"
+            $this._focusStack.Push($this._focusedElement)
+            $this.ClearFocus()
+        }
+    }
+    
+    # Restore focus from stack
+    [void] PopFocus() {
+        if ($this._focusStack.Count -gt 0) {
+            $element = $this._focusStack.Pop()
+            Write-Log -Level Debug -Message "FocusManager: Restoring focus to '$($element.Name)' from stack"
+            $this.SetFocus($element)
+        }
+    }
+    
+    # Find next focusable element
+    [UIElement] FindNextFocusable([UIElement]$container, [UIElement]$current, [bool]$reverse = $false) {
+        if ($null -eq $container) { return $null }
+        
+        $focusableElements = $this.GetFocusableElements($container)
+        if ($focusableElements.Count -eq 0) { return $null }
+        
+        # Sort by tab index, then by position
+        $sorted = $focusableElements | Sort-Object -Property @(
+            @{Expression = {$_.TabIndex}; Ascending = $true},
+            @{Expression = {$_.Y}; Ascending = $true},
+            @{Expression = {$_.X}; Ascending = $true}
+        )
+        
+        if ($reverse) {
+            [array]::Reverse($sorted)
+        }
+        
+        # Find current element's position
+        $currentIndex = -1
+        for ($i = 0; $i -lt $sorted.Count; $i++) {
+            if ($sorted[$i] -eq $current) {
+                $currentIndex = $i
+                break
+            }
+        }
+        
+        # Get next element
+        if ($currentIndex -ge 0) {
+            $nextIndex = ($currentIndex + 1) % $sorted.Count
+            return $sorted[$nextIndex]
+        } else {
+            # Current element not found, return first
+            return $sorted[0]
+        }
+    }
+    
+    # Get all focusable elements in a container
+    hidden [System.Collections.Generic.List[UIElement]] GetFocusableElements([UIElement]$container) {
+        $result = [System.Collections.Generic.List[UIElement]]::new()
+        
+        if ($container.IsFocusable -and $container.Enabled -and $container.Visible) {
+            $result.Add($container)
+        }
+        
+        foreach ($child in $container.Children) {
+            $childFocusables = $this.GetFocusableElements($child)
+            foreach ($focusable in $childFocusables) {
+                $result.Add($focusable)
+            }
+        }
+        
+        return $result
+    }
+    
+    # Move focus to next element
+    [bool] MoveFocusNext([UIElement]$container) {
+        $next = $this.FindNextFocusable($container, $this._focusedElement, $false)
+        if ($null -ne $next) {
+            return $this.SetFocus($next)
+        }
+        return $false
+    }
+    
+    # Move focus to previous element
+    [bool] MoveFocusPrevious([UIElement]$container) {
+        $next = $this.FindNextFocusable($container, $this._focusedElement, $true)
+        if ($null -ne $next) {
+            return $this.SetFocus($next)
+        }
+        return $false
+    }
+    
+    # Capture all input for a specific element (modal behavior)
+    [void] CaptureInput([UIElement]$element) {
+        if ($null -ne $element) {
+            Write-Log -Level Debug -Message "FocusManager: Capturing input for '$($element.Name)'"
+            $this._capturingInput = $true
+            $this._inputCaptureElement = $element
+        }
+    }
+    
+    # Release input capture
+    [void] ReleaseInputCapture() {
+        if ($this._capturingInput) {
+            Write-Log -Level Debug -Message "FocusManager: Releasing input capture"
+            $this._capturingInput = $false
+            $this._inputCaptureElement = $null
+        }
+    }
+    
+    # Check if input is captured
+    [bool] IsInputCaptured() {
+        return $this._capturingInput
+    }
+    
+    # Get the element capturing input
+    [UIElement] GetInputCaptureElement() {
+        return $this._inputCaptureElement
+    }
+    
+    # Route input to the appropriate element
+    [bool] RouteInput([System.ConsoleKeyInfo]$keyInfo) {
+        # If input is captured, route to capture element
+        if ($this._capturingInput -and $null -ne $this._inputCaptureElement) {
+            Write-Log -Level Debug -Message "FocusManager: Routing input to capture element '$($this._inputCaptureElement.Name)'"
+            return $this._inputCaptureElement.HandleInput($keyInfo)
+        }
+        
+        # Otherwise route to focused element
+        if ($null -ne $this._focusedElement) {
+            Write-Log -Level Debug -Message "FocusManager: Routing input to focused element '$($this._focusedElement.Name)'"
+            return $this._focusedElement.HandleInput($keyInfo)
+        }
+        
+        Write-Log -Level Debug -Message "FocusManager: No element to route input to"
+        return $false
+    }
+    
+    # Find first focusable element in container
+    [UIElement] FindFirstFocusable([UIElement]$container) {
+        $focusables = $this.GetFocusableElements($container)
+        if ($focusables.Count -gt 0) {
+            $sorted = $focusables | Sort-Object -Property @(
+                @{Expression = {$_.TabIndex}; Ascending = $true},
+                @{Expression = {$_.Y}; Ascending = $true},
+                @{Expression = {$_.X}; Ascending = $true}
+            )
+            return $sorted[0]
+        }
+        return $null
+    }
+}

@@ -1,4 +1,0 @@
-@echo off
-cd /d "C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split"
-powershell -ExecutionPolicy Bypass -File fix_layout_and_themes.ps1
-pause

@@ -4,7 +4,7 @@
 # ==============================================================================
 
 param(
-    [string]$Theme = "Green",
+    [string]$Theme = "Synthwave",
     [switch]$Debug
 )
 
@@ -81,9 +81,6 @@ try {
     Write-Host "  • Registering NavigationService..." -ForegroundColor Gray
     $container.Register("NavigationService", [NavigationService]::new($container))
     
-    Write-Host "  • Registering FocusManager..." -ForegroundColor Gray
-    $container.Register("FocusManager", [FocusManager]::new($container.GetService("EventManager")))
-    
     Write-Host "  • Registering DialogManager..." -ForegroundColor Gray
     $container.Register("DialogManager", [DialogManager]::new($container))
     
@@ -105,7 +102,6 @@ try {
         ActionService = $container.GetService("ActionService")
         KeybindingService = $container.GetService("KeybindingService")
         NavigationService = $container.GetService("NavigationService")
-        FocusManager = $container.GetService("FocusManager")
         DialogManager = $container.GetService("DialogManager")
         ViewDefinitionService = $container.GetService("ViewDefinitionService")
         FileSystemService = $container.GetService("FileSystemService")
@@ -275,6 +271,13 @@ try {
     $dashboardScreen = [DashboardScreen]::new($container)
     Write-Host "Initializing Dashboard screen..." -ForegroundColor Yellow
     $dashboardScreen.Initialize()
+    
+    # Ensure theme is applied after services are available
+    Write-Host "Applying theme to dashboard..." -ForegroundColor Yellow
+    if ($dashboardScreen -and [bool]($dashboardScreen | Get-Member -Name "RefreshThemeColors" -MemberType Method)) {
+        $dashboardScreen.RefreshThemeColors()
+    }
+    
     Write-Host "Dashboard initialized. Starting engine..." -ForegroundColor Yellow
     Clear-Host
     Start-AxiomPhoenix -ServiceContainer $container -InitialScreen $dashboardScreen

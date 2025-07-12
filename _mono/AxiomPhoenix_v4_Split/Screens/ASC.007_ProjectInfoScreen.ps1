@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Project Info Screen
-# Displays detailed information about a selected project, including linked files.
+# FIXED: Removed FocusManager dependency, simplified input handling
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -15,16 +15,28 @@ class ProjectInfoScreen : Screen {
     hidden [ListBox] $_fileListbox
     hidden [object] $_dataManager
 
-    ProjectInfoScreen([object]$serviceContainer, [PmcProject]$project) : base("ProjectInfoScreen", $serviceContainer) {
+    ProjectInfoScreen([object]$serviceContainer) : base("ProjectInfoScreen", $serviceContainer) {
+        $this._dataManager = $serviceContainer.GetService("DataManager")
+        Write-Log -Level Debug -Message "ProjectInfoScreen: Constructor called"
+    }
+
+    # Method to set the project after construction
+    [void] SetProject([PmcProject]$project) {
         if ($null -eq $project) {
             throw [System.ArgumentNullException]::new("project", "Project must be provided to ProjectInfoScreen.")
         }
         $this._project = $project
-        $this._dataManager = $serviceContainer.GetService("DataManager")
         $this.Title = " Project: $($project.Name) "
     }
 
     [void] Initialize() {
+        Write-Log -Level Debug -Message "ProjectInfoScreen.Initialize: Starting"
+        
+        if ($null -eq $this._project) {
+            Write-Log -Level Error -Message "ProjectInfoScreen.Initialize: Project not set!"
+            throw "Project must be set before Initialize"
+        }
+        
         # Main panel covering the whole screen
         $this._mainPanel = [Panel]::new("ProjectMainPanel")
         $this._mainPanel.X = 0
@@ -107,14 +119,30 @@ class ProjectInfoScreen : Screen {
         }
         
         if ($this._project.BFDate) {
-            $this.AddDetailField("Due Date (BF):", $this._project.BFDate.ToString("yyyy-MM-dd"), $y)
+            $daysUntil = ($this._project.BFDate - [DateTime]::Now).Days
+            $dueDateText = $this._project.BFDate.ToString("yyyy-MM-dd")
+            
+            if ($daysUntil -lt 0) {
+                $dueDateText += " (OVERDUE!)"
+                $this.AddDetailField("Due Date (BF):", $dueDateText, $y, "#FF4444")
+            } elseif ($daysUntil -eq 0) {
+                $dueDateText += " (TODAY)"
+                $this.AddDetailField("Due Date (BF):", $dueDateText, $y, "#FFA500")
+            } elseif ($daysUntil -le 7) {
+                $dueDateText += " ($daysUntil days)"
+                $this.AddDetailField("Due Date (BF):", $dueDateText, $y, "#FFD700")
+            } else {
+                $this.AddDetailField("Due Date (BF):", $dueDateText, $y)
+            }
             $y += 2
         }
         
         $this.AddDetailField("Owner:", ($this._project.Owner -or "Unassigned"), $y)
         $y += 2
         
-        $this.AddDetailField("Status:", (if ($this._project.IsActive) { "Active" } else { "Archived" }), $y)
+        $statusText = if ($this._project.IsActive) { "Active" } else { "Archived" }
+        $statusColor = if ($this._project.IsActive) { Get-ThemeColor "success" } else { Get-ThemeColor "subtle" }
+        $this.AddDetailField("Status:", $statusText, $y, $statusColor)
         $y += 2
 
         # Description
@@ -132,6 +160,7 @@ class ProjectInfoScreen : Screen {
         $this._taskListbox.Width = $this._tasksPanel.Width - 2
         $this._taskListbox.Height = $this._tasksPanel.Height - 2
         $this._taskListbox.HasBorder = $false
+        $this._taskListbox.IsFocusable = $false  # We handle input directly
         $this._taskListbox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
         $this._taskListbox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
         $this._tasksPanel.AddChild($this._taskListbox)
@@ -143,111 +172,144 @@ class ProjectInfoScreen : Screen {
         $this._fileListbox.Width = $this._filesPanel.Width - 2
         $this._fileListbox.Height = $this._filesPanel.Height - 2
         $this._fileListbox.HasBorder = $false
+        $this._fileListbox.IsFocusable = $false  # We handle input directly
         $this._fileListbox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
         $this._fileListbox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
         $this._filesPanel.AddChild($this._fileListbox)
 
         # Instructions
-        $instructions = [LabelComponent]::new("Instructions")
-        $instructions.Text = "Press [ESC] to go back to Dashboard. Use ↑↓ PgUp/PgDn to scroll details."
-        $instructions.X = 1
-        $instructions.Y = $this.Height - 2
-        $instructions.ForegroundColor = Get-ThemeColor "Subtle"
-        $this._mainPanel.AddChild($instructions)
+        $instructionText = "[↑↓] Scroll Details | [PgUp/PgDn] Page | [E] Edit | [Esc] Back"
+        $instructionLabel = [LabelComponent]::new("InstructionLabel")
+        $instructionLabel.Text = $instructionText
+        $instructionLabel.X = 2
+        $instructionLabel.Y = $this.Height - 2
+        $instructionLabel.ForegroundColor = Get-ThemeColor "subtle"
+        $this._mainPanel.AddChild($instructionLabel)
+
+        Write-Log -Level Debug -Message "ProjectInfoScreen.Initialize: Completed"
     }
 
-    hidden [void] AddDetailField([string]$label, [string]$value, [int]$y) {
-        $labelComp = [LabelComponent]::new("Label_$y")
-        $labelComp.Text = $label
-        $labelComp.X = 2
-        $labelComp.Y = $y
-        $labelComp.ForegroundColor = Get-ThemeColor "label"
-        $this._detailsScrollPanel.AddChild($labelComp)
+    hidden [void] AddDetailField([string]$label, [string]$value, [int]$y, [string]$valueColor = $null) {
+        $labelComponent = [LabelComponent]::new("Label_$y")
+        $labelComponent.Text = $label
+        $labelComponent.X = 2
+        $labelComponent.Y = $y
+        $labelComponent.ForegroundColor = Get-ThemeColor "label"
+        $this._detailsScrollPanel.AddChild($labelComponent)
 
-        $valueComp = [LabelComponent]::new("Value_$y")
-        $valueComp.Text = $value
-        $valueComp.X = 20
-        $valueComp.Y = $y
-        $valueComp.ForegroundColor = Get-ThemeColor "Foreground"
-        $this._detailsScrollPanel.AddChild($valueComp)
+        $valueComponent = [LabelComponent]::new("Value_$y")
+        $valueComponent.Text = $value
+        $valueComponent.X = 25
+        $valueComponent.Y = $y
+        $valueComponent.ForegroundColor = if ($valueColor) { $valueColor } else { Get-ThemeColor "foreground" }
+        $this._detailsScrollPanel.AddChild($valueComponent)
     }
 
     hidden [void] AddDetailLabel([string]$label, [int]$y) {
-        $labelComp = [LabelComponent]::new("Label_$y")
-        $labelComp.Text = $label
-        $labelComp.X = 2
-        $labelComp.Y = $y
-        $labelComp.ForegroundColor = Get-ThemeColor "label"
-        $this._detailsScrollPanel.AddChild($labelComp)
+        $labelComponent = [LabelComponent]::new("Label_$y")
+        $labelComponent.Text = $label
+        $labelComponent.X = 2
+        $labelComponent.Y = $y
+        $labelComponent.ForegroundColor = Get-ThemeColor "label"
+        $this._detailsScrollPanel.AddChild($labelComponent)
     }
 
     hidden [void] AddDetailText([string]$text, [int]$y) {
-        $lines = $text -split "`n"
+        # Word wrap the text
+        $maxWidth = $this._detailsScrollPanel.ContentWidth - 4
+        $lines = $this.WrapText($text, $maxWidth)
+        
         $currentY = $y
         foreach ($line in $lines) {
-            $textComp = [LabelComponent]::new("Text_$currentY")
-            $textComp.Text = $line
-            $textComp.X = 2
-            $textComp.Y = $currentY
-            $textComp.ForegroundColor = Get-ThemeColor "Foreground"
-            $this._detailsScrollPanel.AddChild($textComp)
+            $textComponent = [LabelComponent]::new("Text_$currentY")
+            $textComponent.Text = $line
+            $textComponent.X = 2
+            $textComponent.Y = $currentY
+            $textComponent.ForegroundColor = Get-ThemeColor "foreground"
+            $this._detailsScrollPanel.AddChild($textComponent)
             $currentY++
         }
     }
 
-    [void] OnEnter() {
-        Write-Log -Level Debug -Message "ProjectInfoScreen.OnEnter: Project: $($this._project.Name)"
+    hidden [string[]] WrapText([string]$text, [int]$maxWidth) {
+        $lines = @()
+        $words = $text -split '\s+'
+        $currentLine = ""
+        
+        foreach ($word in $words) {
+            if (($currentLine + " " + $word).Length -gt $maxWidth) {
+                if ($currentLine) {
+                    $lines += $currentLine
+                    $currentLine = $word
+                } else {
+                    # Word is longer than max width, break it
+                    $lines += $word.Substring(0, $maxWidth)
+                    $currentLine = $word.Substring($maxWidth)
+                }
+            } else {
+                $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
+            }
+        }
+        
+        if ($currentLine) {
+            $lines += $currentLine
+        }
+        
+        return $lines
+    }
 
-        # Load and display tasks
-        $tasks = $this._dataManager.GetTasksByProject($this._project.Key)
+    [void] OnEnter() {
+        Write-Log -Level Debug -Message "ProjectInfoScreen.OnEnter: Loading project data"
+        
+        # Populate Associated Tasks
         $this._taskListbox.ClearItems()
-        if ($tasks.Count -gt 0) {
-            foreach ($task in $tasks) {
-                $this._taskListbox.AddItem($task.ToString())
+        $allTasks = $this._dataManager.GetTasks()
+        $projectTasks = @($allTasks | Where-Object { $_.ProjectKey -eq $this._project.Key })
+        
+        if ($projectTasks.Count -gt 0) {
+            foreach ($task in $projectTasks) {
+                $statusIcon = switch ($task.Status) {
+                    ([TaskStatus]::Pending) { "○" }
+                    ([TaskStatus]::InProgress) { "◐" }
+                    ([TaskStatus]::Completed) { "●" }
+                    ([TaskStatus]::Cancelled) { "✕" }
+                    default { "?" }
+                }
+                $taskText = "$statusIcon $($task.Title)"
+                $this._taskListbox.AddItem($taskText)
             }
         } else {
             $this._taskListbox.AddItem("No tasks associated with this project.")
         }
         $this._taskListbox.SelectedIndex = -1
 
-        # Load and display files
+        # Populate Client Documents
         $this._fileListbox.ClearItems()
         $filesFound = $false
-        
-        # Add special linked files first
-        if ($this._project.CaaFileName) {
-            $this._fileListbox.AddItem("📄 CAA File: $($this._project.CaaFileName)")
-            $filesFound = $true
-        }
-        
-        if ($this._project.RequestFileName) {
-            $this._fileListbox.AddItem("📋 Request File: $($this._project.RequestFileName)")
-            $filesFound = $true
-        }
-        
-        if ($this._project.T2020FileName) {
-            $this._fileListbox.AddItem("📊 T2020 File: $($this._project.T2020FileName)")
-            $filesFound = $true
-        }
 
-        # List other files in the project folder
-        if ($this._project.ProjectFolderPath -and (Test-Path $this._project.ProjectFolderPath -PathType Container)) {
-            try {
-                $linkedFiles = @($this._project.CaaFileName, $this._project.RequestFileName, $this._project.T2020FileName) | Where-Object { $_ }
-                $files = Get-ChildItem -Path $this._project.ProjectFolderPath -File | Where-Object { 
-                    $_.Name -notin $linkedFiles
-                } | Select-Object -ExpandProperty Name
-
-                if ($files.Count -gt 0) {
-                    foreach ($file in $files) {
-                        $this._fileListbox.AddItem("📁 $file")
-                    }
-                    $filesFound = $true
+        if ($this._project.ProjectFolderPath -and (Test-Path $this._project.ProjectFolderPath)) {
+            $files = Get-ChildItem -Path $this._project.ProjectFolderPath -File
+            if ($files.Count -gt 0) {
+                foreach ($file in $files) {
+                    $fileText = "📄 $($file.Name)"
+                    $this._fileListbox.AddItem($fileText)
                 }
-            } catch {
-                Write-Log -Level Warning -Message "ProjectInfoScreen: Could not list files in $($this._project.ProjectFolderPath): $($_.Exception.Message)"
-                $this._fileListbox.AddItem("Error listing files: $($_.Exception.Message)")
+                $filesFound = $true
             }
+        }
+        
+        # Check specific file properties
+        if ($this._project.CaaFileName) {
+            $this._fileListbox.AddItem("📋 CAA: $($this._project.CaaFileName)")
+            $filesFound = $true
+        }
+        if ($this._project.RequestFileName) {
+            $this._fileListbox.AddItem("📋 Request: $($this._project.RequestFileName)")
+            $filesFound = $true
+        }
+        if ($this._project.T2020FileName) {
+            $this._fileListbox.AddItem("📋 T2020: $($this._project.T2020FileName)")
+            $filesFound = $true
         }
         
         if (-not $filesFound) {
@@ -255,46 +317,90 @@ class ProjectInfoScreen : Screen {
         }
         $this._fileListbox.SelectedIndex = -1
         
-        # Set focus to the screen for keyboard navigation
-        $focusManager = $this.ServiceContainer?.GetService("FocusManager")
-        if ($focusManager) {
-            $focusManager.SetFocus($this)
-        }
-
+        # No FocusManager needed - this is a display screen
         $this.RequestRedraw()
-        ([Screen]$this).OnEnter()
     }
 
+    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if ($null -eq $keyInfo) { return $false }
+        if ($null -eq $keyInfo) {
+            Write-Log -Level Warning -Message "ProjectInfoScreen.HandleInput: Null keyInfo"
+            return $false
+        }
+
+        Write-Log -Level Debug -Message "ProjectInfoScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
 
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Escape) {
-                Write-Log -Level Debug -Message "ProjectInfoScreen.HandleInput: ESC pressed, navigating back."
+                Write-Log -Level Debug -Message "ProjectInfoScreen: Navigating back"
                 $navService = $this.ServiceContainer?.GetService("NavigationService")
                 if ($navService -and $navService.CanGoBack()) {
                     $navService.GoBack()
-                    return $true
                 }
+                return $true
             }
             ([ConsoleKey]::UpArrow) {
                 $this._detailsScrollPanel.ScrollUp()
+                $this.RequestRedraw()
                 return $true
             }
             ([ConsoleKey]::DownArrow) {
                 $this._detailsScrollPanel.ScrollDown()
+                $this.RequestRedraw()
                 return $true
             }
             ([ConsoleKey]::PageUp) {
                 $this._detailsScrollPanel.ScrollPageUp()
+                $this.RequestRedraw()
                 return $true
             }
             ([ConsoleKey]::PageDown) {
                 $this._detailsScrollPanel.ScrollPageDown()
+                $this.RequestRedraw()
+                return $true
+            }
+            ([ConsoleKey]::Home) {
+                $this._detailsScrollPanel.ScrollToTop()
+                $this.RequestRedraw()
+                return $true
+            }
+            ([ConsoleKey]::End) {
+                $this._detailsScrollPanel.ScrollToBottom()
+                $this.RequestRedraw()
                 return $true
             }
         }
         
-        return ([Screen]$this).HandleInput($keyInfo)
+        # Character shortcuts
+        switch ($keyInfo.KeyChar) {
+            'e' {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                    # Edit project
+                    $navService = $this.ServiceContainer?.GetService("NavigationService")
+                    if ($navService) {
+                        $editDialog = [ProjectEditDialog]::new($this.ServiceContainer, $this._project)
+                        $editDialog.Initialize()
+                        $navService.NavigateTo($editDialog)
+                    }
+                    return $true
+                }
+            }
+            'E' {
+                # Edit project
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService) {
+                    $editDialog = [ProjectEditDialog]::new($this.ServiceContainer, $this._project)
+                    $editDialog.Initialize()
+                    $navService.NavigateTo($editDialog)
+                }
+                return $true
+            }
+        }
+        
+        return $false
     }
 }
+
+# ==============================================================================
+# END OF PROJECT INFO SCREEN
+# ==============================================================================

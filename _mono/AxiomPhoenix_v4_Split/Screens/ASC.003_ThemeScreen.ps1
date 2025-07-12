@@ -1,5 +1,6 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Theme Selection Screen - FIXED VERSION
+# Axiom-Phoenix v4.0 - Theme Selection Screen  
+# FIXED: Removed FocusManager dependency, uses direct input handling
 # ==============================================================================
 
 class ThemeScreen : Screen {
@@ -13,6 +14,10 @@ class ThemeScreen : Screen {
     hidden [LabelComponent]$_previewTextLabel
     hidden [LabelComponent]$_previewButtonLabel
     hidden [LabelComponent]$_previewListLabel
+    
+    # State
+    hidden [int]$_selectedIndex = 0
+    hidden [string]$_originalTheme
     
     # Available themes with hex colors
     hidden [hashtable[]]$_themes = @(
@@ -98,119 +103,162 @@ class ThemeScreen : Screen {
                 "component.background" = "#FFFFFF"
                 "component.border" = "#808080"
                 "component.title" = "#000080"
-                "button.focused.fg" = "#FFFFFF"
+                "button.focused.fg" = "#000000"
                 "button.focused.bg" = "#000080"
-                "list.item.selected" = "#FFFFFF"
-                "list.item.selected.background" = "#0000FF"
+                "list.item.selected" = "#000080"
+                "list.item.selected.background" = "#FFFFFF"
+            }
+        }
+        @{
+            Name = "Synthwave"
+            Description = "Retro 80s neon colors"
+            Colors = @{
+                "Background" = "#0A0A0A"
+                "Foreground" = "#FF00FF"
+                "Primary" = "#FF00FF"
+                "Secondary" = "#00FFFF"
+                "Accent" = "#FF00FF"
+                "Success" = "#00FF88"
+                "Warning" = "#FFD700"
+                "Error" = "#FF0066"
+                "Info" = "#00D4FF"
+                "component.background" = "#1A0A1A"
+                "component.border" = "#FF00FF"
+                "component.title" = "#00FFFF"
+                "button.focused.fg" = "#000000"
+                "button.focused.bg" = "#FF00FF"
+                "list.item.selected" = "#000000"
+                "list.item.selected.background" = "#FF00FF"
+            }
+        }
+        @{
+            Name = "HackerVision"
+            Description = "Dark theme with bright green accents"
+            Colors = @{
+                "Background" = "#0A0A0A"
+                "Foreground" = "#00FF00"
+                "Primary" = "#00FF00"
+                "Secondary" = "#00CC00"
+                "Accent" = "#00FF00"
+                "Success" = "#00FF00"
+                "Warning" = "#FFD700"
+                "Error" = "#FF0000"
+                "Info" = "#00D4FF"
+                "component.background" = "#0A0A0A"
+                "component.border" = "#00FF00"
+                "component.title" = "#00FF00"
+                "button.focused.fg" = "#000000"
+                "button.focused.bg" = "#00FF00"
+                "list.item.selected" = "#000000"
+                "list.item.selected.background" = "#00FF00"
             }
         }
     )
     
-    ThemeScreen([ServiceContainer]$container) : base("ThemeScreen", $container) {
+    ThemeScreen([object]$serviceContainer) : base("ThemeScreen", $serviceContainer) {
+        Write-Log -Level Debug -Message "ThemeScreen: Constructor called"
     }
     
     [void] Initialize() {
+        Write-Log -Level Debug -Message "ThemeScreen.Initialize: Starting"
+        
+        # Store current theme to restore on cancel
+        $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
+        if ($themeManager) {
+            $this._originalTheme = $themeManager.ThemeName
+        }
+        
         # Main panel
-        $this._mainPanel = [Panel]::new("ThemeScreen_MainPanel")
+        $this._mainPanel = [Panel]::new("ThemeMain")
         $this._mainPanel.X = 0
         $this._mainPanel.Y = 0
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
-        $this._mainPanel.HasBorder = $true
-        $this._mainPanel.BorderStyle = "Single"
         $this._mainPanel.Title = " Theme Selection "
+        $this._mainPanel.BorderStyle = "Double"
         $this.AddChild($this._mainPanel)
         
         # Title
-        $this._titleLabel = [LabelComponent]::new("ThemeScreen_Title")
-        $this._titleLabel.Text = "Select a Theme"
+        $this._titleLabel = [LabelComponent]::new("Title")
         $this._titleLabel.X = 2
         $this._titleLabel.Y = 1
+        $this._titleLabel.Text = "Select a theme for your terminal experience"
         $this._titleLabel.ForegroundColor = Get-ThemeColor "Primary"
         $this._mainPanel.AddChild($this._titleLabel)
         
-        # Theme list - fixed width
-        $this._themeList = [ListBox]::new("ThemeScreen_List")
-        $this._themeList.X = 2
-        $this._themeList.Y = 3
-        $this._themeList.Width = 30  # Fixed width
-        $this._themeList.Height = $this._mainPanel.Height - 8
-        $this._themeList.HasBorder = $true
-        $this._themeList.BorderStyle = "Single"
-        $this._themeList.Title = " Themes "
-        $this._themeList.IsFocusable = $true
-        $this._mainPanel.AddChild($this._themeList)
+        # List panel (left side)
+        $listWidth = [Math]::Floor($this.Width * 0.3)
+        $listPanel = [Panel]::new("ListPanel")
+        $listPanel.X = 2
+        $listPanel.Y = 3
+        $listPanel.Width = $listWidth
+        $listPanel.Height = $this.Height - 8
+        $listPanel.Title = " Themes "
+        $listPanel.BorderStyle = "Single"
+        $this._mainPanel.AddChild($listPanel)
         
-        # Preview panel - rest of the width
-        $previewX = $this._themeList.X + $this._themeList.Width + 2
-        $this._previewPanel = [Panel]::new("ThemeScreen_Preview")
-        $this._previewPanel.X = $previewX
+        # Theme list
+        $this._themeList = [ListBox]::new("ThemeList")
+        $this._themeList.X = 1
+        $this._themeList.Y = 1
+        $this._themeList.Width = $listPanel.Width - 2
+        $this._themeList.Height = $listPanel.Height - 2
+        $this._themeList.HasBorder = $false
+        $this._themeList.IsFocusable = $false  # We handle input directly
+        $listPanel.AddChild($this._themeList)
+        
+        # Preview panel (right side)
+        $this._previewPanel = [Panel]::new("PreviewPanel")
+        $this._previewPanel.X = $listWidth + 4
         $this._previewPanel.Y = 3
-        $this._previewPanel.Width = $this._mainPanel.Width - $previewX - 2
-        $this._previewPanel.Height = $this._mainPanel.Height - 8
-        $this._previewPanel.HasBorder = $true
-        $this._previewPanel.BorderStyle = "Single"
+        $this._previewPanel.Width = $this.Width - $listWidth - 8
+        $this._previewPanel.Height = $this.Height - 8
         $this._previewPanel.Title = " Preview "
+        $this._previewPanel.BorderStyle = "Single"
         $this._mainPanel.AddChild($this._previewPanel)
         
-        # Description in preview
-        $this._descriptionLabel = [LabelComponent]::new("ThemeScreen_Description")
+        # Description label
+        $this._descriptionLabel = [LabelComponent]::new("Description")
         $this._descriptionLabel.X = 2
         $this._descriptionLabel.Y = 1
-        $this._descriptionLabel.Width = $this._previewPanel.Width - 4
         $this._descriptionLabel.Text = ""
         $this._previewPanel.AddChild($this._descriptionLabel)
         
-        # Preview elements - static labels showing theme colors
-        $y = 3
+        # Preview elements
+        $previewY = 3
         
-        # Text preview
-        $this._previewTextLabel = [LabelComponent]::new("Preview_Text")
-        $this._previewTextLabel.Text = "Sample Text (Foreground Color)"
+        $this._previewTextLabel = [LabelComponent]::new("PreviewText")
         $this._previewTextLabel.X = 2
-        $this._previewTextLabel.Y = $y
+        $this._previewTextLabel.Y = $previewY
+        $this._previewTextLabel.Text = "This is sample text in the selected theme"
         $this._previewPanel.AddChild($this._previewTextLabel)
-        $y += 2
         
-        # Button preview
-        $this._previewButtonLabel = [LabelComponent]::new("Preview_Button")
-        $this._previewButtonLabel.Text = "[ Sample Button (Focused) ]"
+        $previewY += 2
+        
+        $this._previewButtonLabel = [LabelComponent]::new("PreviewButton")
         $this._previewButtonLabel.X = 2
-        $this._previewButtonLabel.Y = $y
+        $this._previewButtonLabel.Y = $previewY
+        $this._previewButtonLabel.Text = " [Sample Button] "
         $this._previewPanel.AddChild($this._previewButtonLabel)
-        $y += 2
         
-        # List preview
-        $this._previewListLabel = [LabelComponent]::new("Preview_List")
-        $this._previewListLabel.Text = "> Selected List Item <"
+        $previewY += 2
+        
+        $this._previewListLabel = [LabelComponent]::new("PreviewList")
         $this._previewListLabel.X = 2
-        $this._previewListLabel.Y = $y
+        $this._previewListLabel.Y = $previewY
+        $this._previewListLabel.Text = "> Selected List Item"
         $this._previewPanel.AddChild($this._previewListLabel)
         
-        # Status label - positioned correctly
-        $statusY = $this._mainPanel.Height - 3
-        $this._statusLabel = [LabelComponent]::new("ThemeScreen_Status")
-        $this._statusLabel.Text = "Use ↑↓ to navigate, Enter to apply theme, Escape to go back"
+        # Status bar
+        $this._statusLabel = [LabelComponent]::new("Status")
         $this._statusLabel.X = 2
-        $this._statusLabel.Y = $statusY
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Info"
+        $this._statusLabel.Y = $this.Height - 3
+        $this._statusLabel.Text = "↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Muted"
         $this._mainPanel.AddChild($this._statusLabel)
         
-        # Populate themes
+        # Populate theme list
         $this.PopulateThemeList()
-        
-        # Selection change handler
-        $thisScreen = $this
-        $this._themeList.SelectedIndexChanged = {
-            param($sender, $index)
-            $thisScreen.UpdatePreview()
-        }
-        
-        # Set focus
-        $focusManager = $this.ServiceContainer.GetService("FocusManager")
-        if ($focusManager) {
-            $focusManager.SetFocus($this._themeList)
-        }
     }
     
     hidden [void] PopulateThemeList() {
@@ -218,86 +266,192 @@ class ThemeScreen : Screen {
         foreach ($theme in $this._themes) {
             $this._themeList.AddItem($theme.Name)
         }
-        $this._themeList.SelectedIndex = 0
+        
+        # Find current theme
+        $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
+        if ($themeManager) {
+            for ($i = 0; $i -lt $this._themes.Count; $i++) {
+                if ($this._themes[$i].Name -eq $themeManager.ThemeName) {
+                    $this._selectedIndex = $i
+                    break
+                }
+            }
+        }
+        
+        $this._themeList.SelectedIndex = $this._selectedIndex
         $this.UpdatePreview()
     }
     
     hidden [void] UpdatePreview() {
-        if ($this._themeList.SelectedIndex -ge 0 -and $this._themeList.SelectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$this._themeList.SelectedIndex]
+        if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
+            $selectedTheme = $this._themes[$this._selectedIndex]
             
             # Update description
             $this._descriptionLabel.Text = $selectedTheme.Description
+            $this._descriptionLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
             
-            # Update preview colors
+            # Update preview elements with theme colors
             $this._previewTextLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
+            
+            $this._previewButtonLabel.BackgroundColor = $selectedTheme.Colors["Primary"]
             $this._previewButtonLabel.ForegroundColor = $selectedTheme.Colors["button.focused.fg"]
-            $this._previewButtonLabel.BackgroundColor = $selectedTheme.Colors["button.focused.bg"]
-            $this._previewListLabel.ForegroundColor = $selectedTheme.Colors["list.item.selected"]
+            
             $this._previewListLabel.BackgroundColor = $selectedTheme.Colors["list.item.selected.background"]
+            $this._previewListLabel.ForegroundColor = $selectedTheme.Colors["list.item.selected"]
+            
+            # Update panel colors
+            $this._previewPanel.BackgroundColor = $selectedTheme.Colors["component.background"]
+            $this._previewPanel.BorderColor = $selectedTheme.Colors["component.border"]
             
             $this.RequestRedraw()
         }
     }
     
-    hidden [void] ApplySelectedTheme() {
-        if ($this._themeList.SelectedIndex -ge 0 -and $this._themeList.SelectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$this._themeList.SelectedIndex]
-            $themeManager = $this.ServiceContainer.GetService("ThemeManager")
+    hidden [void] ApplyTheme() {
+        if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
+            $selectedTheme = $this._themes[$this._selectedIndex]
+            $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
             
             if ($themeManager) {
-                # Apply all colors
-                foreach ($colorKey in $selectedTheme.Colors.Keys) {
-                    $themeManager.SetColor($colorKey, $selectedTheme.Colors[$colorKey])
+                # Apply the theme colors
+                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) {
+                    $themeManager.SetColor($kvp.Key, $kvp.Value)
                 }
                 
                 $themeManager.ThemeName = $selectedTheme.Name
-                $global:TuiState.IsDirty = $true
                 
-                # Show confirmation
-                $this._statusLabel.Text = "Theme '$($selectedTheme.Name)' applied!"
-                $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
-                $this.RequestRedraw()
-                
-                # Force immediate redraw
-                try {
-                    if ($global:TuiState -and $global:TuiState.RenderEngine) {
-                        $global:TuiState.RenderEngine.Render()
-                    }
-                } catch {
-                    # Ignore render engine errors
+                # Notify about theme change
+                $eventManager = $this.ServiceContainer?.GetService("EventManager")
+                if ($eventManager) {
+                    $eventManager.Publish("Theme.Changed", @{ Theme = $selectedTheme.Name })
                 }
                 
-                # Return after delay
-                Start-Sleep -Milliseconds 1500
-                $navService = $this.ServiceContainer.GetService("NavigationService")
-                if ($navService) {
-                    $navService.GoBack()
+                Write-Log -Level Info -Message "Applied theme: $($selectedTheme.Name)"
+            }
+        }
+    }
+    
+    hidden [void] PreviewTheme() {
+        # Temporarily apply theme without saving
+        if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
+            $selectedTheme = $this._themes[$this._selectedIndex]
+            $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
+            
+            if ($themeManager) {
+                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) {
+                    $themeManager.SetColor($kvp.Key, $kvp.Value)
+                }
+                
+                # Request full screen redraw
+                $eventManager = $this.ServiceContainer?.GetService("EventManager")
+                if ($eventManager) {
+                    $eventManager.Publish("Theme.Preview", @{ Theme = $selectedTheme.Name })
                 }
             }
         }
     }
     
     [void] OnEnter() {
-        ([Screen]$this).OnEnter()
-        $this.UpdatePreview()
+        Write-Log -Level Debug -Message "ThemeScreen.OnEnter: Starting"
+        
+        # Don't use FocusManager - we handle input directly
+        $this.RequestRedraw()
     }
     
-    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key) { return $false }
+    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) {
+            Write-Log -Level Warning -Message "ThemeScreen.HandleInput: Null keyInfo"
+            return $false
+        }
         
-        switch ($key.Key) {
-            ([ConsoleKey]::Escape) {
-                $navService = $this.ServiceContainer.GetService("NavigationService")
-                if ($navService) { $navService.GoBack() }
-                return $true
+        Write-Log -Level Debug -Message "ThemeScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
+        
+        $handled = $false
+        
+        # Navigation keys
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::UpArrow) {
+                if ($this._selectedIndex -gt 0) {
+                    $this._selectedIndex--
+                    $this._themeList.SelectedIndex = $this._selectedIndex
+                    $this.UpdatePreview()
+                }
+                $handled = $true
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($this._selectedIndex -lt $this._themes.Count - 1) {
+                    $this._selectedIndex++
+                    $this._themeList.SelectedIndex = $this._selectedIndex
+                    $this.UpdatePreview()
+                }
+                $handled = $true
             }
             ([ConsoleKey]::Enter) {
-                $this.ApplySelectedTheme()
-                return $true
+                $this.ApplyTheme()
+                # Go back after applying
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                }
+                $handled = $true
+            }
+            ([ConsoleKey]::Escape) {
+                # Restore original theme and go back
+                $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
+                if ($themeManager -and $this._originalTheme) {
+                    # Find and apply original theme
+                    foreach ($theme in $this._themes) {
+                        if ($theme.Name -eq $this._originalTheme) {
+                            foreach ($kvp in $theme.Colors.GetEnumerator()) {
+                                $themeManager.SetColor($kvp.Key, $kvp.Value)
+                            }
+                            break
+                        }
+                    }
+                }
+                
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                }
+                $handled = $true
+            }
+            ([ConsoleKey]::Home) {
+                $this._selectedIndex = 0
+                $this._themeList.SelectedIndex = $this._selectedIndex
+                $this.UpdatePreview()
+                $handled = $true
+            }
+            ([ConsoleKey]::End) {
+                $this._selectedIndex = $this._themes.Count - 1
+                $this._themeList.SelectedIndex = $this._selectedIndex
+                $this.UpdatePreview()
+                $handled = $true
             }
         }
         
-        return ([Screen]$this).HandleInput($key)
+        # Character shortcuts
+        if (-not $handled) {
+            switch ($keyInfo.KeyChar) {
+                'p' {
+                    if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
+                        $this.PreviewTheme()
+                        $handled = $true
+                    }
+                }
+                'P' {
+                    $this.PreviewTheme()
+                    $handled = $true
+                }
+            }
+        }
+        
+        Write-Log -Level Debug -Message "ThemeScreen.HandleInput: Returning handled=$handled"
+        return $handled
     }
 }
+
+# ==============================================================================
+# END OF THEME SCREEN
+# ==============================================================================
