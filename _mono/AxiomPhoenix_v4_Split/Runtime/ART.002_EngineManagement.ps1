@@ -136,7 +136,7 @@ function Start-TuiEngine {
                         $keyInfo = [Console]::ReadKey($true)  # $true = no echo
                         if ($keyInfo) {
                             Write-Log -Level Debug -Message "Engine: Read key - Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Modifiers=$($keyInfo.Modifiers)"
-                            Write-Log -Level Debug -Message "Engine: CurrentScreen=$($global:TuiState.CurrentScreen?.Name)"
+#                            Write-Log -Level Debug -Message "Engine: CurrentScreen=$($global:TuiState.CurrentScreen?.Name)"
                             Process-TuiInput -KeyInfo $keyInfo
                         } else {
                             Write-Log -Level Debug -Message "Engine: ReadKey returned null"
