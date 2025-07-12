@@ -45,8 +45,8 @@ class ProjectInfoScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Project Details: $($this._project.Name) "
         $this._mainPanel.BorderStyle = "Double"
-        $this._mainPanel.BorderColor = Get-ThemeColor "Primary"
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Background"
+        $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -64,7 +64,7 @@ class ProjectInfoScreen : Screen {
         $this._detailsScrollPanel.Height = $this.Height - 4
         $this._detailsScrollPanel.Title = " General Information "
         $this._detailsScrollPanel.BorderStyle = "Single"
-        $this._detailsScrollPanel.BorderColor = Get-ThemeColor "component.border"
+        $this._detailsScrollPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._detailsScrollPanel.ShowScrollbar = $true
         $this._mainPanel.AddChild($this._detailsScrollPanel)
 
@@ -76,7 +76,7 @@ class ProjectInfoScreen : Screen {
         $this._tasksPanel.Height = $tasksHeight
         $this._tasksPanel.Title = " Associated Tasks "
         $this._tasksPanel.BorderStyle = "Single"
-        $this._tasksPanel.BorderColor = Get-ThemeColor "component.border"
+        $this._tasksPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._tasksPanel)
 
         # Files Panel (right side, below tasks)
@@ -87,7 +87,7 @@ class ProjectInfoScreen : Screen {
         $this._filesPanel.Height = $filesHeight
         $this._filesPanel.Title = " Client Documents "
         $this._filesPanel.BorderStyle = "Single"
-        $this._filesPanel.BorderColor = Get-ThemeColor "component.border"
+        $this._filesPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._filesPanel)
 
         # Populate Details Panel
@@ -161,8 +161,8 @@ class ProjectInfoScreen : Screen {
         $this._taskListbox.Height = $this._tasksPanel.Height - 2
         $this._taskListbox.HasBorder = $false
         $this._taskListbox.IsFocusable = $false  # We handle input directly
-        $this._taskListbox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
-        $this._taskListbox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
+        $this._taskListbox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+        $this._taskListbox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
         $this._tasksPanel.AddChild($this._taskListbox)
 
         # Populate Files Listbox
@@ -173,8 +173,8 @@ class ProjectInfoScreen : Screen {
         $this._fileListbox.Height = $this._filesPanel.Height - 2
         $this._fileListbox.HasBorder = $false
         $this._fileListbox.IsFocusable = $false  # We handle input directly
-        $this._fileListbox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
-        $this._fileListbox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
+        $this._fileListbox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+        $this._fileListbox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
         $this._filesPanel.AddChild($this._fileListbox)
 
         # Instructions
@@ -183,7 +183,7 @@ class ProjectInfoScreen : Screen {
         $instructionLabel.Text = $instructionText
         $instructionLabel.X = 2
         $instructionLabel.Y = $this.Height - 2
-        $instructionLabel.ForegroundColor = Get-ThemeColor "subtle"
+        $instructionLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._mainPanel.AddChild($instructionLabel)
 
         Write-Log -Level Debug -Message "ProjectInfoScreen.Initialize: Completed"
@@ -194,14 +194,14 @@ class ProjectInfoScreen : Screen {
         $labelComponent.Text = $label
         $labelComponent.X = 2
         $labelComponent.Y = $y
-        $labelComponent.ForegroundColor = Get-ThemeColor "label"
+        $labelComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._detailsScrollPanel.AddChild($labelComponent)
 
         $valueComponent = [LabelComponent]::new("Value_$y")
         $valueComponent.Text = $value
         $valueComponent.X = 25
         $valueComponent.Y = $y
-        $valueComponent.ForegroundColor = if ($valueColor) { $valueColor } else { Get-ThemeColor "foreground" }
+        $valueComponent.ForegroundColor = if ($valueColor) { $valueColor } else { Get-ThemeColor "Label.Foreground" "#d4d4d4" }
         $this._detailsScrollPanel.AddChild($valueComponent)
     }
 
@@ -210,7 +210,7 @@ class ProjectInfoScreen : Screen {
         $labelComponent.Text = $label
         $labelComponent.X = 2
         $labelComponent.Y = $y
-        $labelComponent.ForegroundColor = Get-ThemeColor "label"
+        $labelComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._detailsScrollPanel.AddChild($labelComponent)
     }
 
@@ -225,7 +225,7 @@ class ProjectInfoScreen : Screen {
             $textComponent.Text = $line
             $textComponent.X = 2
             $textComponent.Y = $currentY
-            $textComponent.ForegroundColor = Get-ThemeColor "foreground"
+            $textComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
             $this._detailsScrollPanel.AddChild($textComponent)
             $currentY++
         }

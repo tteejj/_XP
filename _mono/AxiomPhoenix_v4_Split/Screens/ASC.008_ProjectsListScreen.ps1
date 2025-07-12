@@ -42,8 +42,8 @@ class ProjectsListScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Projects Management "
         $this._mainPanel.BorderStyle = "Double"
-        $this._mainPanel.BorderColor = Get-ThemeColor "primary.accent"
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "background"
+        $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
         
         # Calculate dimensions
@@ -58,7 +58,7 @@ class ProjectsListScreen : Screen {
         $this._listPanel.Height = $this.Height - 6  # Leave room for action panel
         $this._listPanel.Title = " Projects "
         $this._listPanel.BorderStyle = "Single"
-        $this._listPanel.BorderColor = Get-ThemeColor "component.border"
+        $this._listPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._listPanel)
         
         # Search box
@@ -73,13 +73,13 @@ class ProjectsListScreen : Screen {
         
         # Add visual focus feedback for search box
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "component.border"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#666666"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -103,17 +103,17 @@ class ProjectsListScreen : Screen {
         $this._projectListBox.HasBorder = $false
         $this._projectListBox.IsFocusable = $true  # HYBRID MODEL: Component handles its own input
         $this._projectListBox.TabIndex = 1
-        $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
-        $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
+        $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+        $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
         
         # Add visual focus feedback for list box
         $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
             $this.RequestRedraw()
         } -Force
         
         $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "component.border"
+            $this.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
         
@@ -134,7 +134,7 @@ class ProjectsListScreen : Screen {
         $this._detailPanel.Height = $this.Height - 6  # Leave room for action panel
         $this._detailPanel.Title = " Project Details "
         $this._detailPanel.BorderStyle = "Single"
-        $this._detailPanel.BorderColor = Get-ThemeColor "component.border"
+        $this._detailPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._detailPanel)
         
         # Create detail components
@@ -147,7 +147,7 @@ class ProjectsListScreen : Screen {
         $this._actionPanel.Width = $this.Width - 2
         $this._actionPanel.Height = 3
         $this._actionPanel.BorderStyle = "Single"
-        $this._actionPanel.BorderColor = Get-ThemeColor "component.border"
+        $this._actionPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._actionPanel)
         
         # Action buttons and status
@@ -159,7 +159,7 @@ class ProjectsListScreen : Screen {
         $viewBtn.Text = "[Enter] View"
         $viewBtn.X = 2
         $viewBtn.Y = $buttonY
-        $viewBtn.ForegroundColor = Get-ThemeColor "success"
+        $viewBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
         $this._actionPanel.AddChild($viewBtn)
         
         # New button
@@ -167,7 +167,7 @@ class ProjectsListScreen : Screen {
         $newBtn.Text = "[N] New"
         $newBtn.X = $viewBtn.X + $buttonSpacing
         $newBtn.Y = $buttonY
-        $newBtn.ForegroundColor = Get-ThemeColor "primary"
+        $newBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._actionPanel.AddChild($newBtn)
         
         # Edit button
@@ -175,7 +175,7 @@ class ProjectsListScreen : Screen {
         $editBtn.Text = "[E] Edit"
         $editBtn.X = $newBtn.X + $buttonSpacing
         $editBtn.Y = $buttonY
-        $editBtn.ForegroundColor = Get-ThemeColor "warning"
+        $editBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500"
         $this._actionPanel.AddChild($editBtn)
         
         # Delete button
@@ -183,7 +183,7 @@ class ProjectsListScreen : Screen {
         $deleteBtn.Text = "[D] Delete"
         $deleteBtn.X = $editBtn.X + $buttonSpacing
         $deleteBtn.Y = $buttonY
-        $deleteBtn.ForegroundColor = Get-ThemeColor "error"
+        $deleteBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444"
         $this._actionPanel.AddChild($deleteBtn)
         
         # Archive button
@@ -191,7 +191,7 @@ class ProjectsListScreen : Screen {
         $archiveBtn.Text = "[A] Archive"
         $archiveBtn.X = $deleteBtn.X + $buttonSpacing
         $archiveBtn.Y = $buttonY
-        $archiveBtn.ForegroundColor = Get-ThemeColor "component.text"
+        $archiveBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._actionPanel.AddChild($archiveBtn)
         
         # Tab hint
@@ -199,7 +199,7 @@ class ProjectsListScreen : Screen {
         $tabHint.Text = "[Tab] Focus"
         $tabHint.X = $archiveBtn.X + $buttonSpacing
         $tabHint.Y = $buttonY
-        $tabHint.ForegroundColor = Get-ThemeColor "subtle"
+        $tabHint.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._actionPanel.AddChild($tabHint)
         
         # Status label
@@ -207,7 +207,7 @@ class ProjectsListScreen : Screen {
         $this._statusLabel.Text = "0 projects"
         $this._statusLabel.X = $this._actionPanel.Width - 20
         $this._statusLabel.Y = $buttonY
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "subtle"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._actionPanel.AddChild($this._statusLabel)
         
         # Exit instructions
@@ -215,7 +215,7 @@ class ProjectsListScreen : Screen {
         $exitLabel.Text = "[Esc] Back"
         $exitLabel.X = $this._actionPanel.Width - 12
         $exitLabel.Y = $buttonY
-        $exitLabel.ForegroundColor = Get-ThemeColor "subtle"
+        $exitLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._actionPanel.AddChild($exitLabel)
         
         Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Completed"
@@ -223,12 +223,12 @@ class ProjectsListScreen : Screen {
     
     hidden [void] CreateDetailComponents() {
         $labelStyle = @{ 
-            ForegroundColor = Get-ThemeColor "label"
+            ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
             Width = 15
             Height = 1 
         }
         $valueStyle = @{ 
-            ForegroundColor = Get-ThemeColor "foreground"
+            ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
             Width = $this._detailPanel.Width - 20
             Height = 1 
         }
@@ -246,7 +246,7 @@ class ProjectsListScreen : Screen {
         $keyValue = [LabelComponent]::new("KeyValue")
         $keyValue.X = 18
         $keyValue.Y = $y
-        $keyValue.ForegroundColor = Get-ThemeColor "primary"
+        $keyValue.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._detailPanel.AddChild($keyValue)
         $this._detailLabels["Key"] = $keyValue
         $y += 2
@@ -294,7 +294,7 @@ class ProjectsListScreen : Screen {
         $statusValue = [LabelComponent]::new("StatusValue")
         $statusValue.X = 18
         $statusValue.Y = $y
-        $statusValue.ForegroundColor = Get-ThemeColor "success"
+        $statusValue.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
         $this._detailPanel.AddChild($statusValue)
         $this._detailLabels["Status"] = $statusValue
         $y += 2
@@ -440,9 +440,9 @@ class ProjectsListScreen : Screen {
         $statusText = if ($project.IsActive) { "Active" } else { "Archived" }
         $this._detailLabels["Status"].Text = $statusText
         $this._detailLabels["Status"].ForegroundColor = if ($project.IsActive) { 
-            Get-ThemeColor "success" 
+            Get-ThemeColor "Label.Foreground" "#00ff88"
         } else { 
-            Get-ThemeColor "subtle" 
+            Get-ThemeColor "Label.Foreground" "#666666"
         }
         
         # Client ID from metadata
@@ -455,17 +455,17 @@ class ProjectsListScreen : Screen {
             $dateText = $project.BFDate.ToString("yyyy-MM-dd")
             if ($daysUntil -lt 0) {
                 $dateText += " (Overdue!)"
-                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "error"
+                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444"
             } elseif ($daysUntil -le 7) {
                 $dateText += " ($daysUntil days)"
-                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "warning"
+                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500"
             } else {
-                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "foreground"
+                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
             }
             $this._detailLabels["DueDate"].Text = $dateText
         } else {
             $this._detailLabels["DueDate"].Text = "Not set"
-            $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "subtle"
+            $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         }
         
         # Description

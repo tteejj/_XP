@@ -60,13 +60,13 @@ class ListBox : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        $bgColor = Get-ThemeColor("component.background")
+        $bgColor = Get-ThemeColor "List.Background" "#1e1e1e"
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Draw border if enabled
         if ($this.HasBorder) {
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-                -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = $bgColor; BorderStyle = $this.BorderStyle; Title = $this.Title }
+                -Style @{ BorderFG = Get-ThemeColor "Panel.Border" "#404040"; BG = $bgColor; BorderStyle = $this.BorderStyle; Title = $this.Title }
         }
             
         # Calculate visible area
@@ -96,10 +96,10 @@ class ListBox : UIElement {
                 
                 # Use theme colors with fallbacks
                 if ($isSelected) { 
-                    $fgColor = if ($this.SelectedForegroundColor) { $this.SelectedForegroundColor } else { Get-ThemeColor "list.item.selected" "#0a0e27" }
-                    $itemBgColor = if ($this.SelectedBackgroundColor) { $this.SelectedBackgroundColor } else { Get-ThemeColor "list.item.selected.background" "#ff6ac1" }
+                    $fgColor = if ($this.SelectedForegroundColor) { $this.SelectedForegroundColor } else { Get-ThemeColor "List.ItemSelected" "#ffffff" }
+                    $itemBgColor = if ($this.SelectedBackgroundColor) { $this.SelectedBackgroundColor } else { Get-ThemeColor "List.ItemSelectedBackground" "#007acc" }
                 } else { 
-                    $fgColor = if ($this.ItemForegroundColor) { $this.ItemForegroundColor } else { Get-ThemeColor "list.item.normal" "#f92aad" }
+                    $fgColor = if ($this.ItemForegroundColor) { $this.ItemForegroundColor } else { Get-ThemeColor "List.ItemNormal" "#d4d4d4" }
                     $itemBgColor = $bgColor
                 }
                 

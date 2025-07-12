@@ -168,7 +168,7 @@ class Dialog : Screen {
         $this._panel.Title = " $this.Title "
         
         # Clear background with semi-transparent effect (simulate with darker color)
-        $bgColor = Get-ThemeColor("overlay.background")
+        $bgColor = Get-ThemeColor "Overlay.Background" "#000000"
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
     }
 

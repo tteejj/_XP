@@ -105,21 +105,23 @@ class MenuListComponent : Component {
     }
     
     [void] OnFocus() {
-        $this.BorderColor = Get-ThemeColor "primary.accent"
+        $this.BorderColor = Get-ThemeColor "Panel.Title" "#007acc"
         $this.RequestRedraw()
     }
     
     [void] OnBlur() {
-        $this.BorderColor = Get-ThemeColor "component.border"
+        $this.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
         $this.RequestRedraw()
     }
     
     [void] OnRender([TuiBuffer]$buffer) {
         # Clear the component area
+        $bgColor = $this.GetEffectiveBackgroundColor()
+        $fgColor = $this.GetEffectiveForegroundColor()
+        
         for ($y = 0; $y -lt $this.Height; $y++) {
             for ($x = 0; $x -lt $this.Width; $x++) {
-                $buffer.SetCell($this.X + $x, $this.Y + $y, ' ', 
-                    $this.ForegroundColor, $this.BackgroundColor)
+                $buffer.SetCell($this.X + $x, $this.Y + $y, ' ', $fgColor, $bgColor)
             }
         }
         
@@ -128,14 +130,14 @@ class MenuListComponent : Component {
             $text = $this._menuItems[$i]
             if (-not [string]::IsNullOrWhiteSpace($text)) {
                 $fg = if ($i -eq $this._selectedIndex) { 
-                    Get-ThemeColor "primary.accent" 
+                    Get-ThemeColor "Panel.Title" "#007acc"
                 } else { 
-                    Get-ThemeColor "component.text" 
+                    Get-ThemeColor "Label.Foreground" "#d4d4d4"
                 }
                 $bg = if ($i -eq $this._selectedIndex) { 
-                    Get-ThemeColor "component.background.hover" 
+                    Get-ThemeColor "List.ItemFocusedBackground" "#3a3a3a"
                 } else { 
-                    $this.BackgroundColor 
+                    $bgColor
                 }
                 
                 # Truncate text if too long
@@ -228,7 +230,7 @@ class DashboardScreen : Screen {
         $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
         $instructions.Y = 21
         $instructions.IsFocusable = $false
-        $instructions.ForegroundColor = Get-ThemeColor("Subtle")
+        $instructions.ForegroundColor = Get-ThemeColor "Label.Foreground" "#9ca3af"
         $this._mainPanel.AddChild($instructions)
         
         Write-Log -Level Debug -Message "DashboardScreen.Initialize: Completed"
@@ -250,18 +252,18 @@ class DashboardScreen : Screen {
     hidden [void] RefreshThemeColors() {
         try {
             if ($this._mainPanel) {
-                $this._mainPanel.BorderColor = Get-ThemeColor("component.border")
-                $this._mainPanel.BackgroundColor = Get-ThemeColor("component.background")
+                $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
+                $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
             }
             
             if ($this._menuPanel) {
-                $this._menuPanel.BorderColor = Get-ThemeColor("component.border")
-                $this._menuPanel.BackgroundColor = Get-ThemeColor("component.background")
+                $this._menuPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
+                $this._menuPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
             }
             
             $instructions = $this._mainPanel.Children | Where-Object { $_.Name -eq "Instructions" }
             if ($instructions) {
-                $instructions.ForegroundColor = Get-ThemeColor("Subtle")
+                $instructions.ForegroundColor = Get-ThemeColor "Label.Foreground" "#9ca3af"
             }
         }
         catch {

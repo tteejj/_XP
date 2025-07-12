@@ -11,212 +11,104 @@
 # Purpose: Visual theming system with palette-based architecture
 class ThemeManager {
     [hashtable]$CurrentTheme = @{}
-    [string]$ThemeName = "Synthwave"
+    [string]$ThemeName = ""
     [hashtable]$Themes = @{}
     
     ThemeManager() {
         $this.InitializeThemes()
-        $this.LoadTheme($this.ThemeName)
+        $this.LoadDefaultTheme()
     }
     
     [void] InitializeThemes() {
-        # Synthwave Theme - Neon cyberpunk aesthetic
-        $this.Themes["Synthwave"] = @{
-            Palette = @{
-                # Base colors
-                Black = "#0a0e27"
-                White = "#ffffff"
-                Primary = "#f92aad"
-                Secondary = "#5a189a"
-                Accent = "#ffcc00"
-                Success = "#3bf4fb"
-                Warning = "#ffbe0b"
-                Error = "#ff006e"
-                Info = "#8338ec"
-                Subtle = "#72f1b8"
-                
-                # Grays
-                Background = "#0a0e27"
-                Surface = "#1a1e3a"
-                Border = "#2a2e4a"
-                TextPrimary = "#f92aad"
-                TextSecondary = "#72f1b8"
-                TextDisabled = "#555555"
-            }
-            
-            Components = @{
-                # Screen/Window
-                Screen = @{
-                    Background = '$Palette.Background'
-                    Foreground = '$Palette.TextPrimary'
+        # Load external themes first
+        $this.LoadExternalThemes()
+        
+        # Basic fallback theme - only if no external themes loaded
+        if ($this.Themes.Count -eq 0) {
+            $this.Themes["Fallback"] = @{
+                Palette = @{
+                    Black = "#000000"
+                    White = "#ffffff"
+                    Primary = "#00ff00"
+                    Secondary = "#008000"
+                    Accent = "#ffff00"
+                    Success = "#00ff00"
+                    Warning = "#ffff00"
+                    Error = "#ff0000"
+                    Info = "#00ffff"
+                    Background = "#000000"
+                    Surface = "#001100"
+                    Border = "#00ff00"
+                    TextPrimary = "#00ff00"
+                    TextSecondary = "#008000"
+                    TextDisabled = "#004400"
                 }
                 
-                # Panel
-                Panel = @{
-                    Background = '$Palette.Background'
-                    Border = '$Palette.Border'
-                    Title = '$Palette.Accent'
-                    Header = '$Palette.Surface'
-                }
-                
-                # Labels and Text
-                Label = @{
-                    Foreground = '$Palette.TextPrimary'
-                    Disabled = '$Palette.TextDisabled'
-                }
-                
-                # Buttons
-                Button = @{
-                    Normal = @{
-                        Foreground = '$Palette.Black'
-                        Background = '$Palette.Primary'
+                Components = @{
+                    Screen = @{ Background = '$Palette.Background'; Foreground = '$Palette.TextPrimary' }
+                    Panel = @{ Background = '$Palette.Background'; Border = '$Palette.Border'; Title = '$Palette.Primary'; Header = '$Palette.Surface' }
+                    Label = @{ Foreground = '$Palette.TextPrimary'; Disabled = '$Palette.TextDisabled' }
+                    Button = @{
+                        Normal = @{ Foreground = '$Palette.Black'; Background = '$Palette.Primary' }
+                        Focused = @{ Foreground = '$Palette.Black'; Background = '$Palette.Accent' }
+                        Pressed = @{ Foreground = '$Palette.Black'; Background = '$Palette.Secondary' }
+                        Disabled = @{ Foreground = '$Palette.TextDisabled'; Background = '$Palette.Surface' }
                     }
-                    Focused = @{
-                        Foreground = '$Palette.Black'
-                        Background = '$Palette.Accent'
+                    Input = @{ Background = '$Palette.Surface'; Foreground = '$Palette.TextPrimary'; Placeholder = '$Palette.TextSecondary'; Border = '$Palette.Border'; FocusedBorder = '$Palette.Primary' }
+                    List = @{
+                        Background = '$Palette.Background'
+                        ItemNormal = '$Palette.TextPrimary'
+                        ItemSelected = '$Palette.Black'
+                        ItemSelectedBackground = '$Palette.Primary'
+                        ItemFocused = '$Palette.Black'
+                        ItemFocusedBackground = '$Palette.Accent'
+                        HeaderForeground = '$Palette.Primary'
+                        HeaderBackground = '$Palette.Surface'
+                        Scrollbar = '$Palette.Secondary'
                     }
-                    Pressed = @{
-                        Foreground = '$Palette.Black'
-                        Background = '$Palette.Secondary'
-                    }
-                    Disabled = @{
-                        Foreground = '$Palette.TextDisabled'
-                        Background = '$Palette.Border'
-                    }
-                }
-                
-                # Input fields
-                Input = @{
-                    Background = '$Palette.Surface'
-                    Foreground = '$Palette.TextPrimary'
-                    Placeholder = '$Palette.TextSecondary'
-                    Border = '$Palette.Border'
-                    FocusedBorder = '$Palette.Accent'
-                }
-                
-                # Lists and Tables
-                List = @{
-                    Background = '$Palette.Background'
-                    ItemNormal = '$Palette.TextPrimary'
-                    ItemSelected = '$Palette.Black'
-                    ItemSelectedBackground = '$Palette.Primary'
-                    ItemFocused = '$Palette.Black'
-                    ItemFocusedBackground = '$Palette.Accent'
-                    HeaderForeground = '$Palette.Accent'
-                    HeaderBackground = '$Palette.Surface'
-                    Scrollbar = '$Palette.Subtle'
-                }
-                
-                # Status
-                Status = @{
-                    Success = '$Palette.Success'
-                    Warning = '$Palette.Warning'
-                    Error = '$Palette.Error'
-                    Info = '$Palette.Info'
-                }
-                
-                # Overlay/Dialog
-                Overlay = @{
-                    Background = '$Palette.Black'
-                    DialogBackground = '$Palette.Surface'
+                    Status = @{ Success = '$Palette.Success'; Warning = '$Palette.Warning'; Error = '$Palette.Error'; Info = '$Palette.Info' }
+                    Overlay = @{ Background = '$Palette.Black'; DialogBackground = '$Palette.Surface' }
                 }
             }
         }
-        
-        # Green Theme - Classic terminal green
-        $this.Themes["Green"] = @{
-            Palette = @{
-                # Base colors
-                Black = "#000000"
-                White = "#ffffff"
-                Primary = "#00ff00"
-                Secondary = "#008000"
-                Accent = "#ffff00"
-                Success = "#00ff00"
-                Warning = "#ffff00"
-                Error = "#ff0000"
-                Info = "#00ffff"
-                Subtle = "#008000"
-                
-                # Grays
-                Background = "#000000"
-                Surface = "#001100"
-                Border = "#00ff00"
-                TextPrimary = "#00ff00"
-                TextSecondary = "#008000"
-                TextDisabled = "#004400"
+    }
+    
+    # Load themes from external files
+    [void] LoadExternalThemes() {
+        try {
+            # Get the current script directory
+            $scriptPath = $PSScriptRoot
+            if (-not $scriptPath) {
+                $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
             }
             
-            Components = @{
-                # Copy structure from Synthwave, all values reference $Palette
-                Screen = @{
-                    Background = '$Palette.Background'
-                    Foreground = '$Palette.TextPrimary'
-                }
+            # Look for Themes folder relative to Services folder
+            $themesPath = Join-Path (Split-Path $scriptPath -Parent) "Themes"
+            
+            if (Test-Path $themesPath) {
+                $themeFiles = Get-ChildItem -Path $themesPath -Filter "*.ps1"
                 
-                Panel = @{
-                    Background = '$Palette.Background'
-                    Border = '$Palette.Border'
-                    Title = '$Palette.Primary'
-                    Header = '$Palette.Surface'
-                }
-                
-                Label = @{
-                    Foreground = '$Palette.TextPrimary'
-                    Disabled = '$Palette.TextDisabled'
-                }
-                
-                Button = @{
-                    Normal = @{
-                        Foreground = '$Palette.Black'
-                        Background = '$Palette.Primary'
+                foreach ($themeFile in $themeFiles) {
+                    try {
+                        # Execute the theme file to get the hashtable
+                        $themeData = & $themeFile.FullName
+                        
+                        if ($themeData -and $themeData.Name) {
+                            $this.Themes[$themeData.Name] = $themeData
+                            Write-Host "Loaded theme: $($themeData.Name)" -ForegroundColor Green
+                        }
                     }
-                    Focused = @{
-                        Foreground = '$Palette.Black'
-                        Background = '$Palette.Accent'
+                    catch {
+                        Write-Warning "Failed to load theme file: $($themeFile.Name) - $_"
                     }
-                    Pressed = @{
-                        Foreground = '$Palette.Black'
-                        Background = '$Palette.Secondary'
-                    }
-                    Disabled = @{
-                        Foreground = '$Palette.TextDisabled'
-                        Background = '$Palette.Surface'
-                    }
-                }
-                
-                Input = @{
-                    Background = '$Palette.Surface'
-                    Foreground = '$Palette.TextPrimary'
-                    Placeholder = '$Palette.TextSecondary'
-                    Border = '$Palette.Border'
-                    FocusedBorder = '$Palette.Primary'
-                }
-                
-                List = @{
-                    Background = '$Palette.Background'
-                    ItemNormal = '$Palette.TextPrimary'
-                    ItemSelected = '$Palette.Black'
-                    ItemSelectedBackground = '$Palette.Primary'
-                    ItemFocused = '$Palette.Black'
-                    ItemFocusedBackground = '$Palette.Accent'
-                    HeaderForeground = '$Palette.Primary'
-                    HeaderBackground = '$Palette.Surface'
-                    Scrollbar = '$Palette.Secondary'
-                }
-                
-                Status = @{
-                    Success = '$Palette.Success'
-                    Warning = '$Palette.Warning'
-                    Error = '$Palette.Error'
-                    Info = '$Palette.Info'
-                }
-                
-                Overlay = @{
-                    Background = '$Palette.Black'
-                    DialogBackground = '$Palette.Surface'
                 }
             }
+            else {
+                Write-Host "Themes folder not found at: $themesPath" -ForegroundColor Yellow
+            }
+        }
+        catch {
+            Write-Warning "Error loading external themes: $_"
         }
     }
     
@@ -232,7 +124,21 @@ class ThemeManager {
     }
     
     [void] LoadDefaultTheme() {
-        $this.LoadTheme("Synthwave")
+        $availableThemes = $this.GetAvailableThemes()
+        if ($availableThemes.Count -gt 0) {
+            # Load first external theme if available, otherwise fallback
+            $preferredOrder = @("Cyberpunk", "Modern Dark", "Synthwave", "RetroAmber", "HighContrast", "Fallback")
+            $themeToLoad = "Fallback"  # Default fallback
+            
+            foreach ($preferred in $preferredOrder) {
+                if ($preferred -in $availableThemes) {
+                    $themeToLoad = $preferred
+                    break
+                }
+            }
+            
+            $this.LoadTheme($themeToLoad)
+        }
     }
     
     # Get any theme value (not just colors)
@@ -267,59 +173,23 @@ class ThemeManager {
         return $current
     }
     
-    # Backward compatibility
-    [string] GetColor([string]$colorName) {
-        # Map old color names to new paths
-        $mappings = @{
-            "Background" = "Screen.Background"
-            "Foreground" = "Screen.Foreground"
-            "Primary" = "Screen.Foreground"
-            "border.active" = "Panel.Border"
-            "border.inactive" = "Panel.Border"
-            "component.background" = "Panel.Background"
-            "component.border" = "Panel.Border"
-            "component.title" = "Panel.Title"
-            "component.text" = "Label.Foreground"
-            "list.selected.bg" = "List.ItemSelectedBackground"
-            "list.selected.fg" = "List.ItemSelected"
-            "list.item.selected" = "List.ItemSelected"
-            "list.item.selected.background" = "List.ItemSelectedBackground"
-            "list.item.normal" = "List.ItemNormal"
-            "list.scrollbar" = "List.Scrollbar"
-            "label" = "Label.Foreground"
-            "primary.accent" = "Panel.Title"
-            "primary.text" = "Label.Foreground"
-            "overlay.background" = "Overlay.Background"
-            "Info" = "Status.Info"
-            "Success" = "Status.Success"
-            "Warning" = "Status.Warning"
-            "Error" = "Status.Error"
-            "Subtle" = "Label.Foreground"
-        }
-        
-        if ($mappings.ContainsKey($colorName)) {
-            return $this.GetThemeValue($mappings[$colorName], "#FFFFFF")
-        }
-        
-        # Check if it's already a path
-        if ($colorName -match '\.') {
-            return $this.GetThemeValue($colorName, "#FFFFFF")
+    # Get color using new theme paths only
+    [string] GetColor([string]$colorPath) {
+        return $this.GetColor($colorPath, "#ffffff")
+    }
+    
+    [string] GetColor([string]$colorPath, [string]$defaultColor) {
+        # Check if it's a component path (e.g., "Panel.Border")
+        if ($colorPath -match '\.') {
+            return $this.GetThemeValue($colorPath, $defaultColor)
         }
         
         # Check palette directly
-        if ($this.CurrentTheme.Palette.ContainsKey($colorName)) {
-            return $this.CurrentTheme.Palette[$colorName]
+        if ($this.CurrentTheme.Palette.ContainsKey($colorPath)) {
+            return $this.CurrentTheme.Palette[$colorPath]
         }
         
-        return "#FFFFFF"
-    }
-    
-    [string] GetColor([string]$colorName, [string]$defaultColor) {
-        $color = $this.GetColor($colorName)
-        if ($color -eq "#FFFFFF" -and $defaultColor -ne "#FFFFFF") {
-            return $defaultColor
-        }
-        return $color
+        return $defaultColor
     }
     
     [void] SetColor([string]$colorName, $colorValue) {

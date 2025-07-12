@@ -49,7 +49,7 @@ class Panel : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = Get-ThemeColor("component.background")
+            $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
             $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
             $this._private_buffer.Clear($bgCell)
 
@@ -58,14 +58,14 @@ class Panel : UIElement {
 
             if ($this.HasBorder) {
                 if ($this.IsFocused) { 
-                    $borderColorValue = Get-ThemeColor("Primary") 
+                    $borderColorValue = Get-ThemeColor "Panel.Title" "#007acc"
                 } else { 
-                    $borderColorValue = Get-ThemeColor("component.border") 
+                    $borderColorValue = Get-ThemeColor "Panel.Border" "#404040"
                 }
                 
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor("component.title") } `
+                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor "Panel.Title" "#007acc" } `
                     -Title $this.Title
             }
 

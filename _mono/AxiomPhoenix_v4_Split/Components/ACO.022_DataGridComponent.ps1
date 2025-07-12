@@ -44,7 +44,7 @@ class DataGridComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         # Clear buffer
-        $bgColor = Get-ThemeColor("component.background")
+        $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         $y = 0

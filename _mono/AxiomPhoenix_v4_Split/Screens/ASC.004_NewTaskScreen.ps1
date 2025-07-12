@@ -35,7 +35,7 @@ class NewTaskScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.HasBorder = $false
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Overlay" "#00000099"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
         
         # Form panel (centered dialog)
@@ -51,8 +51,8 @@ class NewTaskScreen : Screen {
         $this._formPanel.Height = $formHeight
         $this._formPanel.Title = " New Task "
         $this._formPanel.BorderStyle = "Double"
-        $this._formPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
-        $this._formPanel.BackgroundColor = Get-ThemeColor "dialog.bg" "#1A1A1A"
+        $this._formPanel.BorderColor = Get-ThemeColor "Panel.Title" "#007acc"
+        $this._formPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this._mainPanel.AddChild($this._formPanel)
         
         $y = 2
@@ -62,7 +62,7 @@ class NewTaskScreen : Screen {
         $titleLabel.Text = "Task Title:"
         $titleLabel.X = 2
         $titleLabel.Y = $y
-        $titleLabel.ForegroundColor = Get-ThemeColor "label" "#FFD700"
+        $titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._formPanel.AddChild($titleLabel)
         
         $y += 1
@@ -74,19 +74,19 @@ class NewTaskScreen : Screen {
         $this._titleBox.Height = 3  # TextBoxComponent expects height of 3
         $this._titleBox.IsFocusable = $true  # Component handles its own input
         $this._titleBox.TabIndex = 0  # First in tab order
-        $this._titleBox.BackgroundColor = Get-ThemeColor "textbox.bg" "#2A2A2A"
-        $this._titleBox.ForegroundColor = Get-ThemeColor "textbox.fg" "#FFFFFF"
-        $this._titleBox.BorderColor = Get-ThemeColor "textbox.border" "#444444"
+        $this._titleBox.BackgroundColor = Get-ThemeColor "Input.Background" "#2d2d30"
+        $this._titleBox.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4"
+        $this._titleBox.BorderColor = Get-ThemeColor "Input.Border" "#404040"
         
         # Override OnFocus/OnBlur to update border color
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#007acc"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "textbox.border" "#444444"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#404040"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force

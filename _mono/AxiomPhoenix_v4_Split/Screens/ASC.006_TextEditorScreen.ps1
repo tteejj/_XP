@@ -71,7 +71,7 @@ class TextEditorScreen : Screen {
         $this._editorPanel.Width = $this.Width
         $this._editorPanel.Height = $this.Height - 3  # Leave room for status bar
         $this._editorPanel.HasBorder = $false
-        $this._editorPanel.BackgroundColor = Get-ThemeColor "Background"
+        $this._editorPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._editorPanel)
         
         # Status bar
@@ -82,7 +82,7 @@ class TextEditorScreen : Screen {
         $this._statusBar.Height = 3
         $this._statusBar.HasBorder = $true
         $this._statusBar.BorderStyle = "Single"
-        $this._statusBar.BackgroundColor = Get-ThemeColor "component.background"
+        $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._statusBar)
         
         # Status label
@@ -90,7 +90,7 @@ class TextEditorScreen : Screen {
         $this._statusLabel.X = 2
         $this._statusLabel.Y = 1
         $this._statusLabel.Text = "Ready"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Info"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._statusBar.AddChild($this._statusLabel)
         
         # Menu instructions - show available commands
@@ -98,7 +98,7 @@ class TextEditorScreen : Screen {
         $menuLabel.X = 25
         $menuLabel.Y = 1
         $menuLabel.Text = "^O:Open ^S:Save ^F:Find ^Q:Quit"
-        $menuLabel.ForegroundColor = Get-ThemeColor "component.text"
+        $menuLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._statusBar.AddChild($menuLabel)
         
         # Position label
@@ -106,7 +106,7 @@ class TextEditorScreen : Screen {
         $this._positionLabel.X = $this.Width - 20
         $this._positionLabel.Y = 1
         $this._positionLabel.Text = "Ln 1, Col 1"
-        $this._positionLabel.ForegroundColor = Get-ThemeColor "Subtle"
+        $this._positionLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._statusBar.AddChild($this._positionLabel)
         
         # Search panel (hidden by default)
@@ -118,7 +118,7 @@ class TextEditorScreen : Screen {
         $this._searchPanel.HasBorder = $true
         $this._searchPanel.BorderStyle = "Double"
         $this._searchPanel.Title = " Find & Replace "
-        $this._searchPanel.BackgroundColor = Get-ThemeColor "component.background"
+        $this._searchPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this._searchPanel.Visible = $false
         $this._searchPanel.IsOverlay = $true
         $this.AddChild($this._searchPanel)
@@ -161,7 +161,7 @@ class TextEditorScreen : Screen {
         $this._searchStatusLabel.X = 2
         $this._searchStatusLabel.Y = 4
         $this._searchStatusLabel.Text = ""
-        $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Info"
+        $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._searchPanel.AddChild($this._searchStatusLabel)
         
         # Load some initial text for demo
@@ -247,7 +247,7 @@ class TextEditorScreen : Screen {
         $x = $this._editorPanel.X
         if ($this._showLineNumbers) {
             $lineNum = ($lineIndex + 1).ToString().PadLeft($this._lineNumberWidth - 1)
-            $lineNumColor = Get-ThemeColor "component.disabled"
+            $lineNumColor = Get-ThemeColor "Label.Foreground" "#666666"
             
             for ($i = 0; $i -lt $lineNum.Length; $i++) {
                 $cell = [TuiCell]::new($lineNum[$i], $lineNumColor, $null)
@@ -275,13 +275,13 @@ class TextEditorScreen : Screen {
             
             for ($i = 0; $i -lt $maxLength; $i++) {
                 $char = $visibleText[$i]
-                $fg = Get-ThemeColor "Foreground"
+                $fg = Get-ThemeColor "Label.Foreground" "#d4d4d4"
                 
                 # Highlight selection if active
                 $absolutePos = $this._buffer.GetLineStart($lineIndex) + $this._viewportLeft + $i
                 if ($this._selection.IsActive -and $this._selection.ContainsPosition($absolutePos)) {
-                    $fg = Get-ThemeColor "component.selected.foreground"
-                    $bg = Get-ThemeColor "component.selected.background"
+                    $fg = Get-ThemeColor "List.ItemSelected" "#ffffff"
+                    $bg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
                     $cell = [TuiCell]::new($char, $fg, $bg)
                 } else {
                     $cell = [TuiCell]::new($char, $fg, $null)
@@ -469,13 +469,13 @@ class TextEditorScreen : Screen {
     hidden [void] OpenFile() {
         # Would show file dialog
         $this._statusLabel.Text = "Open file: Feature requires file dialog"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Info"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
     }
     
     hidden [void] SaveFile() {
         # Would save to file
         $this._statusLabel.Text = "File saved (simulated)"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
     }
     
     # Search operations
@@ -493,12 +493,12 @@ class TextEditorScreen : Screen {
         $this._searchBox.TabIndex = 0
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
             $this.ShowCursor = $true
-            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
             $this.RequestRedraw()
         } -Force
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
             $this.ShowCursor = $false
-            $this.BorderColor = Get-ThemeColor "border"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.RequestRedraw()
         } -Force
         
@@ -507,12 +507,12 @@ class TextEditorScreen : Screen {
             $this._replaceBox.TabIndex = 1
             $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
                 $this.ShowCursor = $true
-                $this.BorderColor = Get-ThemeColor "primary.accent"
+                $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
                 $this.RequestRedraw()
             } -Force
             $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
                 $this.ShowCursor = $false
-                $this.BorderColor = Get-ThemeColor "border"
+                $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
                 $this.RequestRedraw()
             } -Force
         }
@@ -556,7 +556,7 @@ class TextEditorScreen : Screen {
         $results = $this._searchEngine.Search($this._searchBox.Text, $false, $false)
         if ($results.Count -gt 0) {
             $this._searchStatusLabel.Text = "Found $($results.Count) matches"
-            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
             
             # Move to first result
             $firstResult = $this._searchEngine.GetCurrentResult()

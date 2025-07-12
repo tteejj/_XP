@@ -34,13 +34,13 @@ class CheckBoxComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        $bgColor = Get-ThemeColor("component.background")
+        $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         if ($this.IsFocused) { 
-            $fgColor = Get-ThemeColor("Primary") 
+            $fgColor = Get-ThemeColor "Panel.Title" "#007acc"
         } else { 
-            $fgColor = Get-ThemeColor("Foreground") 
+            $fgColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         }
         if ($this.Checked) { 
             $checkMark = "[X]" 

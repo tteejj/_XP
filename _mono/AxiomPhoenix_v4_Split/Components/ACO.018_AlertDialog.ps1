@@ -65,7 +65,7 @@ class AlertDialog : Dialog {
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
                     if ($currentLine) {
-                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
+                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor "Label.Foreground" "#e0e0e0"; BG = Get-ThemeColor "Panel.Background" "#1e1e1e" }
                         $currentY++
                     }
                     $currentLine = $word
@@ -75,7 +75,7 @@ class AlertDialog : Dialog {
                 }
             }
             if ($currentLine) {
-                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor("dialog.foreground"); BG = Get-ThemeColor("dialog.background") }
+                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor "Label.Foreground" "#e0e0e0"; BG = Get-ThemeColor "Panel.Background" "#1e1e1e" }
             }
         }
     }

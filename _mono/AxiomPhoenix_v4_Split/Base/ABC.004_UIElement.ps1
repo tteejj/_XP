@@ -63,6 +63,11 @@ class UIElement {
     [UIElement] $Parent = $null 
     [System.Collections.Generic.List[UIElement]] $Children 
     
+    # Theme-aware color properties
+    [string] $ForegroundColor = "$null"
+    [string] $BackgroundColor = "$null"
+    [string] $BorderColor = "$null"
+    
     hidden [object] $_private_buffer = $null
     hidden [bool] $_needs_redraw = $true
     
@@ -240,6 +245,38 @@ class UIElement {
     [void] OnMove([int]$newX, [int]$newY) 
     {
         # Write-Verbose "OnMove called for '$($this.Name)': No custom move logic."
+    }
+
+    # Get theme-aware color with fallback
+    [string] GetThemeColor([string]$themePath, [string]$fallback = "#ffffff") {
+        if (Get-Command 'Get-ThemeColor' -ErrorAction SilentlyContinue) {
+            return Get-ThemeColor $themePath $fallback
+        }
+        return $fallback
+    }
+    
+    # Get effective foreground color (theme-aware)
+    [string] GetEffectiveForegroundColor() {
+        if ($this.ForegroundColor -and $this.ForegroundColor -ne '$null') {
+            return $this.ForegroundColor
+        }
+        return $this.GetThemeColor("Label.Foreground", "#d4d4d4")
+    }
+    
+    # Get effective background color (theme-aware)
+    [string] GetEffectiveBackgroundColor() {
+        if ($this.BackgroundColor -and $this.BackgroundColor -ne '$null') {
+            return $this.BackgroundColor
+        }
+        return $this.GetThemeColor("Panel.Background", "#1e1e1e")
+    }
+    
+    # Get effective border color (theme-aware)
+    [string] GetEffectiveBorderColor() {
+        if ($this.BorderColor -and $this.BorderColor -ne '$null') {
+            return $this.BorderColor
+        }
+        return $this.GetThemeColor("Panel.Border", "#404040")
     }
 
     [void] OnFocus() 

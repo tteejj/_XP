@@ -25,6 +25,8 @@ class ScrollablePanel : Panel {
     [int]$MaxScrollY = 0
     [bool]$ShowScrollbar = $true
     hidden [int]$_contentHeight = 0 # Total height of all content
+    hidden [int]$_lastScrollOffset = -1 # Track scroll changes for optimization
+    hidden [hashtable]$_visibleChildrenCache = @{} # Cache visible children calculations
 
     ScrollablePanel([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -57,9 +59,16 @@ class ScrollablePanel : Panel {
         $this._contentHeight = $actualContentBottom
         $this.UpdateMaxScroll()
 
-        # 3. Render visible children directly with viewport clipping
+        # 3. Render visible children with enhanced viewport culling
         $viewportTop = $this.ScrollOffsetY
         $viewportBottom = $this.ScrollOffsetY + $this.ContentHeight
+        $scrollChanged = ($this._lastScrollOffset -ne $this.ScrollOffsetY)
+        
+        # Invalidate cache if scroll changed or if we need redraw
+        if ($scrollChanged -or $this._needs_redraw) {
+            $this._visibleChildrenCache.Clear()
+            $this._lastScrollOffset = $this.ScrollOffsetY
+        }
         
         foreach ($child in $this.Children | Sort-Object ZIndex) {
             if (-not $child.Visible) { continue }
@@ -74,11 +83,12 @@ class ScrollablePanel : Panel {
                 continue
             }
             
-            # Render child
-            $child.Render()
+            # Check if we've already calculated visibility for this child at this scroll position
+            $childKey = "$($child.Name)_$($this.ScrollOffsetY)"
+            $visibilityInfo = $this._visibleChildrenCache[$childKey]
             
-            if ($null -ne $child._private_buffer) {
-                # Calculate where to place the child in our buffer
+            if (-not $visibilityInfo) {
+                # Calculate and cache visibility information
                 $destX = $child.X
                 $destY = $this.ContentY + ($childRelY - $this.ScrollOffsetY)
                 
@@ -100,12 +110,26 @@ class ScrollablePanel : Panel {
                     $sourceHeight -= $clipBottom
                 }
                 
-                # Blend the visible portion
-                if ($sourceHeight -gt 0) {
-                    # Create a sub-buffer for the visible portion of the child
-                    $visiblePortion = $child._private_buffer.GetSubBuffer(0, $sourceY, $child.Width, $sourceHeight)
-                    $this._private_buffer.BlendBuffer($visiblePortion, $destX, $destY)
+                $visibilityInfo = @{
+                    DestX = $destX
+                    DestY = $destY
+                    SourceY = $sourceY
+                    SourceHeight = $sourceHeight
+                    IsVisible = ($sourceHeight -gt 0)
                 }
+                $this._visibleChildrenCache[$childKey] = $visibilityInfo
+            }
+            
+            # Only render child if it needs it or if scroll changed
+            if ($child._needs_redraw -or $scrollChanged) {
+                $child.Render()
+            }
+            
+            # Blend the visible portion using cached calculations
+            if ($visibilityInfo.IsVisible -and $null -ne $child._private_buffer) {
+                # Create a sub-buffer for the visible portion of the child
+                $visiblePortion = $child._private_buffer.GetSubBuffer(0, $visibilityInfo.SourceY, $child.Width, $visibilityInfo.SourceHeight)
+                $this._private_buffer.BlendBuffer($visiblePortion, $visibilityInfo.DestX, $visibilityInfo.DestY)
             }
         }
 
@@ -174,6 +198,7 @@ class ScrollablePanel : Panel {
         $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Max(0, $this.ScrollOffsetY - $lines)
         if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this._visibleChildrenCache.Clear() # Clear cache on scroll
             $this.RequestRedraw()
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled up to $($this.ScrollOffsetY)."
         }
@@ -183,6 +208,7 @@ class ScrollablePanel : Panel {
         $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = [Math]::Min($this.MaxScrollY, $this.ScrollOffsetY + $lines)
         if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this._visibleChildrenCache.Clear() # Clear cache on scroll
             $this.RequestRedraw()
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled down to $($this.ScrollOffsetY)."
         }
@@ -202,6 +228,7 @@ class ScrollablePanel : Panel {
         $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = 0
         if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this._visibleChildrenCache.Clear() # Clear cache on scroll
             $this.RequestRedraw()
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to top."
         }
@@ -211,6 +238,7 @@ class ScrollablePanel : Panel {
         $oldScroll = $this.ScrollOffsetY
         $this.ScrollOffsetY = $this.MaxScrollY
         if ($this.ScrollOffsetY -ne $oldScroll) {
+            $this._visibleChildrenCache.Clear() # Clear cache on scroll
             $this.RequestRedraw()
             # Write-Log -Level Debug -Message "ScrollablePanel '$($this.Name)': Scrolled to bottom."
         }

@@ -182,7 +182,7 @@ class ThemeScreen : Screen {
         $this._titleLabel.X = 2
         $this._titleLabel.Y = 1
         $this._titleLabel.Text = "Select a theme for your terminal experience"
-        $this._titleLabel.ForegroundColor = Get-ThemeColor "Primary"
+        $this._titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._mainPanel.AddChild($this._titleLabel)
         
         # List panel (left side)
@@ -208,12 +208,12 @@ class ThemeScreen : Screen {
         
         # Add visual focus feedback
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
             $this.RequestRedraw()
         } -Force
         
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "component.border"
+            $this.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
         
@@ -273,7 +273,7 @@ class ThemeScreen : Screen {
         $this._statusLabel.X = 2
         $this._statusLabel.Y = $this.Height - 3
         $this._statusLabel.Text = "Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Muted"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._mainPanel.AddChild($this._statusLabel)
         
         # Populate theme list

@@ -35,7 +35,7 @@ class ButtonComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         # Clear buffer with theme background
-        $bgColor = Get-ThemeColor("component.background")
+        $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Determine colors based on state
@@ -43,20 +43,20 @@ class ButtonComponent : UIElement {
         $bgColor = "#333333"
         
         if ($this.IsPressed) {
-            $fgColor = Get-ThemeColor("button.pressed.fg")
-            $bgColor = Get-ThemeColor("button.pressed.bg")
+            $fgColor = Get-ThemeColor "Button.Pressed.Foreground" "#d4d4d4"
+            $bgColor = Get-ThemeColor "Button.Pressed.Background" "#4a5568"
         }
         elseif ($this.IsFocused) {
-            $fgColor = Get-ThemeColor("button.focused.fg") 
-            $bgColor = Get-ThemeColor("button.focused.bg")
+            $fgColor = Get-ThemeColor "Button.Focused.Foreground" "#ffffff"
+            $bgColor = Get-ThemeColor "Button.Focused.Background" "#0e7490"
         }
         elseif (-not $this.Enabled) {
-            $fgColor = Get-ThemeColor("button.disabled.fg")
-            $bgColor = Get-ThemeColor("button.disabled.bg")
+            $fgColor = Get-ThemeColor "Button.Disabled.Foreground" "#6b7280"
+            $bgColor = Get-ThemeColor "Button.Disabled.Background" "#2d2d30"
         }
         else {
-            $fgColor = Get-ThemeColor("button.normal.fg")
-            $bgColor = Get-ThemeColor("button.normal.bg")
+            $fgColor = Get-ThemeColor "Button.Normal.Foreground" "#ffffff"
+            $bgColor = Get-ThemeColor "Button.Normal.Background" "#007acc"
         }
         
         # Draw button background

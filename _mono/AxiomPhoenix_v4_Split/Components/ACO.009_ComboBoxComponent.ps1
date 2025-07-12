@@ -45,14 +45,14 @@ class ComboBoxComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = Get-ThemeColor("input.background")
+            $bgColor = Get-ThemeColor "Input.Background" "#1e1e1e"
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw main box
             if ($this.IsFocused) { 
-                $borderColor = Get-ThemeColor("Primary") 
+                $borderColor = Get-ThemeColor "Primary" "#007acc" 
             } else { 
-                $borderColor = Get-ThemeColor("component.border") 
+                $borderColor = Get-ThemeColor "Panel.Border" "#404040" 
             }
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
                 -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
@@ -68,9 +68,9 @@ class ComboBoxComponent : UIElement {
             }
             
             if ($displayText) { 
-                $textColor = Get-ThemeColor("input.foreground") 
+                $textColor = Get-ThemeColor "Input.Foreground" "#e0e0e0" 
             } else { 
-                $textColor = Get-ThemeColor("input.placeholder") 
+                $textColor = Get-ThemeColor "Input.Foreground" "#666666" 
             }
             
             $maxTextWidth = $this.Width - 4  # Border + dropdown arrow
@@ -88,9 +88,9 @@ class ComboBoxComponent : UIElement {
                 $arrowChar = '▼' 
             }
             if ($this.IsFocused) { 
-                $arrowColor = Get-ThemeColor("Accent") 
+                $arrowColor = Get-ThemeColor "Accent" "#00d4ff" 
             } else { 
-                $arrowColor = Get-ThemeColor("Subtle") 
+                $arrowColor = Get-ThemeColor "Label.Foreground" "#666666" 
             }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new($arrowChar, $arrowColor, $bgColor))
             
@@ -120,7 +120,7 @@ class ComboBoxComponent : UIElement {
         # Draw dropdown border
         Write-TuiBox -Buffer $dropdownBuffer -X 0 -Y 0 `
             -Width $this.Width -Height $dropdownHeight `
-            -Style @{ BorderFG = Get-ThemeColor("component.border"); BG = Get-ThemeColor("input.background"); BorderStyle = "Single" }
+            -Style @{ BorderFG = Get-ThemeColor "Panel.Border" "#404040"; BG = Get-ThemeColor "Input.Background" "#1e1e1e"; BorderStyle = "Single" }
         
         # Draw items
         $itemY = 1
@@ -136,15 +136,15 @@ class ComboBoxComponent : UIElement {
             $item = $this.Items[$itemIndex]
             $itemText = $this.GetDisplayText($item)
             
-            $itemFg = Get-ThemeColor("list.item.normal")
-            $itemBg = Get-ThemeColor("input.background")
+            $itemFg = Get-ThemeColor "List.ItemNormal" "#d4d4d4"
+            $itemBg = Get-ThemeColor "Input.Background" "#1e1e1e"
             
             if ($i -eq $this._highlightedIndex) {
-                $itemFg = Get-ThemeColor("list.item.selected")
-                $itemBg = Get-ThemeColor("list.item.selected.background")
+                $itemFg = Get-ThemeColor "List.ItemSelected" "#ffffff"
+                $itemBg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
             }
             elseif ($itemIndex -eq $this.SelectedIndex) {
-                $itemFg = Get-ThemeColor("Accent")
+                $itemFg = Get-ThemeColor "Accent" "#00d4ff"
             }
             
             # Clear line and draw item

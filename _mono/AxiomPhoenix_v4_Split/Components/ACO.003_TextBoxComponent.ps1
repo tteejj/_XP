@@ -42,14 +42,13 @@ class TextBoxComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         # Clear buffer with theme background
-        $bgColor = Get-ThemeColor("input.background")
-        if (-not $bgColor) { $bgColor = "#1E1E1E" }
+        $bgColor = Get-ThemeColor "Input.Background" "#2d2d30"
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Determine colors
-        $fgColor = if ($this.IsFocused) { Get-ThemeColor("input.foreground") } else { Get-ThemeColor("Subtle") }
-        $bgColor = Get-ThemeColor("input.background")
-        $borderColorValue = if ($this.IsFocused) { Get-ThemeColor("Primary") } else { Get-ThemeColor("component.border") }
+        $fgColor = if ($this.IsFocused) { Get-ThemeColor "Input.Foreground" "#d4d4d4" } else { Get-ThemeColor "Label.Foreground" "#9ca3af" }
+        $bgColor = Get-ThemeColor "Input.Background" "#2d2d30"
+        $borderColorValue = if ($this.IsFocused) { Get-ThemeColor "Input.FocusedBorder" "#007acc" } else { Get-ThemeColor "Input.Border" "#404040" }
         
         # Ensure we have valid colors
         if (-not $fgColor) { $fgColor = "#FFFFFF" }
@@ -71,7 +70,7 @@ class TextBoxComponent : UIElement {
                 $this.Placeholder.Substring(0, $contentWidth)
             } else { $this.Placeholder }
             
-            $textStyle = @{ FG = Get-ThemeColor("input.placeholder"); BG = $bgColor }
+            $textStyle = @{ FG = Get-ThemeColor "Input.Foreground" "#666666"; BG = $bgColor }
             Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $placeholderText -Style $textStyle
         }
         else {

@@ -84,7 +84,7 @@ class FileCommanderScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.HasBorder = $false
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "background" "#0A0A0A"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#0A0A0A"
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -99,7 +99,7 @@ class FileCommanderScreen : Screen {
         $this._leftPanel.Height = $panelHeight
         $this._leftPanel.HasBorder = $true
         $this._leftPanel.BorderStyle = "Single"
-        $this._leftPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"  # Initially active
+        $this._leftPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"  # Initially active
         $this._mainPanel.AddChild($this._leftPanel)
 
         # Left path label
@@ -108,8 +108,8 @@ class FileCommanderScreen : Screen {
         $this._leftPathLabel.Y = 0
         $this._leftPathLabel.Width = $halfWidth - 2
         $this._leftPathLabel.Height = 1
-        $this._leftPathLabel.ForegroundColor = Get-ThemeColor "path" "#FFD700"
-        $this._leftPathLabel.BackgroundColor = Get-ThemeColor "panel.header" "#1A1A1A"
+        $this._leftPathLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
+        $this._leftPathLabel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
         $this._leftPanel.AddChild($this._leftPathLabel)
 
         # Left file list
@@ -122,19 +122,19 @@ class FileCommanderScreen : Screen {
         $this._leftFileList.IsFocusable = $true  # Enable focus for hybrid model
         $this._leftFileList.TabIndex = 0         # First in tab order
         # Use theme colors for selection
-        $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg" "#1E3A8A"
-        $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.fg" "#FFFFFF"
-        $this._leftFileList.ItemForegroundColor = Get-ThemeColor "file.normal" "#E0E0E0"
+        $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#1E3A8A"
+        $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#FFFFFF"
+        $this._leftFileList.ItemForegroundColor = Get-ThemeColor "Label.Foreground" "#E0E0E0"
         
         # Add focus visual feedback
         $this._leftFileList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.Parent.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
             $this.Parent.Parent.UpdateStatusBar()
             $this.RequestRedraw()
         } -Force
         
         $this._leftFileList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.Parent.BorderColor = Get-ThemeColor "border" "#666666"
+            $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
         
@@ -165,7 +165,7 @@ class FileCommanderScreen : Screen {
         $this._rightPanel.Height = $panelHeight
         $this._rightPanel.HasBorder = $true
         $this._rightPanel.BorderStyle = "Single"
-        $this._rightPanel.BorderColor = Get-ThemeColor "border" "#666666"  # Initially inactive
+        $this._rightPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"  # Initially inactive
         $this._mainPanel.AddChild($this._rightPanel)
 
         # Right path label
@@ -174,8 +174,8 @@ class FileCommanderScreen : Screen {
         $this._rightPathLabel.Y = 0
         $this._rightPathLabel.Width = $this._rightPanel.Width - 2
         $this._rightPathLabel.Height = 1
-        $this._rightPathLabel.ForegroundColor = Get-ThemeColor "path" "#FFD700"
-        $this._rightPathLabel.BackgroundColor = Get-ThemeColor "panel.header" "#1A1A1A"
+        $this._rightPathLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
+        $this._rightPathLabel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
         $this._rightPanel.AddChild($this._rightPathLabel)
 
         # Right file list
@@ -188,19 +188,19 @@ class FileCommanderScreen : Screen {
         $this._rightFileList.IsFocusable = $true  # Enable focus for hybrid model
         $this._rightFileList.TabIndex = 1         # Second in tab order
         # Use theme colors for selection  
-        $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg" "#1E3A8A"
-        $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.fg" "#FFFFFF"
-        $this._rightFileList.ItemForegroundColor = Get-ThemeColor "file.normal" "#E0E0E0"
+        $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#1E3A8A"
+        $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#FFFFFF"
+        $this._rightFileList.ItemForegroundColor = Get-ThemeColor "Label.Foreground" "#E0E0E0"
         
         # Add focus visual feedback
         $this._rightFileList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.Parent.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
             $this.Parent.Parent.UpdateStatusBar()
             $this.RequestRedraw()
         } -Force
         
         $this._rightFileList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.Parent.BorderColor = Get-ThemeColor "border" "#666666"
+            $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
         
@@ -230,7 +230,7 @@ class FileCommanderScreen : Screen {
         $this._statusBar.Width = $this.Width
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $false
-        $this._statusBar.BackgroundColor = Get-ThemeColor "statusbar.bg" "#1A1A1A"
+        $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
         $this._mainPanel.AddChild($this._statusBar)
 
         # Status label
@@ -239,7 +239,7 @@ class FileCommanderScreen : Screen {
         $this._statusLabel.Y = 0
         $this._statusLabel.Width = 60
         $this._statusLabel.Height = 1
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "status.text" "#00FF88"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00FF88"
         $this._statusBar.AddChild($this._statusLabel)
 
         # Size label
@@ -248,7 +248,7 @@ class FileCommanderScreen : Screen {
         $this._sizeLabel.Y = 0
         $this._sizeLabel.Width = 20
         $this._sizeLabel.Height = 1
-        $this._sizeLabel.ForegroundColor = Get-ThemeColor "size.text" "#FFD700"
+        $this._sizeLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
         $this._statusBar.AddChild($this._sizeLabel)
 
         # Item count label
@@ -257,7 +257,7 @@ class FileCommanderScreen : Screen {
         $this._itemCountLabel.Y = 0
         $this._itemCountLabel.Width = 24
         $this._itemCountLabel.Height = 1
-        $this._itemCountLabel.ForegroundColor = Get-ThemeColor "count.text" "#00D4FF"
+        $this._itemCountLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
         $this._statusBar.AddChild($this._itemCountLabel)
 
         # Function key bar
@@ -267,7 +267,7 @@ class FileCommanderScreen : Screen {
         $this._functionBar.Width = $this.Width
         $this._functionBar.Height = 2
         $this._functionBar.HasBorder = $false
-        $this._functionBar.BackgroundColor = Get-ThemeColor "function.bg" "#0D47A1"
+        $this._functionBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#0D47A1"
         $this._mainPanel.AddChild($this._functionBar)
 
         # Function key labels
@@ -291,7 +291,7 @@ class FileCommanderScreen : Screen {
             $keyLabel.Width = 9
             $keyLabel.Height = 1
             $keyLabel.Text = "$($func.Key):$($func.Text)"
-            $keyLabel.ForegroundColor = Get-ThemeColor "foreground" "#FFFFFF"
+            $keyLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFFFFF"
             $this._functionBar.AddChild($keyLabel)
         }
 
@@ -589,7 +589,7 @@ class FileCommanderScreen : Screen {
             if ($actionService) {
                 # Store the file path for the editor to open
                 $this._statusLabel.Text = "Opening: $($item.Name)"
-                $this._statusLabel.ForegroundColor = Get-ThemeColor "info"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
                 # Navigate to text editor
                 $actionService.ExecuteAction("tools.textEditor", @{FilePath = $item.FullName})
             }
@@ -612,7 +612,7 @@ class FileCommanderScreen : Screen {
             
             # Simple confirmation - in real app would use dialog
             $this._statusLabel.Text = "Press Y to confirm delete, any other key to cancel"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "warning"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500"
             $this.RequestRedraw()
             
             # Store for next keypress handling
@@ -624,12 +624,12 @@ class FileCommanderScreen : Screen {
         # In a real implementation, would show input dialog
         # For now, just show status
         $this._statusLabel.Text = "Create directory: Feature requires dialog system"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "info"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
     }
 
     hidden [void] ShowHelp() {
         $this._statusLabel.Text = "Help: Tab=Switch, Enter=Open, F5=Copy, F8=Delete, F10=Quit"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "info"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
     }
 
     [void] OnEnter() {
@@ -639,8 +639,8 @@ class FileCommanderScreen : Screen {
         $this.RefreshPanels()
         
         # Set initial border states (will be updated by focus system)
-        $this._leftPanel.BorderColor = Get-ThemeColor "border" "#666666"
-        $this._rightPanel.BorderColor = Get-ThemeColor "border" "#666666"
+        $this._leftPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
+        $this._rightPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         
         # Call base to set initial focus (will focus first focusable child)
         ([Screen]$this).OnEnter()
@@ -668,15 +668,15 @@ class FileCommanderScreen : Screen {
                 try {
                     Remove-Item -Path $this._pendingDelete.FullName -Recurse -Force
                     $this._statusLabel.Text = "Deleted: $($this._pendingDelete.Name)"
-                    $this._statusLabel.ForegroundColor = Get-ThemeColor "success"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
                     $this.RefreshPanels()
                 } catch {
                     $this._statusLabel.Text = "Error: $($_.Exception.Message)"
-                    $this._statusLabel.ForegroundColor = Get-ThemeColor "error"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444"
                 }
             } else {
                 $this._statusLabel.Text = "Delete cancelled"
-                $this._statusLabel.ForegroundColor = Get-ThemeColor "info"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
             }
             $this._pendingDelete = $null
             $this.RequestRedraw()

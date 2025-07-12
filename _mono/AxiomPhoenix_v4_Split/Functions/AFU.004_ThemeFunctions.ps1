@@ -2,34 +2,16 @@
 # Axiom-Phoenix v4.0 - Theme Functions (Enhanced for Palette-Based System)
 # ==============================================================================
 
-# Get theme color with fallback (enhanced for palette-based themes)
+# Get theme color with fallback (uses new theme paths)
 function Get-ThemeColor {
     param(
-        [string]$ColorName,
-        [string]$DefaultColor = $null
+        [string]$ThemePath,
+        [string]$DefaultColor = "#ffffff"
     )
-    
-    # Better default colors instead of white
-    if (-not $DefaultColor) {
-        $defaults = @{
-            "component.text" = "#00FF00"
-            "Primary" = "#00FF00" 
-            "Subtle" = "#008000"
-            "component.border" = "#00FF00"
-            "component.background" = "#000000"
-            "component.title" = "#FFFF00"
-            "list.item.normal" = "#00FF00"
-            "list.item.selected" = "#000000"
-            "list.item.selected.background" = "#00FF00"
-            "panel.border" = "#00FF00"
-            "panel.title" = "#FFFF00"
-        }
-        $DefaultColor = if ($defaults.ContainsKey($ColorName)) { $defaults[$ColorName] } else { "#00FF00" }
-    }
     
     $themeManager = $global:TuiState?.Services?.ThemeManager
     if ($themeManager) {
-        return $themeManager.GetColor($ColorName, $DefaultColor)
+        return $themeManager.GetColor($ThemePath, $DefaultColor)
     }
     return $DefaultColor
 }

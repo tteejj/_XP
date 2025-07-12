@@ -70,8 +70,8 @@ class EditTaskScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " ╔═ Edit Task ═╗ "
         $this._mainPanel.BorderStyle = "Double"
-        $this._mainPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "background" "#0A0A0A"
+        $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#0A0A0A"
         $this.AddChild($this._mainPanel)
         
         # === FORM PANEL ===
@@ -82,7 +82,7 @@ class EditTaskScreen : Screen {
         $this._formPanel.Height = $this.Height - 5  # Leave room for status bar
         $this._formPanel.Title = " Task Details "
         $this._formPanel.BorderStyle = "Single"
-        $this._formPanel.BorderColor = Get-ThemeColor "border" "#333333"
+        $this._formPanel.BorderColor = Get-ThemeColor "Panel.Border" "#333333"
         $this._mainPanel.AddChild($this._formPanel)
         
         # Calculate layout dimensions
@@ -98,7 +98,7 @@ class EditTaskScreen : Screen {
         $titleLabel.Text = "Task Title:"
         $titleLabel.X = $leftColumnX
         $titleLabel.Y = $y
-        $titleLabel.ForegroundColor = Get-ThemeColor "label" "#FFD700"
+        $titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
         $this._formPanel.AddChild($titleLabel)
         
         $y++
@@ -110,17 +110,17 @@ class EditTaskScreen : Screen {
         $this._titleBox.Text = $this._task.Title
         $this._titleBox.IsFocusable = $true
         $this._titleBox.TabIndex = 0
-        $this._titleBox.BorderColor = Get-ThemeColor "input.border" "#444444"
+        $this._titleBox.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         
         # Add focus visual feedback
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -134,7 +134,7 @@ class EditTaskScreen : Screen {
         $descLabel.Text = "Description:"
         $descLabel.X = $leftColumnX
         $descLabel.Y = $y
-        $descLabel.ForegroundColor = Get-ThemeColor "label" "#00D4FF"
+        $descLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
         $this._formPanel.AddChild($descLabel)
         
         $y++
@@ -146,17 +146,17 @@ class EditTaskScreen : Screen {
         $this._descriptionBox.Text = $this._task.Description
         $this._descriptionBox.IsFocusable = $true
         $this._descriptionBox.TabIndex = 1
-        $this._descriptionBox.BorderColor = Get-ThemeColor "input.border" "#444444"
+        $this._descriptionBox.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         
         # Add focus visual feedback
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -170,7 +170,7 @@ class EditTaskScreen : Screen {
         $statusLabel.Text = "Status:"
         $statusLabel.X = $leftColumnX
         $statusLabel.Y = $y
-        $statusLabel.ForegroundColor = Get-ThemeColor "label" "#FF69B4"
+        $statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF69B4"
         $this._formPanel.AddChild($statusLabel)
         
         $y++
@@ -180,7 +180,7 @@ class EditTaskScreen : Screen {
         $this._statusList.Width = $fieldWidth
         $this._statusList.Height = 6
         $this._statusList.HasBorder = $true
-        $this._statusList.BorderColor = Get-ThemeColor "input.border" "#444444"
+        $this._statusList.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         $this._statusList.AddItem("○ Pending")
         $this._statusList.AddItem("◐ InProgress")
         $this._statusList.AddItem("● Completed")
@@ -191,12 +191,12 @@ class EditTaskScreen : Screen {
         
         # Add focus visual feedback  
         $this._statusList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
             $this.RequestRedraw()
         } -Force
         
         $this._statusList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.RequestRedraw()
         } -Force
         
@@ -207,7 +207,7 @@ class EditTaskScreen : Screen {
         $priorityLabel.Text = "Priority:"
         $priorityLabel.X = $rightColumnX
         $priorityLabel.Y = $y - 1
-        $priorityLabel.ForegroundColor = Get-ThemeColor "label" "#FFA500"
+        $priorityLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFA500"
         $this._formPanel.AddChild($priorityLabel)
         
         $this._priorityList = [ListBox]::new("PriorityList")
@@ -216,7 +216,7 @@ class EditTaskScreen : Screen {
         $this._priorityList.Width = $fieldWidth
         $this._priorityList.Height = 5
         $this._priorityList.HasBorder = $true
-        $this._priorityList.BorderColor = Get-ThemeColor "input.border" "#444444"
+        $this._priorityList.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         $this._priorityList.AddItem("↓ Low")
         $this._priorityList.AddItem("- Medium")
         $this._priorityList.AddItem("! High")
@@ -226,12 +226,12 @@ class EditTaskScreen : Screen {
         
         # Add focus visual feedback
         $this._priorityList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
             $this.RequestRedraw()
         } -Force
         
         $this._priorityList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.RequestRedraw()
         } -Force
         
@@ -244,7 +244,7 @@ class EditTaskScreen : Screen {
         $progressLabel.Text = "Progress (%):"
         $progressLabel.X = $leftColumnX
         $progressLabel.Y = $y
-        $progressLabel.ForegroundColor = Get-ThemeColor "label" "#00FF88"
+        $progressLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00FF88"
         $this._formPanel.AddChild($progressLabel)
         
         $y++
@@ -257,17 +257,17 @@ class EditTaskScreen : Screen {
         $this._progressBox.MaxLength = 3
         $this._progressBox.IsFocusable = $true
         $this._progressBox.TabIndex = 4
-        $this._progressBox.BorderColor = Get-ThemeColor "input.border" "#444444"
+        $this._progressBox.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         
         # Add focus visual feedback
         $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -301,7 +301,7 @@ class EditTaskScreen : Screen {
         $projectLabel.Text = "Project:"
         $projectLabel.X = $rightColumnX
         $projectLabel.Y = $y - 1
-        $projectLabel.ForegroundColor = Get-ThemeColor "label" "#8A2BE2"
+        $projectLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#8A2BE2"
         $this._formPanel.AddChild($projectLabel)
         
         $this._projectList = [ListBox]::new("ProjectList")
@@ -310,19 +310,19 @@ class EditTaskScreen : Screen {
         $this._projectList.Width = $fieldWidth
         $this._projectList.Height = 5
         $this._projectList.HasBorder = $true
-        $this._projectList.BorderColor = Get-ThemeColor "input.border" "#444444"
+        $this._projectList.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         $this._projectList.AddItem("None")
         $this._projectList.IsFocusable = $true
         $this._projectList.TabIndex = 5
         
         # Add focus visual feedback
         $this._projectList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
             $this.RequestRedraw()
         } -Force
         
         $this._projectList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.RequestRedraw()
         } -Force
         
@@ -335,7 +335,7 @@ class EditTaskScreen : Screen {
         $this._statusLabel.X = $leftColumnX
         $this._statusLabel.Y = $y
         $this._statusLabel.Text = "Ready to save changes"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "info" "#00D4FF"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
         $this._formPanel.AddChild($this._statusLabel)
         
         $y += 2
@@ -349,17 +349,17 @@ class EditTaskScreen : Screen {
         $this._saveButton.Y = $y
         $this._saveButton.IsFocusable = $true
         $this._saveButton.TabIndex = 6
-        $this._saveButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+        $this._saveButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
         $this._saveButton.ForegroundColor = "#FFFFFF"
         
         # Add focus visual feedback and click handler
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
+            $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#1976D2"
             $this.RequestRedraw()
         } -Force
         
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+            $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
             $this.RequestRedraw()
         } -Force
         
@@ -378,17 +378,17 @@ class EditTaskScreen : Screen {
         $this._cancelButton.Y = $y
         $this._cancelButton.IsFocusable = $true
         $this._cancelButton.TabIndex = 7
-        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+        $this._cancelButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
         $this._cancelButton.ForegroundColor = "#FFFFFF"
         
         # Add focus visual feedback and click handler
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
+            $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#D32F2F"
             $this.RequestRedraw()
         } -Force
         
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+            $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
             $this.RequestRedraw()
         } -Force
         
@@ -414,7 +414,7 @@ class EditTaskScreen : Screen {
         $this._statusBar.Width = $this.Width - 2
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $false
-        $this._statusBar.BackgroundColor = Get-ThemeColor "status.bg" "#1A1A1A"
+        $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
         $this._mainPanel.AddChild($this._statusBar)
 
         # Separator line
@@ -422,7 +422,7 @@ class EditTaskScreen : Screen {
         $separator.X = 0
         $separator.Y = 0
         $separator.Text = "─" * ($this._statusBar.Width)
-        $separator.ForegroundColor = Get-ThemeColor "border" "#333333"
+        $separator.ForegroundColor = Get-ThemeColor "Panel.Border" "#333333"
         $this._statusBar.AddChild($separator)
 
         # Help text
@@ -430,7 +430,7 @@ class EditTaskScreen : Screen {
         $helpLabel.X = 2
         $helpLabel.Y = 1
         $helpLabel.Text = "[Tab] Next Field | [↑↓] Navigate Lists | [Enter] Save | [Esc] Cancel | [F5] Reset"
-        $helpLabel.ForegroundColor = Get-ThemeColor "help" "#666666"
+        $helpLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._statusBar.AddChild($helpLabel)
         
         # Shortcut hints on right
@@ -438,7 +438,7 @@ class EditTaskScreen : Screen {
         $shortcutsLabel.X = $this._statusBar.Width - 30
         $shortcutsLabel.Y = 1
         $shortcutsLabel.Text = "[P] Priority | [S] Status"
-        $shortcutsLabel.ForegroundColor = Get-ThemeColor "help" "#888888"
+        $shortcutsLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#888888"
         $this._statusBar.AddChild($shortcutsLabel)
     }
     
@@ -488,7 +488,7 @@ class EditTaskScreen : Screen {
         # Validate input
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
             $this._statusLabel.Text = "Error: Title is required"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "error" "#FF4444"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF4444"
             $this.RequestRedraw()
             return
         }
@@ -497,7 +497,7 @@ class EditTaskScreen : Screen {
         $progress = 0
         if (-not [int]::TryParse($this._progressBox.Text, [ref]$progress) -or $progress -lt 0 -or $progress -gt 100) {
             $this._statusLabel.Text = "Error: Progress must be 0-100"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "error" "#FF4444"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF4444"
             $this.RequestRedraw()
             return
         }
@@ -530,7 +530,7 @@ class EditTaskScreen : Screen {
                 $dataManager.UpdateTask($this._task)
                 
                 $this._statusLabel.Text = "Task updated successfully!"
-                $this._statusLabel.ForegroundColor = Get-ThemeColor "success" "#00FF88"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00FF88"
                 $this.RequestRedraw()
                 
                 # Publish event
@@ -546,7 +546,7 @@ class EditTaskScreen : Screen {
         }
         catch {
             $this._statusLabel.Text = "Error: $($_.Exception.Message)"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "error" "#FF4444"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF4444"
             $this.RequestRedraw()
         }
     }
@@ -593,7 +593,7 @@ class EditTaskScreen : Screen {
         $this._LoadProjects()
         
         $this._statusLabel.Text = "Form reset to original values"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "info" "#00D4FF"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
         $this.RequestRedraw()
     }
     
@@ -616,7 +616,7 @@ class EditTaskScreen : Screen {
         $currentIndex = $this._priorityList.SelectedIndex
         $this._priorityList.SelectedIndex = ($currentIndex + 1) % 3
         $this._statusLabel.Text = "Priority changed to $([TaskPriority]$this._priorityList.SelectedIndex)"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "info" "#00D4FF"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
         $this.RequestRedraw()
     }
     
@@ -624,7 +624,7 @@ class EditTaskScreen : Screen {
         $currentIndex = $this._statusList.SelectedIndex
         $this._statusList.SelectedIndex = ($currentIndex + 1) % 4
         $this._statusLabel.Text = "Status changed to $([TaskStatus]$this._statusList.SelectedIndex)"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "info" "#00D4FF"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
         $this.RequestRedraw()
     }
     
