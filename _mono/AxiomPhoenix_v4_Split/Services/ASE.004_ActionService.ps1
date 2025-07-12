@@ -395,10 +395,9 @@ class ActionService {
         
         # Add missing navigation.nextComponent action
         $this.RegisterAction("navigation.nextComponent", {
-            $focusManager = $global:TuiState.Services.FocusManager
-            if ($focusManager) {
-                $focusManager.FocusNext()
-            }
+            # Tab navigation is now handled directly by screens
+            # Each screen manages its own focus using ncurses-style window model
+            Write-Log -Level Debug -Message "Tab navigation handled by active screen"
         }, @{
             Category = "Navigation"
             Description = "Focus Next Component"

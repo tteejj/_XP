@@ -565,71 +565,29 @@ class TextEditorScreen : Screen {
     # Demo content
     hidden [void] LoadDemoText() {
         $demoText = @"
-# Welcome to the Axiom-Phoenix Text Editor!
+Welcome to the Axiom-Phoenix Text Editor!
 
-This is a high-performance text editor built with PowerShell.
-It features:
-
-- Smooth cursor movement and scrolling
-- Incremental search and replace
-- Undo/redo functionality
-- Optimized rendering with dirty line tracking
-- Line numbers and status bar
-
-## Key Bindings
-
-Navigation:
-- Arrow keys: Move cursor
-- Ctrl+Left/Right: Move by word
+Features:
+- Smooth cursor movement with arrow keys
+- Word navigation with Ctrl+Left/Right
 - Home/End: Move to line start/end
 - Page Up/Down: Scroll by page
 - Ctrl+Home/End: Go to document start/end
-
-Editing:
-- Type to insert text
-- Backspace/Delete: Remove characters
+- Ctrl+S: Save file
+- Ctrl+O: Open file
+- Ctrl+F: Find text
+- Ctrl+H: Find and replace
 - Ctrl+Z: Undo
 - Ctrl+Y: Redo
-
-Search:
-- Ctrl+F: Find
-- Ctrl+H: Find and Replace
 - F3: Find next
 - Shift+F3: Find previous
-- Escape: Close search panel
-
-File Operations:
-- Ctrl+O: Open file
-- Ctrl+S: Save file
 - Ctrl+Q: Quit editor
 
-## Sample Code
-
-Here's a sample PowerShell function:
-
-function Get-RandomQuote {
-    $quotes = @(
-        "The only way to do great work is to love what you do.",
-        "Innovation distinguishes between a leader and a follower.",
-        "Stay hungry, stay foolish."
-    )
-    
-    $randomIndex = Get-Random -Maximum $quotes.Count
-    return $quotes[$randomIndex]
-}
-
-# Call the function
-$quote = Get-RandomQuote
-Write-Host "Quote of the day: $quote"
-
-Enjoy using the editor!
+This editor uses a high-performance gap buffer for efficient text editing.
+Try typing, navigating, and searching to see the smooth performance!
 "@
         
-        foreach ($char in $demoText.ToCharArray()) {
-            $this._buffer.InsertChar($char)
-        }
-        
-        # Reset cursor to start
+        $this._buffer.Insert($demoText)
         $this._buffer.SetCursorPosition(0)
         $this.UpdateCursorPosition()
     }

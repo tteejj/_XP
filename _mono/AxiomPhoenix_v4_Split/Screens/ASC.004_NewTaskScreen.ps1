@@ -204,11 +204,17 @@ class NewTaskScreen : Screen {
     }
     
     hidden [string] GetPriorityColor([TaskPriority]$priority) {
-        return switch ($priority) {
-            ([TaskPriority]::Low) { Get-ThemeColor "success" "#00FF88" }
-            ([TaskPriority]::Medium) { Get-ThemeColor "warning" "#FFD700" }
-            ([TaskPriority]::High) { Get-ThemeColor "error" "#FF4444" }
-            default { Get-ThemeColor "text" "#E0E0E0" }
+        if ($priority -eq [TaskPriority]::Low) {
+            return Get-ThemeColor "Success" "#00FF88"
+        }
+        elseif ($priority -eq [TaskPriority]::Medium) {
+            return Get-ThemeColor "Warning" "#FFD700"
+        }
+        elseif ($priority -eq [TaskPriority]::High) {
+            return Get-ThemeColor "Error" "#FF4444"
+        }
+        else {
+            return Get-ThemeColor "Label.Foreground" "#E0E0E0"
         }
     }
     
