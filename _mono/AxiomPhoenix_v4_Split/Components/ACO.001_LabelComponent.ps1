@@ -102,8 +102,8 @@ class LabelComponent : UIElement {
         
         # Slow path: Render and cache
         # Get background color
-        if ($this.BackgroundColor) {
-            if ($this.BackgroundColor -is [ConsoleColor]) {
+        if ($this.BackgroundColor -and $this.BackgroundColor -ne '$null') { # Fixed null check
+            if ($this.BackgroundColor -is [ConsoleColor]) { # This branch is likely dead code as BackgroundColor is [string]
                 $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e" # Use theme default instead
             } else {
                 $bgColor = $this.BackgroundColor # Assume it's already hex
@@ -127,8 +127,8 @@ class LabelComponent : UIElement {
         }
         
         # Get foreground color
-        if ($this.ForegroundColor) {
-            if ($this.ForegroundColor -is [ConsoleColor]) {
+        if ($this.ForegroundColor -and $this.ForegroundColor -ne '$null') { # Fixed null check
+            if ($this.ForegroundColor -is [ConsoleColor]) { # This branch is likely dead code as ForegroundColor is [string]
                 # Convert ConsoleColor to hex if needed
                 $fg = Get-ThemeColor "Label.Foreground" "#d4d4d4" # Use theme default instead
             } else {

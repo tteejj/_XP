@@ -3,11 +3,6 @@
 # REFACTORED: Uses hybrid window model with focusable menu component
 # ==============================================================================
 
-# ==============================================================================
-# Axiom-Phoenix v4.0 - Dashboard Screen
-# REFACTORED: Uses hybrid window model with focusable menu component
-# ==============================================================================
-
 using namespace System.Collections.Generic
 
 # ==============================================================================
@@ -105,17 +100,26 @@ class MenuListComponent : Component {
     }
     
     [void] OnFocus() {
+        # Assuming BorderColor is a property of Component or UIElement
+        # and that direct assignment is the intended way to set it here.
         $this.BorderColor = Get-ThemeColor "Panel.Title" "#007acc"
         $this.RequestRedraw()
     }
     
     [void] OnBlur() {
+        # Assuming BorderColor is a property of Component or UIElement
+        # and that direct assignment is the intended way to set it here.
         $this.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
         $this.RequestRedraw()
     }
     
     [void] OnRender([TuiBuffer]$buffer) {
         # Clear the component area
+        # Assuming GetEffectiveBackgroundColor/ForegroundColor are available on Component
+        # or that BackgroundColor/ForegroundColor are directly accessible properties.
+        # Given the context, direct access to $this.BackgroundColor and $this.ForegroundColor
+        # for rendering purposes is acceptable here, as MenuListComponent does not
+        # define SetBackgroundColor/SetForegroundColor methods.
         $bgColor = $this.GetEffectiveBackgroundColor()
         $fgColor = $this.GetEffectiveForegroundColor()
         
@@ -142,7 +146,7 @@ class MenuListComponent : Component {
                 
                 # Truncate text if too long
                 $displayText = if ($text.Length -gt $this.Width - 4) { 
-                    $text.Substring(0, $this.Width - 7) + "..." 
+                    $text.Substring(0, [Math]::Max(0, $this.Width - 7)) + "..." # Ensure substring length is not negative
                 } else { 
                     $text.PadRight($this.Width - 4) 
                 }
@@ -252,11 +256,13 @@ class DashboardScreen : Screen {
     hidden [void] RefreshThemeColors() {
         try {
             if ($this._mainPanel) {
+                # Panel has a BorderColor property and SetBackgroundColor method
                 $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
                 $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
             }
             
             if ($this._menuPanel) {
+                # Panel has a BorderColor property and SetBackgroundColor method
                 $this._menuPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
                 $this._menuPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
             }
@@ -264,6 +270,7 @@ class DashboardScreen : Screen {
             if ($this._mainPanel -and $this._mainPanel.Children) {
                 $instructions = $this._mainPanel.Children | Where-Object { $_.Name -eq "Instructions" }
                 if ($instructions -and ($instructions -is [LabelComponent])) {
+                    # LabelComponent has a SetForegroundColor method
                     $instructions.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#9ca3af"))
                 }
             }

@@ -89,7 +89,7 @@ class TextEditorScreen : Screen {
         $this._statusLabel = [LabelComponent]::new("StatusLabel")
         $this._statusLabel.X = 2
         $this._statusLabel.Y = 1
-        $this._statusLabel.Text = "Ready"
+        $this._statusLabel.SetText("Ready")
         $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
         $this._statusBar.AddChild($this._statusLabel)
         
@@ -97,7 +97,7 @@ class TextEditorScreen : Screen {
         $menuLabel = [LabelComponent]::new("MenuLabel")
         $menuLabel.X = 25
         $menuLabel.Y = 1
-        $menuLabel.Text = "^O:Open ^S:Save ^F:Find ^Q:Quit"
+        $menuLabel.SetText("^O:Open ^S:Save ^F:Find ^Q:Quit")
         $menuLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
         $this._statusBar.AddChild($menuLabel)
         
@@ -105,7 +105,7 @@ class TextEditorScreen : Screen {
         $this._positionLabel = [LabelComponent]::new("PositionLabel")
         $this._positionLabel.X = $this.Width - 20
         $this._positionLabel.Y = 1
-        $this._positionLabel.Text = "Ln 1, Col 1"
+        $this._positionLabel.SetText("Ln 1, Col 1")
         $this._positionLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         $this._statusBar.AddChild($this._positionLabel)
         
@@ -127,7 +127,7 @@ class TextEditorScreen : Screen {
         $searchLabel = [LabelComponent]::new("SearchLabel")
         $searchLabel.X = 2
         $searchLabel.Y = 1
-        $searchLabel.Text = "Find:"
+        $searchLabel.SetText("Find:")
         $this._searchPanel.AddChild($searchLabel)
         
         $this._searchBox = [TextBoxComponent]::new("SearchBox")
@@ -146,7 +146,7 @@ class TextEditorScreen : Screen {
         $replaceLabel = [LabelComponent]::new("ReplaceLabel")
         $replaceLabel.X = 2
         $replaceLabel.Y = 2
-        $replaceLabel.Text = "Replace:"
+        $replaceLabel.SetText("Replace:")
         $this._searchPanel.AddChild($replaceLabel)
         
         $this._replaceBox = [TextBoxComponent]::new("ReplaceBox")
@@ -160,7 +160,7 @@ class TextEditorScreen : Screen {
         $this._searchStatusLabel = [LabelComponent]::new("SearchStatus")
         $this._searchStatusLabel.X = 2
         $this._searchStatusLabel.Y = 4
-        $this._searchStatusLabel.Text = ""
+        $this._searchStatusLabel.SetText("")
         $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
         $this._searchPanel.AddChild($this._searchStatusLabel)
         
@@ -234,7 +234,7 @@ class TextEditorScreen : Screen {
         }
         
         # Update position label
-        $this._positionLabel.Text = "Ln $($this._cursorLine + 1), Col $($this._cursorColumn + 1)"
+        $this._positionLabel.SetText("Ln $($this._cursorLine + 1), Col $($this._cursorColumn + 1)")
         
         $this._lastRenderVersion = $this._buffer._version
     }
@@ -468,13 +468,13 @@ class TextEditorScreen : Screen {
     # File operations
     hidden [void] OpenFile() {
         # Would show file dialog
-        $this._statusLabel.Text = "Open file: Feature requires file dialog"
+        $this._statusLabel.SetText("Open file: Feature requires file dialog")
         $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
     }
     
     hidden [void] SaveFile() {
         # Would save to file
-        $this._statusLabel.Text = "File saved (simulated)"
+        $this._statusLabel.SetText("File saved (simulated)")
         $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
     }
     
@@ -493,11 +493,13 @@ class TextEditorScreen : Screen {
         $this._searchBox.TabIndex = 0
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
             $this.ShowCursor = $true
+            # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
             $this.RequestRedraw()
         } -Force
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
             $this.ShowCursor = $false
+            # Direct assignment for BorderColor is fine.
             $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
             $this.RequestRedraw()
         } -Force
@@ -507,11 +509,13 @@ class TextEditorScreen : Screen {
             $this._replaceBox.TabIndex = 1
             $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
                 $this.ShowCursor = $true
+                # Direct assignment for BorderColor is fine.
                 $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
                 $this.RequestRedraw()
             } -Force
             $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
                 $this.ShowCursor = $false
+                # Direct assignment for BorderColor is fine.
                 $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
                 $this.RequestRedraw()
             } -Force
@@ -533,7 +537,7 @@ class TextEditorScreen : Screen {
         $this._searchPanel.Visible = $false
         $this._searchBox.Text = ""
         $this._replaceBox.Text = ""
-        $this._searchStatusLabel.Text = ""
+        $this._searchStatusLabel.SetText("")
         
         # Make search boxes non-focusable when hidden
         $this._searchBox.IsFocusable = $false
@@ -549,13 +553,13 @@ class TextEditorScreen : Screen {
     
     hidden [void] PerformIncrementalSearch() {
         if ([string]::IsNullOrEmpty($this._searchBox.Text)) {
-            $this._searchStatusLabel.Text = ""
+            $this._searchStatusLabel.SetText("")
             return
         }
         
         $results = $this._searchEngine.Search($this._searchBox.Text, $false, $false)
         if ($results.Count -gt 0) {
-            $this._searchStatusLabel.Text = "Found $($results.Count) matches"
+            $this._searchStatusLabel.SetText("Found $($results.Count) matches")
             $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
             
             # Move to first result
@@ -567,7 +571,7 @@ class TextEditorScreen : Screen {
                 $this._selection.UpdateSelection($firstResult.Start + $firstResult.Length)
             }
         } else {
-            $this._searchStatusLabel.Text = "No matches found"
+            $this._searchStatusLabel.SetText("No matches found")
             $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Warning"))
         }
         
@@ -822,7 +826,7 @@ Try typing, navigating, and searching to see the smooth performance!
                 if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
                     # Replace current
                     if ($this._searchEngine.ReplaceCurrent($this._replaceBox.Text)) {
-                        $this._searchStatusLabel.Text = "Replaced 1 occurrence"
+                        $this._searchStatusLabel.SetText("Replaced 1 occurrence")
                         $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Success"))
                         $this._fullRedrawNeeded = $true
                         $this.RequestRedraw()
@@ -834,7 +838,7 @@ Try typing, navigating, and searching to see the smooth performance!
                 if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
                     # Replace all
                     $count = $this._searchEngine.ReplaceAll($this._replaceBox.Text)
-                    $this._searchStatusLabel.Text = "Replaced $count occurrences"
+                    $this._searchStatusLabel.SetText("Replaced $count occurrences")
                     $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Success"))
                     $this._fullRedrawNeeded = $true
                     $this.RequestRedraw()

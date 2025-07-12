@@ -181,8 +181,8 @@ class ThemeScreen : Screen {
         $this._titleLabel = [LabelComponent]::new("Title")
         $this._titleLabel.X = 2
         $this._titleLabel.Y = 1
-        $this._titleLabel.Text = "Select a theme for your terminal experience"
-        $this._titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        $this._titleLabel.SetText("Select a theme for your terminal experience") # Use SetText
+        $this._titleLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
         $this._mainPanel.AddChild($this._titleLabel)
         
         # List panel (left side)
@@ -208,11 +208,13 @@ class ThemeScreen : Screen {
         
         # Add visual focus feedback
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            # ListBox inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
             $this.RequestRedraw()
         } -Force
         
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            # ListBox inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
@@ -240,7 +242,8 @@ class ThemeScreen : Screen {
         $this._descriptionLabel = [LabelComponent]::new("Description")
         $this._descriptionLabel.X = 2
         $this._descriptionLabel.Y = 1
-        $this._descriptionLabel.Text = ""
+        $this._descriptionLabel.SetText("") # Use SetText
+        # Don't set colors during initialization - UpdatePreview will handle it
         $this._previewPanel.AddChild($this._descriptionLabel)
         
         # Preview elements
@@ -249,7 +252,8 @@ class ThemeScreen : Screen {
         $this._previewTextLabel = [LabelComponent]::new("PreviewText")
         $this._previewTextLabel.X = 2
         $this._previewTextLabel.Y = $previewY
-        $this._previewTextLabel.Text = "This is sample text in the selected theme"
+        $this._previewTextLabel.SetText("This is sample text in the selected theme") # Use SetText
+        # Don't set colors during initialization
         $this._previewPanel.AddChild($this._previewTextLabel)
         
         $previewY += 2
@@ -257,7 +261,8 @@ class ThemeScreen : Screen {
         $this._previewButtonLabel = [LabelComponent]::new("PreviewButton")
         $this._previewButtonLabel.X = 2
         $this._previewButtonLabel.Y = $previewY
-        $this._previewButtonLabel.Text = " [Sample Button] "
+        $this._previewButtonLabel.SetText(" [Sample Button] ") # Use SetText
+        # Don't set colors during initialization
         $this._previewPanel.AddChild($this._previewButtonLabel)
         
         $previewY += 2
@@ -265,15 +270,16 @@ class ThemeScreen : Screen {
         $this._previewListLabel = [LabelComponent]::new("PreviewList")
         $this._previewListLabel.X = 2
         $this._previewListLabel.Y = $previewY
-        $this._previewListLabel.Text = "> Selected List Item"
+        $this._previewListLabel.SetText("> Selected List Item") # Use SetText
+        # Don't set colors during initialization
         $this._previewPanel.AddChild($this._previewListLabel)
         
         # Status bar
         $this._statusLabel = [LabelComponent]::new("Status")
         $this._statusLabel.X = 2
         $this._statusLabel.Y = $this.Height - 3
-        $this._statusLabel.Text = "Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $this._statusLabel.SetText("Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel") # Use SetText
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666")) # Use SetForegroundColor
         $this._mainPanel.AddChild($this._statusLabel)
         
         # Populate theme list
@@ -306,20 +312,21 @@ class ThemeScreen : Screen {
             $selectedTheme = $this._themes[$selectedIndex]
             
             # Update description
-            $this._descriptionLabel.Text = $selectedTheme.Description
-            $this._descriptionLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
+            $this._descriptionLabel.SetText($selectedTheme.Description) # Use SetText
+            $this._descriptionLabel.SetForegroundColor(($selectedTheme.Colors["Foreground"])) # Use SetForegroundColor
             
             # Update preview elements with theme colors
-            $this._previewTextLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
+            $this._previewTextLabel.SetForegroundColor(($selectedTheme.Colors["Foreground"])) # Use SetForegroundColor
             
             $this._previewButtonLabel.SetBackgroundColor(($selectedTheme.Colors["Primary"]))
-            $this._previewButtonLabel.ForegroundColor = $selectedTheme.Colors["button.focused.fg"]
+            $this._previewButtonLabel.SetForegroundColor(($selectedTheme.Colors["button.focused.fg"])) # Use SetForegroundColor
             
             $this._previewListLabel.SetBackgroundColor(($selectedTheme.Colors["list.item.selected.background"]))
-            $this._previewListLabel.ForegroundColor = $selectedTheme.Colors["list.item.selected"]
+            $this._previewListLabel.SetForegroundColor(($selectedTheme.Colors["list.item.selected"])) # Use SetForegroundColor
             
             # Update panel colors
             $this._previewPanel.SetBackgroundColor(($selectedTheme.Colors["component.background"]))
+            # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this._previewPanel.BorderColor = $selectedTheme.Colors["component.border"]
             
             $this.RequestRedraw()

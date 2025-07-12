@@ -44,6 +44,7 @@ class NavigationMenu : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
+            # Direct property access for clearing the buffer is acceptable within the class's own methods.
             $this._private_buffer.Clear([TuiCell]::new(' ', $this.ForegroundColor, $this.BackgroundColor))
             
             if ($this.Orientation -eq "Horizontal") {
@@ -53,7 +54,10 @@ class NavigationMenu : UIElement {
                 $this.RenderVertical()
             }
         }
-        catch {}
+        catch {
+            # Log or handle rendering errors gracefully
+            # Write-Error "Error rendering NavigationMenu '$($this.Name)': $($_.Exception.Message)"
+        }
     }
 
     hidden [void] RenderHorizontal() {
@@ -63,6 +67,7 @@ class NavigationMenu : UIElement {
             $item = $this.Items[$i]
             $isSelected = ($i -eq $this.SelectedIndex -and $this.IsFocused)
             
+            # Direct property access for determining colors is acceptable within the class's own methods.
             $fg = if ($isSelected) { $this.SelectedForegroundColor } else { $this.ForegroundColor }
             $bg = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.BackgroundColor }
             
@@ -97,6 +102,7 @@ class NavigationMenu : UIElement {
             $item = $this.Items[$i]
             $isSelected = ($i -eq $this.SelectedIndex -and $this.IsFocused)
             
+            # Direct property access for determining colors is acceptable within the class's own methods.
             $fg = if ($isSelected) { $this.SelectedForegroundColor } else { $this.ForegroundColor }
             $bg = if ($isSelected) { $this.SelectedBackgroundColor } else { $this.BackgroundColor }
             
@@ -192,7 +198,10 @@ class NavigationMenu : UIElement {
                 try {
                     & $item.Action
                 }
-                catch {}
+                catch {
+                    # Log or handle action execution errors gracefully
+                    # Write-Error "Error executing action for NavigationMenu item '$($item.Label)': $($_.Exception.Message)"
+                }
             }
         }
     }

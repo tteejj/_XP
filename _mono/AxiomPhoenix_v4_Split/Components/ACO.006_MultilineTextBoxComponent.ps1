@@ -44,10 +44,12 @@ class MultilineTextBoxComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
+            # Get theme-aware colors, using component properties as defaults if not found in theme
             $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
             $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
             $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
+            # Clear buffer with background color
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
             # Draw border
@@ -106,12 +108,16 @@ class MultilineTextBoxComponent : UIElement {
                         $cursorChar = $currentLine[$this.CursorColumn]
                     }
                     
+                    # Invert colors for the cursor cell
                     $this._private_buffer.SetCell($cursorScreenX, $cursorScreenY,
                         [TuiCell]::new($cursorChar, $bgColor, $fgColor))
                 }
             }
         }
-        catch {}
+        catch {
+            # Log or handle rendering errors gracefully
+            # Write-Error "Error rendering MultilineTextBoxComponent '$($this.Name)': $($_.Exception.Message)"
+        }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {

@@ -85,7 +85,10 @@ class NumericInputComponent : UIElement {
                 }
             }
         }
-        catch {}
+        catch {
+            # Log or handle rendering errors gracefully
+            # Write-Error "Error rendering NumericInputComponent '$($this.Name)': $($_.Exception.Message)"
+        }
     }
     
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {

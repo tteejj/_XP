@@ -352,32 +352,32 @@ class TaskListScreen : Screen {
         $titleLabel = [LabelComponent]::new("DetailTitle")
         $titleLabel.X = 1
         $titleLabel.Y = $y++
-        $titleLabel.Text = "Title: $($task.Title)"
-        $titleLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+        $titleLabel.SetText("Title: $($task.Title)") # Use SetText
+        $titleLabel.SetForegroundColor((Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF")) # Use SetForegroundColor
         $panel.AddChild($titleLabel)
         
         # Status label
         $statusLabel = [LabelComponent]::new("DetailStatus")
         $statusLabel.X = 1
         $statusLabel.Y = $y++
-        $statusLabel.Text = "Status: $($task.Status)"
-        $statusLabel.ForegroundColor = Get-ThemeColor -ColorName "Info" -DefaultColor "#00BFFF"
+        $statusLabel.SetText("Status: $($task.Status)") # Use SetText
+        $statusLabel.SetForegroundColor((Get-ThemeColor -ColorName "Info" -DefaultColor "#00BFFF")) # Use SetForegroundColor
         $panel.AddChild($statusLabel)
         
         # Priority label
         $priorityLabel = [LabelComponent]::new("DetailPriority")
         $priorityLabel.X = 1
         $priorityLabel.Y = $y++
-        $priorityLabel.Text = "Priority: $($task.Priority)"
-        $priorityLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
+        $priorityLabel.SetText("Priority: $($task.Priority)") # Use SetText
+        $priorityLabel.SetForegroundColor((Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500")) # Use SetForegroundColor
         $panel.AddChild($priorityLabel)
         
         # Progress label
         $progressLabel = [LabelComponent]::new("DetailProgress")
         $progressLabel.X = 1
         $progressLabel.Y = $y++
-        $progressLabel.Text = "Progress: $($task.Progress)%"
-        $progressLabel.ForegroundColor = Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00"
+        $progressLabel.SetText("Progress: $($task.Progress)%") # Use SetText
+        $progressLabel.SetForegroundColor((Get-ThemeColor -ColorName "Success" -DefaultColor "#00FF00")) # Use SetForegroundColor
         $panel.AddChild($progressLabel)
         
         $y++ # Empty line
@@ -386,8 +386,8 @@ class TaskListScreen : Screen {
         $descHeaderLabel = [LabelComponent]::new("DetailDescHeader")
         $descHeaderLabel.X = 1
         $descHeaderLabel.Y = $y++
-        $descHeaderLabel.Text = "Description:"
-        $descHeaderLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $descHeaderLabel.SetText("Description:") # Use SetText
+        $descHeaderLabel.SetForegroundColor((Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080")) # Use SetForegroundColor
         $panel.AddChild($descHeaderLabel)
         
         if (-not [string]::IsNullOrEmpty($task.Description)) {
@@ -404,8 +404,8 @@ class TaskListScreen : Screen {
                         $descLineLabel = [LabelComponent]::new("DetailDescLine$lineIndex")
                         $descLineLabel.X = 1
                         $descLineLabel.Y = $y++
-                        $descLineLabel.Text = $line
-                        $descLineLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+                        $descLineLabel.SetText($line) # Use SetText
+                        $descLineLabel.SetForegroundColor((Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF")) # Use SetForegroundColor
                         $panel.AddChild($descLineLabel)
                         $lineIndex++
                     }
@@ -424,16 +424,16 @@ class TaskListScreen : Screen {
                 $descLineLabel = [LabelComponent]::new("DetailDescLine$lineIndex")
                 $descLineLabel.X = 1
                 $descLineLabel.Y = $y++
-                $descLineLabel.Text = $line
-                $descLineLabel.ForegroundColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+                $descLineLabel.SetText($line) # Use SetText
+                $descLineLabel.SetForegroundColor((Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF")) # Use SetForegroundColor
                 $panel.AddChild($descLineLabel)
             }
         } else {
             $noDescLabel = [LabelComponent]::new("DetailNoDesc")
             $noDescLabel.X = 1
             $noDescLabel.Y = $y++
-            $noDescLabel.Text = "(No description)"
-            $noDescLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $noDescLabel.SetText("(No description)") # Use SetText
+            $noDescLabel.SetForegroundColor((Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080")) # Use SetForegroundColor
             $panel.AddChild($noDescLabel)
         }
         
@@ -448,7 +448,7 @@ class TaskListScreen : Screen {
         $panel.Children.Clear()
         
         # Set panel background color
-        $panel.BackgroundColor = Get-ThemeColor -ColorName "status.bar.bg" -DefaultColor "#1E1E1E"
+        $panel.SetBackgroundColor((Get-ThemeColor -ColorName "status.bar.bg" -DefaultColor "#1E1E1E")) # Use SetBackgroundColor
         
         # Status text label
         $statusText = "Tasks: $($this._tasks.Count)"
@@ -462,8 +462,8 @@ class TaskListScreen : Screen {
         $statusLabel = [LabelComponent]::new("StatusText")
         $statusLabel.X = 0
         $statusLabel.Y = 0
-        $statusLabel.Text = $statusText
-        $statusLabel.ForegroundColor = Get-ThemeColor -ColorName "status.bar.fg" -DefaultColor "#FFFFFF"
+        $statusLabel.SetText($statusText) # Use SetText
+        $statusLabel.SetForegroundColor((Get-ThemeColor -ColorName "status.bar.fg" -DefaultColor "#FFFFFF")) # Use SetForegroundColor
         $panel.AddChild($statusLabel)
         # Keyboard hints label
         $hints = "Arrow: Navigate | Enter: Edit | 1: Dashboard | N: New | D: Delete | C: Complete"
@@ -472,8 +472,8 @@ class TaskListScreen : Screen {
             $hintsLabel = [LabelComponent]::new("StatusHints")
             $hintsLabel.X = $hintsX
             $hintsLabel.Y = 0
-            $hintsLabel.Text = $hints
-            $hintsLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+            $hintsLabel.SetText($hints) # Use SetText
+            $hintsLabel.SetForegroundColor((Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080")) # Use SetForegroundColor
             $panel.AddChild($hintsLabel)
         }
         
@@ -608,7 +608,7 @@ class ThemePickerScreen : Screen {
         $instructionLabel.Y = 2
         $instructionLabel.Width = [Math]::Min(60, $this.Width - 4)
         $instructionLabel.Height = 1
-        $instructionLabel.ForegroundColor = Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080"
+        $instructionLabel.SetForegroundColor((Get-ThemeColor -ColorName "Subtle" -DefaultColor "#808080")) # Use SetForegroundColor
         $this._mainPanel.AddChild($instructionLabel)
         
         # Theme scrollable panel
@@ -658,11 +658,12 @@ class ThemePickerScreen : Screen {
             $itemPanel.HasBorder = $false
             
             # Set background based on selection
-            $itemPanel.BackgroundColor = if ($isSelected) { 
+            # Panel has SetBackgroundColor method
+            $itemPanel.SetBackgroundColor((if ($isSelected) { 
                 Get-ThemeColor -ColorName "list.item.selected.background" -DefaultColor "#0000FF" 
             } else { 
                 Get-ThemeColor -ColorName "Background" -DefaultColor "#000000" 
-            }
+            }))
             
             # Create label for theme name
             $themeLabel = [LabelComponent]::new("ThemeLabel_$i")
@@ -674,14 +675,15 @@ class ThemePickerScreen : Screen {
             # Format display text
             $indicator = if ($isSelected) { "> " } else { "  " }
             $currentMarker = if ($themeName -eq $this._originalTheme) { " (current)" } else { "" }
-            $themeLabel.Text = "$indicator$themeName$currentMarker"
+            $themeLabel.SetText("$indicator$themeName$currentMarker") # Use SetText
             
             # Set text color based on selection
-            $themeLabel.ForegroundColor = if ($isSelected) { 
+            # LabelComponent has SetForegroundColor method
+            $themeLabel.SetForegroundColor((if ($isSelected) { 
                 Get-ThemeColor -ColorName "list.item.selected" -DefaultColor "#FFFFFF" 
             } else { 
                 Get-ThemeColor -ColorName "list.item.normal" -DefaultColor "#C0C0C0" 
-            }
+            }))
             
             $itemPanel.AddChild($themeLabel)
             $this._themePanel.AddChild($itemPanel)

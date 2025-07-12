@@ -50,9 +50,11 @@ class GroupPanel : Panel {
         # Add expand/collapse indicator to title
         if ($this.CanCollapse -and $this.Title) {
             $indicator = if ($this.IsExpanded) { "[-]" } else { "[+]" }
+            # Ensure the title doesn't accumulate indicators
             $this.Title = "$indicator $($this.Title.TrimStart('[+]', '[-]').Trim())"
         }
 
+        # Call the base Panel's OnRender method
         ([Panel]$this).OnRender()
     }
 
@@ -66,7 +68,8 @@ class GroupPanel : Panel {
             return $true
         }
         
-        return $false
+        # Allow base class to handle input if not handled here
+        return ([Panel]$this).HandleInput($key)
     }
 
     [void] Toggle() {

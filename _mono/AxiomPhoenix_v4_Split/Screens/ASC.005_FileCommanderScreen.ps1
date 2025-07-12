@@ -84,6 +84,7 @@ class FileCommanderScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.HasBorder = $false
+        # Panel has a SetBackgroundColor method, which is correctly used here.
         $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0A0A0A"))
         $this.AddChild($this._mainPanel)
 
@@ -99,6 +100,7 @@ class FileCommanderScreen : Screen {
         $this._leftPanel.Height = $panelHeight
         $this._leftPanel.HasBorder = $true
         $this._leftPanel.BorderStyle = "Single"
+        # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._leftPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"  # Initially active
         $this._mainPanel.AddChild($this._leftPanel)
 
@@ -108,6 +110,7 @@ class FileCommanderScreen : Screen {
         $this._leftPathLabel.Y = 0
         $this._leftPathLabel.Width = $halfWidth - 2
         $this._leftPathLabel.Height = 1
+        # LabelComponent has SetForegroundColor and SetBackgroundColor methods, correctly used.
         $this._leftPathLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
         $this._leftPathLabel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._leftPanel.AddChild($this._leftPathLabel)
@@ -121,19 +124,21 @@ class FileCommanderScreen : Screen {
         $this._leftFileList.HasBorder = $false
         $this._leftFileList.IsFocusable = $true  # Enable focus for hybrid model
         $this._leftFileList.TabIndex = 0         # First in tab order
-        # Use theme colors for selection
+        # ListBox has SetBackgroundColor and SetForegroundColor methods, correctly used.
         $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#1E3A8A"
         $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#FFFFFF"
         $this._leftFileList.ItemForegroundColor = Get-ThemeColor "Label.Foreground" "#E0E0E0"
         
         # Add focus visual feedback
         $this._leftFileList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
             $this.Parent.Parent.UpdateStatusBar()
             $this.RequestRedraw()
         } -Force
         
         $this._leftFileList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            # Direct assignment for BorderColor is fine.
             $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
@@ -152,7 +157,8 @@ class FileCommanderScreen : Screen {
             }
             
             # Let base ListBox handle navigation (arrows, page up/down, etc.)
-            return $false
+            # This ensures default ListBox navigation still works
+            return ([ListBox]$this).HandleInput($keyInfo)
         } -Force
         
         $this._leftPanel.AddChild($this._leftFileList)
@@ -165,6 +171,7 @@ class FileCommanderScreen : Screen {
         $this._rightPanel.Height = $panelHeight
         $this._rightPanel.HasBorder = $true
         $this._rightPanel.BorderStyle = "Single"
+        # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._rightPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"  # Initially inactive
         $this._mainPanel.AddChild($this._rightPanel)
 
@@ -174,6 +181,7 @@ class FileCommanderScreen : Screen {
         $this._rightPathLabel.Y = 0
         $this._rightPathLabel.Width = $this._rightPanel.Width - 2
         $this._rightPathLabel.Height = 1
+        # LabelComponent has SetForegroundColor and SetBackgroundColor methods, correctly used.
         $this._rightPathLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
         $this._rightPathLabel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._rightPanel.AddChild($this._rightPathLabel)
@@ -187,19 +195,21 @@ class FileCommanderScreen : Screen {
         $this._rightFileList.HasBorder = $false
         $this._rightFileList.IsFocusable = $true  # Enable focus for hybrid model
         $this._rightFileList.TabIndex = 1         # Second in tab order
-        # Use theme colors for selection  
+        # ListBox has SetBackgroundColor and SetForegroundColor methods, correctly used.
         $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#1E3A8A"
         $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#FFFFFF"
         $this._rightFileList.ItemForegroundColor = Get-ThemeColor "Label.Foreground" "#E0E0E0"
         
         # Add focus visual feedback
         $this._rightFileList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            # Direct assignment for BorderColor is fine.
             $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
             $this.Parent.Parent.UpdateStatusBar()
             $this.RequestRedraw()
         } -Force
         
         $this._rightFileList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            # Direct assignment for BorderColor is fine.
             $this.Parent.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
@@ -218,7 +228,7 @@ class FileCommanderScreen : Screen {
             }
             
             # Let base ListBox handle navigation (arrows, page up/down, etc.)
-            return $false
+            return ([ListBox]$this).HandleInput($keyInfo)
         } -Force
         
         $this._rightPanel.AddChild($this._rightFileList)
@@ -230,6 +240,7 @@ class FileCommanderScreen : Screen {
         $this._statusBar.Width = $this.Width
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $false
+        # Panel has a SetBackgroundColor method, which is correctly used here.
         $this._statusBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._mainPanel.AddChild($this._statusBar)
 
@@ -239,6 +250,7 @@ class FileCommanderScreen : Screen {
         $this._statusLabel.Y = 0
         $this._statusLabel.Width = 60
         $this._statusLabel.Height = 1
+        # LabelComponent has a SetForegroundColor method, which is correctly used here.
         $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00FF88"))
         $this._statusBar.AddChild($this._statusLabel)
 
@@ -248,6 +260,7 @@ class FileCommanderScreen : Screen {
         $this._sizeLabel.Y = 0
         $this._sizeLabel.Width = 20
         $this._sizeLabel.Height = 1
+        # LabelComponent has a SetForegroundColor method, which is correctly used here.
         $this._sizeLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
         $this._statusBar.AddChild($this._sizeLabel)
 
@@ -257,6 +270,7 @@ class FileCommanderScreen : Screen {
         $this._itemCountLabel.Y = 0
         $this._itemCountLabel.Width = 24
         $this._itemCountLabel.Height = 1
+        # LabelComponent has a SetForegroundColor method, which is correctly used here.
         $this._itemCountLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF"))
         $this._statusBar.AddChild($this._itemCountLabel)
 
@@ -267,6 +281,7 @@ class FileCommanderScreen : Screen {
         $this._functionBar.Width = $this.Width
         $this._functionBar.Height = 2
         $this._functionBar.HasBorder = $false
+        # Panel has a SetBackgroundColor method, which is correctly used here.
         $this._functionBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0D47A1"))
         $this._mainPanel.AddChild($this._functionBar)
 
@@ -291,6 +306,7 @@ class FileCommanderScreen : Screen {
             $keyLabel.Width = 9
             $keyLabel.Height = 1
             $keyLabel.Text = "$($func.Key):$($func.Text)"
+            # LabelComponent has a SetForegroundColor method, which is correctly used here.
             $keyLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFFFFF"))
             $this._functionBar.AddChild($keyLabel)
         }
@@ -453,13 +469,13 @@ class FileCommanderScreen : Screen {
         if ($leftDisplay.Length -gt $maxPathLength) {
             $leftDisplay = "..." + $leftDisplay.Substring($leftDisplay.Length - $maxPathLength + 3)
         }
-        $this._leftPathLabel.Text = " $leftDisplay "
+        $this._leftPathLabel.SetText(" $leftDisplay ") # Use SetText
         
         $rightDisplay = $this._rightPath
         if ($rightDisplay.Length -gt $maxPathLength) {
             $rightDisplay = "..." + $rightDisplay.Substring($rightDisplay.Length - $maxPathLength + 3)
         }
-        $this._rightPathLabel.Text = " $rightDisplay "
+        $this._rightPathLabel.SetText(" $rightDisplay ") # Use SetText
     }
 
     hidden [void] UpdateStatusBar() {
@@ -479,18 +495,18 @@ class FileCommanderScreen : Screen {
         if ($this._selectedItem) {
             $name = $this._selectedItem.Name
             if ($this._selectedItem.PSIsContainer -or $this._selectedItem.Attributes -band [System.IO.FileAttributes]::Directory) {
-                $this._statusLabel.Text = "Directory: $name"
-                $this._sizeLabel.Text = ""
+                $this._statusLabel.SetText("Directory: $name") # Use SetText
+                $this._sizeLabel.SetText("") # Use SetText
             } else {
-                $this._statusLabel.Text = "File: $name"
-                $this._sizeLabel.Text = "Size: $($this.FormatFileSize($this._selectedItem.Length))"
+                $this._statusLabel.SetText("File: $name") # Use SetText
+                $this._sizeLabel.SetText("Size: $($this.FormatFileSize($this._selectedItem.Length))") # Use SetText
             }
         }
         
         # Update item counts
         $leftCount = $this._leftItems.Count
         $rightCount = $this._rightItems.Count
-        $this._itemCountLabel.Text = "L: $leftCount | R: $rightCount items"
+        $this._itemCountLabel.SetText("L: $leftCount | R: $rightCount items") # Use SetText
     }
 
     hidden [void] NavigateToDirectory([string]$path) {
@@ -568,7 +584,7 @@ class FileCommanderScreen : Screen {
         
         if ($item -and $item.Name -ne "..") {
             $this._clipboard.Add($item.FullName)
-            $this._statusLabel.Text = "Copied: $($item.Name)"
+            $this._statusLabel.SetText("Copied: $($item.Name)") # Use SetText
         }
     }
 
@@ -588,8 +604,8 @@ class FileCommanderScreen : Screen {
             $actionService = $this.ServiceContainer.GetService("ActionService")
             if ($actionService) {
                 # Store the file path for the editor to open
-                $this._statusLabel.Text = "Opening: $($item.Name)"
-                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
+                $this._statusLabel.SetText("Opening: $($item.Name)") # Use SetText
+                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
                 # Navigate to text editor
                 $actionService.ExecuteAction("tools.textEditor", @{FilePath = $item.FullName})
             }
@@ -611,8 +627,8 @@ class FileCommanderScreen : Screen {
             $message = "Delete $itemType '$($item.Name)'?"
             
             # Simple confirmation - in real app would use dialog
-            $this._statusLabel.Text = "Press Y to confirm delete, any other key to cancel"
-            $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ffa500"))
+            $this._statusLabel.SetText("Press Y to confirm delete, any other key to cancel") # Use SetText
+            $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ffa500")) # Use SetForegroundColor
             $this.RequestRedraw()
             
             # Store for next keypress handling
@@ -623,13 +639,13 @@ class FileCommanderScreen : Screen {
     hidden [void] CreateDirectory() {
         # In a real implementation, would show input dialog
         # For now, just show status
-        $this._statusLabel.Text = "Create directory: Feature requires dialog system"
-        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
+        $this._statusLabel.SetText("Create directory: Feature requires dialog system") # Use SetText
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
     }
 
     hidden [void] ShowHelp() {
-        $this._statusLabel.Text = "Help: Tab=Switch, Enter=Open, F5=Copy, F8=Delete, F10=Quit"
-        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
+        $this._statusLabel.SetText("Help: Tab=Switch, Enter=Open, F5=Copy, F8=Delete, F10=Quit") # Use SetText
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
     }
 
     [void] OnEnter() {
@@ -639,6 +655,7 @@ class FileCommanderScreen : Screen {
         $this.RefreshPanels()
         
         # Set initial border states (will be updated by focus system)
+        # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._leftPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._rightPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         
@@ -667,16 +684,16 @@ class FileCommanderScreen : Screen {
             if ($key.KeyChar -eq 'y' -or $key.KeyChar -eq 'Y') {
                 try {
                     Remove-Item -Path $this._pendingDelete.FullName -Recurse -Force
-                    $this._statusLabel.Text = "Deleted: $($this._pendingDelete.Name)"
-                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
+                    $this._statusLabel.SetText("Deleted: $($this._pendingDelete.Name)") # Use SetText
+                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88")) # Use SetForegroundColor
                     $this.RefreshPanels()
                 } catch {
-                    $this._statusLabel.Text = "Error: $($_.Exception.Message)"
-                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ff4444"))
+                    $this._statusLabel.SetText("Error: $($_.Exception.Message)") # Use SetText
+                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ff4444")) # Use SetForegroundColor
                 }
             } else {
-                $this._statusLabel.Text = "Delete cancelled"
-                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
+                $this._statusLabel.SetText("Delete cancelled") # Use SetText
+                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
             }
             $this._pendingDelete = $null
             $this.RequestRedraw()
@@ -763,18 +780,18 @@ class FileCommanderScreen : Screen {
                     # Toggle hidden files
                     $this._showHidden = -not $this._showHidden
                     $this.RefreshPanels()
-                    $this._statusLabel.Text = if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" }
+                    $this._statusLabel.SetText((if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" })) # Use SetText
                     return $true
                 }
                 ([ConsoleKey]::R) {
                     # Refresh
                     $this.RefreshPanels()
-                    $this._statusLabel.Text = "Refreshed"
+                    $this._statusLabel.SetText("Refreshed") # Use SetText
                     return $true
                 }
                 ([ConsoleKey]::L) {
                     # Go to path (would show input dialog)
-                    $this._statusLabel.Text = "Go to path: Feature requires dialog system"
+                    $this._statusLabel.SetText("Go to path: Feature requires dialog system") # Use SetText
                     return $true
                 }
             }

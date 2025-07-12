@@ -96,16 +96,15 @@ class ListBox : UIElement {
                 
                 # Use theme colors with fallbacks
                 if ($isSelected) { 
-                    $fgColor = if ($this.SelectedForegroundColor) { $this.SelectedForegroundColor } else { Get-ThemeColor "List.ItemSelected" "#ffffff" }
-                    $itemBgColor = if ($this.SelectedBackgroundColor) { $this.SelectedBackgroundColor } else { Get-ThemeColor "List.ItemSelectedBackground" "#007acc" }
+                    $fgColor = if ($this.SelectedForegroundColor -and $this.SelectedForegroundColor -ne '$null') { $this.SelectedForegroundColor } else { Get-ThemeColor "List.ItemSelected" "#ffffff" }
+                    $itemBgColor = if ($this.SelectedBackgroundColor -and $this.SelectedBackgroundColor -ne '$null') { $this.SelectedBackgroundColor } else { Get-ThemeColor "List.ItemSelectedBackground" "#007acc" }
                 } else { 
-                    $fgColor = if ($this.ItemForegroundColor) { $this.ItemForegroundColor } else { Get-ThemeColor "List.ItemNormal" "#d4d4d4" }
+                    $fgColor = if ($this.ItemForegroundColor -and $this.ItemForegroundColor -ne '$null') { $this.ItemForegroundColor } else { Get-ThemeColor "List.ItemNormal" "#d4d4d4" }
                     $itemBgColor = $bgColor
                 }
                 
-                # Draw item with proper padding to ensure text is visible
+                # Draw selection background only for the text area if selected
                 if ($isSelected) {
-                    # Draw selection background only for the text area
                     for ($x = $contentX; $x -lt ($contentX + $contentWidth); $x++) {
                         $this._private_buffer.SetCell($x, $contentY + $i, [TuiCell]::new(' ', $fgColor, $itemBgColor))
                     }
