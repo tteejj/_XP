@@ -332,6 +332,11 @@ class ProjectsListScreen : Screen {
         $this.RequestRedraw()
     }
     
+    [void] OnExit() {
+        Write-Log -Level Debug -Message "ProjectsListScreen.OnExit: Cleaning up"
+        # Nothing to clean up
+    }
+    
     hidden [void] FilterProjects([string]$searchTerm) {
         $this._currentFilter = $searchTerm
         $this._filteredProjects = [List[PmcProject]]::new()
@@ -493,35 +498,30 @@ class ProjectsListScreen : Screen {
         
         $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
         
-        # Show confirmation dialog
-        $dialogManager = $this.ServiceContainer?.GetService("DialogManager")
-        if ($dialogManager) {
-            $dialogManager.ShowConfirmation(
-                "Delete Project",
-                "Are you sure you want to delete project '$($selectedProject.Name)'?`nThis action cannot be undone.",
-                {
-                    # On confirm
-                    $this._dataManager.DeleteProject($selectedProject.Key)
-                    $this._allProjects.Remove($selectedProject)
-                    $this.FilterProjects($this._currentFilter)
-                },
-                $null  # On cancel
-            )
-        }
+        # Simple confirmation - in real app would use dialog
+        Write-Log -Level Warning -Message "Delete not implemented for project: $($selectedProject.Key)"
     }
     
-    hidden [void] ToggleArchiveSelectedProject() {
-        if ($this._projectListBox.SelectedIndex -ge 0 -and 
-            $this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count) {
-            $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
-            
-            # Toggle archive status
-            $selectedProject.IsActive = -not $selectedProject.IsActive
-            $this._dataManager.UpdateProject($selectedProject)
-            
-            # Refresh display
-            $this.FilterProjects($this._currentFilter)
+    hidden [void] ArchiveSelectedProject() {
+        if ($this._projectListBox.SelectedIndex -lt 0 -or 
+            $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
+            return
         }
+        
+        $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+        
+        if ($selectedProject.IsActive) {
+            $selectedProject.IsActive = $false
+            $this._dataManager.UpdateProject($selectedProject)
+            Write-Log -Level Info -Message "Archived project: $($selectedProject.Key)"
+        } else {
+            $selectedProject.IsActive = $true
+            $this._dataManager.UpdateProject($selectedProject)
+            Write-Log -Level Info -Message "Activated project: $($selectedProject.Key)"
+        }
+        
+        # Refresh display
+        $this.FilterProjects($this._searchText)
     }
     
     # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
@@ -531,54 +531,45 @@ class ProjectsListScreen : Screen {
             return $false
         }
         
-        Write-Log -Level Debug -Message "ProjectsListScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Active=$($this._activeComponent)"
-        
-        # Global keys work regardless of focus
-        switch ($keyInfo.Key) {
-            ([ConsoleKey]::Escape) {
-                # Go back
-                $navService = $this.ServiceContainer?.GetService("NavigationService")
-                if ($navService -and $navService.CanGoBack()) {
-                    $navService.GoBack()
-                }
-                return $true
-            }
-            ([ConsoleKey]::Tab) {
-                # Toggle between search and list
-                if ($this._activeComponent -eq "search") {
-                    $this._activeComponent = "list"
-                } else {
-                    $this._activeComponent = "search"
-                }
-                $this._UpdateVisualFocus()
-                return $true
-            }
-        }
+        Write-Log -Level Debug -Message "ProjectsListScreen.HandleInput: Key=$($keyInfo.Key), Active=$($this._activeComponent)"
         
         # Handle based on active component
         if ($this._activeComponent -eq "search") {
             # Search box is active
             switch ($keyInfo.Key) {
+                ([ConsoleKey]::Tab) {
+                    # Switch to list
+                    $this._activeComponent = "list"
+                    $this._UpdateVisualFocus()
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    # Apply search and move to list
+                    $this.FilterProjects($this._searchText)
+                    $this._activeComponent = "list"
+                    $this._UpdateVisualFocus()
+                    return $true
+                }
+                ([ConsoleKey]::Escape) {
+                    # Clear search or go back
+                    if ($this._searchText.Length -gt 0) {
+                        $this._searchText = ""
+                        $this._searchBox.Text = ""
+                        $this.FilterProjects("")
+                    } else {
+                        # Go back
+                        $navService = $this.ServiceContainer?.GetService("NavigationService")
+                        if ($navService -and $navService.CanGoBack()) {
+                            $navService.GoBack()
+                        }
+                    }
+                    return $true
+                }
                 ([ConsoleKey]::Backspace) {
                     if ($this._searchText.Length -gt 0) {
                         $this._searchText = $this._searchText.Substring(0, $this._searchText.Length - 1)
                         $this._searchBox.Text = $this._searchText
                         $this.FilterProjects($this._searchText)
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    # View first result if any
-                    if ($this._filteredProjects.Count -gt 0) {
-                        $this.ViewSelectedProject()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::DownArrow) {
-                    # Move to list if there are results
-                    if ($this._filteredProjects.Count -gt 0) {
-                        $this._activeComponent = "list"
-                        $this._UpdateVisualFocus()
                     }
                     return $true
                 }
@@ -594,13 +585,21 @@ class ProjectsListScreen : Screen {
                     }
                 }
             }
-        } else {
+        }
+        else {
             # List is active
             switch ($keyInfo.Key) {
+                ([ConsoleKey]::Tab) {
+                    # Switch to search
+                    $this._activeComponent = "search"
+                    $this._UpdateVisualFocus()
+                    return $true
+                }
                 ([ConsoleKey]::UpArrow) {
                     if ($this._projectListBox.SelectedIndex -gt 0) {
                         $this._projectListBox.SelectedIndex--
                         $this.UpdateDetailPanel()
+                        $this.RequestRedraw()
                     }
                     return $true
                 }
@@ -608,6 +607,7 @@ class ProjectsListScreen : Screen {
                     if ($this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count - 1) {
                         $this._projectListBox.SelectedIndex++
                         $this.UpdateDetailPanel()
+                        $this.RequestRedraw()
                     }
                     return $true
                 }
@@ -615,24 +615,24 @@ class ProjectsListScreen : Screen {
                     $this.ViewSelectedProject()
                     return $true
                 }
-                ([ConsoleKey]::Home) {
-                    if ($this._filteredProjects.Count -gt 0) {
-                        $this._projectListBox.SelectedIndex = 0
-                        $this.UpdateDetailPanel()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::End) {
-                    if ($this._filteredProjects.Count -gt 0) {
-                        $this._projectListBox.SelectedIndex = $this._filteredProjects.Count - 1
-                        $this.UpdateDetailPanel()
+                ([ConsoleKey]::Escape) {
+                    # Go back
+                    $navService = $this.ServiceContainer?.GetService("NavigationService")
+                    if ($navService -and $navService.CanGoBack()) {
+                        $navService.GoBack()
+                    } else {
+                        # Fallback to dashboard
+                        $actionService = $this.ServiceContainer?.GetService("ActionService")
+                        if ($actionService) {
+                            $actionService.ExecuteAction("navigation.dashboard", @{})
+                        }
                     }
                     return $true
                 }
             }
         }
         
-        # Character shortcuts (work in both modes)
+        # Global shortcuts (work in both modes)
         switch ($keyInfo.KeyChar) {
             'n' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
@@ -666,16 +666,16 @@ class ProjectsListScreen : Screen {
             }
             'a' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
-                    $this.ToggleArchiveSelectedProject()
+                    $this.ArchiveSelectedProject()
                     return $true
                 }
             }
             'A' {
-                $this.ToggleArchiveSelectedProject()
+                $this.ArchiveSelectedProject()
                 return $true
             }
             '/' {
-                # Jump to search
+                # Quick jump to search
                 $this._activeComponent = "search"
                 $this._UpdateVisualFocus()
                 return $true

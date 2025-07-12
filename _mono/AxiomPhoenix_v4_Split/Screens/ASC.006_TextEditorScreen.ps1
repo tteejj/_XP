@@ -1,5 +1,6 @@
 # ==============================================================================
 # High-Performance Text Editor Screen for Axiom-Phoenix
+# FIXED: Removed FocusManager dependency, uses NCURSES-style window focus model
 # Smooth rendering, advanced cursor movement, and incremental search
 # ==============================================================================
 
@@ -39,6 +40,9 @@ class TextEditorScreen : Screen {
     hidden [bool]$_isReadOnly = $false
     hidden [string]$_clipboard = ""
     
+    # Internal focus tracking for search/replace
+    hidden [bool]$_searchBoxFocused = $true  # When search panel is open
+    
     # Undo/Redo stacks
     hidden [Stack[IEditCommand]]$_undoStack
     hidden [Stack[IEditCommand]]$_redoStack
@@ -59,6 +63,8 @@ class TextEditorScreen : Screen {
     }
     
     [void] Initialize() {
+        Write-Log -Level Debug -Message "TextEditorScreen.Initialize: Starting"
+        
         # Main editor panel
         $this._editorPanel = [Panel]::new("EditorPanel")
         $this._editorPanel.X = 0
@@ -129,7 +135,7 @@ class TextEditorScreen : Screen {
         $this._searchBox.X = 8
         $this._searchBox.Y = 1
         $this._searchBox.Width = $this._searchPanel.Width - 10
-        $this._searchBox.IsFocusable = $true
+        $this._searchBox.IsFocusable = $false  # We handle input directly
         $thisEditor = $this
         $this._searchBox.OnChange = {
             param($sender, $text)
@@ -148,7 +154,7 @@ class TextEditorScreen : Screen {
         $this._replaceBox.X = 11
         $this._replaceBox.Y = 2
         $this._replaceBox.Width = $this._searchPanel.Width - 13
-        $this._replaceBox.IsFocusable = $true
+        $this._replaceBox.IsFocusable = $false  # We handle input directly
         $this._searchPanel.AddChild($this._replaceBox)
         
         # Search status
@@ -161,19 +167,21 @@ class TextEditorScreen : Screen {
         
         # Load some initial text for demo
         $this.LoadDemoText()
+        
+        Write-Log -Level Debug -Message "TextEditorScreen.Initialize: Completed"
     }
     
     [void] OnEnter() {
-        ([Screen]$this).OnEnter()
+        Write-Log -Level Debug -Message "TextEditorScreen.OnEnter: Starting"
         
-        # Set focus to this screen so it receives keyboard input
-        $focusManager = $this.ServiceContainer.GetService("FocusManager")
-        if ($focusManager) {
-            $focusManager.SetFocus($this)
-        }
-        
+        # Simply request redraw - no FocusManager needed
         $this.RequestRedraw()
         $this._fullRedrawNeeded = $true
+    }
+    
+    [void] OnExit() {
+        Write-Log -Level Debug -Message "TextEditorScreen.OnExit: Cleaning up"
+        # Nothing to clean up
     }
     
     # Optimized rendering
@@ -198,606 +206,294 @@ class TextEditorScreen : Screen {
         
         # Get dirty lines
         $dirtyLines = $this._buffer.GetAndClearDirtyLines()
-        $versionChanged = $this._buffer._version -ne $this._lastRenderVersion
         
         # Render visible lines
         for ($i = 0; $i -lt $editorHeight; $i++) {
             $lineIndex = $this._viewportTop + $i
-            if ($lineIndex -ge $this._buffer.LineCount) { 
-                # Clear remaining lines
-                for ($j = $i; $j -lt $editorHeight; $j++) {
-                    for ($x = 0; $x -lt $editorWidth; $x++) {
-                        $buffer.SetCell($x, $j, [TuiCell]::new(' ', (Get-ThemeColor "Foreground"), (Get-ThemeColor "Background")))
-                    }
-                }
-                break 
-            }
+            if ($lineIndex -ge $this._buffer.LineCount) { break }
             
             # Check if line needs redraw
-            $needsRedraw = $this._fullRedrawNeeded -or 
-                          $versionChanged -or 
-                          ($lineIndex -in $dirtyLines) -or
-                          -not $this._lineRenderCache.ContainsKey($lineIndex)
+            $needsRedraw = $this._fullRedrawNeeded -or ($lineIndex -in $dirtyLines) -or 
+                           ($this._buffer._version -ne $this._lastRenderVersion)
             
             if ($needsRedraw) {
-                $this.RenderLine($buffer, $lineIndex, $i, $contentStartX, $contentWidth)
+                $this.RenderLine($buffer, $lineIndex, $i)
             }
         }
         
-        # Render cursor
-        $this.RenderCursor($buffer)
+        # Update cursor position in buffer
+        $cursorScreenX = $this._editorPanel.X + $contentStartX + $this._cursorColumn - $this._viewportLeft
+        $cursorScreenY = $this._editorPanel.Y + $this._cursorLine - $this._viewportTop
         
-        # Update last render version
+        if ($cursorScreenX -ge $this._editorPanel.X + $contentStartX -and 
+            $cursorScreenX -lt $this._editorPanel.X + $editorWidth -and
+            $cursorScreenY -ge $this._editorPanel.Y -and 
+            $cursorScreenY -lt $this._editorPanel.Y + $editorHeight) {
+            $buffer.SetCursorPosition($cursorScreenX, $cursorScreenY)
+            $buffer.ShowCursor = $true
+        }
+        
+        # Update position label
+        $this._positionLabel.Text = "Ln $($this._cursorLine + 1), Col $($this._cursorColumn + 1)"
+        
         $this._lastRenderVersion = $this._buffer._version
-        
-        # Let base class render children (status bar, search panel)
-        ([Screen]$this).OnRender($buffer)
     }
     
-    hidden [void] RenderLine([TuiBuffer]$buffer, [int]$lineIndex, [int]$screenY, [int]$startX, [int]$width) {
+    hidden [void] RenderLine([TuiBuffer]$buffer, [int]$lineIndex, [int]$screenRow) {
+        $y = $this._editorPanel.Y + $screenRow
+        $lineText = $this._buffer.GetLineText($lineIndex)
+        
         # Render line numbers
+        $x = $this._editorPanel.X
         if ($this._showLineNumbers) {
-            $lineNumStr = ($lineIndex + 1).ToString().PadLeft($this._lineNumberWidth - 1)
-            $lineNumColor = Get-ThemeColor "Subtle"
+            $lineNum = ($lineIndex + 1).ToString().PadLeft($this._lineNumberWidth - 1)
+            $lineNumColor = Get-ThemeColor "component.disabled"
             
-            for ($j = 0; $j -lt $lineNumStr.Length; $j++) {
-                $buffer.SetCell($j, $screenY, 
-                    [TuiCell]::new($lineNumStr[$j], $lineNumColor, (Get-ThemeColor "Background")))
+            for ($i = 0; $i -lt $lineNum.Length; $i++) {
+                $cell = [TuiCell]::new($lineNum[$i], $lineNumColor, $null)
+                $buffer.SetCell($x + $i, $y, $cell)
             }
             
             # Separator
-            $buffer.SetCell($this._lineNumberWidth - 1, $screenY,
-                [TuiCell]::new('│', (Get-ThemeColor "component.border"), (Get-ThemeColor "Background")))
+            $cell = [TuiCell]::new('│', $lineNumColor, $null)
+            $buffer.SetCell($x + $this._lineNumberWidth - 1, $y, $cell)
+            
+            $x += $this._lineNumberWidth
         }
         
-        # Get line text
-        $lineStart = $this._buffer.GetLineStart($lineIndex)
-        $lineEnd = $this._buffer.GetLineEnd($lineIndex)
-        $lineText = $this._buffer.GetLineText($lineIndex)
-        
-        # Apply viewport horizontal offset
-        if ($this._viewportLeft -gt 0 -and $lineText.Length -gt $this._viewportLeft) {
-            $lineText = $lineText.Substring($this._viewportLeft)
-        } elseif ($this._viewportLeft -ge $lineText.Length) {
-            $lineText = ""
+        # Clear the line first
+        $contentWidth = $this._editorPanel.Width - ($x - $this._editorPanel.X)
+        for ($i = 0; $i -lt $contentWidth; $i++) {
+            $cell = [TuiCell]::new(' ', $null, $null)
+            $buffer.SetCell($x + $i, $y, $cell)
         }
         
-        # Render visible part of line
-        $visibleLength = [Math]::Min($lineText.Length, $width)
-        $normalFg = Get-ThemeColor "Foreground"
-        $normalBg = Get-ThemeColor "Background"
-        $selectionFg = Get-ThemeColor "list.item.selected"
-        $selectionBg = Get-ThemeColor "list.item.selected.background"
-        
-        for ($j = 0; $j -lt $visibleLength; $j++) {
-            $charPos = $lineStart + $this._viewportLeft + $j
-            $char = $lineText[$j]
+        # Render visible text
+        if ($lineText.Length -gt $this._viewportLeft) {
+            $visibleText = $lineText.Substring($this._viewportLeft)
+            $maxLength = [Math]::Min($visibleText.Length, $contentWidth)
             
-            # Handle tabs
-            if ($char -eq "`t") {
-                $char = ' '
-            }
-            
-            # Check if in selection
-            $fg = $normalFg
-            $bg = $normalBg
-            if ($this._selection.ContainsPosition($charPos)) {
-                $fg = $selectionFg
-                $bg = $selectionBg
-            }
-            
-            # Check if in search result
-            $searchResults = $this._searchEngine._results
-            foreach ($result in $searchResults) {
-                if ($charPos -ge $result.Start -and $charPos -lt ($result.Start + $result.Length)) {
-                    $bg = Get-ThemeColor "Warning"
-                    break
+            for ($i = 0; $i -lt $maxLength; $i++) {
+                $char = $visibleText[$i]
+                $fg = Get-ThemeColor "Foreground"
+                
+                # Highlight selection if active
+                $absolutePos = $this._buffer.GetLineStart($lineIndex) + $this._viewportLeft + $i
+                if ($this._selection.IsActive -and $this._selection.ContainsPosition($absolutePos)) {
+                    $fg = Get-ThemeColor "component.selected.foreground"
+                    $bg = Get-ThemeColor "component.selected.background"
+                    $cell = [TuiCell]::new($char, $fg, $bg)
+                } else {
+                    $cell = [TuiCell]::new($char, $fg, $null)
                 }
-            }
-            
-            $buffer.SetCell($startX + $j, $screenY, [TuiCell]::new($char, $fg, $bg))
-        }
-        
-        # Clear rest of line
-        for ($j = $visibleLength; $j -lt $width; $j++) {
-            $buffer.SetCell($startX + $j, $screenY, [TuiCell]::new(' ', $normalFg, $normalBg))
-        }
-        
-        # Cache rendered line
-        $this._lineRenderCache[$lineIndex] = $true
-    }
-    
-    hidden [void] RenderCursor([TuiBuffer]$buffer) {
-        # Calculate cursor screen position
-        $cursorScreenX = $this._cursorColumn - $this._viewportLeft
-        $cursorScreenY = $this._cursorLine - $this._viewportTop
-        
-        if ($this._showLineNumbers) {
-            $cursorScreenX += $this._lineNumberWidth + 1
-        }
-        
-        # Ensure cursor is visible
-        if ($cursorScreenX -ge 0 -and $cursorScreenX -lt $this._editorPanel.Width -and
-            $cursorScreenY -ge 0 -and $cursorScreenY -lt $this._editorPanel.Height) {
-            
-            # Get current cell
-            $cell = $buffer.GetCell($cursorScreenX, $cursorScreenY)
-            if ($cell) {
-                # Invert colors for cursor
-                $cursorCell = [TuiCell]::new($cell.Char, 
-                    (Get-ThemeColor "Background"), 
-                    (Get-ThemeColor "Foreground"))
-                $buffer.SetCell($cursorScreenX, $cursorScreenY, $cursorCell)
+                
+                $buffer.SetCell($x + $i, $y, $cell)
             }
         }
-    }
-    
-    hidden [void] UpdateCursorPosition() {
-        $this._cursorPosition = $this._buffer.GetCursorPosition()
-        $this._cursorLine = $this._buffer.GetLineFromPosition($this._cursorPosition)
         
-        # Calculate column safely
-        $lineStart = $this._buffer.GetLineStart($this._cursorLine)
-        $this._cursorColumn = [Math]::Max(0, $this._cursorPosition - $lineStart)
-        
-        # Ensure values are valid
-        $displayLine = [Math]::Max(1, $this._cursorLine + 1)
-        $displayColumn = [Math]::Max(1, $this._cursorColumn + 1)
-        
-        # Update position label
-        $this._positionLabel.Text = "Ln $displayLine, Col $displayColumn"
-        
-        # Update selection if active
-        if ($this._selection.IsActive) {
-            $this._selection.UpdateSelection($this._cursorPosition)
-        }
+        # Cache the rendered line
+        $this._lineRenderCache[$lineIndex] = $this._buffer._version
     }
     
     hidden [void] EnsureCursorVisible() {
         # Vertical scrolling
         if ($this._cursorLine -lt $this._viewportTop) {
             $this._viewportTop = $this._cursorLine
-            $this._fullRedrawNeeded = $true
         } elseif ($this._cursorLine -ge $this._viewportTop + $this._editorPanel.Height) {
             $this._viewportTop = $this._cursorLine - $this._editorPanel.Height + 1
-            $this._fullRedrawNeeded = $true
         }
         
         # Horizontal scrolling
         $contentStartX = if ($this._showLineNumbers) { $this._lineNumberWidth + 1 } else { 0 }
-        $contentWidth = $this._editorPanel.Width - $contentStartX
+        $visibleWidth = $this._editorPanel.Width - $contentStartX
         
         if ($this._cursorColumn -lt $this._viewportLeft) {
             $this._viewportLeft = $this._cursorColumn
-            $this._fullRedrawNeeded = $true
-        } elseif ($this._cursorColumn -ge $this._viewportLeft + $contentWidth) {
-            $this._viewportLeft = $this._cursorColumn - $contentWidth + 1
-            $this._fullRedrawNeeded = $true
+        } elseif ($this._cursorColumn -ge $this._viewportLeft + $visibleWidth) {
+            $this._viewportLeft = $this._cursorColumn - $visibleWidth + 1
         }
     }
     
-    # Input handling
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if ($null -eq $keyInfo) { return $false }
-        
-        # Search mode input
-        if ($this._isSearchMode) {
-            return $this.HandleSearchInput($keyInfo)
-        }
-        
-        # Check for modifiers
-        $ctrl = ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) -ne 0
-        $shift = ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) -ne 0
-        $alt = ($keyInfo.Modifiers -band [ConsoleModifiers]::Alt) -ne 0
-        
-        # Handle shortcuts
-        if ($ctrl) {
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::F) { $this.ShowSearchPanel(); return $true }
-                ([ConsoleKey]::H) { $this.ShowSearchPanel($true); return $true }
-                ([ConsoleKey]::G) { $this.GoToLine(); return $true }
-                ([ConsoleKey]::A) { $this.SelectAll(); return $true }
-                ([ConsoleKey]::C) { $this.Copy(); return $true }
-                ([ConsoleKey]::X) { $this.Cut(); return $true }
-                ([ConsoleKey]::V) { $this.Paste(); return $true }
-                ([ConsoleKey]::Z) { $this.Undo(); return $true }
-                ([ConsoleKey]::Y) { $this.Redo(); return $true }
-                ([ConsoleKey]::S) { $this.Save(); return $true }
-                ([ConsoleKey]::Q) { $this.Exit(); return $true }
-                ([ConsoleKey]::O) { $this.Open(); return $true }
-            }
-        }
-        
-        # Movement and selection
-        $startSelection = $shift -and -not $this._selection.IsActive
-        if ($startSelection) {
-            $this._selection.StartSelection($this._cursorPosition)
-        }
-        
-        $handled = $false
-        
-        switch ($keyInfo.Key) {
-            # Basic movement
-            ([ConsoleKey]::LeftArrow) {
-                if ($ctrl) {
-                    $this.MoveCursorToWordBoundary($false)
-                } else {
-                    $this.MoveCursorLeft()
-                }
-                $this._preferredColumn = $this._cursorColumn
-                $handled = $true
-            }
-            ([ConsoleKey]::RightArrow) {
-                if ($ctrl) {
-                    $this.MoveCursorToWordBoundary($true)
-                } else {
-                    $this.MoveCursorRight()
-                }
-                $this._preferredColumn = $this._cursorColumn
-                $handled = $true
-            }
-            ([ConsoleKey]::UpArrow) {
-                $this.MoveCursorUp()
-                $handled = $true
-            }
-            ([ConsoleKey]::DownArrow) {
-                $this.MoveCursorDown()
-                $handled = $true
-            }
-            ([ConsoleKey]::Home) {
-                if ($ctrl) {
-                    $this.MoveCursorToStart()
-                } else {
-                    $this.MoveCursorToLineStart()
-                }
-                $this._preferredColumn = $this._cursorColumn
-                $handled = $true
-            }
-            ([ConsoleKey]::End) {
-                if ($ctrl) {
-                    $this.MoveCursorToEnd()
-                } else {
-                    $this.MoveCursorToLineEnd()
-                }
-                $this._preferredColumn = $this._cursorColumn
-                $handled = $true
-            }
-            ([ConsoleKey]::PageUp) {
-                $this.PageUp()
-                $handled = $true
-            }
-            ([ConsoleKey]::PageDown) {
-                $this.PageDown()
-                $handled = $true
-            }
-            
-            # Editing
-            ([ConsoleKey]::Backspace) {
-                if (-not $this._isReadOnly) {
-                    $this.HandleBackspace()
-                }
-                $handled = $true
-            }
-            ([ConsoleKey]::Delete) {
-                if (-not $this._isReadOnly) {
-                    $this.HandleDelete()
-                }
-                $handled = $true
-            }
-            ([ConsoleKey]::Enter) {
-                if (-not $this._isReadOnly) {
-                    $this.HandleEnter()
-                }
-                $handled = $true
-            }
-            ([ConsoleKey]::Tab) {
-                if (-not $this._isReadOnly) {
-                    $this.HandleTab()
-                }
-                $handled = $true
-            }
-            ([ConsoleKey]::Escape) {
-                if ($this._selection.IsActive) {
-                    $this._selection.ClearSelection()
-                    $this.RequestRedraw()
-                } else {
-                    $this.Exit()
-                }
-                $handled = $true
-            }
-            
-            # Regular character input
-            default {
-                if (-not $ctrl -and -not $alt -and $keyInfo.KeyChar -ne 0 -and -not $this._isReadOnly) {
-                    $this.InsertChar($keyInfo.KeyChar)
-                    $handled = $true
-                }
-            }
-        }
-        
-        # Update selection after movement
-        if ($shift -and $handled) {
-            $this._selection.UpdateSelection($this._cursorPosition)
-        } elseif (-not $shift -and $this._selection.IsActive -and $handled) {
-            $this._selection.ClearSelection()
-        }
-        
-        # Update cursor and redraw
-        if ($handled) {
-            $this.UpdateCursorPosition()
-            $this.RequestRedraw()
-        }
-        
-        return $handled
+    hidden [void] UpdateCursorPosition() {
+        $pos = $this._buffer.GetCursorPosition()
+        $this._cursorPosition = $pos
+        $this._cursorLine = $this._buffer.GetLineFromPosition($pos)
+        $lineStart = $this._buffer.GetLineStart($this._cursorLine)
+        $this._cursorColumn = $pos - $lineStart
     }
     
-    # Movement methods
+    hidden [void] MoveCursorTo([int]$line, [int]$column) {
+        $line = [Math]::Max(0, [Math]::Min($line, $this._buffer.LineCount - 1))
+        $lineStart = $this._buffer.GetLineStart($line)
+        $lineEnd = $this._buffer.GetLineEnd($line)
+        $lineLength = $lineEnd - $lineStart
+        
+        $column = [Math]::Max(0, [Math]::Min($column, $lineLength))
+        $newPos = $lineStart + $column
+        
+        $this._buffer.SetCursorPosition($newPos)
+        $this.UpdateCursorPosition()
+        $this.RequestRedraw()
+    }
+    
+    # Movement commands
     hidden [void] MoveCursorLeft() {
         if ($this._cursorPosition -gt 0) {
             $this._buffer.SetCursorPosition($this._cursorPosition - 1)
+            $this.UpdateCursorPosition()
+            $this._preferredColumn = $this._cursorColumn
         }
     }
     
     hidden [void] MoveCursorRight() {
         if ($this._cursorPosition -lt $this._buffer.Length) {
             $this._buffer.SetCursorPosition($this._cursorPosition + 1)
+            $this.UpdateCursorPosition()
+            $this._preferredColumn = $this._cursorColumn
         }
     }
     
     hidden [void] MoveCursorUp() {
         if ($this._cursorLine -gt 0) {
-            $newLine = $this._cursorLine - 1
-            $lineStart = $this._buffer.GetLineStart($newLine)
-            $lineLength = $this._buffer.GetLineEnd($newLine) - $lineStart
-            $newColumn = [Math]::Min($this._preferredColumn, $lineLength)
-            $this._buffer.SetCursorPosition($lineStart + $newColumn)
+            $this.MoveCursorTo($this._cursorLine - 1, $this._preferredColumn)
         }
     }
     
     hidden [void] MoveCursorDown() {
         if ($this._cursorLine -lt $this._buffer.LineCount - 1) {
-            $newLine = $this._cursorLine + 1
-            $lineStart = $this._buffer.GetLineStart($newLine)
-            $lineLength = $this._buffer.GetLineEnd($newLine) - $lineStart
-            $newColumn = [Math]::Min($this._preferredColumn, $lineLength)
-            $this._buffer.SetCursorPosition($lineStart + $newColumn)
+            $this.MoveCursorTo($this._cursorLine + 1, $this._preferredColumn)
         }
     }
     
-    hidden [void] MoveCursorToLineStart() {
-        $lineStart = $this._buffer.GetLineStart($this._cursorLine)
-        $lineText = $this._buffer.GetLineText($this._cursorLine)
-        
-        # Smart home - toggle between start and first non-whitespace
-        $firstNonWhitespace = 0
-        for ($i = 0; $i -lt $lineText.Length; $i++) {
-            if (-not [char]::IsWhiteSpace($lineText[$i])) {
-                $firstNonWhitespace = $i
-                break
-            }
-        }
-        
-        if ($this._cursorColumn -eq $firstNonWhitespace) {
-            $this._buffer.SetCursorPosition($lineStart)
-        } else {
-            $this._buffer.SetCursorPosition($lineStart + $firstNonWhitespace)
-        }
+    hidden [void] MoveCursorHome() {
+        $this.MoveCursorTo($this._cursorLine, 0)
+        $this._preferredColumn = 0
     }
     
-    hidden [void] MoveCursorToLineEnd() {
+    hidden [void] MoveCursorEnd() {
         $lineEnd = $this._buffer.GetLineEnd($this._cursorLine)
-        $this._buffer.SetCursorPosition($lineEnd)
+        $lineStart = $this._buffer.GetLineStart($this._cursorLine)
+        $this.MoveCursorTo($this._cursorLine, $lineEnd - $lineStart)
+        $this._preferredColumn = $this._cursorColumn
     }
     
-    hidden [void] MoveCursorToStart() {
-        $this._buffer.SetCursorPosition(0)
-    }
-    
-    hidden [void] MoveCursorToEnd() {
-        $this._buffer.SetCursorPosition($this._buffer.Length)
-    }
-    
-    hidden [void] MoveCursorToWordBoundary([bool]$forward) {
-        $newPos = $this._buffer.FindNextWordBoundary($this._cursorPosition, $forward)
+    hidden [void] MoveCursorWordLeft() {
+        $newPos = $this._buffer.FindNextWordBoundary($this._cursorPosition, $false)
         $this._buffer.SetCursorPosition($newPos)
+        $this.UpdateCursorPosition()
+        $this._preferredColumn = $this._cursorColumn
     }
     
-    hidden [void] PageUp() {
-        $pageSize = [Math]::Max(1, $this._editorPanel.Height - 2)
-        $this._viewportTop = [Math]::Max(0, $this._viewportTop - $pageSize)
-        
-        if ($this._cursorLine -ge $this._viewportTop + $this._editorPanel.Height) {
-            $newLine = $this._viewportTop + $this._editorPanel.Height - 1
-            $lineStart = $this._buffer.GetLineStart($newLine)
-            $this._buffer.SetCursorPosition($lineStart + [Math]::Min($this._preferredColumn, 
-                $this._buffer.GetLineEnd($newLine) - $lineStart))
-        }
-        
-        $this._fullRedrawNeeded = $true
+    hidden [void] MoveCursorWordRight() {
+        $newPos = $this._buffer.FindNextWordBoundary($this._cursorPosition, $true)
+        $this._buffer.SetCursorPosition($newPos)
+        $this.UpdateCursorPosition()
+        $this._preferredColumn = $this._cursorColumn
     }
     
-    hidden [void] PageDown() {
-        $pageSize = [Math]::Max(1, $this._editorPanel.Height - 2)
-        $maxViewportTop = [Math]::Max(0, $this._buffer.LineCount - $this._editorPanel.Height)
-        $this._viewportTop = [Math]::Min($maxViewportTop, $this._viewportTop + $pageSize)
-        
-        if ($this._cursorLine -lt $this._viewportTop) {
-            $newLine = $this._viewportTop
-            $lineStart = $this._buffer.GetLineStart($newLine)
-            $this._buffer.SetCursorPosition($lineStart + [Math]::Min($this._preferredColumn, 
-                $this._buffer.GetLineEnd($newLine) - $lineStart))
-        }
-        
-        $this._fullRedrawNeeded = $true
-    }
-    
-    # Editing methods
+    # Editing commands
     hidden [void] InsertChar([char]$char) {
-        $this.DeleteSelection()
+        if ($this._isReadOnly) { return }
         
-        # Group rapid typing into single undo command
-        $now = [datetime]::Now
-        $timeSinceLastEdit = ($now - $this._lastEditTime).TotalMilliseconds
-        
-        if ($timeSinceLastEdit -gt 1000) {
-            $this._lastCommandGroupId++
-        }
-        
-        $cmd = [InsertCommand]::new($this._cursorPosition, $char.ToString(), $this._cursorPosition)
-        $this.ExecuteCommand($cmd)
-        
-        $this._lastEditTime = $now
+        $command = [InsertCommand]::new($this._cursorPosition, $char.ToString(), $this._cursorPosition)
+        $this.ExecuteCommand($command)
+        $this.MoveCursorRight()
     }
     
-    hidden [void] HandleBackspace() {
-        if ($this._selection.IsActive) {
-            $this.DeleteSelection()
-        } else {
-            if ($this._buffer.DeleteBackward()) {
-                $this._redoStack.Clear()
-            }
-        }
+    hidden [void] InsertText([string]$text) {
+        if ($this._isReadOnly -or [string]::IsNullOrEmpty($text)) { return }
+        
+        $command = [InsertCommand]::new($this._cursorPosition, $text, $this._cursorPosition)
+        $this.ExecuteCommand($command)
+        
+        # Move cursor to end of inserted text
+        $this._buffer.SetCursorPosition($this._cursorPosition + $text.Length)
+        $this.UpdateCursorPosition()
     }
     
-    hidden [void] HandleDelete() {
-        if ($this._selection.IsActive) {
-            $this.DeleteSelection()
-        } else {
-            if ($this._buffer.DeleteForward()) {
-                $this._redoStack.Clear()
-            }
-        }
+    hidden [void] DeleteBackward() {
+        if ($this._isReadOnly -or $this._cursorPosition -eq 0) { return }
+        
+        $this.MoveCursorLeft()
+        $deletedChar = $this._buffer.GetChar($this._cursorPosition)
+        $command = [DeleteCommand]::new($this._cursorPosition, 1, $deletedChar.ToString(), $this._cursorPosition + 1)
+        $this.ExecuteCommand($command)
     }
     
-    hidden [void] HandleEnter() {
-        $this.DeleteSelection()
+    hidden [void] DeleteForward() {
+        if ($this._isReadOnly -or $this._cursorPosition -ge $this._buffer.Length) { return }
         
-        # Get current line indentation
-        $lineText = $this._buffer.GetLineText($this._cursorLine)
-        $indent = ""
-        for ($i = 0; $i -lt $lineText.Length; $i++) {
-            if ($lineText[$i] -eq ' ' -or $lineText[$i] -eq "`t") {
-                $indent += $lineText[$i]
-            } else {
-                break
-            }
-        }
-        
-        # Insert newline and indent
-        $cmd = [InsertCommand]::new($this._cursorPosition, "`n$indent", $this._cursorPosition)
-        $this.ExecuteCommand($cmd)
+        $deletedChar = $this._buffer.GetChar($this._cursorPosition)
+        $command = [DeleteCommand]::new($this._cursorPosition, 1, $deletedChar.ToString(), $this._cursorPosition)
+        $this.ExecuteCommand($command)
     }
     
-    hidden [void] HandleTab() {
-        $this.DeleteSelection()
-        
-        # Insert spaces for tab
-        $spaces = " " * $this._tabSize
-        $cmd = [InsertCommand]::new($this._cursorPosition, $spaces, $this._cursorPosition)
-        $this.ExecuteCommand($cmd)
-    }
-    
-    hidden [bool] DeleteSelection() {
-        if (-not $this._selection.IsActive) { return $false }
-        
-        $start = $this._selection.GetNormalizedStart()
-        $length = $this._selection.GetLength()
-        
-        if ($length -gt 0) {
-            $deletedText = $this._buffer.GetText($start, $length)
-            $cmd = [DeleteCommand]::new($start, $length, $deletedText, $this._cursorPosition)
-            $this.ExecuteCommand($cmd)
-            
-            $this._buffer.SetCursorPosition($start)
-            $this._selection.ClearSelection()
-            return $true
-        }
-        
-        return $false
-    }
-    
-    # Command execution
-    hidden [void] ExecuteCommand([IEditCommand]$cmd) {
-        $cmd.Execute($this._buffer)
-        $this._undoStack.Push($cmd)
+    hidden [void] ExecuteCommand([IEditCommand]$command) {
+        $command.Execute($this._buffer)
+        $this._undoStack.Push($command)
         $this._redoStack.Clear()
-        # Update cursor position after command execution
         $this.UpdateCursorPosition()
+        $this._fullRedrawNeeded = $true
         $this.RequestRedraw()
     }
     
-    # Clipboard operations
-    hidden [void] Copy() {
-        if ($this._selection.IsActive) {
-            $start = $this._selection.GetNormalizedStart()
-            $length = $this._selection.GetLength()
-            $this._clipboard = $this._buffer.GetText($start, $length)
-            $this._statusLabel.Text = "Copied $length characters"
-        }
-    }
-    
-    hidden [void] Cut() {
-        if ($this._selection.IsActive -and -not $this._isReadOnly) {
-            $this.Copy()
-            $this.DeleteSelection()
-        }
-    }
-    
-    hidden [void] Paste() {
-        if (-not [string]::IsNullOrEmpty($this._clipboard) -and -not $this._isReadOnly) {
-            $this.DeleteSelection()
-            $cmd = [InsertCommand]::new($this._cursorPosition, $this._clipboard, $this._cursorPosition)
-            $this.ExecuteCommand($cmd)
-        }
-    }
-    
-    hidden [void] SelectAll() {
-        $this._selection.StartSelection(0)
-        $this._selection.UpdateSelection($this._buffer.Length)
-        $this._buffer.SetCursorPosition($this._buffer.Length)
-        $this.UpdateCursorPosition()
-        $this.RequestRedraw()
-    }
-    
-    # Undo/Redo
     hidden [void] Undo() {
-        if ($this._undoStack.Count -gt 0) {
-            $cmd = $this._undoStack.Pop()
-            $cmd.Undo($this._buffer)
-            $this._redoStack.Push($cmd)
-            $this._buffer.SetCursorPosition($cmd.CursorBefore)
-            $this.UpdateCursorPosition()
-            $this.RequestRedraw()
-        }
+        if ($this._undoStack.Count -eq 0) { return }
+        
+        $command = $this._undoStack.Pop()
+        $command.Undo($this._buffer)
+        $this._redoStack.Push($command)
+        
+        # Restore cursor position
+        $this._buffer.SetCursorPosition($command.CursorBefore)
+        $this.UpdateCursorPosition()
+        $this._fullRedrawNeeded = $true
+        $this.RequestRedraw()
     }
     
     hidden [void] Redo() {
-        if ($this._redoStack.Count -gt 0) {
-            $cmd = $this._redoStack.Pop()
-            $cmd.Execute($this._buffer)
-            $this._undoStack.Push($cmd)
-            $this._buffer.SetCursorPosition($cmd.CursorAfter)
-            $this.UpdateCursorPosition()
-            $this.RequestRedraw()
-        }
+        if ($this._redoStack.Count -eq 0) { return }
+        
+        $command = $this._redoStack.Pop()
+        $command.Execute($this._buffer)
+        $this._undoStack.Push($command)
+        
+        # Restore cursor position
+        $this._buffer.SetCursorPosition($command.CursorAfter)
+        $this.UpdateCursorPosition()
+        $this._fullRedrawNeeded = $true
+        $this.RequestRedraw()
     }
     
-    # Search functionality
+    # File operations
+    hidden [void] OpenFile() {
+        # Would show file dialog
+        $this._statusLabel.Text = "Open file: Feature requires file dialog"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Info"
+    }
+    
+    hidden [void] SaveFile() {
+        # Would save to file
+        $this._statusLabel.Text = "File saved (simulated)"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
+    }
+    
+    # Search operations
     hidden [void] ShowSearchPanel([bool]$replace = $false) {
         $this._isSearchMode = $true
         $this._isReplaceMode = $replace
         $this._searchPanel.Visible = $true
-        $this._searchPanel.Title = if ($replace) { " Find & Replace " } else { " Find " }
+        $this._searchBoxFocused = $true  # Start with search box focused
         
         # Update search panel height
         $this._searchPanel.Height = if ($replace) { 6 } else { 4 }
         $this._replaceBox.Visible = $replace
         
-        # Focus search box
-        $focusManager = $this.ServiceContainer.GetService("FocusManager")
-        if ($focusManager) {
-            $focusManager.SetFocus($this._searchBox)
-        }
+        # Update visual focus
+        $this._searchBox.ShowCursor = $true
+        $this._searchBox.BorderColor = Get-ThemeColor "primary.accent"
+        $this._replaceBox.ShowCursor = $false
+        $this._replaceBox.BorderColor = Get-ThemeColor "border"
         
         $this.RequestRedraw()
     }
@@ -809,6 +505,8 @@ class TextEditorScreen : Screen {
         $this._searchBox.Text = ""
         $this._replaceBox.Text = ""
         $this._searchStatusLabel.Text = ""
+        $this._searchBox.ShowCursor = $false
+        $this._replaceBox.ShowCursor = $false
         $this.RequestRedraw()
     }
     
@@ -819,67 +517,324 @@ class TextEditorScreen : Screen {
         }
         
         $results = $this._searchEngine.Search($this._searchBox.Text, $false, $false)
-        
         if ($results.Count -gt 0) {
-            $this._searchStatusLabel.Text = "$($results.Count) matches found"
-            $current = $this._searchEngine.GetCurrentResult()
-            if ($current) {
-                $this._buffer.SetCursorPosition($current.Start)
+            $this._searchStatusLabel.Text = "Found $($results.Count) matches"
+            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+            
+            # Move to first result
+            $firstResult = $this._searchEngine.GetCurrentResult()
+            if ($firstResult) {
+                $this._buffer.SetCursorPosition($firstResult.Start)
                 $this.UpdateCursorPosition()
-                $this.EnsureCursorVisible()
+                $this._selection.StartSelection($firstResult.Start)
+                $this._selection.UpdateSelection($firstResult.Start + $firstResult.Length)
             }
         } else {
             $this._searchStatusLabel.Text = "No matches found"
+            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Warning"
         }
         
+        $this._fullRedrawNeeded = $true
         $this.RequestRedraw()
     }
     
+    hidden [void] FindNext() {
+        $result = $this._searchEngine.NextResult()
+        if ($result) {
+            $this._buffer.SetCursorPosition($result.Start)
+            $this.UpdateCursorPosition()
+            $this._selection.StartSelection($result.Start)
+            $this._selection.UpdateSelection($result.Start + $result.Length)
+            $this._fullRedrawNeeded = $true
+            $this.RequestRedraw()
+        }
+    }
+    
+    hidden [void] FindPrevious() {
+        $result = $this._searchEngine.PreviousResult()
+        if ($result) {
+            $this._buffer.SetCursorPosition($result.Start)
+            $this.UpdateCursorPosition()
+            $this._selection.StartSelection($result.Start)
+            $this._selection.UpdateSelection($result.Start + $result.Length)
+            $this._fullRedrawNeeded = $true
+            $this.RequestRedraw()
+        }
+    }
+    
+    # Demo content
+    hidden [void] LoadDemoText() {
+        $demoText = @"
+# Welcome to the Axiom-Phoenix Text Editor!
+
+This is a high-performance text editor built with PowerShell.
+It features:
+
+- Smooth cursor movement and scrolling
+- Incremental search and replace
+- Undo/redo functionality
+- Optimized rendering with dirty line tracking
+- Line numbers and status bar
+
+## Key Bindings
+
+Navigation:
+- Arrow keys: Move cursor
+- Ctrl+Left/Right: Move by word
+- Home/End: Move to line start/end
+- Page Up/Down: Scroll by page
+- Ctrl+Home/End: Go to document start/end
+
+Editing:
+- Type to insert text
+- Backspace/Delete: Remove characters
+- Ctrl+Z: Undo
+- Ctrl+Y: Redo
+
+Search:
+- Ctrl+F: Find
+- Ctrl+H: Find and Replace
+- F3: Find next
+- Shift+F3: Find previous
+- Escape: Close search panel
+
+File Operations:
+- Ctrl+O: Open file
+- Ctrl+S: Save file
+- Ctrl+Q: Quit editor
+
+## Sample Code
+
+Here's a sample PowerShell function:
+
+function Get-RandomQuote {
+    $quotes = @(
+        "The only way to do great work is to love what you do.",
+        "Innovation distinguishes between a leader and a follower.",
+        "Stay hungry, stay foolish."
+    )
+    
+    $randomIndex = Get-Random -Maximum $quotes.Count
+    return $quotes[$randomIndex]
+}
+
+# Call the function
+$quote = Get-RandomQuote
+Write-Host "Quote of the day: $quote"
+
+Enjoy using the editor!
+"@
+        
+        foreach ($char in $demoText.ToCharArray()) {
+            $this._buffer.InsertChar($char)
+        }
+        
+        # Reset cursor to start
+        $this._buffer.SetCursorPosition(0)
+        $this.UpdateCursorPosition()
+    }
+    
+    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) {
+            Write-Log -Level Warning -Message "TextEditorScreen.HandleInput: Null keyInfo"
+            return $false
+        }
+        
+        Write-Log -Level Debug -Message "TextEditorScreen.HandleInput: Key=$($keyInfo.Key), SearchMode=$($this._isSearchMode)"
+        
+        # Handle search panel input when active
+        if ($this._isSearchMode) {
+            return $this.HandleSearchInput($keyInfo)
+        }
+        
+        # Main editor input handling
+        $handled = $true
+        
+        # Ctrl combinations
+        if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
+            switch ($keyInfo.Key) {
+                ([ConsoleKey]::F) {
+                    $this.ShowSearchPanel($false)
+                    return $true
+                }
+                ([ConsoleKey]::H) {
+                    $this.ShowSearchPanel($true)
+                    return $true
+                }
+                ([ConsoleKey]::O) {
+                    $this.OpenFile()
+                    return $true
+                }
+                ([ConsoleKey]::S) {
+                    $this.SaveFile()
+                    return $true
+                }
+                ([ConsoleKey]::Q) {
+                    # Quit
+                    $navService = $this.ServiceContainer.GetService("NavigationService")
+                    if ($navService.CanGoBack()) {
+                        $navService.GoBack()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::Z) {
+                    $this.Undo()
+                    return $true
+                }
+                ([ConsoleKey]::Y) {
+                    $this.Redo()
+                    return $true
+                }
+                ([ConsoleKey]::LeftArrow) {
+                    $this.MoveCursorWordLeft()
+                    return $true
+                }
+                ([ConsoleKey]::RightArrow) {
+                    $this.MoveCursorWordRight()
+                    return $true
+                }
+                ([ConsoleKey]::Home) {
+                    $this.MoveCursorTo(0, 0)
+                    return $true
+                }
+                ([ConsoleKey]::End) {
+                    $lastLine = $this._buffer.LineCount - 1
+                    $this.MoveCursorTo($lastLine, [int]::MaxValue)
+                    return $true
+                }
+                default { $handled = $false }
+            }
+        }
+        # Regular keys
+        else {
+            switch ($keyInfo.Key) {
+                # Navigation
+                ([ConsoleKey]::LeftArrow) {
+                    $this.MoveCursorLeft()
+                    return $true
+                }
+                ([ConsoleKey]::RightArrow) {
+                    $this.MoveCursorRight()
+                    return $true
+                }
+                ([ConsoleKey]::UpArrow) {
+                    $this.MoveCursorUp()
+                    return $true
+                }
+                ([ConsoleKey]::DownArrow) {
+                    $this.MoveCursorDown()
+                    return $true
+                }
+                ([ConsoleKey]::Home) {
+                    $this.MoveCursorHome()
+                    return $true
+                }
+                ([ConsoleKey]::End) {
+                    $this.MoveCursorEnd()
+                    return $true
+                }
+                ([ConsoleKey]::PageUp) {
+                    for ($i = 0; $i -lt $this._editorPanel.Height - 1; $i++) {
+                        $this.MoveCursorUp()
+                    }
+                    return $true
+                }
+                ([ConsoleKey]::PageDown) {
+                    for ($i = 0; $i -lt $this._editorPanel.Height - 1; $i++) {
+                        $this.MoveCursorDown()
+                    }
+                    return $true
+                }
+                
+                # Editing
+                ([ConsoleKey]::Backspace) {
+                    $this.DeleteBackward()
+                    return $true
+                }
+                ([ConsoleKey]::Delete) {
+                    $this.DeleteForward()
+                    return $true
+                }
+                ([ConsoleKey]::Enter) {
+                    $this.InsertChar("`n")
+                    return $true
+                }
+                ([ConsoleKey]::Tab) {
+                    # Insert spaces for tab
+                    for ($i = 0; $i -lt $this._tabSize; $i++) {
+                        $this.InsertChar(' ')
+                    }
+                    return $true
+                }
+                
+                # Function keys
+                ([ConsoleKey]::F3) {
+                    if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
+                        $this.FindPrevious()
+                    } else {
+                        $this.FindNext()
+                    }
+                    return $true
+                }
+                
+                ([ConsoleKey]::Escape) {
+                    if ($this._selection.IsActive) {
+                        $this._selection.ClearSelection()
+                        $this._fullRedrawNeeded = $true
+                        $this.RequestRedraw()
+                    } else {
+                        # Go back
+                        $navService = $this.ServiceContainer.GetService("NavigationService")
+                        if ($navService.CanGoBack()) {
+                            $navService.GoBack()
+                        }
+                    }
+                    return $true
+                }
+                
+                default {
+                    # Regular character input
+                    if ($keyInfo.KeyChar -and $keyInfo.KeyChar -ne "`0") {
+                        $this.InsertChar($keyInfo.KeyChar)
+                        return $true
+                    }
+                    $handled = $false
+                }
+            }
+        }
+        
+        return $handled
+    }
+    
     hidden [bool] HandleSearchInput([System.ConsoleKeyInfo]$keyInfo) {
+        $handled = $true
+        
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Escape) {
                 $this.HideSearchPanel()
                 return $true
             }
             ([ConsoleKey]::Enter) {
-                if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
-                    # Previous result
-                    $result = $this._searchEngine.PreviousResult()
-                } else {
-                    # Next result
-                    $result = $this._searchEngine.NextResult()
-                }
-                
-                if ($result) {
-                    $this._buffer.SetCursorPosition($result.Start)
-                    $this.UpdateCursorPosition()
-                    $this.EnsureCursorVisible()
-                    $this.RequestRedraw()
-                }
-                return $true
-            }
-            ([ConsoleKey]::F3) {
-                # Find next
-                $result = $this._searchEngine.NextResult()
-                if ($result) {
-                    $this._buffer.SetCursorPosition($result.Start)
-                    $this.UpdateCursorPosition()
-                    $this.EnsureCursorVisible()
-                    $this.RequestRedraw()
-                }
+                $this.FindNext()
                 return $true
             }
             ([ConsoleKey]::Tab) {
                 if ($this._isReplaceMode) {
-                    # Switch focus between search and replace
-                    $focusManager = $this.ServiceContainer.GetService("FocusManager")
-                    if ($focusManager) {
-                        if ($this._searchBox.IsFocused) {
-                            $focusManager.SetFocus($this._replaceBox)
-                        } else {
-                            $focusManager.SetFocus($this._searchBox)
-                        }
+                    # Toggle focus between search and replace boxes
+                    $this._searchBoxFocused = -not $this._searchBoxFocused
+                    if ($this._searchBoxFocused) {
+                        $this._searchBox.ShowCursor = $true
+                        $this._searchBox.BorderColor = Get-ThemeColor "primary.accent"
+                        $this._replaceBox.ShowCursor = $false
+                        $this._replaceBox.BorderColor = Get-ThemeColor "border"
+                    } else {
+                        $this._searchBox.ShowCursor = $false
+                        $this._searchBox.BorderColor = Get-ThemeColor "border"
+                        $this._replaceBox.ShowCursor = $true
+                        $this._replaceBox.BorderColor = Get-ThemeColor "primary.accent"
                     }
+                    $this.RequestRedraw()
                 }
                 return $true
             }
@@ -888,157 +843,64 @@ class TextEditorScreen : Screen {
                     # Replace current
                     if ($this._searchEngine.ReplaceCurrent($this._replaceBox.Text)) {
                         $this._searchStatusLabel.Text = "Replaced 1 occurrence"
-                        $this.UpdateCursorPosition()
+                        $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+                        $this._fullRedrawNeeded = $true
                         $this.RequestRedraw()
                     }
                     return $true
                 }
             }
             ([ConsoleKey]::A) {
-                if (($keyInfo.Modifiers -band [ConsoleModifiers]::Control) -and $this._isReplaceMode) {
+                if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
                     # Replace all
                     $count = $this._searchEngine.ReplaceAll($this._replaceBox.Text)
                     $this._searchStatusLabel.Text = "Replaced $count occurrences"
-                    $this.UpdateCursorPosition()
+                    $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+                    $this._fullRedrawNeeded = $true
                     $this.RequestRedraw()
                     return $true
                 }
             }
+            ([ConsoleKey]::Backspace) {
+                $activeBox = if ($this._searchBoxFocused) { $this._searchBox } else { $this._replaceBox }
+                if ($activeBox.Text.Length -gt 0) {
+                    $activeBox.Text = $activeBox.Text.Substring(0, $activeBox.Text.Length - 1)
+                    if ($this._searchBoxFocused) {
+                        $this.PerformIncrementalSearch()
+                    }
+                    $this.RequestRedraw()
+                }
+                return $true
+            }
+            default {
+                # Character input
+                if ($keyInfo.KeyChar -and $keyInfo.KeyChar -ne "`0") {
+                    $activeBox = if ($this._searchBoxFocused) { $this._searchBox } else { $this._replaceBox }
+                    $activeBox.Text += $keyInfo.KeyChar
+                    if ($this._searchBoxFocused) {
+                        $this.PerformIncrementalSearch()
+                    }
+                    $this.RequestRedraw()
+                    return $true
+                }
+                $handled = $false
+            }
         }
         
-        # Let search/replace boxes handle their input
-        return ([Screen]$this).HandleInput($keyInfo)
-    }
-    
-    # Demo content
-    hidden [void] LoadDemoText() {
-        $demoText = @"
-# High-Performance Text Editor Demo
-
-Welcome to the Axiom-Phoenix Text Editor!
-
-This editor features:
-- Gap buffer for O(1) insertions at cursor position
-- Efficient line indexing for fast navigation
-- Viewport-only rendering for smooth scrolling
-- Incremental search with highlighting
-- Smart cursor movement and selection
-- Undo/Redo support
-- Syntax-aware indentation
-
-## Key Bindings
-
-### Navigation
-- Arrow keys: Move cursor
-- Ctrl+Arrow: Move by word
-- Home/End: Move to line start/end
-- Ctrl+Home/End: Move to document start/end
-- PageUp/PageDown: Scroll by page
-
-### Editing
-- Ctrl+A: Select all
-- Ctrl+C: Copy selection
-- Ctrl+X: Cut selection
-- Ctrl+V: Paste
-- Ctrl+Z: Undo
-- Ctrl+Y: Redo
-
-### Search
-- Ctrl+F: Find
-- Ctrl+H: Find and Replace
-- F3: Find next
-- Shift+F3: Find previous
-- Ctrl+R: Replace current (in replace mode)
-- Ctrl+A: Replace all (in replace mode)
-
-### File Operations
-- Ctrl+S: Save (placeholder)
-- Ctrl+Q: Exit
-
-## Performance Features
-
-The editor uses several optimizations:
-1. **Gap Buffer**: Maintains a gap at the cursor position for O(1) insertions
-2. **Line Caching**: Tracks line starts for O(1) line access
-3. **Dirty Tracking**: Only redraws changed lines
-4. **Viewport Rendering**: Only processes visible content
-
-Try editing this text to see the smooth performance!
-"@
+        # Function keys work in search mode too
+        if ($keyInfo.Key -eq [ConsoleKey]::F3) {
+            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
+                $this.FindPrevious()
+            } else {
+                $this.FindNext()
+            }
+            return $true
+        }
         
-        $this._buffer.Insert($demoText)
-        $this._buffer.SetCursorPosition(0)
-        $this.UpdateCursorPosition()
-        $this._fullRedrawNeeded = $true
-    }
-    
-    # Placeholder methods
-    hidden [void] GoToLine() {
-        $this._statusLabel.Text = "Go to line (not implemented)"
-    }
-    
-    hidden [void] Save() {
-        # Show save dialog
-        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
-        if ($dialogManager) {
-            $dialog = [InputDialog]::new("SaveDialog", $this.ServiceContainer)
-            $dialog.SetMessage("Enter filename to save:")
-            $dialog.SetInputValue("document.txt")
-            $dialog.OnClose = {
-                param($result, $value)
-                if ($result -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($value)) {
-                    $this._statusLabel.Text = "Saved to: $value"
-                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
-                    # In a real implementation, would save to file system here
-                    # $content = $this._buffer.GetAllText()
-                    # Set-Content -Path $value -Value $content
-                }
-            }.GetNewClosure()
-            $dialogManager.ShowDialog($dialog)
-        } else {
-            $this._statusLabel.Text = "Save dialog not available"
-        }
-    }
-    
-    hidden [void] Open() {
-        # Show open dialog
-        $dialogManager = $this.ServiceContainer.GetService("DialogManager")
-        if ($dialogManager) {
-            $dialog = [InputDialog]::new("OpenDialog", $this.ServiceContainer)
-            $dialog.SetMessage("Enter filename to open:")
-            $dialog.SetInputValue("")
-            $dialog.OnClose = {
-                param($result, $value)
-                if ($result -eq [DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($value)) {
-                    # Clear current buffer
-                    $this._buffer = [TextBuffer]::new()
-                    # In a real implementation, would load from file system here
-                    # if (Test-Path $value) {
-                    #     $content = Get-Content -Path $value -Raw
-                    #     $this._buffer.Insert($content)
-                    # }
-                    # For demo, just show a message
-                    $this._buffer.Insert("# Opened: $value`n`nFile loading not implemented in demo.")
-                    $this._buffer.SetCursorPosition(0)
-                    $this.UpdateCursorPosition()
-                    $this._fullRedrawNeeded = $true
-                    $this._statusLabel.Text = "Opened: $value"
-                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Success"
-                }
-            }.GetNewClosure()
-            $dialogManager.ShowDialog($dialog)
-        } else {
-            $this._statusLabel.Text = "Open dialog not available"
-        }
-    }
-    
-    hidden [void] Exit() {
-        # Return to previous screen
-        $navService = $this.ServiceContainer.GetService("NavigationService")
-        if ($navService -and $navService.CanGoBack()) {
-            $navService.GoBack()
-        } else {
-            $global:TuiState.Running = $false
-        }
+        return $handled
     }
 }
+
+# ==============================================================================
+# END OF TEXT EDITOR SCREEN
+# ==============================================================================
