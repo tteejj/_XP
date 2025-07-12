@@ -301,7 +301,7 @@ class TaskDeleteDialog : ConfirmDialog {
             $detailsLabel.Text = "Task: $($this._task.Title)"
             $detailsLabel.X = 2
             $detailsLabel.Y = 4
-            $detailsLabel.ForegroundColor = [ConsoleColor]::Yellow
+            $detailsLabel.ForegroundColor = Get-ThemeColor -ColorName "Warning" -DefaultColor "#FFA500"
             $this._panel.AddChild($detailsLabel)
         }
     }

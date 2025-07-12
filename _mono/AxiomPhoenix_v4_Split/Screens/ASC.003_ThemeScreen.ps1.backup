@@ -312,14 +312,14 @@ class ThemeScreen : Screen {
             # Update preview elements with theme colors
             $this._previewTextLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
             
-            $this._previewButtonLabel.SetBackgroundColor($selectedTheme.Colors["Primary"])
+            $this._previewButtonLabel.BackgroundColor = $selectedTheme.Colors["Primary"]
             $this._previewButtonLabel.ForegroundColor = $selectedTheme.Colors["button.focused.fg"]
             
-            $this._previewListLabel.SetBackgroundColor($selectedTheme.Colors["list.item.selected.background"])
+            $this._previewListLabel.BackgroundColor = $selectedTheme.Colors["list.item.selected.background"]
             $this._previewListLabel.ForegroundColor = $selectedTheme.Colors["list.item.selected"]
             
             # Update panel colors
-            $this._previewPanel.SetBackgroundColor($selectedTheme.Colors["component.background"])
+            $this._previewPanel.BackgroundColor = $selectedTheme.Colors["component.background"]
             $this._previewPanel.BorderColor = $selectedTheme.Colors["component.border"]
             
             $this.RequestRedraw()

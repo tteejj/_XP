@@ -43,7 +43,7 @@ class ProjectsListScreen : Screen {
         $this._mainPanel.Title = " Projects Management "
         $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
-        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
         
         # Calculate dimensions
@@ -159,7 +159,7 @@ class ProjectsListScreen : Screen {
         $viewBtn.Text = "[Enter] View"
         $viewBtn.X = 2
         $viewBtn.Y = $buttonY
-        $viewBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
+        $viewBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
         $this._actionPanel.AddChild($viewBtn)
         
         # New button
@@ -167,7 +167,7 @@ class ProjectsListScreen : Screen {
         $newBtn.Text = "[N] New"
         $newBtn.X = $viewBtn.X + $buttonSpacing
         $newBtn.Y = $buttonY
-        $newBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
+        $newBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._actionPanel.AddChild($newBtn)
         
         # Edit button
@@ -175,7 +175,7 @@ class ProjectsListScreen : Screen {
         $editBtn.Text = "[E] Edit"
         $editBtn.X = $newBtn.X + $buttonSpacing
         $editBtn.Y = $buttonY
-        $editBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ffa500"))
+        $editBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500"
         $this._actionPanel.AddChild($editBtn)
         
         # Delete button
@@ -183,7 +183,7 @@ class ProjectsListScreen : Screen {
         $deleteBtn.Text = "[D] Delete"
         $deleteBtn.X = $editBtn.X + $buttonSpacing
         $deleteBtn.Y = $buttonY
-        $deleteBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ff4444"))
+        $deleteBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444"
         $this._actionPanel.AddChild($deleteBtn)
         
         # Archive button
@@ -191,7 +191,7 @@ class ProjectsListScreen : Screen {
         $archiveBtn.Text = "[A] Archive"
         $archiveBtn.X = $deleteBtn.X + $buttonSpacing
         $archiveBtn.Y = $buttonY
-        $archiveBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
+        $archiveBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._actionPanel.AddChild($archiveBtn)
         
         # Tab hint
@@ -199,7 +199,7 @@ class ProjectsListScreen : Screen {
         $tabHint.Text = "[Tab] Focus"
         $tabHint.X = $archiveBtn.X + $buttonSpacing
         $tabHint.Y = $buttonY
-        $tabHint.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
+        $tabHint.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._actionPanel.AddChild($tabHint)
         
         # Status label
@@ -207,7 +207,7 @@ class ProjectsListScreen : Screen {
         $this._statusLabel.Text = "0 projects"
         $this._statusLabel.X = $this._actionPanel.Width - 20
         $this._statusLabel.Y = $buttonY
-        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._actionPanel.AddChild($this._statusLabel)
         
         # Exit instructions
@@ -215,7 +215,7 @@ class ProjectsListScreen : Screen {
         $exitLabel.Text = "[Esc] Back"
         $exitLabel.X = $this._actionPanel.Width - 12
         $exitLabel.Y = $buttonY
-        $exitLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
+        $exitLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._actionPanel.AddChild($exitLabel)
         
         Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Completed"
@@ -240,13 +240,13 @@ class ProjectsListScreen : Screen {
         $keyLabel.Text = "Project Key:"
         $keyLabel.X = 2
         $keyLabel.Y = $y
-        $keyLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $keyLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($keyLabel)
         
         $keyValue = [LabelComponent]::new("KeyValue")
         $keyValue.X = 18
         $keyValue.Y = $y
-        $keyValue.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
+        $keyValue.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._detailPanel.AddChild($keyValue)
         $this._detailLabels["Key"] = $keyValue
         $y += 2
@@ -256,13 +256,13 @@ class ProjectsListScreen : Screen {
         $nameLabel.Text = "Name:"
         $nameLabel.X = 2
         $nameLabel.Y = $y
-        $nameLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $nameLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($nameLabel)
         
         $nameValue = [LabelComponent]::new("NameValue")
         $nameValue.X = 18
         $nameValue.Y = $y
-        $nameValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $nameValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($nameValue)
         $this._detailLabels["Name"] = $nameValue
         $y += 2
@@ -272,13 +272,13 @@ class ProjectsListScreen : Screen {
         $ownerLabel.Text = "Owner:"
         $ownerLabel.X = 2
         $ownerLabel.Y = $y
-        $ownerLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $ownerLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($ownerLabel)
         
         $ownerValue = [LabelComponent]::new("OwnerValue")
         $ownerValue.X = 18
         $ownerValue.Y = $y
-        $ownerValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $ownerValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($ownerValue)
         $this._detailLabels["Owner"] = $ownerValue
         $y += 2
@@ -288,13 +288,13 @@ class ProjectsListScreen : Screen {
         $statusLabel.Text = "Status:"
         $statusLabel.X = 2
         $statusLabel.Y = $y
-        $statusLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $statusLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($statusLabel)
         
         $statusValue = [LabelComponent]::new("StatusValue")
         $statusValue.X = 18
         $statusValue.Y = $y
-        $statusValue.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
+        $statusValue.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
         $this._detailPanel.AddChild($statusValue)
         $this._detailLabels["Status"] = $statusValue
         $y += 2
@@ -304,13 +304,13 @@ class ProjectsListScreen : Screen {
         $clientLabel.Text = "Client ID:"
         $clientLabel.X = 2
         $clientLabel.Y = $y
-        $clientLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $clientLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($clientLabel)
         
         $clientValue = [LabelComponent]::new("ClientValue")
         $clientValue.X = 18
         $clientValue.Y = $y
-        $clientValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $clientValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($clientValue)
         $this._detailLabels["ClientID"] = $clientValue
         $y += 2
@@ -320,13 +320,13 @@ class ProjectsListScreen : Screen {
         $dueDateLabel.Text = "Due Date:"
         $dueDateLabel.X = 2
         $dueDateLabel.Y = $y
-        $dueDateLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $dueDateLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($dueDateLabel)
         
         $dueDateValue = [LabelComponent]::new("DueDateValue")
         $dueDateValue.X = 18
         $dueDateValue.Y = $y
-        $dueDateValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $dueDateValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($dueDateValue)
         $this._detailLabels["DueDate"] = $dueDateValue
         $y += 3
@@ -336,7 +336,7 @@ class ProjectsListScreen : Screen {
         $descLabel.Text = "Description:"
         $descLabel.X = 2
         $descLabel.Y = $y
-        $descLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $descLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($descLabel)
         $y += 1
         

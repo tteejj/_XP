@@ -44,7 +44,7 @@ class CommandPaletteScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Command Palette "
         $this._mainPanel.BorderStyle = "Double"
-        $this._mainPanel.BorderColor = [ConsoleColor]::Cyan
+        $this._mainPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
         $this.AddChild($this._mainPanel)
         
         # Search box
@@ -75,7 +75,7 @@ class CommandPaletteScreen : Screen {
         $helpText.Text = "Enter: Execute | Tab: Toggle Focus | ↑↓: Navigate | Esc: Cancel"
         $helpText.X = 2
         $helpText.Y = $this.Height - 2
-        $helpText.ForegroundColor = [ConsoleColor]::DarkGray
+        $helpText.ForegroundColor = Get-ThemeColor "Subtle" "#808080"
         $this._mainPanel.AddChild($helpText)
         
         Write-Log -Level Debug -Message "CommandPaletteScreen.Initialize: Completed"
@@ -168,12 +168,12 @@ class CommandPaletteScreen : Screen {
         # Update visual indicators based on active component
         if ($this._activeComponent -eq "search") {
             $this._searchBox.ShowCursor = $true
-            $this._searchBox.BorderColor = [ConsoleColor]::Cyan
-            $this._listBox.BorderColor = [ConsoleColor]::DarkGray
+            $this._searchBox.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this._listBox.BorderColor = Get-ThemeColor "border" "#333333"
         } else {
             $this._searchBox.ShowCursor = $false
-            $this._searchBox.BorderColor = [ConsoleColor]::DarkGray
-            $this._listBox.BorderColor = [ConsoleColor]::Cyan
+            $this._searchBox.BorderColor = Get-ThemeColor "border" "#333333"
+            $this._listBox.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
         }
         $this.RequestRedraw()
     }

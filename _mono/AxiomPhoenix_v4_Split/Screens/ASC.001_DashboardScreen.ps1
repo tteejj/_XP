@@ -230,7 +230,7 @@ class DashboardScreen : Screen {
         $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
         $instructions.Y = 21
         $instructions.IsFocusable = $false
-        $instructions.ForegroundColor = Get-ThemeColor "Label.Foreground" "#9ca3af"
+        $instructions.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#9ca3af"))
         $this._mainPanel.AddChild($instructions)
         
         Write-Log -Level Debug -Message "DashboardScreen.Initialize: Completed"
@@ -253,17 +253,19 @@ class DashboardScreen : Screen {
         try {
             if ($this._mainPanel) {
                 $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
-                $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+                $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
             }
             
             if ($this._menuPanel) {
                 $this._menuPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
-                $this._menuPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+                $this._menuPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
             }
             
-            $instructions = $this._mainPanel.Children | Where-Object { $_.Name -eq "Instructions" }
-            if ($instructions) {
-                $instructions.ForegroundColor = Get-ThemeColor "Label.Foreground" "#9ca3af"
+            if ($this._mainPanel -and $this._mainPanel.Children) {
+                $instructions = $this._mainPanel.Children | Where-Object { $_.Name -eq "Instructions" }
+                if ($instructions -and ($instructions -is [LabelComponent])) {
+                    $instructions.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#9ca3af"))
+                }
             }
         }
         catch {

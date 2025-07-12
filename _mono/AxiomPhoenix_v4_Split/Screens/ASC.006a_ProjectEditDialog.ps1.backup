@@ -54,7 +54,7 @@ class ProjectEditDialog : Dialog {
         $keyLabel.Text = "Project Key*:"
         $keyLabel.X = 2
         $keyLabel.Y = $y
-        $keyLabel.SetForegroundColor((Get-ThemeColor "label"))
+        $keyLabel.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($keyLabel)
         
         $keyField = [TextBoxComponent]::new("KeyField")
@@ -77,7 +77,7 @@ class ProjectEditDialog : Dialog {
         $nameLabel.Text = "Project Name*:"
         $nameLabel.X = 2
         $nameLabel.Y = $y
-        $nameLabel.SetForegroundColor((Get-ThemeColor "label"))
+        $nameLabel.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($nameLabel)
         
         $nameField = [TextBoxComponent]::new("NameField")
@@ -99,7 +99,7 @@ class ProjectEditDialog : Dialog {
         $id1Label.Text = "ID1 (Non-unique):"
         $id1Label.X = 2
         $id1Label.Y = $y
-        $id1Label.SetForegroundColor((Get-ThemeColor "label"))
+        $id1Label.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($id1Label)
         
         $id1Field = [TextBoxComponent]::new("ID1Field")
@@ -121,7 +121,7 @@ class ProjectEditDialog : Dialog {
         $id2Label.Text = "ID2 (Main Case):"
         $id2Label.X = 2
         $id2Label.Y = $y
-        $id2Label.SetForegroundColor((Get-ThemeColor "label"))
+        $id2Label.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($id2Label)
         
         $id2Field = [TextBoxComponent]::new("ID2Field")
@@ -143,7 +143,7 @@ class ProjectEditDialog : Dialog {
         $ownerLabel.Text = "Owner:"
         $ownerLabel.X = 2
         $ownerLabel.Y = $y
-        $ownerLabel.SetForegroundColor((Get-ThemeColor "label"))
+        $ownerLabel.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($ownerLabel)
         
         $ownerField = [TextBoxComponent]::new("OwnerField")
@@ -165,7 +165,7 @@ class ProjectEditDialog : Dialog {
         $clientLabel.Text = "Client ID (BN):"
         $clientLabel.X = 2
         $clientLabel.Y = $y
-        $clientLabel.SetForegroundColor((Get-ThemeColor "label"))
+        $clientLabel.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($clientLabel)
         
         $clientField = [TextBoxComponent]::new("ClientField")
@@ -187,7 +187,7 @@ class ProjectEditDialog : Dialog {
         $assignedLabel.Text = "Assigned Date:"
         $assignedLabel.X = 2
         $assignedLabel.Y = $y
-        $assignedLabel.SetForegroundColor((Get-ThemeColor "label"))
+        $assignedLabel.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($assignedLabel)
         
         $assignedField = [TextBoxComponent]::new("AssignedField")
@@ -209,7 +209,7 @@ class ProjectEditDialog : Dialog {
         $dueLabel.Text = "Due Date (BF):"
         $dueLabel.X = 2
         $dueLabel.Y = $y
-        $dueLabel.SetForegroundColor((Get-ThemeColor "label"))
+        $dueLabel.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($dueLabel)
         
         $dueField = [TextBoxComponent]::new("DueField")
@@ -231,7 +231,7 @@ class ProjectEditDialog : Dialog {
         $descLabel.Text = "Description:"
         $descLabel.X = 2
         $descLabel.Y = $y
-        $descLabel.SetForegroundColor((Get-ThemeColor "label"))
+        $descLabel.ForegroundColor = Get-ThemeColor "label"
         $this._scrollPanel.AddChild($descLabel)
         $y += 1
         
@@ -328,12 +328,12 @@ class ProjectEditDialog : Dialog {
         }
         elseif ($field -is [CheckBoxComponent]) {
             $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                $this.SetForegroundColor((Get-ThemeColor "primary.accent"))
+                $this.ForegroundColor = Get-ThemeColor "primary.accent"
                 $this.RequestRedraw()
             } -Force
             
             $field | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-                $this.SetForegroundColor((Get-ThemeColor "text"))
+                $this.ForegroundColor = Get-ThemeColor "text"
                 $this.RequestRedraw()
             } -Force
         }

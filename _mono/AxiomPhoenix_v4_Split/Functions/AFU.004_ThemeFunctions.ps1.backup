@@ -43,24 +43,24 @@ function Apply-ThemeToComponent {
     switch ($ComponentType) {
         "Panel" {
             $Component.BorderColor = Get-ThemeValue "Panel.Border" "#333333"
-            $Component.SetBackgroundColor((Get-ThemeValue "Panel.Background" "#000000"))
+            $Component.BackgroundColor = Get-ThemeValue "Panel.Background" "#000000"
             if ($Component.Title) {
                 # Title color handled internally by Panel
             }
         }
         "Button" {
-            $Component.SetBackgroundColor((Get-ThemeValue "Button.Background" "#1A1A1A"))
+            $Component.BackgroundColor = Get-ThemeValue "Button.Background" "#1A1A1A"
             $Component.ForegroundColor = Get-ThemeValue "Button.Foreground" "#E0E0E0"
             # Focus states handled internally by Button
         }
         "TextBox" {
-            $Component.SetBackgroundColor((Get-ThemeValue "TextBox.Background" "#1A1A1A"))
+            $Component.BackgroundColor = Get-ThemeValue "TextBox.Background" "#1A1A1A"
             $Component.ForegroundColor = Get-ThemeValue "TextBox.Foreground" "#E0E0E0"
             $Component.BorderColor = Get-ThemeValue "TextBox.Border" "#333333"
             $Component.PlaceholderColor = Get-ThemeValue "TextBox.Placeholder" "#666666"
         }
         "List" {
-            $Component.SetBackgroundColor((Get-ThemeValue "List.Background" "#000000"))
+            $Component.BackgroundColor = Get-ThemeValue "List.Background" "#000000"
             $Component.ForegroundColor = Get-ThemeValue "List.Foreground" "#E0E0E0"
             $Component.SelectedBackgroundColor = Get-ThemeValue "List.SelectedBackground" "#0066CC"
             $Component.SelectedForegroundColor = Get-ThemeValue "List.SelectedForeground" "#FFFFFF"
@@ -72,7 +72,7 @@ function Apply-ThemeToComponent {
             # Labels typically inherit from parent, but can be set explicitly
             $bg = Get-ThemeValue "Label.Background"
             if ($bg -and $bg -ne 'transparent') {
-                $Component.SetBackgroundColor($bg)
+                $Component.BackgroundColor = $bg
             }
             $Component.ForegroundColor = Get-ThemeValue "Label.Foreground" "#E0E0E0"
         }

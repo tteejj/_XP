@@ -63,7 +63,7 @@ class LabelComponent : UIElement {
     
     [void] SetForegroundColor([object]$color) {
         if ($this.ForegroundColor -ne $color) {
-            $this.SetForegroundColor($color)
+            $this.ForegroundColor = $color
             $this._InvalidateCache()
             $this.RequestRedraw()
         }
@@ -71,7 +71,7 @@ class LabelComponent : UIElement {
     
     [void] SetBackgroundColor([object]$color) {
         if ($this.BackgroundColor -ne $color) {
-            $this.SetBackgroundColor($color)
+            $this.BackgroundColor = $color
             $this._InvalidateCache()
             $this.RequestRedraw()
         }

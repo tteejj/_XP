@@ -1,0 +1,290 @@
+# Fix Color Property Assignments Script
+# Converts direct property assignments to method calls to fix PowerShell ambiguous match errors
+# 
+# Changes:
+#   $obj.BackgroundColor = value  ->  $obj.SetBackgroundColor(value)
+#   $obj.ForegroundColor = value  ->  $obj.SetForegroundColor(value)
+
+param(
+    [string]$RootPath = "C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split",
+    [switch]$DryRun = $false,
+    [switch]$CreateBackups = $true,
+    [switch]$Verbose = $false
+)
+
+# Script configuration
+$ErrorActionPreference = "Stop"
+$TargetPattern = '(\$\w+(?:\.\w+)*\.)(BackgroundColor|ForegroundColor)(\s*=\s*)(.+)'
+$ReplacementPattern = '$1Set$2($4)'
+
+# Files to process (only .ps1 files)
+$FilePattern = "*.ps1"
+
+# Directories to exclude from processing
+$ExcludeDirectories = @("Archive", "Backup", "Old", ".git")
+
+function Write-LogMessage {
+    param([string]$Message, [string]$Level = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Write-Host "[$timestamp] [$Level] $Message" -ForegroundColor $(
+        switch($Level) {
+            "ERROR" { "Red" }
+            "WARN" { "Yellow" } 
+            "SUCCESS" { "Green" }
+            default { "White" }
+        }
+    )
+}
+
+function Test-SafeFile {
+    param([string]$FilePath)
+    
+    # Basic safety checks
+    if (-not (Test-Path $FilePath)) {
+        return $false
+    }
+    
+    $fileInfo = Get-Item $FilePath
+    
+    # Skip read-only files
+    if ($fileInfo.IsReadOnly) {
+        Write-LogMessage "Skipping read-only file: $FilePath" "WARN"
+        return $false
+    }
+    
+    # Skip if backup already exists and we're creating backups
+    if ($CreateBackups -and (Test-Path "$FilePath.backup")) {
+        Write-LogMessage "Backup already exists, skipping: $FilePath" "WARN"
+        return $false
+    }
+    
+    return $true
+}
+
+function Get-TargetFiles {
+    param([string]$Path)
+    
+    Write-LogMessage "Scanning for PowerShell files in: $Path"
+    
+    $allFiles = Get-ChildItem -Path $Path -Filter $FilePattern -Recurse | Where-Object {
+        $include = $true
+        
+        # Exclude certain directories
+        foreach ($excludeDir in $ExcludeDirectories) {
+            if ($_.FullName -like "*\$excludeDir\*") {
+                $include = $false
+                break
+            }
+        }
+        
+        return $include -and (Test-SafeFile $_.FullName)
+    }
+    
+    Write-LogMessage "Found $($allFiles.Count) eligible PowerShell files"
+    return $allFiles
+}
+
+function Test-FileContainsPattern {
+    param([string]$FilePath)
+    
+    try {
+        $content = Get-Content -Path $FilePath -Raw
+        return $content -match $TargetPattern
+    }
+    catch {
+        Write-LogMessage "Error reading file $FilePath`: $_" "ERROR"
+        return $false
+    }
+}
+
+function Show-MatchPreview {
+    param([string]$FilePath, [string]$Content)
+    
+    $lines = $Content -split "`n"
+    $lineNumber = 0
+    $matchCount = 0
+    
+    foreach ($line in $lines) {
+        $lineNumber++
+        if ($line -match $TargetPattern) {
+            $matchCount++
+            $newLine = $line -replace $TargetPattern, $ReplacementPattern
+            
+            Write-Host "  Line $lineNumber`:" -ForegroundColor Cyan
+            Write-Host "    OLD: $line" -ForegroundColor Red
+            Write-Host "    NEW: $newLine" -ForegroundColor Green
+            
+            if ($matchCount -ge 3 -and -not $Verbose) {
+                $remainingMatches = ($lines | Where-Object { $_ -match $TargetPattern }).Count - $matchCount
+                if ($remainingMatches -gt 0) {
+                    Write-Host "    ... and $remainingMatches more matches" -ForegroundColor Yellow
+                }
+                break
+            }
+        }
+    }
+    
+    return $matchCount
+}
+
+function Backup-File {
+    param([string]$FilePath)
+    
+    if ($CreateBackups) {
+        $backupPath = "$FilePath.backup"
+        try {
+            Copy-Item -Path $FilePath -Destination $backupPath -Force
+            Write-LogMessage "Created backup: $backupPath"
+            return $true
+        }
+        catch {
+            Write-LogMessage "Failed to create backup for $FilePath`: $_" "ERROR"
+            return $false
+        }
+    }
+    return $true
+}
+
+function Process-File {
+    param([string]$FilePath)
+    
+    Write-LogMessage "Processing: $FilePath"
+    
+    try {
+        # Read current content
+        $content = Get-Content -Path $FilePath -Raw
+        
+        # Check if file contains target pattern
+        if (-not ($content -match $TargetPattern)) {
+            if ($Verbose) {
+                Write-LogMessage "  No matches found, skipping"
+            }
+            return @{ Success = $true; MatchCount = 0; Changed = $false }
+        }
+        
+        # Show preview of changes
+        Write-LogMessage "  Found matches in file:"
+        $matchCount = Show-MatchPreview -FilePath $FilePath -Content $content
+        
+        if ($DryRun) {
+            Write-LogMessage "  [DRY RUN] Would process $matchCount matches" "WARN"
+            return @{ Success = $true; MatchCount = $matchCount; Changed = $false }
+        }
+        
+        # Create backup if enabled
+        if (-not (Backup-File -FilePath $FilePath)) {
+            return @{ Success = $false; MatchCount = 0; Changed = $false; Error = "Backup failed" }
+        }
+        
+        # Apply the transformation
+        $newContent = $content -replace $TargetPattern, $ReplacementPattern
+        
+        # Verify the replacement worked
+        $newMatchCount = ($newContent | Select-String -Pattern $TargetPattern -AllMatches).Matches.Count
+        if ($newMatchCount -gt 0) {
+            Write-LogMessage "  WARNING: $newMatchCount patterns still remain after replacement" "WARN"
+        }
+        
+        # Write the modified content
+        Set-Content -Path $FilePath -Value $newContent -NoNewline
+        
+        Write-LogMessage "  SUCCESS: Processed $matchCount matches" "SUCCESS"
+        return @{ Success = $true; MatchCount = $matchCount; Changed = $true }
+        
+    }
+    catch {
+        Write-LogMessage "  ERROR processing file: $_" "ERROR"
+        return @{ Success = $false; MatchCount = 0; Changed = $false; Error = $_.Exception.Message }
+    }
+}
+
+# Main execution
+Write-LogMessage "=== COLOR PROPERTY ASSIGNMENT FIX SCRIPT ===" "SUCCESS"
+Write-LogMessage "Root Path: $RootPath"
+Write-LogMessage "Dry Run: $DryRun"
+Write-LogMessage "Create Backups: $CreateBackups"
+Write-LogMessage "Pattern: $TargetPattern"
+Write-LogMessage "Replacement: $ReplacementPattern"
+Write-LogMessage ""
+
+# Validate root path
+if (-not (Test-Path $RootPath)) {
+    Write-LogMessage "Root path does not exist: $RootPath" "ERROR"
+    exit 1
+}
+
+# Get target files
+$targetFiles = Get-TargetFiles -Path $RootPath
+
+if ($targetFiles.Count -eq 0) {
+    Write-LogMessage "No eligible files found to process" "WARN"
+    exit 0
+}
+
+# Show files with matches
+Write-LogMessage "Checking files for target patterns..."
+$filesToProcess = @()
+
+foreach ($file in $targetFiles) {
+    if (Test-FileContainsPattern -FilePath $file.FullName) {
+        $filesToProcess += $file
+        Write-LogMessage "  MATCH: $($file.FullName -replace [regex]::Escape($RootPath), '.')"
+    }
+}
+
+if ($filesToProcess.Count -eq 0) {
+    Write-LogMessage "No files contain the target patterns" "SUCCESS"
+    exit 0
+}
+
+Write-LogMessage ""
+Write-LogMessage "Found $($filesToProcess.Count) files with color property assignments"
+
+if ($DryRun) {
+    Write-LogMessage "=== DRY RUN MODE - NO CHANGES WILL BE MADE ===" "WARN"
+} else {
+    Write-LogMessage "=== PROCESSING FILES ===" "SUCCESS"
+}
+
+# Process each file
+$totalMatches = 0
+$processedFiles = 0
+$errorCount = 0
+
+foreach ($file in $filesToProcess) {
+    $result = Process-File -FilePath $file.FullName
+    
+    if ($result.Success) {
+        $totalMatches += $result.MatchCount
+        if ($result.Changed) {
+            $processedFiles++
+        }
+    } else {
+        $errorCount++
+        Write-LogMessage "Failed to process $($file.FullName): $($result.Error)" "ERROR"
+    }
+    
+    Write-LogMessage ""
+}
+
+# Summary
+Write-LogMessage "=== SUMMARY ===" "SUCCESS"
+Write-LogMessage "Files scanned: $($targetFiles.Count)"
+Write-LogMessage "Files with matches: $($filesToProcess.Count)"
+Write-LogMessage "Files processed: $processedFiles"
+Write-LogMessage "Total matches fixed: $totalMatches"
+Write-LogMessage "Errors: $errorCount"
+
+if ($DryRun) {
+    Write-LogMessage ""
+    Write-LogMessage "This was a DRY RUN. To apply changes, run:" "WARN"
+    Write-LogMessage "  .\fix-color-properties.ps1 -DryRun:`$false" "WARN"
+}
+
+if ($CreateBackups -and $processedFiles -gt 0) {
+    Write-LogMessage ""
+    Write-LogMessage "Backup files created with .backup extension" "SUCCESS"
+    Write-LogMessage "To restore all files: Get-ChildItem -Recurse -Filter '*.backup' | ForEach-Object { Move-Item `$_.FullName (`$_.FullName -replace '\.backup$','') -Force }"
+}
+
+Write-LogMessage "Script completed" "SUCCESS"

@@ -37,23 +37,23 @@ class TuiCell {
     # Constructor with 3 parameters (char, fg, bg)
     TuiCell([char]$char, [string]$fg, [string]$bg) {
         $this.Char = $char
-        $this.ForegroundColor = $fg
-        $this.BackgroundColor = $bg
+        $this.SetForegroundColor($fg)
+        $this.SetBackgroundColor($bg)
     }
     
     # Constructor with 4 parameters (char, fg, bg, bold)
     TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold) {
         $this.Char = $char
-        $this.ForegroundColor = $fg
-        $this.BackgroundColor = $bg
+        $this.SetForegroundColor($fg)
+        $this.SetBackgroundColor($bg)
         $this.Bold = $bold
     }
     
     # Full constructor with all parameters
     TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold, [bool]$italic, [bool]$underline, [bool]$strikethrough) {
         $this.Char = $char
-        $this.ForegroundColor = $fg
-        $this.BackgroundColor = $bg
+        $this.SetForegroundColor($fg)
+        $this.SetBackgroundColor($bg)
         $this.Bold = $bold
         $this.Italic = $italic
         $this.Underline = $underline
@@ -63,8 +63,8 @@ class TuiCell {
     # Copy Constructor: Ensure it copies all new properties
     TuiCell([object]$other) {
         $this.Char = $other.Char
-        $this.ForegroundColor = $other.ForegroundColor
-        $this.BackgroundColor = $other.BackgroundColor
+        $this.SetForegroundColor($other.ForegroundColor)
+        $this.SetBackgroundColor($other.BackgroundColor)
         $this.Bold = $other.Bold
         $this.Underline = $other.Underline
         $this.Italic = $other.Italic
@@ -75,8 +75,8 @@ class TuiCell {
 
     [TuiCell] WithStyle([string]$fg, [string]$bg) { # Parameter types changed
         $copy = [TuiCell]::new($this)
-        $copy.ForegroundColor = $fg
-        $copy.BackgroundColor = $bg
+        $copy.SetForegroundColor($fg)
+        $copy.SetBackgroundColor($bg)
         return $copy
     }
 

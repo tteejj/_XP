@@ -37,7 +37,7 @@ function New-TuiLabel {
     $label.X = $X
     $label.Y = $Y
     if ($ForegroundColor) {
-        $label.ForegroundColor = $ForegroundColor
+        $label.SetForegroundColor($ForegroundColor)
     }
     return $label
 }
