@@ -64,9 +64,9 @@ class UIElement {
     [System.Collections.Generic.List[UIElement]] $Children 
     
     # Theme-aware color properties
-    [string] $ForegroundColor = "$null"
-    [string] $BackgroundColor = "$null"
-    [string] $BorderColor = "$null"
+    [string] $ForegroundColor = $null
+    [string] $BackgroundColor = $null
+    [string] $BorderColor = $null
     
     hidden [object] $_private_buffer = $null
     hidden [bool] $_needs_redraw = $true

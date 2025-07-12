@@ -81,7 +81,7 @@ class TaskListScreen : Screen {
         $this._mainPanel.Title = " ╔═ Task Management System ═╗ "
         $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#007acc"
-        $this._mainPanel.SetBackgroundColor(Get-ThemeColor "Panel.Background" "#1e1e1e")
+        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -112,12 +112,12 @@ class TaskListScreen : Screen {
         
         # Add visual focus feedback
         $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Focused.Background" "#0e7490")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Focused.Background" "#0e7490"))
             $this.RequestRedraw()
         } -Force
         
         $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#007acc")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#007acc"))
             $this.RequestRedraw()
         } -Force
         
@@ -169,7 +169,7 @@ class TaskListScreen : Screen {
         $this._contextPanel.Height = $contextHeight
         $this._contextPanel.BorderStyle = "Single"
         $this._contextPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
-        $this._contextPanel.SetBackgroundColor(Get-ThemeColor "Panel.Background" "#1e1e1e")
+        $this._contextPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this._mainPanel.AddChild($this._contextPanel)
 
         # Filter box with icon
@@ -237,7 +237,7 @@ class TaskListScreen : Screen {
         $this._detailPanel.Height = $this.Height - $contextHeight - 6
         $this._detailPanel.BorderStyle = "Single"
         $this._detailPanel.BorderColor = Get-ThemeColor "Panel.Border" "#333333"
-        $this._detailPanel.SetBackgroundColor(Get-ThemeColor "Panel.Background" "#0A0A0A")
+        $this._detailPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0A0A0A"))
         $this._mainPanel.AddChild($this._detailPanel)
 
         # === BOTTOM STATUS BAR ===
@@ -257,7 +257,7 @@ class TaskListScreen : Screen {
         $this._statusBar.Width = $this.Width - 2
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $false
-        $this._statusBar.SetBackgroundColor(Get-ThemeColor "Panel.Background" "#1A1A1A")
+        $this._statusBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._mainPanel.AddChild($this._statusBar)
 
         # Separator line
@@ -858,7 +858,7 @@ class SimpleTaskDialog : Screen {
         $this._dialogPanel.Title = if ($this._isNewTask) { " New Task " } else { " Edit Task " }
         $this._dialogPanel.BorderStyle = "Double"
         $this._dialogPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
-        $this._dialogPanel.SetBackgroundColor(Get-ThemeColor "Panel.Background" "#1A1A1A")
+        $this._dialogPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this.AddChild($this._dialogPanel)
         
         # Content panel
@@ -975,18 +975,18 @@ class SimpleTaskDialog : Screen {
         $this._saveButton.Height = 1
         $this._saveButton.IsFocusable = $true
         $this._saveButton.TabIndex = 2
-        $this._saveButton.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#0D47A1")
+        $this._saveButton.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#0D47A1"))
         $this._saveButton.ForegroundColor = Get-ThemeColor "Button.Normal.Foreground" "#FFFFFF"
         $this._saveButton.OnClick = { $this._SaveTask() }
         
         # Add visual feedback
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Focused.Background" "#1976D2")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Focused.Background" "#1976D2"))
             $this.RequestRedraw()
         } -Force
         
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#0D47A1")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#0D47A1"))
             $this.RequestRedraw()
         } -Force
         
@@ -1000,18 +1000,18 @@ class SimpleTaskDialog : Screen {
         $this._cancelButton.Height = 1
         $this._cancelButton.IsFocusable = $true
         $this._cancelButton.TabIndex = 3
-        $this._cancelButton.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#B71C1C")
+        $this._cancelButton.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#B71C1C"))
         $this._cancelButton.ForegroundColor = Get-ThemeColor "Button.Normal.Foreground" "#FFFFFF"
         $this._cancelButton.OnClick = { $this._Cancel() }
         
         # Add visual feedback
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Focused.Background" "#D32F2F")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Focused.Background" "#D32F2F"))
             $this.RequestRedraw()
         } -Force
         
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#B71C1C")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#B71C1C"))
             $this.RequestRedraw()
         } -Force
         
@@ -1166,7 +1166,7 @@ class ConfirmDialog : Screen {
         $this._mainPanel.Title = " $($this.Title) "
         $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#FFA500"
-        $this._mainPanel.SetBackgroundColor(Get-ThemeColor "Panel.Background" "#0A0A0A")
+        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0A0A0A"))
         $this.AddChild($this._mainPanel)
         
         # Message
@@ -1194,18 +1194,18 @@ class ConfirmDialog : Screen {
         $this._yesButton.Height = 1
         $this._yesButton.IsFocusable = $true
         $this._yesButton.TabIndex = 0
-        $this._yesButton.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#0D47A1")
+        $this._yesButton.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#0D47A1"))
         $this._yesButton.ForegroundColor = "#FFFFFF"
         $this._yesButton.OnClick = { $this._Confirm() }
         
         # Add visual feedback
         $this._yesButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Focused.Background" "#1976D2")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Focused.Background" "#1976D2"))
             $this.RequestRedraw()
         } -Force
         
         $this._yesButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#0D47A1")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#0D47A1"))
             $this.RequestRedraw()
         } -Force
         
@@ -1219,18 +1219,18 @@ class ConfirmDialog : Screen {
         $this._noButton.Height = 1
         $this._noButton.IsFocusable = $true
         $this._noButton.TabIndex = 1
-        $this._noButton.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#B71C1C")
+        $this._noButton.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#B71C1C"))
         $this._noButton.ForegroundColor = "#FFFFFF"
         $this._noButton.OnClick = { $this._Cancel() }
         
         # Add visual feedback
         $this._noButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Focused.Background" "#D32F2F")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Focused.Background" "#D32F2F"))
             $this.RequestRedraw()
         } -Force
         
         $this._noButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.SetBackgroundColor(Get-ThemeColor "Button.Normal.Background" "#B71C1C")
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#B71C1C"))
             $this.RequestRedraw()
         } -Force
         

@@ -24,8 +24,6 @@ using namespace System.Management.Automation
 # Purpose: Static text display
 class LabelComponent : UIElement {
     [string]$Text = ""
-    [object]$ForegroundColor
-    [object]$BackgroundColor = $null
     
     # Output caching for performance
     hidden [object]$_renderCache = $null
@@ -40,8 +38,8 @@ class LabelComponent : UIElement {
     
     # Generate cache key based on all rendering parameters
     hidden [string] _GenerateCacheKey() {
-        $fg = if ($this.ForegroundColor) { $this.ForegroundColor.ToString() } else { "default" }
-        $bg = if ($this.BackgroundColor) { $this.BackgroundColor.ToString() } else { "default" }
+        $fg = if ($this.ForegroundColor -and $this.ForegroundColor -ne '$null') { $this.ForegroundColor } else { "default" }
+        $bg = if ($this.BackgroundColor -and $this.BackgroundColor -ne '$null') { $this.BackgroundColor } else { "default" }
         return "$($this.Text)_$($this.Width)_$($this.Height)_$($fg)_$($bg)"
     }
     
@@ -63,7 +61,7 @@ class LabelComponent : UIElement {
     
     [void] SetForegroundColor([object]$color) {
         if ($this.ForegroundColor -ne $color) {
-            $this.SetForegroundColor($color)
+            $this.ForegroundColor = $color
             $this._InvalidateCache()
             $this.RequestRedraw()
         }
@@ -71,7 +69,7 @@ class LabelComponent : UIElement {
     
     [void] SetBackgroundColor([object]$color) {
         if ($this.BackgroundColor -ne $color) {
-            $this.SetBackgroundColor($color)
+            $this.BackgroundColor = $color
             $this._InvalidateCache()
             $this.RequestRedraw()
         }

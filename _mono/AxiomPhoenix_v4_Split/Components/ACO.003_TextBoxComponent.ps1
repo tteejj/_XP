@@ -27,7 +27,7 @@ class TextBoxComponent : UIElement {
     [int]$CursorPosition = 0
     [scriptblock]$OnChange
     hidden [int]$_scrollOffset = 0
-    [string]$BackgroundColor = "#000000"
+    hidden [string]$_backgroundColorValue = "#000000"
     [string]$ForegroundColor = "#FFFFFF"
     [string]$BorderColor = "#808080"
     [string]$PlaceholderColor = "#808080"

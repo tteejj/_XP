@@ -28,7 +28,7 @@ class MultilineTextBoxComponent : UIElement {
     [int]$ScrollOffsetX = 0
     [bool]$ReadOnly = $false
     [scriptblock]$OnChange
-    [string]$BackgroundColor = "#000000"
+    hidden [string]$_backgroundColorValue = "#000000"
     [string]$ForegroundColor = "#FFFFFF"
     [string]$BorderColor = "#808080"
     
