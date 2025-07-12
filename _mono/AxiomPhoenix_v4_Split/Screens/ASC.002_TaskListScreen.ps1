@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Task List Screen  
-# FIXED: Removed FocusManager dependency, uses ncurses-style window focus model
+# UPDATED: Uses Hybrid Window Model for proper component focus management
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -10,13 +10,13 @@ using namespace System.Collections.Generic
 #
 # PURPOSE:
 #   Task management screen with list view and details panel
-#   Uses direct input handling without external focus manager
+#   Uses hybrid window model with automatic focus management
 #
 # FOCUS MODEL:
-#   - Screen manages which component is "active" internally
-#   - Tab cycles between: task list, filter box, buttons
-#   - Direct key handling for all operations
-#   - NO EXTERNAL FOCUS MANAGER SERVICE
+#   - Screen base class manages focus automatically
+#   - Components are focusable and handle their own input
+#   - Tab navigation is automatic based on TabIndex
+#   - Components provide visual focus feedback
 #
 # DEPENDENCIES:
 #   Services:
@@ -54,9 +54,6 @@ class TaskListScreen : Screen {
     hidden [string] $_sortBy = "Priority"
     hidden [bool] $_sortDescending = $true
     hidden [string] $_taskChangeSubscriptionId = $null
-    
-    # Focus management (internal)
-    hidden [string] $_activeComponent = "list"  # "list", "filter", "buttons"
     #endregion
 
     TaskListScreen([object]$serviceContainer) : base("TaskListScreen", $serviceContainer) {
@@ -110,7 +107,20 @@ class TaskListScreen : Screen {
         $this._projectButton.Y = 1
         $this._projectButton.Width = $listWidth - 4
         $this._projectButton.Height = 1
-        $this._projectButton.IsFocusable = $false  # We handle input directly
+        $this._projectButton.IsFocusable = $true
+        $this._projectButton.TabIndex = 0
+        
+        # Add visual focus feedback
+        $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._listPanel.AddChild($this._projectButton)
 
         # Task list
@@ -120,10 +130,35 @@ class TaskListScreen : Screen {
         $this._taskListBox.Width = $listWidth - 2
         $this._taskListBox.Height = $this._listPanel.Height - 5
         $this._taskListBox.HasBorder = $false
-        $this._taskListBox.IsFocusable = $false  # We handle input directly
+        $this._taskListBox.IsFocusable = $true
+        $this._taskListBox.TabIndex = 1
         $this._taskListBox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg" "#1E3A8A"
         $this._taskListBox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg" "#FFFFFF"
         $this._taskListBox.ItemForegroundColor = Get-ThemeColor "list.item.fg" "#E0E0E0"
+        
+        # Add visual focus feedback for list panel
+        $listPanel = $this._listPanel
+        $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $listPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $listPanel.BorderColor = Get-ThemeColor "border" "#333333"
+            $this.RequestRedraw()
+        } -Force
+        
+        # Add selection change handler to update details
+        $thisScreen = $this
+        $this._taskListBox | Add-Member -MemberType ScriptMethod -Name SelectedIndexChanged -Value {
+            param($sender, $newIndex)
+            if ($newIndex -ge 0 -and $newIndex -lt $thisScreen._filteredTasks.Count) {
+                $thisScreen._selectedIndex = $newIndex
+                $thisScreen._selectedTask = $thisScreen._filteredTasks[$newIndex]
+                $thisScreen._UpdateDetailPanel()
+            }
+        } -Force
+        
         $this._listPanel.AddChild($this._taskListBox)
 
         # === TOP-RIGHT PANEL: Context & Filters ===
@@ -151,7 +186,31 @@ class TaskListScreen : Screen {
         $this._filterBox.Y = 1
         $this._filterBox.Width = [Math]::Floor($detailWidth * 0.5)
         $this._filterBox.Height = 3
-        $this._filterBox.IsFocusable = $false  # We handle input directly
+        $this._filterBox.IsFocusable = $true
+        $this._filterBox.TabIndex = 2
+        
+        # Add visual focus feedback for context panel
+        $contextPanel = $this._contextPanel
+        $thisScreen = $this
+        $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $contextPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $contextPanel.BorderColor = Get-ThemeColor "border" "#333333"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
+        # Add text change handler to trigger filtering
+        $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnTextChanged -Value {
+            param($sender, $newText)
+            $thisScreen._filterText = $newText
+            $thisScreen._RefreshTasks()
+        } -Force
+        
         $this._contextPanel.AddChild($this._filterBox)
 
         # Sort indicator
@@ -253,9 +312,8 @@ class TaskListScreen : Screen {
             Write-Log -Level Debug -Message "TaskListScreen: Subscribed to Tasks.Changed events"
         }
         
-        # Set initial active component
-        $this._activeComponent = "list"
-        $this._UpdateVisualFocus()
+        # Call base to set initial focus
+        ([Screen]$this).OnEnter()
         
         $this.RequestRedraw()
     }
@@ -269,34 +327,6 @@ class TaskListScreen : Screen {
             $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
             $this._taskChangeSubscriptionId = $null
         }
-    }
-
-    # === VISUAL FOCUS INDICATOR ===
-    hidden [void] _UpdateVisualFocus() {
-        # Update visual indicators based on active component
-        switch ($this._activeComponent) {
-            "list" {
-                $this._listPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
-                $this._contextPanel.BorderColor = Get-ThemeColor "border" "#333333"
-            }
-            "filter" {
-                $this._listPanel.BorderColor = Get-ThemeColor "border" "#333333"
-                $this._contextPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
-                # Show cursor in filter box
-                $this._filterBox.ShowCursor = $true
-            }
-            default {
-                $this._listPanel.BorderColor = Get-ThemeColor "border" "#333333"
-                $this._contextPanel.BorderColor = Get-ThemeColor "border" "#333333"
-            }
-        }
-        
-        # Hide cursor when not in filter
-        if ($this._activeComponent -ne "filter") {
-            $this._filterBox.ShowCursor = $false
-        }
-        
-        $this.RequestRedraw()
     }
 
     # === DATA MANAGEMENT ===
@@ -642,205 +672,130 @@ class TaskListScreen : Screen {
     
     #endregion
 
-    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    # === INPUT HANDLING (HYBRID WINDOW MODEL) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
             Write-Log -Level Warning -Message "TaskListScreen.HandleInput: Null keyInfo"
             return $false
         }
         
-        Write-Log -Level Debug -Message "TaskListScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Active=$($this._activeComponent)"
+        Write-Log -Level Debug -Message "TaskListScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
         
-        # === HANDLE BASED ON ACTIVE COMPONENT ===
-        if ($this._activeComponent -eq "filter") {
-            # Filter box is active - handle text input
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::Escape) {
-                    # Exit filter mode
-                    $this._activeComponent = "list"
-                    $this._UpdateVisualFocus()
-                    return $true
-                }
-                ([ConsoleKey]::Tab) {
-                    # Move to next component
-                    $this._activeComponent = "list"
-                    $this._UpdateVisualFocus()
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    # Apply filter and return to list
-                    $this._activeComponent = "list"
-                    $this._UpdateVisualFocus()
-                    $this._RefreshTasks()
-                    return $true
-                }
-                ([ConsoleKey]::Backspace) {
-                    if ($this._filterText.Length -gt 0) {
-                        $this._filterText = $this._filterText.Substring(0, $this._filterText.Length - 1)
-                        $this._filterBox.Text = $this._filterText
-                        $this._RefreshTasks()
-                    }
-                    return $true
-                }
-                default {
-                    # Add character to filter
-                    if ($keyInfo.KeyChar -and [char]::IsLetterOrDigit($keyInfo.KeyChar) -or $keyInfo.KeyChar -eq ' ') {
-                        $this._filterText += $keyInfo.KeyChar
-                        $this._filterBox.Text = $this._filterText
-                        $this._RefreshTasks()
-                        return $true
-                    }
-                }
-            }
-            return $false
+        # Base class handles Tab navigation and routes input to focused components
+        if (([Screen]$this).HandleInput($keyInfo)) {
+            return $true
         }
         
-        # === MAIN LIST MODE - HANDLE SHORTCUTS ===
-        $handled = $false
-        
-        # Single key commands
+        # Handle screen-level shortcuts only
         switch ($keyInfo.KeyChar) {
             'n' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     $this._ShowNewTaskDialog()
-                    $handled = $true
+                    return $true
                 }
             }
             'N' {
                 $this._ShowNewTaskDialog()
-                $handled = $true
+                return $true
             }
             'e' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
                     $this._ShowEditTaskDialog()
-                    $handled = $true
+                    return $true
                 }
             }
             'E' {
                 if ($this._selectedTask) {
                     $this._ShowEditTaskDialog()
-                    $handled = $true
+                    return $true
                 }
             }
             'd' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
                     $this._DeleteTask()
-                    $handled = $true
+                    return $true
                 }
             }
             'D' {
                 if ($this._selectedTask) {
                     $this._DeleteTask()
-                    $handled = $true
+                    return $true
                 }
             }
             'c' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -and $this._selectedTask) {
                     $this._CompleteTask()
-                    $handled = $true
+                    return $true
                 }
             }
             'C' {
                 if ($this._selectedTask) {
                     $this._CompleteTask()
-                    $handled = $true
+                    return $true
                 }
             }
             's' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     $this._CycleSortMode()
-                    $handled = $true
+                    return $true
                 }
             }
             'S' {
                 $this._CycleSortMode()
-                $handled = $true
+                return $true
             }
             '/' {
-                # Switch to filter mode
-                $this._activeComponent = "filter"
-                $this._UpdateVisualFocus()
-                $handled = $true
+                # Switch focus to filter box
+                $this.SetChildFocus($this._filterBox)
+                return $true
             }
         }
         
-        # Special keys
-        if (-not $handled) {
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::UpArrow) {
-                    if ($this._selectedIndex -gt 0 -and $this._filteredTasks.Count -gt 0) {
-                        $this._selectedIndex--
-                        $this._selectedTask = $this._filteredTasks[$this._selectedIndex]
-                        $this._taskListBox.SelectedIndex = $this._selectedIndex
-                        $this._UpdateDetailPanel()
-                        $this.RequestRedraw()
-                    }
-                    $handled = $true
+        # Handle special keys
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Enter) {
+                if ($this._selectedTask) {
+                    $this._ShowEditTaskDialog()
+                    return $true
                 }
-                ([ConsoleKey]::DownArrow) {
-                    if ($this._selectedIndex -lt $this._filteredTasks.Count - 1) {
-                        $this._selectedIndex++
-                        $this._selectedTask = $this._filteredTasks[$this._selectedIndex]
-                        $this._taskListBox.SelectedIndex = $this._selectedIndex
-                        $this._UpdateDetailPanel()
-                        $this.RequestRedraw()
-                    }
-                    $handled = $true
-                }
-                ([ConsoleKey]::Enter) {
-                    if ($this._selectedTask) {
-                        $this._ShowEditTaskDialog()
-                        $handled = $true
-                    }
-                }
-                ([ConsoleKey]::Tab) {
-                    # Cycle through components
-                    switch ($this._activeComponent) {
-                        "list" { $this._activeComponent = "filter" }
-                        "filter" { $this._activeComponent = "list" }
-                        default { $this._activeComponent = "list" }
-                    }
-                    $this._UpdateVisualFocus()
-                    $handled = $true
-                }
-                ([ConsoleKey]::Spacebar) {
-                    if ($this._selectedTask) {
-                        # Toggle task progress
-                        $dataManager = $this.ServiceContainer?.GetService("DataManager")
-                        if ($dataManager) {
-                            if ($this._selectedTask.Progress -eq 100) {
-                                $this._selectedTask.SetProgress(0)
-                            } else {
-                                $this._selectedTask.SetProgress(100)
-                            }
-                            $dataManager.UpdateTask($this._selectedTask)
-                            $this._RefreshTasks()
+            }
+            ([ConsoleKey]::Spacebar) {
+                if ($this._selectedTask) {
+                    # Toggle task completion
+                    $dataManager = $this.ServiceContainer?.GetService("DataManager")
+                    if ($dataManager) {
+                        if ($this._selectedTask.Progress -eq 100) {
+                            $this._selectedTask.SetProgress(0)
+                        } else {
+                            $this._selectedTask.SetProgress(100)
                         }
-                        $handled = $true
+                        $dataManager.UpdateTask($this._selectedTask)
+                        $this._RefreshTasks()
+                    }
+                    return $true
+                }
+            }
+            ([ConsoleKey]::F5) {
+                $this._RefreshTasks()
+                return $true
+            }
+            ([ConsoleKey]::Escape) {
+                # Navigate back
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                } else {
+                    $actionService = $this.ServiceContainer?.GetService("ActionService")
+                    if ($actionService) {
+                        $actionService.ExecuteAction("navigation.dashboard", @{})
                     }
                 }
-                ([ConsoleKey]::F5) {
-                    $this._RefreshTasks()
-                    $handled = $true
-                }
-                ([ConsoleKey]::Escape) {
-                    # Go back
-                    $navService = $this.ServiceContainer?.GetService("NavigationService")
-                    if ($navService -and $navService.CanGoBack()) {
-                        $navService.GoBack()
-                    } else {
-                        $actionService = $this.ServiceContainer?.GetService("ActionService")
-                        if ($actionService) {
-                            $actionService.ExecuteAction("navigation.dashboard", @{})
-                        }
-                    }
-                    $handled = $true
-                }
+                return $true
             }
         }
         
-        Write-Log -Level Debug -Message "TaskListScreen.HandleInput: Returning handled=$handled"
-        return $handled
+        Write-Log -Level Debug -Message "TaskListScreen.HandleInput: No handler found, returning false"
+        return $false
     }
 }
 
@@ -852,10 +807,11 @@ class SimpleTaskDialog : Screen {
     hidden [Panel] $_contentPanel
     hidden [TextBoxComponent] $_titleBox
     hidden [TextBoxComponent] $_descriptionBox
+    hidden [ButtonComponent] $_saveButton
+    hidden [ButtonComponent] $_cancelButton
     hidden [PmcTask] $_task
     hidden [TaskPriority] $_selectedPriority
     hidden [string] $_selectedProject
-    hidden [string] $_activeField = "title"  # "title", "description", "buttons"
     
     [scriptblock]$OnSave = {}
     [scriptblock]$OnCancel = {}
@@ -932,7 +888,22 @@ class SimpleTaskDialog : Screen {
         $this._titleBox.Height = 1
         $this._titleBox.Text = if ($this._task.Title) { $this._task.Title } else { "" }
         $this._titleBox.Placeholder = "Enter task title..."
-        $this._titleBox.IsFocusable = $false  # We handle input directly
+        $this._titleBox.IsFocusable = $true
+        $this._titleBox.TabIndex = 0
+        
+        # Add visual feedback
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "border" "#333333"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._contentPanel.AddChild($this._titleBox)
         
         $y += 2
@@ -953,7 +924,22 @@ class SimpleTaskDialog : Screen {
         $this._descriptionBox.Height = 1
         $this._descriptionBox.Text = if ($this._task.Description) { $this._task.Description } else { "" }
         $this._descriptionBox.Placeholder = "Enter description..."
-        $this._descriptionBox.IsFocusable = $false  # We handle input directly
+        $this._descriptionBox.IsFocusable = $true
+        $this._descriptionBox.TabIndex = 1
+        
+        # Add visual feedback
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "border" "#333333"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._contentPanel.AddChild($this._descriptionBox)
         
         $y += 2
@@ -981,45 +967,61 @@ class SimpleTaskDialog : Screen {
         $y += 3
         
         # Buttons
-        $saveLabel = [LabelComponent]::new("SaveBtn")
-        $saveLabel.X = [Math]::Floor($this._contentPanel.Width / 2) - 15
-        $saveLabel.Y = $y
-        $saveLabel.Text = "  [S]ave  "
-        $saveLabel.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
-        $saveLabel.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
-        $this._contentPanel.AddChild($saveLabel)
+        $this._saveButton = [ButtonComponent]::new("SaveBtn")
+        $this._saveButton.Text = "  [S]ave  "
+        $this._saveButton.X = [Math]::Floor($this._contentPanel.Width / 2) - 15
+        $this._saveButton.Y = $y
+        $this._saveButton.Width = 10
+        $this._saveButton.Height = 1
+        $this._saveButton.IsFocusable = $true
+        $this._saveButton.TabIndex = 2
+        $this._saveButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+        $this._saveButton.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
+        $this._saveButton.OnClick = { $this._SaveTask() }
         
-        $cancelLabel = [LabelComponent]::new("CancelBtn")
-        $cancelLabel.X = [Math]::Floor($this._contentPanel.Width / 2) + 2
-        $cancelLabel.Y = $y
-        $cancelLabel.Text = " [C]ancel "
-        $cancelLabel.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
-        $cancelLabel.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
-        $this._contentPanel.AddChild($cancelLabel)
+        # Add visual feedback
+        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._contentPanel.AddChild($this._saveButton)
+        
+        $this._cancelButton = [ButtonComponent]::new("CancelBtn")
+        $this._cancelButton.Text = " [C]ancel "
+        $this._cancelButton.X = [Math]::Floor($this._contentPanel.Width / 2) + 2
+        $this._cancelButton.Y = $y
+        $this._cancelButton.Width = 10
+        $this._cancelButton.Height = 1
+        $this._cancelButton.IsFocusable = $true
+        $this._cancelButton.TabIndex = 3
+        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+        $this._cancelButton.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
+        $this._cancelButton.OnClick = { $this._Cancel() }
+        
+        # Add visual feedback
+        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._contentPanel.AddChild($this._cancelButton)
     }
     
     [void] OnEnter() {
-        $this._activeField = "title"
-        $this._UpdateVisualFocus()
+        # Call base to set initial focus
+        ([Screen]$this).OnEnter()
         $this.RequestRedraw()
-    }
-    
-    hidden [void] _UpdateVisualFocus() {
-        # Show cursor in active field
-        $this._titleBox.ShowCursor = ($this._activeField -eq "title")
-        $this._descriptionBox.ShowCursor = ($this._activeField -eq "description")
-        
-        # Update button highlighting
-        $saveBtn = $this._contentPanel.Children | Where-Object { $_.Name -eq "SaveBtn" }
-        $cancelBtn = $this._contentPanel.Children | Where-Object { $_.Name -eq "CancelBtn" }
-        
-        if ($this._activeField -eq "buttons") {
-            $saveBtn.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
-            $cancelBtn.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
-        } else {
-            $saveBtn.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
-            $cancelBtn.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
-        }
     }
     
     hidden [void] _SaveTask() {
@@ -1080,57 +1082,12 @@ class SimpleTaskDialog : Screen {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
-        # Handle text input in active field
-        if ($this._activeField -eq "title" -or $this._activeField -eq "description") {
-            $textBox = if ($this._activeField -eq "title") { $this._titleBox } else { $this._descriptionBox }
-            
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::Backspace) {
-                    if ($textBox.Text.Length -gt 0) {
-                        $textBox.Text = $textBox.Text.Substring(0, $textBox.Text.Length - 1)
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Tab) {
-                    # Move to next field
-                    switch ($this._activeField) {
-                        "title" { $this._activeField = "description" }
-                        "description" { $this._activeField = "buttons" }
-                        "buttons" { $this._activeField = "title" }
-                    }
-                    $this._UpdateVisualFocus()
-                    $this.RequestRedraw()
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    if ($this._activeField -eq "title") {
-                        $this._activeField = "description"
-                        $this._UpdateVisualFocus()
-                        $this.RequestRedraw()
-                    } else {
-                        $this._SaveTask()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Escape) {
-                    $this._Cancel()
-                    return $true
-                }
-                default {
-                    # Add character
-                    if ($keyInfo.KeyChar -and ([char]::IsLetterOrDigit($keyInfo.KeyChar) -or 
-                        [char]::IsPunctuation($keyInfo.KeyChar) -or 
-                        [char]::IsWhiteSpace($keyInfo.KeyChar))) {
-                        $textBox.Text += $keyInfo.KeyChar
-                        $this.RequestRedraw()
-                        return $true
-                    }
-                }
-            }
+        # Base class handles Tab navigation and component input
+        if (([Screen]$this).HandleInput($keyInfo)) {
+            return $true
         }
         
-        # Global shortcuts
+        # Handle global shortcuts only
         switch ($keyInfo.KeyChar) {
             's' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
@@ -1182,7 +1139,8 @@ class SimpleTaskDialog : Screen {
 class ConfirmDialog : Screen {
     hidden [Panel] $_mainPanel
     hidden [LabelComponent] $_messageLabel
-    hidden [bool] $_selectedYes = $false
+    hidden [ButtonComponent] $_yesButton
+    hidden [ButtonComponent] $_noButton
     
     [string]$Title = "Confirm"
     [string]$Message = "Are you sure?"
@@ -1224,47 +1182,65 @@ class ConfirmDialog : Screen {
             $this._mainPanel.AddChild($msgLabel)
             $y++
         }
+        
+        # Buttons
+        $buttonY = $dialogHeight - 2
+        
+        $this._yesButton = [ButtonComponent]::new("YesButton")
+        $this._yesButton.Text = " [Y]es "
+        $this._yesButton.X = [Math]::Floor($dialogWidth / 2) - 10
+        $this._yesButton.Y = $buttonY
+        $this._yesButton.Width = 7
+        $this._yesButton.Height = 1
+        $this._yesButton.IsFocusable = $true
+        $this._yesButton.TabIndex = 0
+        $this._yesButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+        $this._yesButton.ForegroundColor = "#FFFFFF"
+        $this._yesButton.OnClick = { $this._Confirm() }
+        
+        # Add visual feedback
+        $this._yesButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._yesButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._mainPanel.AddChild($this._yesButton)
+        
+        $this._noButton = [ButtonComponent]::new("NoButton")
+        $this._noButton.Text = " [N]o "
+        $this._noButton.X = [Math]::Floor($dialogWidth / 2) + 2
+        $this._noButton.Y = $buttonY
+        $this._noButton.Width = 7
+        $this._noButton.Height = 1
+        $this._noButton.IsFocusable = $true
+        $this._noButton.TabIndex = 1
+        $this._noButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+        $this._noButton.ForegroundColor = "#FFFFFF"
+        $this._noButton.OnClick = { $this._Cancel() }
+        
+        # Add visual feedback
+        $this._noButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._noButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._mainPanel.AddChild($this._noButton)
     }
     
     [void] OnEnter() {
-        $this._selectedYes = $false
-        $this._UpdateButtons()
+        # Call base to set initial focus
+        ([Screen]$this).OnEnter()
         $this.RequestRedraw()
-    }
-    
-    hidden [void] _UpdateButtons() {
-        # Clear existing buttons
-        $existingButtons = @($this._mainPanel.Children | Where-Object { $_.Name -like "*Button" })
-        foreach ($btn in $existingButtons) {
-            $this._mainPanel.RemoveChild($btn)
-        }
-        
-        # Add updated buttons
-        $buttonY = $this._mainPanel.Height - 2
-        
-        $yesButton = [LabelComponent]::new("YesButton")
-        $yesButton.Text = " [Y]es "
-        $yesButton.X = [Math]::Floor($this._mainPanel.Width / 2) - 10
-        $yesButton.Y = $buttonY
-        if ($this._selectedYes) {
-            $yesButton.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
-        } else {
-            $yesButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
-        }
-        $yesButton.ForegroundColor = "#FFFFFF"
-        $this._mainPanel.AddChild($yesButton)
-        
-        $noButton = [LabelComponent]::new("NoButton")
-        $noButton.Text = " [N]o "
-        $noButton.X = [Math]::Floor($this._mainPanel.Width / 2) + 2
-        $noButton.Y = $buttonY
-        if (-not $this._selectedYes) {
-            $noButton.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
-        } else {
-            $noButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
-        }
-        $noButton.ForegroundColor = "#FFFFFF"
-        $this._mainPanel.AddChild($noButton)
     }
     
     hidden [void] _Confirm() {
@@ -1290,6 +1266,12 @@ class ConfirmDialog : Screen {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
+        # Base class handles Tab navigation and button input
+        if (([Screen]$this).HandleInput($keyInfo)) {
+            return $true
+        }
+        
+        # Handle global shortcuts
         switch ($keyInfo.KeyChar) {
             'y' {
                 $this._Confirm()
@@ -1310,26 +1292,10 @@ class ConfirmDialog : Screen {
         }
         
         switch ($keyInfo.Key) {
-            ([ConsoleKey]::LeftArrow) {
-                $this._selectedYes = $true
-                $this._UpdateButtons()
-                $this.RequestRedraw()
-                return $true
-            }
-            ([ConsoleKey]::RightArrow) {
-                $this._selectedYes = $false
-                $this._UpdateButtons()
-                $this.RequestRedraw()
-                return $true
-            }
-            ([ConsoleKey]::Tab) {
-                $this._selectedYes = -not $this._selectedYes
-                $this._UpdateButtons()
-                $this.RequestRedraw()
-                return $true
-            }
             ([ConsoleKey]::Enter) {
-                if ($this._selectedYes) {
+                # Activate focused button
+                $focused = $this.GetFocusedChild()
+                if ($focused -eq $this._yesButton) {
                     $this._Confirm()
                 } else {
                     $this._Cancel()

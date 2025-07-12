@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Project Edit Dialog
-# FIXED: Removed FocusManager dependency, uses direct input handling
+# HYBRID MODEL: Components handle their own input, automatic Tab navigation
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -14,10 +14,6 @@ class ProjectEditDialog : Dialog {
     hidden [object] $_dataManager
     hidden [object] $_fileSystemService
     hidden [string] $_baseProjectPath
-    
-    # Internal focus management
-    hidden [string[]] $_fieldOrder
-    hidden [int] $_focusIndex = 0
     
     ProjectEditDialog([object]$serviceContainer, [PmcProject]$project = $null) : base("ProjectEditDialog", $serviceContainer) {
         $this._project = if ($project) { $project } else { [PmcProject]::new() }
@@ -69,7 +65,9 @@ class ProjectEditDialog : Dialog {
         $keyField.Placeholder = "e.g., PROJ-001"
         $keyField.MaxLength = 20
         $keyField.ReadOnly = -not $this._isNewProject  # Can't change key on existing project
-        $keyField.IsFocusable = $false  # We handle input directly
+        $keyField.IsFocusable = if ($this._isNewProject) { $true } else { $false }
+        $keyField.TabIndex = 0
+        $this._AddFieldVisualFeedback($keyField)
         $this._scrollPanel.AddChild($keyField)
         $this._fields["Key"] = $keyField
         $y += 2
@@ -89,7 +87,9 @@ class ProjectEditDialog : Dialog {
         $nameField.Text = $this._project.Name
         $nameField.Placeholder = "Enter project name"
         $nameField.MaxLength = 100
-        $nameField.IsFocusable = $false  # We handle input directly
+        $nameField.IsFocusable = $true
+        $nameField.TabIndex = 1
+        $this._AddFieldVisualFeedback($nameField)
         $this._scrollPanel.AddChild($nameField)
         $this._fields["Name"] = $nameField
         $y += 2
@@ -109,7 +109,9 @@ class ProjectEditDialog : Dialog {
         $id1Field.Text = $this._project.ID1
         $id1Field.Placeholder = "Optional secondary ID"
         $id1Field.MaxLength = 50
-        $id1Field.IsFocusable = $false  # We handle input directly
+        $id1Field.IsFocusable = $true
+        $id1Field.TabIndex = 2
+        $this._AddFieldVisualFeedback($id1Field)
         $this._scrollPanel.AddChild($id1Field)
         $this._fields["ID1"] = $id1Field
         $y += 2
@@ -129,7 +131,9 @@ class ProjectEditDialog : Dialog {
         $id2Field.Text = $this._project.ID2
         $id2Field.Placeholder = "Main case ID"
         $id2Field.MaxLength = 50
-        $id2Field.IsFocusable = $false  # We handle input directly
+        $id2Field.IsFocusable = $true
+        $id2Field.TabIndex = 3
+        $this._AddFieldVisualFeedback($id2Field)
         $this._scrollPanel.AddChild($id2Field)
         $this._fields["ID2"] = $id2Field
         $y += 2
@@ -149,7 +153,9 @@ class ProjectEditDialog : Dialog {
         $ownerField.Text = $this._project.Owner
         $ownerField.Placeholder = "Project owner name"
         $ownerField.MaxLength = 100
-        $ownerField.IsFocusable = $false  # We handle input directly
+        $ownerField.IsFocusable = $true
+        $ownerField.TabIndex = 4
+        $this._AddFieldVisualFeedback($ownerField)
         $this._scrollPanel.AddChild($ownerField)
         $this._fields["Owner"] = $ownerField
         $y += 2
@@ -169,7 +175,9 @@ class ProjectEditDialog : Dialog {
         $clientField.Text = $this._project.GetMetadata("ClientID")
         $clientField.Placeholder = "BN-XXXXXX"
         $clientField.MaxLength = 50
-        $clientField.IsFocusable = $false  # We handle input directly
+        $clientField.IsFocusable = $true
+        $clientField.TabIndex = 5
+        $this._AddFieldVisualFeedback($clientField)
         $this._scrollPanel.AddChild($clientField)
         $this._fields["ClientID"] = $clientField
         $y += 2
@@ -189,7 +197,9 @@ class ProjectEditDialog : Dialog {
         $assignedField.Text = if ($this._project.AssignedDate) { $this._project.AssignedDate.ToString("yyyy-MM-dd") } else { "" }
         $assignedField.Placeholder = "YYYY-MM-DD"
         $assignedField.MaxLength = 10
-        $assignedField.IsFocusable = $false  # We handle input directly
+        $assignedField.IsFocusable = $true
+        $assignedField.TabIndex = 6
+        $this._AddFieldVisualFeedback($assignedField)
         $this._scrollPanel.AddChild($assignedField)
         $this._fields["AssignedDate"] = $assignedField
         $y += 2
@@ -209,7 +219,9 @@ class ProjectEditDialog : Dialog {
         $dueField.Text = if ($this._project.BFDate) { $this._project.BFDate.ToString("yyyy-MM-dd") } else { "" }
         $dueField.Placeholder = "YYYY-MM-DD"
         $dueField.MaxLength = 10
-        $dueField.IsFocusable = $false  # We handle input directly
+        $dueField.IsFocusable = $true
+        $dueField.TabIndex = 7
+        $this._AddFieldVisualFeedback($dueField)
         $this._scrollPanel.AddChild($dueField)
         $this._fields["BFDate"] = $dueField
         $y += 2
@@ -230,7 +242,9 @@ class ProjectEditDialog : Dialog {
         $descField.Height = 5
         $descField.SetText($this._project.Description)
         $descField.BorderStyle = "Single"
-        $descField.IsFocusable = $false  # We handle input directly
+        $descField.IsFocusable = $true
+        $descField.TabIndex = 8
+        $this._AddFieldVisualFeedback($descField)
         $this._scrollPanel.AddChild($descField)
         $this._fields["Description"] = $descField
         $y += 6
@@ -242,7 +256,9 @@ class ProjectEditDialog : Dialog {
             $createFolderCheck.Y = $y
             $createFolderCheck.Text = "Create project folder"
             $createFolderCheck.Checked = $true
-            $createFolderCheck.IsFocusable = $false  # We handle input directly
+            $createFolderCheck.IsFocusable = $true
+            $createFolderCheck.TabIndex = 9
+            $this._AddFieldVisualFeedback($createFolderCheck)
             $this._scrollPanel.AddChild($createFolderCheck)
             $this._fields["CreateFolder"] = $createFolderCheck
             $y += 2
@@ -258,11 +274,13 @@ class ProjectEditDialog : Dialog {
         $saveButton.Text = "[S]ave"
         $saveButton.X = $buttonX
         $saveButton.Y = $buttonY
-        $saveButton.IsFocusable = $false  # We handle input directly
+        $saveButton.IsFocusable = $true
+        $saveButton.TabIndex = 10
         $thisDialog = $this
         $saveButton.OnClick = {
             $thisDialog.SaveProject()
         }.GetNewClosure()
+        $this._AddFieldVisualFeedback($saveButton)
         $this.ContentPanel.AddChild($saveButton)
         
         # Cancel button
@@ -270,52 +288,55 @@ class ProjectEditDialog : Dialog {
         $cancelButton.Text = "[C]ancel"
         $cancelButton.X = $buttonX + $buttonSpacing
         $cancelButton.Y = $buttonY
-        $cancelButton.IsFocusable = $false  # We handle input directly
+        $cancelButton.IsFocusable = $true
+        $cancelButton.TabIndex = 11
         $cancelButton.OnClick = {
             $thisDialog.DialogResult = $null
             $thisDialog.Close()
         }.GetNewClosure()
+        $this._AddFieldVisualFeedback($cancelButton)
         $this.ContentPanel.AddChild($cancelButton)
-        
-        # Set up field order for Tab navigation
-        $this._fieldOrder = @("Key", "Name", "ID1", "ID2", "Owner", "ClientID", "AssignedDate", "BFDate", "Description")
-        if ($this._isNewProject) {
-            $this._fieldOrder += "CreateFolder"
-        }
-        
-        # Set initial focus
-        if ($this._isNewProject) {
-            $this._focusIndex = 0  # Focus on Key field
-        } else {
-            $this._focusIndex = 1  # Focus on Name field (Key is read-only)
-        }
-        $this._UpdateFieldFocus()
         
         Write-Log -Level Debug -Message "ProjectEditDialog.Initialize: Completed"
     }
     
-    hidden [void] _UpdateFieldFocus() {
-        # Update visual indicators for focused field
-        foreach ($fieldName in $this._fields.Keys) {
-            $field = $this._fields[$fieldName]
-            if ($field -is [TextBoxComponent] -or $field -is [MultilineTextBoxComponent]) {
-                $field.ShowCursor = $false
-                $field.BorderColor = Get-ThemeColor "component.border"
-            }
-        }
-        
-        # Highlight current field
-        if ($this._focusIndex -ge 0 -and $this._focusIndex -lt $this._fieldOrder.Count) {
-            $currentFieldName = $this._fieldOrder[$this._focusIndex]
-            $currentField = $this._fields[$currentFieldName]
+    # Add visual feedback for focus/blur events
+    hidden [void] _AddFieldVisualFeedback([Component]$field) {
+        if ($field -is [TextBoxComponent] -or $field -is [MultilineTextBoxComponent]) {
+            $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+                $this.BorderColor = Get-ThemeColor "primary.accent"
+                $this.ShowCursor = $true
+                $this.RequestRedraw()
+            } -Force
             
-            if ($currentField -is [TextBoxComponent] -or $currentField -is [MultilineTextBoxComponent]) {
-                $currentField.ShowCursor = $true
-                $currentField.BorderColor = Get-ThemeColor "primary.accent"
-            }
+            $field | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+                $this.BorderColor = Get-ThemeColor "component.border"
+                $this.ShowCursor = $false
+                $this.RequestRedraw()
+            } -Force
         }
-        
-        $this.RequestRedraw()
+        elseif ($field -is [ButtonComponent]) {
+            $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+                $this.BorderColor = Get-ThemeColor "primary.accent"
+                $this.RequestRedraw()
+            } -Force
+            
+            $field | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+                $this.BorderColor = Get-ThemeColor "component.border"
+                $this.RequestRedraw()
+            } -Force
+        }
+        elseif ($field -is [CheckBoxComponent]) {
+            $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+                $this.ForegroundColor = Get-ThemeColor "primary.accent"
+                $this.RequestRedraw()
+            } -Force
+            
+            $field | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+                $this.ForegroundColor = Get-ThemeColor "text"
+                $this.RequestRedraw()
+            } -Force
+        }
     }
     
     hidden [void] SaveProject() {
@@ -419,20 +440,24 @@ class ProjectEditDialog : Dialog {
     
     [void] OnEnter() {
         ([Dialog]$this).OnEnter()
-        Write-Log -Level Debug -Message "ProjectEditDialog.OnEnter: Setting initial focus"
-        $this._UpdateFieldFocus()
+        Write-Log -Level Debug -Message "ProjectEditDialog.OnEnter: Dialog entered, base class will set initial focus"
     }
     
-    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    # === HYBRID MODEL INPUT HANDLING ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
             Write-Log -Level Warning -Message "ProjectEditDialog.HandleInput: Null keyInfo"
             return $false
         }
         
-        Write-Log -Level Debug -Message "ProjectEditDialog.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', FocusIndex=$($this._focusIndex)"
+        Write-Log -Level Debug -Message "ProjectEditDialog.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
         
-        # Check for save/cancel shortcuts first
+        # Base class handles Tab navigation and routes input to focused components
+        if (([Dialog]$this).HandleInput($keyInfo)) {
+            return $true
+        }
+        
+        # Handle global dialog shortcuts only
         switch ($keyInfo.KeyChar) {
             's' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
@@ -458,88 +483,7 @@ class ProjectEditDialog : Dialog {
             }
         }
         
-        # Handle Tab navigation
-        if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
-            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
-                # Shift+Tab - go backwards
-                $this._focusIndex--
-                if ($this._focusIndex -lt 0) {
-                    $this._focusIndex = $this._fieldOrder.Count - 1
-                }
-                # Skip read-only key field when editing
-                if (-not $this._isNewProject -and $this._focusIndex -eq 0) {
-                    $this._focusIndex = $this._fieldOrder.Count - 1
-                }
-            } else {
-                # Tab - go forwards
-                $this._focusIndex++
-                if ($this._focusIndex -ge $this._fieldOrder.Count) {
-                    $this._focusIndex = 0
-                }
-                # Skip read-only key field when editing
-                if (-not $this._isNewProject -and $this._focusIndex -eq 0) {
-                    $this._focusIndex = 1
-                }
-            }
-            $this._UpdateFieldFocus()
-            return $true
-        }
-        
-        # Handle input based on current field
-        if ($this._focusIndex -ge 0 -and $this._focusIndex -lt $this._fieldOrder.Count) {
-            $currentFieldName = $this._fieldOrder[$this._focusIndex]
-            $currentField = $this._fields[$currentFieldName]
-            
-            # Special handling for checkbox
-            if ($currentField -is [CheckBoxComponent]) {
-                if ($keyInfo.Key -eq [ConsoleKey]::Spacebar) {
-                    $currentField.Checked = -not $currentField.Checked
-                    $this.RequestRedraw()
-                    return $true
-                }
-            }
-            # Text input fields
-            elseif ($currentField -is [TextBoxComponent] -or $currentField -is [MultilineTextBoxComponent]) {
-                # Skip if read-only
-                if ($currentField.ReadOnly) {
-                    return $false
-                }
-                
-                switch ($keyInfo.Key) {
-                    ([ConsoleKey]::Backspace) {
-                        if ($currentField.Text.Length -gt 0) {
-                            $currentField.Text = $currentField.Text.Substring(0, $currentField.Text.Length - 1)
-                            $this.RequestRedraw()
-                        }
-                        return $true
-                    }
-                    ([ConsoleKey]::Delete) {
-                        # Clear field
-                        $currentField.Text = ""
-                        $this.RequestRedraw()
-                        return $true
-                    }
-                    default {
-                        # Add character if within max length
-                        if ($keyInfo.KeyChar -and 
-                            ([char]::IsLetterOrDigit($keyInfo.KeyChar) -or 
-                             [char]::IsPunctuation($keyInfo.KeyChar) -or 
-                             [char]::IsWhiteSpace($keyInfo.KeyChar) -or
-                             $keyInfo.KeyChar -eq '-')) {
-                            
-                            if (-not $currentField.MaxLength -or $currentField.Text.Length -lt $currentField.MaxLength) {
-                                $currentField.Text += $keyInfo.KeyChar
-                                $this.RequestRedraw()
-                                return $true
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        # Let base Dialog handle other input (like Escape)
-        return ([Dialog]$this).HandleInput($keyInfo)
+        return $false
     }
 }
 

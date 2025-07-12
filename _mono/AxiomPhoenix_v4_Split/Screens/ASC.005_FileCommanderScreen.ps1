@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - File Commander - Full-Featured Terminal File Browser
-# FIXED: Removed FocusManager dependency, uses NCURSES-style window focus model
+# HYBRID MODEL: Uses automatic focus management with focusable panel components
 # ==============================================================================
 
 class FileCommanderScreen : Screen {
@@ -24,10 +24,10 @@ class FileCommanderScreen : Screen {
     #region State
     hidden [string] $_leftPath
     hidden [string] $_rightPath
-    hidden [bool] $_leftPanelActive = $true  # Internal focus tracking
     hidden [object[]] $_leftItems = @()
     hidden [object[]] $_rightItems = @()
     hidden [object] $_selectedItem
+    hidden [object] $_pendingDelete = $null
     hidden [hashtable] $_fileTypeIcons = @{
         ".ps1" = "🔧"
         ".txt" = "📄"
@@ -119,11 +119,42 @@ class FileCommanderScreen : Screen {
         $this._leftFileList.Width = $halfWidth - 2
         $this._leftFileList.Height = $panelHeight - 2
         $this._leftFileList.HasBorder = $false
-        $this._leftFileList.IsFocusable = $false  # We handle input directly
+        $this._leftFileList.IsFocusable = $true  # Enable focus for hybrid model
+        $this._leftFileList.TabIndex = 0         # First in tab order
         # Use theme colors for selection
         $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg" "#1E3A8A"
         $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.fg" "#FFFFFF"
         $this._leftFileList.ItemForegroundColor = Get-ThemeColor "file.normal" "#E0E0E0"
+        
+        # Add focus visual feedback
+        $this._leftFileList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.Parent.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.Parent.Parent.UpdateStatusBar()
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._leftFileList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.Parent.BorderColor = Get-ThemeColor "border" "#666666"
+            $this.RequestRedraw()
+        } -Force
+        
+        # Handle item selection and directory navigation
+        $this._leftFileList | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
+            param([System.ConsoleKeyInfo]$keyInfo)
+            
+            if (-not $this.IsFocused) { return $false }
+            
+            # Handle Enter for directory navigation
+            if ($keyInfo.Key -eq [ConsoleKey]::Enter) {
+                $screen = $this.Parent.Parent
+                $screen.EnterDirectoryLeft()
+                return $true
+            }
+            
+            # Let base ListBox handle navigation (arrows, page up/down, etc.)
+            return $false
+        } -Force
+        
         $this._leftPanel.AddChild($this._leftFileList)
 
         # Right file panel
@@ -154,11 +185,42 @@ class FileCommanderScreen : Screen {
         $this._rightFileList.Width = $this._rightPanel.Width - 2
         $this._rightFileList.Height = $panelHeight - 2
         $this._rightFileList.HasBorder = $false
-        $this._rightFileList.IsFocusable = $false  # We handle input directly
+        $this._rightFileList.IsFocusable = $true  # Enable focus for hybrid model
+        $this._rightFileList.TabIndex = 1         # Second in tab order
         # Use theme colors for selection  
         $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg" "#1E3A8A"
         $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.fg" "#FFFFFF"
         $this._rightFileList.ItemForegroundColor = Get-ThemeColor "file.normal" "#E0E0E0"
+        
+        # Add focus visual feedback
+        $this._rightFileList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.Parent.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.Parent.Parent.UpdateStatusBar()
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._rightFileList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.Parent.BorderColor = Get-ThemeColor "border" "#666666"
+            $this.RequestRedraw()
+        } -Force
+        
+        # Handle item selection and directory navigation
+        $this._rightFileList | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
+            param([System.ConsoleKeyInfo]$keyInfo)
+            
+            if (-not $this.IsFocused) { return $false }
+            
+            # Handle Enter for directory navigation
+            if ($keyInfo.Key -eq [ConsoleKey]::Enter) {
+                $screen = $this.Parent.Parent
+                $screen.EnterDirectoryRight()
+                return $true
+            }
+            
+            # Let base ListBox handle navigation (arrows, page up/down, etc.)
+            return $false
+        } -Force
+        
         $this._rightPanel.AddChild($this._rightFileList)
 
         # Status bar
@@ -233,8 +295,8 @@ class FileCommanderScreen : Screen {
             $this._functionBar.AddChild($keyLabel)
         }
 
-        # Set up event handlers (simplified - no longer need selection change handlers)
-        # Selection is handled directly in HandleInput
+        # Set up event handlers - components now handle their own input
+        # Selection changes are handled automatically via focus system
         
         Write-Log -Level Debug -Message "FileCommanderScreen.Initialize: Completed"
     }
@@ -401,12 +463,14 @@ class FileCommanderScreen : Screen {
     }
 
     hidden [void] UpdateStatusBar() {
-        # Get currently selected item based on active panel
-        if ($this._leftPanelActive) {
+        # Get currently selected item based on focused component
+        $focusedChild = $this.GetFocusedChild()
+        
+        if ($focusedChild -eq $this._leftFileList) {
             if ($this._leftFileList.SelectedIndex -ge 0 -and $this._leftFileList.SelectedIndex -lt $this._leftItems.Count) {
                 $this._selectedItem = $this._leftItems[$this._leftFileList.SelectedIndex]
             }
-        } else {
+        } elseif ($focusedChild -eq $this._rightFileList) {
             if ($this._rightFileList.SelectedIndex -ge 0 -and $this._rightFileList.SelectedIndex -lt $this._rightItems.Count) {
                 $this._selectedItem = $this._rightItems[$this._rightFileList.SelectedIndex]
             }
@@ -431,10 +495,12 @@ class FileCommanderScreen : Screen {
 
     hidden [void] NavigateToDirectory([string]$path) {
         if (Test-Path $path -PathType Container) {
-            if ($this._leftPanelActive) {
+            $focusedChild = $this.GetFocusedChild()
+            
+            if ($focusedChild -eq $this._leftFileList) {
                 $this._leftPath = $path
                 $this.LoadDirectory($path, $true)
-            } else {
+            } elseif ($focusedChild -eq $this._rightFileList) {
                 $this._rightPath = $path
                 $this.LoadDirectory($path, $false)
             }
@@ -443,63 +509,76 @@ class FileCommanderScreen : Screen {
         }
     }
 
-    hidden [void] EnterDirectory() {
-        $item = $null
-        if ($this._leftPanelActive -and $this._leftFileList.SelectedIndex -ge 0) {
+    hidden [void] EnterDirectoryLeft() {
+        if ($this._leftFileList.SelectedIndex -ge 0 -and $this._leftFileList.SelectedIndex -lt $this._leftItems.Count) {
             $item = $this._leftItems[$this._leftFileList.SelectedIndex]
-        } elseif (-not $this._leftPanelActive -and $this._rightFileList.SelectedIndex -ge 0) {
-            $item = $this._rightItems[$this._rightFileList.SelectedIndex]
-        }
-        
-        if ($item -and ($item.PSIsContainer -or $item.Attributes -band [System.IO.FileAttributes]::Directory -or $item.Name -eq "..")) {
-            if ($item.Name -eq "..") {
-                $this.NavigateToDirectory($item.FullName)
-            } else {
-                $this.NavigateToDirectory($item.FullName)
+            if ($item -and ($item.PSIsContainer -or $item.Attributes -band [System.IO.FileAttributes]::Directory -or $item.Name -eq "..")) {
+                if ($item.Name -eq "..") {
+                    $this._leftPath = $item.FullName
+                    $this.LoadDirectory($item.FullName, $true)
+                } else {
+                    $this._leftPath = $item.FullName
+                    $this.LoadDirectory($item.FullName, $true)
+                }
+                $this.UpdatePathLabels()
+                $this.UpdateStatusBar()
             }
         }
     }
 
-    hidden [void] SwitchPanel() {
-        $this._leftPanelActive = -not $this._leftPanelActive
-        
-        # Update visual focus indicators
-        if ($this._leftPanelActive) {
-            $this._leftPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
-            $this._rightPanel.BorderColor = Get-ThemeColor "border" "#666666"
-        } else {
-            $this._leftPanel.BorderColor = Get-ThemeColor "border" "#666666"
-            $this._rightPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+    hidden [void] EnterDirectoryRight() {
+        if ($this._rightFileList.SelectedIndex -ge 0 -and $this._rightFileList.SelectedIndex -lt $this._rightItems.Count) {
+            $item = $this._rightItems[$this._rightFileList.SelectedIndex]
+            if ($item -and ($item.PSIsContainer -or $item.Attributes -band [System.IO.FileAttributes]::Directory -or $item.Name -eq "..")) {
+                if ($item.Name -eq "..") {
+                    $this._rightPath = $item.FullName
+                    $this.LoadDirectory($item.FullName, $false)
+                } else {
+                    $this._rightPath = $item.FullName
+                    $this.LoadDirectory($item.FullName, $false)
+                }
+                $this.UpdatePathLabels()
+                $this.UpdateStatusBar()
+            }
         }
+    }
+
+    hidden [void] EnterDirectory() {
+        $focusedChild = $this.GetFocusedChild()
         
-        $this.UpdateStatusBar()
-        $this.RequestRedraw()
+        if ($focusedChild -eq $this._leftFileList) {
+            $this.EnterDirectoryLeft()
+        } elseif ($focusedChild -eq $this._rightFileList) {
+            $this.EnterDirectoryRight()
+        }
     }
 
     hidden [void] CopySelectedItems() {
         $this._clipboard.Clear()
         $this._cutMode = $false
         
-        if ($this._leftPanelActive -and $this._leftFileList.SelectedIndex -ge 0) {
+        $focusedChild = $this.GetFocusedChild()
+        $item = $null
+        
+        if ($focusedChild -eq $this._leftFileList -and $this._leftFileList.SelectedIndex -ge 0) {
             $item = $this._leftItems[$this._leftFileList.SelectedIndex]
-            if ($item.Name -ne "..") {
-                $this._clipboard.Add($item.FullName)
-                $this._statusLabel.Text = "Copied: $($item.Name)"
-            }
-        } elseif (-not $this._leftPanelActive -and $this._rightFileList.SelectedIndex -ge 0) {
+        } elseif ($focusedChild -eq $this._rightFileList -and $this._rightFileList.SelectedIndex -ge 0) {
             $item = $this._rightItems[$this._rightFileList.SelectedIndex]
-            if ($item.Name -ne "..") {
-                $this._clipboard.Add($item.FullName)
-                $this._statusLabel.Text = "Copied: $($item.Name)"
-            }
+        }
+        
+        if ($item -and $item.Name -ne "..") {
+            $this._clipboard.Add($item.FullName)
+            $this._statusLabel.Text = "Copied: $($item.Name)"
         }
     }
 
     hidden [void] ViewFile() {
+        $focusedChild = $this.GetFocusedChild()
         $item = $null
-        if ($this._leftPanelActive -and $this._leftFileList.SelectedIndex -ge 0) {
+        
+        if ($focusedChild -eq $this._leftFileList -and $this._leftFileList.SelectedIndex -ge 0) {
             $item = $this._leftItems[$this._leftFileList.SelectedIndex]
-        } elseif (-not $this._leftPanelActive -and $this._rightFileList.SelectedIndex -ge 0) {
+        } elseif ($focusedChild -eq $this._rightFileList -and $this._rightFileList.SelectedIndex -ge 0) {
             $item = $this._rightItems[$this._rightFileList.SelectedIndex]
         }
         
@@ -518,10 +597,12 @@ class FileCommanderScreen : Screen {
     }
 
     hidden [void] DeleteSelectedItem() {
+        $focusedChild = $this.GetFocusedChild()
         $item = $null
-        if ($this._leftPanelActive -and $this._leftFileList.SelectedIndex -ge 0) {
+        
+        if ($focusedChild -eq $this._leftFileList -and $this._leftFileList.SelectedIndex -ge 0) {
             $item = $this._leftItems[$this._leftFileList.SelectedIndex]
-        } elseif (-not $this._leftPanelActive -and $this._rightFileList.SelectedIndex -ge 0) {
+        } elseif ($focusedChild -eq $this._rightFileList -and $this._rightFileList.SelectedIndex -ge 0) {
             $item = $this._rightItems[$this._rightFileList.SelectedIndex]
         }
         
@@ -557,9 +638,12 @@ class FileCommanderScreen : Screen {
         # Load initial directories
         $this.RefreshPanels()
         
-        # Set initial active panel visual state
-        $this._leftPanel.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+        # Set initial border states (will be updated by focus system)
+        $this._leftPanel.BorderColor = Get-ThemeColor "border" "#666666"
         $this._rightPanel.BorderColor = Get-ThemeColor "border" "#666666"
+        
+        # Call base to set initial focus (will focus first focusable child)
+        ([Screen]$this).OnEnter()
         
         $this.RequestRedraw()
     }
@@ -569,16 +653,16 @@ class FileCommanderScreen : Screen {
         # Nothing to clean up
     }
 
-    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    # === HYBRID MODEL INPUT HANDLING ===
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) {
             Write-Log -Level Warning -Message "FileCommanderScreen.HandleInput: Null keyInfo"
             return $false
         }
         
-        Write-Log -Level Debug -Message "FileCommanderScreen.HandleInput: Key=$($key.Key), Active=$($this._leftPanelActive)"
+        Write-Log -Level Debug -Message "FileCommanderScreen.HandleInput: Key=$($key.Key)"
         
-        # Check if we have a pending delete confirmation
+        # Check if we have a pending delete confirmation (global state)
         if ($this._pendingDelete) {
             if ($key.KeyChar -eq 'y' -or $key.KeyChar -eq 'Y') {
                 try {
@@ -599,116 +683,33 @@ class FileCommanderScreen : Screen {
             return $true
         }
         
-        $handled = $true
+        # IMPORTANT: Call base class first - handles Tab navigation and routes to focused component
+        if (([Screen]$this).HandleInput($key)) {
+            return $true
+        }
         
+        # Handle global shortcuts that work regardless of focus
         switch ($key.Key) {
-            # Navigation within panels
-            ([ConsoleKey]::UpArrow) {
-                if ($this._leftPanelActive) {
-                    if ($this._leftFileList.SelectedIndex -gt 0) {
-                        $this._leftFileList.SelectedIndex--
-                        $this.UpdateStatusBar()
-                        $this.RequestRedraw()
-                    }
-                } else {
-                    if ($this._rightFileList.SelectedIndex -gt 0) {
-                        $this._rightFileList.SelectedIndex--
-                        $this.UpdateStatusBar()
-                        $this.RequestRedraw()
-                    }
-                }
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this._leftPanelActive) {
-                    if ($this._leftFileList.SelectedIndex -lt $this._leftItems.Count - 1) {
-                        $this._leftFileList.SelectedIndex++
-                        $this.UpdateStatusBar()
-                        $this.RequestRedraw()
-                    }
-                } else {
-                    if ($this._rightFileList.SelectedIndex -lt $this._rightItems.Count - 1) {
-                        $this._rightFileList.SelectedIndex++
-                        $this.UpdateStatusBar()
-                        $this.RequestRedraw()
-                    }
-                }
-            }
-            ([ConsoleKey]::PageUp) {
-                $activeList = if ($this._leftPanelActive) { $this._leftFileList } else { $this._rightFileList }
-                $itemCount = if ($this._leftPanelActive) { $this._leftItems.Count } else { $this._rightItems.Count }
-                
-                $pageSize = [Math]::Max(1, $activeList.Height - 2)
-                $newIndex = [Math]::Max(0, $activeList.SelectedIndex - $pageSize)
-                $activeList.SelectedIndex = $newIndex
-                $this.UpdateStatusBar()
-                $this.RequestRedraw()
-            }
-            ([ConsoleKey]::PageDown) {
-                $activeList = if ($this._leftPanelActive) { $this._leftFileList } else { $this._rightFileList }
-                $itemCount = if ($this._leftPanelActive) { $this._leftItems.Count } else { $this._rightItems.Count }
-                
-                $pageSize = [Math]::Max(1, $activeList.Height - 2)
-                $newIndex = [Math]::Min($itemCount - 1, $activeList.SelectedIndex + $pageSize)
-                $activeList.SelectedIndex = $newIndex
-                $this.UpdateStatusBar()
-                $this.RequestRedraw()
-            }
-            ([ConsoleKey]::Home) {
-                if ($this._leftPanelActive) {
-                    $this._leftFileList.SelectedIndex = 0
-                } else {
-                    $this._rightFileList.SelectedIndex = 0
-                }
-                $this.UpdateStatusBar()
-                $this.RequestRedraw()
-            }
-            ([ConsoleKey]::End) {
-                if ($this._leftPanelActive) {
-                    $this._leftFileList.SelectedIndex = $this._leftItems.Count - 1
-                } else {
-                    $this._rightFileList.SelectedIndex = $this._rightItems.Count - 1
-                }
-                $this.UpdateStatusBar()
-                $this.RequestRedraw()
-            }
-            
-            # Panel switching and navigation
-            ([ConsoleKey]::Tab) { 
-                $this.SwitchPanel()
-            }
-            ([ConsoleKey]::Enter) {
-                $this.EnterDirectory()
-            }
-            ([ConsoleKey]::Backspace) {
-                # Go to parent directory
-                if ($this._leftPanelActive) {
-                    $parent = Split-Path $this._leftPath -Parent
-                    if ($parent) {
-                        $this.NavigateToDirectory($parent)
-                    }
-                } else {
-                    $parent = Split-Path $this._rightPath -Parent
-                    if ($parent) {
-                        $this.NavigateToDirectory($parent)
-                    }
-                }
-            }
-            
             # Function keys
             ([ConsoleKey]::F1) {
                 $this.ShowHelp()
+                return $true
             }
             ([ConsoleKey]::F3) {
                 $this.ViewFile()
+                return $true
             }
             ([ConsoleKey]::F5) {
                 $this.CopySelectedItems()
+                return $true
             }
             ([ConsoleKey]::F7) {
                 $this.CreateDirectory()
+                return $true
             }
             ([ConsoleKey]::F8) {
                 $this.DeleteSelectedItem()
+                return $true
             }
             ([ConsoleKey]::F10) {
                 # Exit
@@ -721,6 +722,7 @@ class FileCommanderScreen : Screen {
                         $actionService.ExecuteAction("app.exit", @{})
                     }
                 }
+                return $true
             }
             ([ConsoleKey]::Escape) {
                 # Go back
@@ -728,39 +730,58 @@ class FileCommanderScreen : Screen {
                 if ($navService.CanGoBack()) {
                     $navService.GoBack()
                 }
+                return $true
             }
-            
-            # Ctrl combinations
-            default {
-                if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                    switch ($key.Key) {
-                        ([ConsoleKey]::H) {
-                            # Toggle hidden files
-                            $this._showHidden = -not $this._showHidden
-                            $this.RefreshPanels()
-                            $this._statusLabel.Text = if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" }
-                        }
-                        ([ConsoleKey]::R) {
-                            # Refresh
-                            $this.RefreshPanels()
-                            $this._statusLabel.Text = "Refreshed"
-                        }
-                        ([ConsoleKey]::L) {
-                            # Go to path (would show input dialog)
-                            $this._statusLabel.Text = "Go to path: Feature requires dialog system"
-                        }
-                        default {
-                            $handled = $false
-                        }
+            ([ConsoleKey]::Backspace) {
+                # Go to parent directory of focused panel
+                $focusedChild = $this.GetFocusedChild()
+                if ($focusedChild -eq $this._leftFileList) {
+                    $parent = Split-Path $this._leftPath -Parent
+                    if ($parent) {
+                        $this._leftPath = $parent
+                        $this.LoadDirectory($parent, $true)
+                        $this.UpdatePathLabels()
+                        $this.UpdateStatusBar()
                     }
-                } else {
-                    $handled = $false
+                } elseif ($focusedChild -eq $this._rightFileList) {
+                    $parent = Split-Path $this._rightPath -Parent
+                    if ($parent) {
+                        $this._rightPath = $parent
+                        $this.LoadDirectory($parent, $false)
+                        $this.UpdatePathLabels()
+                        $this.UpdateStatusBar()
+                    }
+                }
+                return $true
+            }
+        }
+        
+        # Handle Ctrl combinations
+        if ($key.Modifiers -band [ConsoleModifiers]::Control) {
+            switch ($key.Key) {
+                ([ConsoleKey]::H) {
+                    # Toggle hidden files
+                    $this._showHidden = -not $this._showHidden
+                    $this.RefreshPanels()
+                    $this._statusLabel.Text = if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" }
+                    return $true
+                }
+                ([ConsoleKey]::R) {
+                    # Refresh
+                    $this.RefreshPanels()
+                    $this._statusLabel.Text = "Refreshed"
+                    return $true
+                }
+                ([ConsoleKey]::L) {
+                    # Go to path (would show input dialog)
+                    $this._statusLabel.Text = "Go to path: Feature requires dialog system"
+                    return $true
                 }
             }
         }
         
-        Write-Log -Level Debug -Message "FileCommanderScreen.HandleInput: Returning handled=$handled"
-        return $handled
+        Write-Log -Level Debug -Message "FileCommanderScreen.HandleInput: Returning false (unhandled)"
+        return $false
     }
 }
 

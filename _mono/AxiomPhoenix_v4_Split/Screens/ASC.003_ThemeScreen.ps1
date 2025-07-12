@@ -16,7 +16,6 @@ class ThemeScreen : Screen {
     hidden [LabelComponent]$_previewListLabel
     
     # State
-    hidden [int]$_selectedIndex = 0
     hidden [string]$_originalTheme
     
     # Available themes with hex colors
@@ -204,7 +203,27 @@ class ThemeScreen : Screen {
         $this._themeList.Width = $listPanel.Width - 2
         $this._themeList.Height = $listPanel.Height - 2
         $this._themeList.HasBorder = $false
-        $this._themeList.IsFocusable = $false  # We handle input directly
+        $this._themeList.IsFocusable = $true   # HYBRID MODEL: Component handles its own input
+        $this._themeList.TabIndex = 0
+        
+        # Add visual focus feedback
+        $this._themeList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._themeList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "component.border"
+            $this.RequestRedraw()
+        } -Force
+        
+        # Handle selection changes
+        $screenRef = $this
+        $this._themeList.SelectedIndexChanged = {
+            param($sender, $newIndex)
+            $screenRef.UpdatePreview()
+        }.GetNewClosure()
+        
         $listPanel.AddChild($this._themeList)
         
         # Preview panel (right side)
@@ -253,7 +272,7 @@ class ThemeScreen : Screen {
         $this._statusLabel = [LabelComponent]::new("Status")
         $this._statusLabel.X = 2
         $this._statusLabel.Y = $this.Height - 3
-        $this._statusLabel.Text = "↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel"
+        $this._statusLabel.Text = "Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel"
         $this._statusLabel.ForegroundColor = Get-ThemeColor "Muted"
         $this._mainPanel.AddChild($this._statusLabel)
         
@@ -272,19 +291,19 @@ class ThemeScreen : Screen {
         if ($themeManager) {
             for ($i = 0; $i -lt $this._themes.Count; $i++) {
                 if ($this._themes[$i].Name -eq $themeManager.ThemeName) {
-                    $this._selectedIndex = $i
+                    $this._themeList.SelectedIndex = $i
                     break
                 }
             }
         }
         
-        $this._themeList.SelectedIndex = $this._selectedIndex
         $this.UpdatePreview()
     }
     
     hidden [void] UpdatePreview() {
-        if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$this._selectedIndex]
+        $selectedIndex = $this._themeList.SelectedIndex
+        if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
+            $selectedTheme = $this._themes[$selectedIndex]
             
             # Update description
             $this._descriptionLabel.Text = $selectedTheme.Description
@@ -308,8 +327,9 @@ class ThemeScreen : Screen {
     }
     
     hidden [void] ApplyTheme() {
-        if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$this._selectedIndex]
+        $selectedIndex = $this._themeList.SelectedIndex
+        if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
+            $selectedTheme = $this._themes[$selectedIndex]
             $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
             
             if ($themeManager) {
@@ -333,8 +353,9 @@ class ThemeScreen : Screen {
     
     hidden [void] PreviewTheme() {
         # Temporarily apply theme without saving
-        if ($this._selectedIndex -ge 0 -and $this._selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$this._selectedIndex]
+        $selectedIndex = $this._themeList.SelectedIndex
+        if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
+            $selectedTheme = $this._themes[$selectedIndex]
             $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
             
             if ($themeManager) {
@@ -354,11 +375,13 @@ class ThemeScreen : Screen {
     [void] OnEnter() {
         Write-Log -Level Debug -Message "ThemeScreen.OnEnter: Starting"
         
-        # Don't use FocusManager - we handle input directly
+        # Call base class to handle focus management
+        ([Screen]$this).OnEnter()
+        
         $this.RequestRedraw()
     }
     
-    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    # === INPUT HANDLING (HYBRID MODEL) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
             Write-Log -Level Warning -Message "ThemeScreen.HandleInput: Null keyInfo"
@@ -367,26 +390,13 @@ class ThemeScreen : Screen {
         
         Write-Log -Level Debug -Message "ThemeScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
         
-        $handled = $false
+        # HYBRID MODEL: Base class handles Tab navigation and routes input to focused component
+        if (([Screen]$this).HandleInput($keyInfo)) {
+            return $true
+        }
         
-        # Navigation keys
+        # Handle screen-level shortcuts that work regardless of focus
         switch ($keyInfo.Key) {
-            ([ConsoleKey]::UpArrow) {
-                if ($this._selectedIndex -gt 0) {
-                    $this._selectedIndex--
-                    $this._themeList.SelectedIndex = $this._selectedIndex
-                    $this.UpdatePreview()
-                }
-                $handled = $true
-            }
-            ([ConsoleKey]::DownArrow) {
-                if ($this._selectedIndex -lt $this._themes.Count - 1) {
-                    $this._selectedIndex++
-                    $this._themeList.SelectedIndex = $this._selectedIndex
-                    $this.UpdatePreview()
-                }
-                $handled = $true
-            }
             ([ConsoleKey]::Enter) {
                 $this.ApplyTheme()
                 # Go back after applying
@@ -394,7 +404,7 @@ class ThemeScreen : Screen {
                 if ($navService -and $navService.CanGoBack()) {
                     $navService.GoBack()
                 }
-                $handled = $true
+                return $true
             }
             ([ConsoleKey]::Escape) {
                 # Restore original theme and go back
@@ -415,40 +425,25 @@ class ThemeScreen : Screen {
                 if ($navService -and $navService.CanGoBack()) {
                     $navService.GoBack()
                 }
-                $handled = $true
-            }
-            ([ConsoleKey]::Home) {
-                $this._selectedIndex = 0
-                $this._themeList.SelectedIndex = $this._selectedIndex
-                $this.UpdatePreview()
-                $handled = $true
-            }
-            ([ConsoleKey]::End) {
-                $this._selectedIndex = $this._themes.Count - 1
-                $this._themeList.SelectedIndex = $this._selectedIndex
-                $this.UpdatePreview()
-                $handled = $true
+                return $true
             }
         }
         
         # Character shortcuts
-        if (-not $handled) {
-            switch ($keyInfo.KeyChar) {
-                'p' {
-                    if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
-                        $this.PreviewTheme()
-                        $handled = $true
-                    }
-                }
-                'P' {
+        switch ($keyInfo.KeyChar) {
+            'p' {
+                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
                     $this.PreviewTheme()
-                    $handled = $true
+                    return $true
                 }
+            }
+            'P' {
+                $this.PreviewTheme()
+                return $true
             }
         }
         
-        Write-Log -Level Debug -Message "ThemeScreen.HandleInput: Returning handled=$handled"
-        return $handled
+        return $false
     }
 }
 

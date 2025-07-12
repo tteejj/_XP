@@ -40,8 +40,7 @@ class TextEditorScreen : Screen {
     hidden [bool]$_isReadOnly = $false
     hidden [string]$_clipboard = ""
     
-    # Internal focus tracking for search/replace
-    hidden [bool]$_searchBoxFocused = $true  # When search panel is open
+    # Search panel uses proper Screen focus management
     
     # Undo/Redo stacks
     hidden [Stack[IEditCommand]]$_undoStack
@@ -135,7 +134,7 @@ class TextEditorScreen : Screen {
         $this._searchBox.X = 8
         $this._searchBox.Y = 1
         $this._searchBox.Width = $this._searchPanel.Width - 10
-        $this._searchBox.IsFocusable = $false  # We handle input directly
+        $this._searchBox.IsFocusable = $false  # Will be set to true when panel opens
         $thisEditor = $this
         $this._searchBox.OnChange = {
             param($sender, $text)
@@ -154,7 +153,7 @@ class TextEditorScreen : Screen {
         $this._replaceBox.X = 11
         $this._replaceBox.Y = 2
         $this._replaceBox.Width = $this._searchPanel.Width - 13
-        $this._replaceBox.IsFocusable = $false  # We handle input directly
+        $this._replaceBox.IsFocusable = $false  # Will be set to true when panel opens
         $this._searchPanel.AddChild($this._replaceBox)
         
         # Search status
@@ -174,7 +173,8 @@ class TextEditorScreen : Screen {
     [void] OnEnter() {
         Write-Log -Level Debug -Message "TextEditorScreen.OnEnter: Starting"
         
-        # Simply request redraw - no FocusManager needed
+        # Call base to set up focus system
+        ([Screen]$this).OnEnter()
         $this.RequestRedraw()
         $this._fullRedrawNeeded = $true
     }
@@ -483,30 +483,67 @@ class TextEditorScreen : Screen {
         $this._isSearchMode = $true
         $this._isReplaceMode = $replace
         $this._searchPanel.Visible = $true
-        $this._searchBoxFocused = $true  # Start with search box focused
         
         # Update search panel height
         $this._searchPanel.Height = if ($replace) { 6 } else { 4 }
         $this._replaceBox.Visible = $replace
         
-        # Update visual focus
-        $this._searchBox.ShowCursor = $true
-        $this._searchBox.BorderColor = Get-ThemeColor "primary.accent"
-        $this._replaceBox.ShowCursor = $false
-        $this._replaceBox.BorderColor = Get-ThemeColor "border"
+        # Make search boxes focusable and add focus handlers
+        $this._searchBox.IsFocusable = $true
+        $this._searchBox.TabIndex = 0
+        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.ShowCursor = $true
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.RequestRedraw()
+        } -Force
+        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.ShowCursor = $false
+            $this.BorderColor = Get-ThemeColor "border"
+            $this.RequestRedraw()
+        } -Force
+        
+        if ($replace) {
+            $this._replaceBox.IsFocusable = $true
+            $this._replaceBox.TabIndex = 1
+            $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+                $this.ShowCursor = $true
+                $this.BorderColor = Get-ThemeColor "primary.accent"
+                $this.RequestRedraw()
+            } -Force
+            $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+                $this.ShowCursor = $false
+                $this.BorderColor = Get-ThemeColor "border"
+                $this.RequestRedraw()
+            } -Force
+        }
+        
+        # Invalidate focus cache and focus the search box
+        $this.InvalidateFocusCache()
+        $this.SetChildFocus($this._searchBox)
         
         $this.RequestRedraw()
     }
     
     hidden [void] HideSearchPanel() {
+        # Clear focus before hiding
+        $this.ClearFocus()
+        
         $this._isSearchMode = $false
         $this._isReplaceMode = $false
         $this._searchPanel.Visible = $false
         $this._searchBox.Text = ""
         $this._replaceBox.Text = ""
         $this._searchStatusLabel.Text = ""
+        
+        # Make search boxes non-focusable when hidden
+        $this._searchBox.IsFocusable = $false
         $this._searchBox.ShowCursor = $false
+        $this._replaceBox.IsFocusable = $false
         $this._replaceBox.ShowCursor = $false
+        
+        # Invalidate focus cache
+        $this.InvalidateFocusCache()
+        
         $this.RequestRedraw()
     }
     
@@ -592,7 +629,7 @@ Try typing, navigating, and searching to see the smooth performance!
         $this.UpdateCursorPosition()
     }
     
-    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    # === INPUT HANDLING (HYBRID MODEL FOR SEARCH, DIRECT FOR EDITING) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
             Write-Log -Level Warning -Message "TextEditorScreen.HandleInput: Null keyInfo"
@@ -601,8 +638,13 @@ Try typing, navigating, and searching to see the smooth performance!
         
         Write-Log -Level Debug -Message "TextEditorScreen.HandleInput: Key=$($keyInfo.Key), SearchMode=$($this._isSearchMode)"
         
-        # Handle search panel input when active
+        # When search panel is open, use hybrid model for Tab navigation
         if ($this._isSearchMode) {
+            # Let base Screen handle Tab navigation between search components
+            if (([Screen]$this).HandleInput($keyInfo)) {
+                return $true
+            }
+            # Handle search-specific shortcuts
             return $this.HandleSearchInput($keyInfo)
         }
         
@@ -762,12 +804,11 @@ Try typing, navigating, and searching to see the smooth performance!
             }
         }
         
-        return $handled
+        # Let base Screen handle any unhandled keys (global shortcuts, etc.)
+        return ([Screen]$this).HandleInput($keyInfo)
     }
     
     hidden [bool] HandleSearchInput([System.ConsoleKeyInfo]$keyInfo) {
-        $handled = $true
-        
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Escape) {
                 $this.HideSearchPanel()
@@ -775,25 +816,6 @@ Try typing, navigating, and searching to see the smooth performance!
             }
             ([ConsoleKey]::Enter) {
                 $this.FindNext()
-                return $true
-            }
-            ([ConsoleKey]::Tab) {
-                if ($this._isReplaceMode) {
-                    # Toggle focus between search and replace boxes
-                    $this._searchBoxFocused = -not $this._searchBoxFocused
-                    if ($this._searchBoxFocused) {
-                        $this._searchBox.ShowCursor = $true
-                        $this._searchBox.BorderColor = Get-ThemeColor "primary.accent"
-                        $this._replaceBox.ShowCursor = $false
-                        $this._replaceBox.BorderColor = Get-ThemeColor "border"
-                    } else {
-                        $this._searchBox.ShowCursor = $false
-                        $this._searchBox.BorderColor = Get-ThemeColor "border"
-                        $this._replaceBox.ShowCursor = $true
-                        $this._replaceBox.BorderColor = Get-ThemeColor "primary.accent"
-                    }
-                    $this.RequestRedraw()
-                }
                 return $true
             }
             ([ConsoleKey]::R) {
@@ -819,43 +841,19 @@ Try typing, navigating, and searching to see the smooth performance!
                     return $true
                 }
             }
-            ([ConsoleKey]::Backspace) {
-                $activeBox = if ($this._searchBoxFocused) { $this._searchBox } else { $this._replaceBox }
-                if ($activeBox.Text.Length -gt 0) {
-                    $activeBox.Text = $activeBox.Text.Substring(0, $activeBox.Text.Length - 1)
-                    if ($this._searchBoxFocused) {
-                        $this.PerformIncrementalSearch()
-                    }
-                    $this.RequestRedraw()
+            ([ConsoleKey]::F3) {
+                if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
+                    $this.FindPrevious()
+                } else {
+                    $this.FindNext()
                 }
                 return $true
             }
-            default {
-                # Character input
-                if ($keyInfo.KeyChar -and $keyInfo.KeyChar -ne "`0") {
-                    $activeBox = if ($this._searchBoxFocused) { $this._searchBox } else { $this._replaceBox }
-                    $activeBox.Text += $keyInfo.KeyChar
-                    if ($this._searchBoxFocused) {
-                        $this.PerformIncrementalSearch()
-                    }
-                    $this.RequestRedraw()
-                    return $true
-                }
-                $handled = $false
-            }
         }
         
-        # Function keys work in search mode too
-        if ($keyInfo.Key -eq [ConsoleKey]::F3) {
-            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
-                $this.FindPrevious()
-            } else {
-                $this.FindNext()
-            }
-            return $true
-        }
-        
-        return $handled
+        # Let focused search component handle text input
+        # The TextBoxComponent.HandleInput() will handle character input
+        return $false
     }
 }
 

@@ -1,7 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Edit Task Screen  
-# FIXED: Removed sidebar, removed FocusManager dependency
-# Uses NCURSES-style window focus model with direct input handling
+# REFACTORED: Uses Hybrid Window Model for focus management
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -11,14 +10,13 @@ using namespace System.Collections.Generic
 #
 # PURPOSE:
 #   Full screen for editing existing tasks
-#   Uses direct input handling without external focus manager
+#   Uses hybrid window model with automatic focus management
 #
 # FOCUS MODEL:
-#   - Screen manages which field is "active" internally
-#   - Tab cycles through all fields sequentially
-#   - Up/Down arrows move between fields
-#   - Direct key handling for all operations
-#   - NO EXTERNAL FOCUS MANAGER SERVICE
+#   - Components are focusable and handle their own input
+#   - Screen base class manages Tab navigation automatically  
+#   - Components show visual focus feedback via OnFocus/OnBlur
+#   - Screen handles only global shortcuts and actions
 #
 # DEPENDENCIES:
 #   Services:
@@ -51,9 +49,6 @@ class EditTaskScreen : Screen {
     #region State
     hidden [PmcTask]$_task
     hidden [PmcTask]$_originalTask  # For cancel/revert
-    hidden [string]$_activeField = "title"  # Current active field
-    hidden [System.Collections.Generic.List[string]]$_fieldOrder  # Tab order
-    hidden [int]$_currentFieldIndex = 0
     #endregion
     
     EditTaskScreen([object]$serviceContainer, [PmcTask]$task) : base("EditTaskScreen", $serviceContainer) {
@@ -62,13 +57,6 @@ class EditTaskScreen : Screen {
         }
         $this._task = $task
         $this._originalTask = $task.Clone()  # Keep original for cancel
-        
-        # Define tab order for fields
-        $this._fieldOrder = [System.Collections.Generic.List[string]]::new()
-        $this._fieldOrder.AddRange(@(
-            "title", "description", "status", "priority", 
-            "progress", "project", "save", "cancel"
-        ))
     }
     
     [void] Initialize() {
@@ -120,8 +108,23 @@ class EditTaskScreen : Screen {
         $this._titleBox.Width = $contentWidth
         $this._titleBox.Height = 3
         $this._titleBox.Text = $this._task.Title
-        $this._titleBox.IsFocusable = $false  # We handle focus internally
+        $this._titleBox.IsFocusable = $true
+        $this._titleBox.TabIndex = 0
         $this._titleBox.BorderColor = Get-ThemeColor "input.border" "#444444"
+        
+        # Add focus visual feedback
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._formPanel.AddChild($this._titleBox)
         
         $y += 4
@@ -141,8 +144,23 @@ class EditTaskScreen : Screen {
         $this._descriptionBox.Width = $contentWidth
         $this._descriptionBox.Height = 3
         $this._descriptionBox.Text = $this._task.Description
-        $this._descriptionBox.IsFocusable = $false  # We handle focus internally
+        $this._descriptionBox.IsFocusable = $true
+        $this._descriptionBox.TabIndex = 1
         $this._descriptionBox.BorderColor = Get-ThemeColor "input.border" "#444444"
+        
+        # Add focus visual feedback
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._formPanel.AddChild($this._descriptionBox)
         
         $y += 4
@@ -168,7 +186,20 @@ class EditTaskScreen : Screen {
         $this._statusList.AddItem("● Completed")
         $this._statusList.AddItem("✕ Cancelled")
         $this._statusList.SelectedIndex = [int]$this._task.Status
-        $this._statusList.IsFocusable = $false  # We handle focus internally
+        $this._statusList.IsFocusable = $true
+        $this._statusList.TabIndex = 2
+        
+        # Add focus visual feedback  
+        $this._statusList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._statusList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._formPanel.AddChild($this._statusList)
         
         # Priority (Right Column)
@@ -190,7 +221,20 @@ class EditTaskScreen : Screen {
         $this._priorityList.AddItem("- Medium")
         $this._priorityList.AddItem("! High")
         $this._priorityList.SelectedIndex = [int]$this._task.Priority
-        $this._priorityList.IsFocusable = $false  # We handle focus internally
+        $this._priorityList.IsFocusable = $true
+        $this._priorityList.TabIndex = 3
+        
+        # Add focus visual feedback
+        $this._priorityList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._priorityList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._formPanel.AddChild($this._priorityList)
         
         $y += 7
@@ -211,8 +255,34 @@ class EditTaskScreen : Screen {
         $this._progressBox.Height = 3
         $this._progressBox.Text = $this._task.Progress.ToString()
         $this._progressBox.MaxLength = 3
-        $this._progressBox.IsFocusable = $false  # We handle focus internally
+        $this._progressBox.IsFocusable = $true
+        $this._progressBox.TabIndex = 4
         $this._progressBox.BorderColor = Get-ThemeColor "input.border" "#444444"
+        
+        # Add focus visual feedback
+        $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
+        # Add progress bar update when text changes
+        $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnTextChanged -Value {
+            $parent = $this.Parent
+            if ($parent) {
+                $screen = $parent.Parent
+                if ($screen -and $screen.GetType().Name -eq "EditTaskScreen") {
+                    $screen._UpdateProgressBar()
+                }
+            }
+        } -Force
+        
         $this._formPanel.AddChild($this._progressBox)
         
         # Progress bar visualization
@@ -242,7 +312,20 @@ class EditTaskScreen : Screen {
         $this._projectList.HasBorder = $true
         $this._projectList.BorderColor = Get-ThemeColor "input.border" "#444444"
         $this._projectList.AddItem("None")
-        $this._projectList.IsFocusable = $false  # We handle focus internally
+        $this._projectList.IsFocusable = $true
+        $this._projectList.TabIndex = 5
+        
+        # Add focus visual feedback
+        $this._projectList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._projectList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border" "#444444"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._formPanel.AddChild($this._projectList)
         
         $y += 6
@@ -264,18 +347,58 @@ class EditTaskScreen : Screen {
         $this._saveButton.Text = " Save Changes "
         $this._saveButton.X = $buttonX
         $this._saveButton.Y = $y
-        $this._saveButton.IsFocusable = $false  # We handle focus internally
+        $this._saveButton.IsFocusable = $true
+        $this._saveButton.TabIndex = 6
         $this._saveButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
         $this._saveButton.ForegroundColor = "#FFFFFF"
+        
+        # Add focus visual feedback and click handler
+        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._saveButton.OnClick = { 
+            $screen = $this.Parent.Parent
+            if ($screen -and $screen.GetType().Name -eq "EditTaskScreen") {
+                $screen._SaveTask()
+            }
+        }
+        
         $this._formPanel.AddChild($this._saveButton)
         
         $this._cancelButton = [ButtonComponent]::new("CancelButton")
         $this._cancelButton.Text = "   Cancel   "
         $this._cancelButton.X = $buttonX + 20
         $this._cancelButton.Y = $y
-        $this._cancelButton.IsFocusable = $false  # We handle focus internally
+        $this._cancelButton.IsFocusable = $true
+        $this._cancelButton.TabIndex = 7
         $this._cancelButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
         $this._cancelButton.ForegroundColor = "#FFFFFF"
+        
+        # Add focus visual feedback and click handler
+        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._cancelButton.OnClick = {
+            $screen = $this.Parent.Parent
+            if ($screen -and $screen.GetType().Name -eq "EditTaskScreen") {
+                $screen._CancelEdit()
+            }
+        }
+        
         $this._formPanel.AddChild($this._cancelButton)
         
         # === BOTTOM STATUS BAR ===
@@ -325,10 +448,8 @@ class EditTaskScreen : Screen {
         # Load projects
         $this._LoadProjects()
         
-        # Set initial focus to title
-        $this._activeField = "title"
-        $this._currentFieldIndex = 0
-        $this._UpdateVisualFocus()
+        # Call base to set initial focus automatically
+        ([Screen]$this).OnEnter()
         
         $this.RequestRedraw()
     }
@@ -336,60 +457,6 @@ class EditTaskScreen : Screen {
     [void] OnExit() {
         Write-Log -Level Debug -Message "EditTaskScreen.OnExit: Cleaning up"
         # Nothing to clean up
-    }
-    
-    # === VISUAL FOCUS MANAGEMENT ===
-    hidden [void] _UpdateVisualFocus() {
-        # Reset all field borders to default
-        $defaultBorder = Get-ThemeColor "input.border" "#444444"
-        $focusBorder = Get-ThemeColor "primary.accent" "#00D4FF"
-        
-        $this._titleBox.BorderColor = $defaultBorder
-        $this._titleBox.ShowCursor = $false
-        $this._descriptionBox.BorderColor = $defaultBorder
-        $this._descriptionBox.ShowCursor = $false
-        $this._statusList.BorderColor = $defaultBorder
-        $this._priorityList.BorderColor = $defaultBorder
-        $this._progressBox.BorderColor = $defaultBorder
-        $this._progressBox.ShowCursor = $false
-        $this._projectList.BorderColor = $defaultBorder
-        
-        # Reset button colors
-        $this._saveButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
-        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
-        
-        # Apply focus to active field
-        switch ($this._activeField) {
-            "title" {
-                $this._titleBox.BorderColor = $focusBorder
-                $this._titleBox.ShowCursor = $true
-            }
-            "description" {
-                $this._descriptionBox.BorderColor = $focusBorder
-                $this._descriptionBox.ShowCursor = $true
-            }
-            "status" {
-                $this._statusList.BorderColor = $focusBorder
-            }
-            "priority" {
-                $this._priorityList.BorderColor = $focusBorder
-            }
-            "progress" {
-                $this._progressBox.BorderColor = $focusBorder
-                $this._progressBox.ShowCursor = $true
-            }
-            "project" {
-                $this._projectList.BorderColor = $focusBorder
-            }
-            "save" {
-                $this._saveButton.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
-            }
-            "cancel" {
-                $this._cancelButton.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
-            }
-        }
-        
-        $this.RequestRedraw()
     }
     
     # === DATA LOADING ===
@@ -412,28 +479,6 @@ class EditTaskScreen : Screen {
             $i++
         }
         $this._projectList.SelectedIndex = $selectedIndex
-    }
-    
-    # === FIELD NAVIGATION ===
-    hidden [void] _MoveToNextField() {
-        $this._currentFieldIndex = ($this._currentFieldIndex + 1) % $this._fieldOrder.Count
-        $this._activeField = $this._fieldOrder[$this._currentFieldIndex]
-        $this._UpdateVisualFocus()
-    }
-    
-    hidden [void] _MoveToPreviousField() {
-        $this._currentFieldIndex = ($this._currentFieldIndex - 1 + $this._fieldOrder.Count) % $this._fieldOrder.Count
-        $this._activeField = $this._fieldOrder[$this._currentFieldIndex]
-        $this._UpdateVisualFocus()
-    }
-    
-    hidden [void] _MoveToField([string]$fieldName) {
-        $index = $this._fieldOrder.IndexOf($fieldName)
-        if ($index -ge 0) {
-            $this._currentFieldIndex = $index
-            $this._activeField = $fieldName
-            $this._UpdateVisualFocus()
-        }
     }
     
     # === SAVE/CANCEL OPERATIONS ===
@@ -583,153 +628,49 @@ class EditTaskScreen : Screen {
         $this.RequestRedraw()
     }
     
-    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    # === INPUT HANDLING (HYBRID MODEL) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
             Write-Log -Level Warning -Message "EditTaskScreen.HandleInput: Null keyInfo"
             return $false
         }
         
-        Write-Log -Level Debug -Message "EditTaskScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Active=$($this._activeField)"
+        Write-Log -Level Debug -Message "EditTaskScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
         
-        # === HANDLE TEXT INPUT FOR TEXT FIELDS ===
-        if ($this._activeField -in @("title", "description", "progress")) {
-            $textBox = switch ($this._activeField) {
-                "title" { $this._titleBox }
-                "description" { $this._descriptionBox }
-                "progress" { $this._progressBox }
+        # The base Screen class handles Tab navigation automatically!
+        # Just call the base implementation first
+        if (([Screen]$this).HandleInput($keyInfo)) {
+            return $true
+        }
+        
+        # Handle global shortcuts that work regardless of focus
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Escape) {
+                $this._CancelEdit()
+                return $true
             }
-            
+            ([ConsoleKey]::F5) {
+                $this._ResetForm()
+                return $true
+            }
+            ([ConsoleKey]::Enter) {
+                # Enter saves from anywhere
+                $this._SaveTask()
+                return $true
+            }
+        }
+        
+        # Handle global character shortcuts
+        if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control) {
             switch ($keyInfo.Key) {
-                ([ConsoleKey]::Backspace) {
-                    if ($textBox.Text.Length -gt 0) {
-                        $textBox.Text = $textBox.Text.Substring(0, $textBox.Text.Length - 1)
-                        if ($this._activeField -eq "progress") {
-                            $this._UpdateProgressBar()
-                        }
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Delete) {
-                    # For simplicity, same as backspace
-                    if ($textBox.Text.Length -gt 0) {
-                        $textBox.Text = $textBox.Text.Substring(0, $textBox.Text.Length - 1)
-                        if ($this._activeField -eq "progress") {
-                            $this._UpdateProgressBar()
-                        }
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Tab) {
-                    if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
-                        $this._MoveToPreviousField()
-                    } else {
-                        $this._MoveToNextField()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    # Enter in text field saves the task
+                ([ConsoleKey]::S) {
                     $this._SaveTask()
                     return $true
                 }
-                ([ConsoleKey]::Escape) {
-                    $this._CancelEdit()
-                    return $true
-                }
-                default {
-                    # Add character to text field
-                    if ($keyInfo.KeyChar -and $keyInfo.KeyChar -ne "`0") {
-                        # Special handling for progress field - numbers only
-                        if ($this._activeField -eq "progress") {
-                            if ([char]::IsDigit($keyInfo.KeyChar) -and $textBox.Text.Length -lt 3) {
-                                $textBox.Text += $keyInfo.KeyChar
-                                $this._UpdateProgressBar()
-                                $this.RequestRedraw()
-                            }
-                        } else {
-                            # Normal text input
-                            $textBox.Text += $keyInfo.KeyChar
-                            $this.RequestRedraw()
-                        }
-                        return $true
-                    }
-                }
             }
         }
         
-        # === HANDLE LIST NAVIGATION ===
-        if ($this._activeField -in @("status", "priority", "project")) {
-            $listBox = switch ($this._activeField) {
-                "status" { $this._statusList }
-                "priority" { $this._priorityList }
-                "project" { $this._projectList }
-            }
-            
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::UpArrow) {
-                    if ($listBox.SelectedIndex -gt 0) {
-                        $listBox.SelectedIndex--
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::DownArrow) {
-                    if ($listBox.SelectedIndex -lt $listBox.Items.Count - 1) {
-                        $listBox.SelectedIndex++
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Tab) {
-                    if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
-                        $this._MoveToPreviousField()
-                    } else {
-                        $this._MoveToNextField()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    # Enter in list saves the task
-                    $this._SaveTask()
-                    return $true
-                }
-                ([ConsoleKey]::Escape) {
-                    $this._CancelEdit()
-                    return $true
-                }
-            }
-        }
-        
-        # === HANDLE BUTTON ACTIONS ===
-        if ($this._activeField -in @("save", "cancel")) {
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::Enter) {
-                    if ($this._activeField -eq "save") {
-                        $this._SaveTask()
-                    } else {
-                        $this._CancelEdit()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Tab) {
-                    if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
-                        $this._MoveToPreviousField()
-                    } else {
-                        $this._MoveToNextField()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Escape) {
-                    $this._CancelEdit()
-                    return $true
-                }
-            }
-        }
-        
-        # === GLOBAL SHORTCUTS (work from any field) ===
+        # Quick action shortcuts (case-insensitive)
         switch ($keyInfo.KeyChar) {
             'p' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
@@ -750,24 +691,6 @@ class EditTaskScreen : Screen {
             'S' {
                 $this._CycleStatus()
                 return $true
-            }
-        }
-        
-        # === FUNCTION KEYS ===
-        switch ($keyInfo.Key) {
-            ([ConsoleKey]::F5) {
-                $this._ResetForm()
-                return $true
-            }
-        }
-        
-        # === CTRL COMBINATIONS ===
-        if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control) {
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::S) {
-                    $this._SaveTask()
-                    return $true
-                }
             }
         }
         

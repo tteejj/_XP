@@ -22,8 +22,7 @@ class ProjectsListScreen : Screen {
     hidden [MultilineTextBoxComponent] $_descriptionBox
     hidden [Dictionary[string, LabelComponent]] $_detailLabels
     
-    # Internal focus management
-    hidden [string] $_activeComponent = "search"  # "search", "list"
+    # Search state
     hidden [string] $_searchText = ""
     
     ProjectsListScreen([object]$serviceContainer) : base("ProjectsListScreen", $serviceContainer) {
@@ -69,8 +68,30 @@ class ProjectsListScreen : Screen {
         $this._searchBox.Width = $this._listPanel.Width - 4
         $this._searchBox.Height = 1
         $this._searchBox.Placeholder = "🔍 Search projects..."
-        $this._searchBox.IsFocusable = $false  # We handle input directly
-        $this._searchBox.ShowCursor = $true  # Show cursor initially
+        $this._searchBox.IsFocusable = $true  # HYBRID MODEL: Component handles its own input
+        $this._searchBox.TabIndex = 0
+        
+        # Add visual focus feedback for search box
+        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "component.border"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
+        # Handle search text changes
+        $screenRef = $this
+        $this._searchBox.OnChange = {
+            param($sender, $newText)
+            $screenRef._searchText = $newText
+            $screenRef.FilterProjects($newText)
+        }.GetNewClosure()
+        
         $this._listPanel.AddChild($this._searchBox)
         
         # Project list
@@ -80,9 +101,29 @@ class ProjectsListScreen : Screen {
         $this._projectListBox.Width = $this._listPanel.Width - 2
         $this._projectListBox.Height = $this._listPanel.Height - 5
         $this._projectListBox.HasBorder = $false
-        $this._projectListBox.IsFocusable = $false  # We handle input directly
+        $this._projectListBox.IsFocusable = $true  # HYBRID MODEL: Component handles its own input
+        $this._projectListBox.TabIndex = 1
         $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "list.selected.bg"
         $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "list.selected.fg"
+        
+        # Add visual focus feedback for list box
+        $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "component.border"
+            $this.RequestRedraw()
+        } -Force
+        
+        # Handle list selection changes
+        $screenRef = $this
+        $this._projectListBox.SelectedIndexChanged = {
+            param($sender, $newIndex)
+            $screenRef.UpdateDetailPanel()
+        }.GetNewClosure()
+        
         $this._listPanel.AddChild($this._projectListBox)
         
         # Detail panel (right side)
@@ -155,7 +196,7 @@ class ProjectsListScreen : Screen {
         
         # Tab hint
         $tabHint = [LabelComponent]::new("TabHint")
-        $tabHint.Text = "[Tab] Switch"
+        $tabHint.Text = "[Tab] Focus"
         $tabHint.X = $archiveBtn.X + $buttonSpacing
         $tabHint.Y = $buttonY
         $tabHint.ForegroundColor = Get-ThemeColor "subtle"
@@ -325,9 +366,8 @@ class ProjectsListScreen : Screen {
         $this._searchBox.Text = ""
         $this.FilterProjects("")
         
-        # Set initial focus state
-        $this._activeComponent = "search"
-        $this._UpdateVisualFocus()
+        # Call base class to handle focus management
+        ([Screen]$this).OnEnter()
         
         $this.RequestRedraw()
     }
@@ -438,20 +478,6 @@ class ProjectsListScreen : Screen {
         $this.RequestRedraw()
     }
     
-    hidden [void] _UpdateVisualFocus() {
-        # Update visual indicators based on active component
-        if ($this._activeComponent -eq "search") {
-            $this._searchBox.ShowCursor = $true
-            $this._listPanel.BorderColor = Get-ThemeColor "primary.accent"
-            $this._searchBox.BorderColor = Get-ThemeColor "primary.accent"
-        } else {
-            $this._searchBox.ShowCursor = $false
-            $this._listPanel.BorderColor = Get-ThemeColor "component.border"
-            $this._searchBox.BorderColor = Get-ThemeColor "component.border"
-        }
-        $this.RequestRedraw()
-    }
-    
     hidden [void] ViewSelectedProject() {
         if ($this._projectListBox.SelectedIndex -ge 0 -and 
             $this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count) {
@@ -524,115 +550,43 @@ class ProjectsListScreen : Screen {
         $this.FilterProjects($this._searchText)
     }
     
-    # === INPUT HANDLING (DIRECT, NO FOCUS MANAGER) ===
+    # === INPUT HANDLING (HYBRID MODEL) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
             Write-Log -Level Warning -Message "ProjectsListScreen.HandleInput: Null keyInfo"
             return $false
         }
         
-        Write-Log -Level Debug -Message "ProjectsListScreen.HandleInput: Key=$($keyInfo.Key), Active=$($this._activeComponent)"
+        Write-Log -Level Debug -Message "ProjectsListScreen.HandleInput: Key=$($keyInfo.Key)"
         
-        # Handle based on active component
-        if ($this._activeComponent -eq "search") {
-            # Search box is active
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::Tab) {
-                    # Switch to list
-                    $this._activeComponent = "list"
-                    $this._UpdateVisualFocus()
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    # Apply search and move to list
-                    $this.FilterProjects($this._searchText)
-                    $this._activeComponent = "list"
-                    $this._UpdateVisualFocus()
-                    return $true
-                }
-                ([ConsoleKey]::Escape) {
-                    # Clear search or go back
-                    if ($this._searchText.Length -gt 0) {
-                        $this._searchText = ""
-                        $this._searchBox.Text = ""
-                        $this.FilterProjects("")
-                    } else {
-                        # Go back
-                        $navService = $this.ServiceContainer?.GetService("NavigationService")
-                        if ($navService -and $navService.CanGoBack()) {
-                            $navService.GoBack()
-                        }
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Backspace) {
-                    if ($this._searchText.Length -gt 0) {
-                        $this._searchText = $this._searchText.Substring(0, $this._searchText.Length - 1)
-                        $this._searchBox.Text = $this._searchText
-                        $this.FilterProjects($this._searchText)
-                    }
-                    return $true
-                }
-                default {
-                    # Add character to search
-                    if ($keyInfo.KeyChar -and ([char]::IsLetterOrDigit($keyInfo.KeyChar) -or 
-                        [char]::IsPunctuation($keyInfo.KeyChar) -or 
-                        [char]::IsWhiteSpace($keyInfo.KeyChar))) {
-                        $this._searchText += $keyInfo.KeyChar
-                        $this._searchBox.Text = $this._searchText
-                        $this.FilterProjects($this._searchText)
-                        return $true
-                    }
-                }
-            }
+        # HYBRID MODEL: Base class handles Tab navigation and routes input to focused component
+        if (([Screen]$this).HandleInput($keyInfo)) {
+            return $true
         }
-        else {
-            # List is active
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::Tab) {
-                    # Switch to search
-                    $this._activeComponent = "search"
-                    $this._UpdateVisualFocus()
-                    return $true
-                }
-                ([ConsoleKey]::UpArrow) {
-                    if ($this._projectListBox.SelectedIndex -gt 0) {
-                        $this._projectListBox.SelectedIndex--
-                        $this.UpdateDetailPanel()
-                        $this.RequestRedraw()
+        
+        # Handle screen-level shortcuts that work regardless of focus
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Enter) {
+                $this.ViewSelectedProject()
+                return $true
+            }
+            ([ConsoleKey]::Escape) {
+                # Go back
+                $navService = $this.ServiceContainer?.GetService("NavigationService")
+                if ($navService -and $navService.CanGoBack()) {
+                    $navService.GoBack()
+                } else {
+                    # Fallback to dashboard
+                    $actionService = $this.ServiceContainer?.GetService("ActionService")
+                    if ($actionService) {
+                        $actionService.ExecuteAction("navigation.dashboard", @{})
                     }
-                    return $true
                 }
-                ([ConsoleKey]::DownArrow) {
-                    if ($this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count - 1) {
-                        $this._projectListBox.SelectedIndex++
-                        $this.UpdateDetailPanel()
-                        $this.RequestRedraw()
-                    }
-                    return $true
-                }
-                ([ConsoleKey]::Enter) {
-                    $this.ViewSelectedProject()
-                    return $true
-                }
-                ([ConsoleKey]::Escape) {
-                    # Go back
-                    $navService = $this.ServiceContainer?.GetService("NavigationService")
-                    if ($navService -and $navService.CanGoBack()) {
-                        $navService.GoBack()
-                    } else {
-                        # Fallback to dashboard
-                        $actionService = $this.ServiceContainer?.GetService("ActionService")
-                        if ($actionService) {
-                            $actionService.ExecuteAction("navigation.dashboard", @{})
-                        }
-                    }
-                    return $true
-                }
+                return $true
             }
         }
         
-        # Global shortcuts (work in both modes)
+        # Global character shortcuts (work in both search and list)
         switch ($keyInfo.KeyChar) {
             'n' {
                 if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None) {
@@ -675,10 +629,10 @@ class ProjectsListScreen : Screen {
                 return $true
             }
             '/' {
-                # Quick jump to search
-                $this._activeComponent = "search"
-                $this._UpdateVisualFocus()
-                return $true
+                # Quick jump to search - focus the search box
+                # The framework will handle this through focus management
+                # We can use SetChildFocus if needed
+                return $false  # Let framework handle
             }
         }
         

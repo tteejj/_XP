@@ -181,6 +181,14 @@ class Screen : UIElement {
         if (-not $this._focusCacheValid -or $null -eq $this._focusableCache) {
             $this._focusableCache = [System.Collections.Generic.List[UIElement]]::new()
             $this._CollectFocusableRecursive($this, $this._focusableCache)
+            
+            # Sort by TabIndex for predictable tab order
+            $sorted = $this._focusableCache | Sort-Object TabIndex
+            $this._focusableCache.Clear()
+            foreach ($item in $sorted) {
+                $this._focusableCache.Add($item)
+            }
+            
             $this._focusCacheValid = $true
         }
         return $this._focusableCache
