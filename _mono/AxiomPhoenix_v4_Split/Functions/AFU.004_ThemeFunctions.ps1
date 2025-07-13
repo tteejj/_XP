@@ -10,6 +10,11 @@ function Get-ThemeColor {
     )
     
     $themeManager = $global:TuiState?.Services?.ThemeManager
+    if (-not $themeManager) {
+        # Try alternate location during initialization
+        $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
+    }
+    
     if ($themeManager) {
         return $themeManager.GetColor($ThemePath, $DefaultColor)
     }
@@ -23,9 +28,14 @@ function Get-ThemeValue {
         [object]$DefaultValue = $null
     )
     
-    $themeManager = $global:TuiState.Services.ThemeManager
+    $themeManager = $global:TuiState?.Services?.ThemeManager
+    if (-not $themeManager) {
+        # Try alternate location during initialization
+        $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
+    }
+    
     if ($themeManager) {
-        return $themeManager.GetValue($Path, $DefaultValue)
+        return $themeManager.GetThemeValue($Path, $DefaultValue)
     }
     return $DefaultValue
 }
@@ -42,41 +52,41 @@ function Apply-ThemeToComponent {
     # Common theme applications
     switch ($ComponentType) {
         "Panel" {
-            $Component.SetBorderColor((Get-ThemeValue "Panel.Border" "#333333"))
-            $Component.SetBackgroundColor((Get-ThemeValue "Panel.Background" "#000000"))
+            $Component.BorderColor = Get-ThemeValue "Panel.Border" "#333333"
+            $Component.BackgroundColor = Get-ThemeValue "Panel.Background" "#000000"
             if ($Component.Title) {
                 # Title color handled internally by Panel
             }
         }
         "Button" {
-            $Component.SetBackgroundColor((Get-ThemeValue "Button.Background" "#1A1A1A"))
-            $Component.SetForegroundColor((Get-ThemeValue "Button.Foreground" "#E0E0E0"))
+            $Component.BackgroundColor = Get-ThemeValue "Button.Background" "#1A1A1A"
+            $Component.ForegroundColor = Get-ThemeValue "Button.Foreground" "#E0E0E0"
             # Focus states handled internally by Button
         }
         "TextBox" {
-            $Component.SetBackgroundColor((Get-ThemeValue "TextBox.Background" "#1A1A1A"))
-            $Component.SetForegroundColor((Get-ThemeValue "TextBox.Foreground" "#E0E0E0"))
-            $Component.SetBorderColor((Get-ThemeValue "TextBox.Border" "#333333"))
+            $Component.BackgroundColor = Get-ThemeValue "TextBox.Background" "#1A1A1A"
+            $Component.ForegroundColor = Get-ThemeValue "TextBox.Foreground" "#E0E0E0"
+            $Component.BorderColor = Get-ThemeValue "TextBox.Border" "#333333"
             # PlaceholderColor does not have a setter method, direct assignment is fine.
             $Component.PlaceholderColor = Get-ThemeValue "TextBox.Placeholder" "#666666"
         }
         "List" {
-            $Component.SetBackgroundColor((Get-ThemeValue "List.Background" "#000000"))
-            $Component.SetForegroundColor((Get-ThemeValue "List.Foreground" "#E0E0E0"))
+            $Component.BackgroundColor = Get-ThemeValue "List.Background" "#000000"
+            $Component.ForegroundColor = Get-ThemeValue "List.Foreground" "#E0E0E0"
             # SelectedBackgroundColor and SelectedForegroundColor do not have setter methods, direct assignment is fine.
             $Component.SelectedBackgroundColor = Get-ThemeValue "List.SelectedBackground" "#0066CC"
             $Component.SelectedForegroundColor = Get-ThemeValue "List.SelectedForeground" "#FFFFFF"
             if ($Component.HasBorder) {
-                $Component.SetBorderColor((Get-ThemeValue "List.Border" "#333333"))
+                $Component.BorderColor = Get-ThemeValue "List.Border" "#333333"
             }
         }
         "Label" {
             # Labels typically inherit from parent, but can be set explicitly
             $bg = Get-ThemeValue "Label.Background"
             if ($bg -and $bg -ne 'transparent') {
-                $Component.SetBackgroundColor($bg)
+                $Component.BackgroundColor = $bg
             }
-            $Component.SetForegroundColor((Get-ThemeValue "Label.Foreground" "#E0E0E0"))
+            $Component.ForegroundColor = Get-ThemeValue "Label.Foreground" "#E0E0E0"
         }
     }
 }

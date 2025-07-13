@@ -1,31 +1,28 @@
-You are absolutely right. My apologies. The previous response was generic and did not meet the standard of a specific, high-quality internal design document that your framework deserves. I will do better.
+Axiom-Phoenix v4.1 - Official UI Development Guide
 
-This new guide is written from the perspective of the framework's architect, using your class names and design patterns. It is intended to be the definitive, official documentation for all UI development in Axiom-Phoenix, replacing any previous models.
+Document Status: Final | Effective: Immediately
+Subject: The Hybrid Window Manager & Input Handling Model
+Owner: Framework Architecture Team
 
----
+1. Overview & Philosophy
 
-# **Axiom-Phoenix v4.1 - Official UI Development Guide**
+This document outlines the correct and only supported model for input handling and focus management in the Axiom-Phoenix v4.1 framework. The previous FocusManager service is deprecated and must be removed from all screens.
 
-**Document Status:** Final | **Effective:** Immediately
-**Subject:** The Hybrid Window Manager & Input Handling Model
-**Owner:** Framework Architecture Team
+Our architecture is a Hybrid Window Manager Model, mirroring mature desktop GUI frameworks. The principles are:
 
-## 1. Overview & Philosophy
+Each Screen is a Window Manager: It is responsible for its child components. It manages which component has focus and handles navigation between them.
 
-This document outlines the **correct and only supported model** for input handling and focus management in the Axiom-Phoenix v4.1 framework. The previous `FocusManager` service is **deprecated** and must be removed from all screens.
+Components are Self-Sufficient: When focused, a component is responsible for processing its own input (e.g., a TextBoxComponent handles typing, a ListBox handles scrolling).
 
-Our architecture is a **Hybrid Window Manager Model**, mirroring mature desktop GUI frameworks. The principles are:
+Navigation is Automatic: The base Screen class provides automatic, ordered Tab / Shift+Tab navigation. You do not need to implement this.
 
--   **Each `Screen` is a Window Manager:** It is responsible for its child components. It manages which component has focus and handles navigation between them.
--   **Components are Self-Sufficient:** When focused, a component is responsible for processing its own input (e.g., a `TextBoxComponent` handles typing, a `ListBox` handles scrolling).
--   **Navigation is Automatic:** The base `Screen` class provides automatic, ordered `Tab` / `Shift+Tab` navigation. You do not need to implement this.
--   **Global Shortcuts are Centralized:** The `Screen` handles application-wide shortcuts (`Escape`, `F-Keys`, `Ctrl+` combos), providing consistent behavior across the application.
+Global Shortcuts are Centralized: The Screen handles application-wide shortcuts (Escape, F-Keys, Ctrl+ combos), providing consistent behavior across the application.
 
-## 2. The Canonical Input Flow
+2. The Canonical Input Flow
 
 All input follows this precise, predictable flow. Understanding this is essential.
 
-```mermaid
+Generated mermaid
 graph TD
     A[TUI Engine sends key] --> B(Screen.HandleInput);
 
@@ -52,17 +49,16 @@ graph TD
         K -->|No| M[Screen returns false];
     end
     M --> Y([END] Input Not Handled);
-```
 
-## 3. Implementing a `Screen`: The Window Manager
+3. Implementing a Screen: The Window Manager
 
-A `Screen`'s role is orchestration, not micromanagement. It sets up its components, defines the focus order, and handles global actions.
+A Screen's role is orchestration, not micromanagement. It sets up its components, defines the focus order, and handles global actions.
 
-### Correct `Screen` Implementation
+Correct Screen Implementation
 
 This is the blueprint for all new screens. It demonstrates proper initialization and input handling.
 
-```powershell
+Generated powershell
 class YourScreen : Screen {
     hidden [TextBoxComponent] $_searchBox
     hidden [ListBox] $_itemList
@@ -139,15 +135,18 @@ class YourScreen : Screen {
         return $false // We did not handle this key.
     }
 }
-```
-
-## 4. Implementing a `Component`: The Input Handler
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+4. Implementing a Component: The Input Handler
 
 A component is a focused specialist. It provides visual feedback for focus and handles only the keys relevant to its function.
 
-### Correct `Component` Implementation
-
-```powershell
+Correct Component Implementation
+Generated powershell
 class TextBoxComponent : UIElement {
     # --- Visual Feedback for Focus ---
     
@@ -203,31 +202,48 @@ class TextBoxComponent : UIElement {
         return $false
     }
 }
-```
-
-## 5. The Anti-Pattern Graveyard: What You MUST AVOID
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Powershell
+IGNORE_WHEN_COPYING_END
+5. The Anti-Pattern Graveyard: What You MUST AVOID
 
 To ensure framework stability, the following patterns are strictly forbidden.
 
-1.  **DO NOT USE `FocusManager`:** The `FocusManager` service (`Services\ASE.006_FocusManager.ps1`) is deprecated and must be removed from the project. All calls to it must be refactored.
-2.  **DO NOT HANDLE `Tab` IN COMPONENTS:** The `Screen` base class handles `Tab` and `Shift+Tab`. Any component-level tab handling will break the focus order.
-3.  **DO NOT FORGET THE BASE CALL:** In a screen's `HandleInput`, `([Screen]$this).HandleInput($keyInfo)` **must** be the first call. Omitting it disables all automatic focus management and input routing.
-4.  **DO NOT USE `Set...Color()` METHODS:** The `UIElement` class exposes public string properties (`$ForegroundColor`, `$BackgroundColor`, `$BorderColor`). Use direct assignment: `$this.BorderColor = Get-ThemeColor "..."`. The old setter methods have been removed to prevent ambiguity errors.
+DO NOT USE FocusManager: The FocusManager service (Services\ASE.006_FocusManager.ps1) is deprecated and must be removed from the project. All calls to it must be refactored.
 
-## 6. Migration Checklist for Existing Screens
+DO NOT HANDLE Tab IN COMPONENTS: The Screen base class handles Tab and Shift+Tab. Any component-level tab handling will break the focus order. For complex components with internal focusable areas (like a command palette), use other keys like UpArrow/DownArrow to manage internal focus, but let Tab exit the component.
 
-Use this checklist to update any screen (e.g., `TaskListScreen`, `FileCommanderScreen`) from the old model to the correct hybrid model.
+DO NOT FORGET THE BASE CALL: In a screen's HandleInput, ([Screen]$this).HandleInput($keyInfo) must be the first call. Omitting it disables all automatic focus management and input routing.
 
--   [ ] **Remove `FocusManager`:** Delete all code that references the `FocusManager` service.
--   [ ] **Remove Manual Focus Tracking:** Delete any state variables like `$_activeComponent` or `$_focusedIndex`.
--   [ ] **Remove Manual `Tab` Handling:** Delete any `switch` cases for `[ConsoleKey]::Tab`.
--   [ ] **Set `IsFocusable`:** Go through every UI component. If it's interactive, set `$component.IsFocusable = $true`. If it's static/decorative, set `$component.IsFocusable = $false`.
--   [ ] **Set `TabIndex`:** Assign a unique, sequential `TabIndex` (0, 1, 2...) to every focusable component to define the navigation order.
--   [ ] **Refactor `HandleInput`:**
-    -   Make `if (([Screen]$this).HandleInput($keyInfo)) { return $true }` the very first line.
-    -   Move component-specific key handling (e.g., arrow keys for a list) into that component's `HandleInput` method.
-    -   Keep only global shortcuts (`Escape`, `F-Keys`) in the screen's `HandleInput` fallback section.
--   [ ] **Implement `OnFocus`/`OnBlur`:** Add these methods to your custom components to provide clear visual feedback when they become active or inactive.
--   [ ] **Standardize Color Setting:** Replace all `$component.SetBackgroundColor(...)` calls with `$component.BackgroundColor = ...`.
+DO NOT USE Set...Color() METHODS: The UIElement class exposes public string properties ($ForegroundColor, $BackgroundColor, $BorderColor). Use direct assignment: $this.BorderColor = Get-ThemeColor "...". The old setter methods have been removed to prevent ambiguity errors.
+
+6. Migration Checklist for Existing Screens
+
+Use this checklist to update any screen (e.g., TaskListScreen, FileCommanderScreen) from the old model to the correct hybrid model.
+
+Remove FocusManager: Delete all code that references the FocusManager service.
+
+Remove Manual Focus Tracking: Delete any state variables like $_activeComponent or $_focusedIndex.
+
+Remove Manual Tab Handling: Delete any switch cases for [ConsoleKey]::Tab.
+
+Set IsFocusable: Go through every UI component. If it's interactive, set $component.IsFocusable = $true. If it's static/decorative, set $component.IsFocusable = $false.
+
+Set TabIndex: Assign a unique, sequential TabIndex (0, 1, 2...) to every focusable component to define the navigation order.
+
+Refactor HandleInput:
+
+Make if (([Screen]$this).HandleInput($keyInfo)) { return $true } the very first line.
+
+Move component-specific key handling (e.g., arrow keys for a list) into that component's HandleInput method.
+
+Keep only global shortcuts (Escape, F-Keys) in the screen's HandleInput fallback section.
+
+Implement OnFocus/OnBlur: Add these methods to your custom components to provide clear visual feedback when they become active or inactive.
+
+Standardize Color Setting: Replace all $component.SetBackgroundColor(...) calls with $component.BackgroundColor = ....
 
 By adhering to this guide, you will ensure that every part of the Axiom-Phoenix UI is robust, predictable, and easy to maintain.

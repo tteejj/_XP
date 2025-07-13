@@ -27,7 +27,7 @@ class GroupPanel : Panel {
     GroupPanel([string]$name) : base($name) {
         $this.BorderStyle = "Double"
         $this.BorderColor = "#008B8B"     # FIXED: DarkCyan in hex
-        $this.SetBackgroundColor("#000000") # FIXED: Black in hex
+        $this.BackgroundColor = "#000000" # FIXED: Use property assignment instead of method
     }
 
     [void] OnRender() {

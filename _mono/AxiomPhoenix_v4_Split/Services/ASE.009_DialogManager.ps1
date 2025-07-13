@@ -15,7 +15,9 @@ class DialogManager {
         $this.ServiceContainer = $serviceContainer
         $this.NavigationService = $serviceContainer.GetService("NavigationService")
         
-        Write-Log -Level Debug -Message "DialogManager: Initialized with window-based model."
+        if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "DialogManager: Initialized with window-based model."
+        }
     }
 
     [void] ShowDialog([Dialog]$dialog) {
@@ -23,54 +25,76 @@ class DialogManager {
             throw [System.ArgumentException]::new("Dialog cannot be null.", "dialog")
         }
         
-        # WINDOW-BASED MODEL: Use NavigationService to show dialog as a window
+        # FIXED: WINDOW-BASED MODEL: Use NavigationService to show dialog as a window
         if ($this.NavigationService) {
-            Write-Log -Level Debug -Message "DialogManager: Showing dialog '$($dialog.Name)' via NavigationService"
+            if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Debug -Message "DialogManager: Showing dialog '$($dialog.Name)' via NavigationService"
+            }
             
-            # Initialize dialog if needed
+            # FIXED: Initialize dialog if needed before navigating
             if ($dialog.PSObject.Methods['Initialize'] -and -not $dialog._isInitialized) {
                 $dialog.Initialize()
-                $dialog._isInitialized = $true
             }
             
             # Navigate to the dialog
             $this.NavigationService.NavigateTo($dialog)
         } else {
-            Write-Log -Level Error -Message "DialogManager: NavigationService not available"
+            if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Error -Message "DialogManager: NavigationService not available"
+            }
         }
     }
 
     [void] HideDialog([Dialog]$dialog) {
-        # WINDOW-BASED MODEL: Dialog handles its own closing via Complete() method
-        # which calls NavigationService.GoBack()
-        Write-Log -Level Debug -Message "DialogManager: Dialog '$($dialog.Name)' will close itself via GoBack"
+        # FIXED: WINDOW-BASED MODEL: Dialog handles its own closing via Complete() method
+        # which calls NavigationService.GoBack(). This method is now a no-op.
+        if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "DialogManager: HideDialog is a no-op. Dialog '$($dialog.Name)' will close itself via its Complete() method."
+        }
     }
     
     [void] ShowAlert([string]$title, [string]$message) {
+        # FIXED: Pass the service container to the constructor
         $alert = [AlertDialog]::new("Alert", $this.ServiceContainer)
         $alert.Show($title, $message)
         $this.ShowDialog($alert)
     }
     
-    [void] ShowConfirm([string]$title, [string]$message, [scriptblock]$onConfirm, [scriptblock]$onCancel) {
+    [void] ShowConfirm([string]$title, [string]$message, [scriptblock]$onConfirm, [scriptblock]$onCancel = $null) {
+        # FIXED: Pass the service container to the constructor
         $confirm = [ConfirmDialog]::new("Confirm", $this.ServiceContainer)
         $confirm.Show($title, $message)
-        $confirm.OnConfirm = $onConfirm
-        $confirm.OnCancel = $onCancel
+        # The dialog's OnClick handlers will call Complete(), which calls GoBack()
+        $confirm.OnClose = {
+            param($result)
+            if ($result -and $onConfirm) {
+                & $onConfirm
+            } elseif (-not $result -and $onCancel) {
+                & $onCancel
+            }
+        }.GetNewClosure()
         $this.ShowDialog($confirm)
     }
     
-    [object] ShowInput([string]$title, [string]$prompt, [string]$defaultValue) {
+    [void] ShowInput([string]$title, [string]$prompt, [scriptblock]$onComplete, [string]$defaultValue = "") {
+        # FIXED: Pass the service container to the constructor
         $input = [InputDialog]::new("Input", $this.ServiceContainer)
-        $input.Show($title, $prompt)
-        $input.DefaultValue = $defaultValue
+        $input.Show($title, $prompt, $defaultValue)
+        $input.OnClose = {
+            param($result)
+            # Only call the completion handler if the user didn't cancel (result is not null)
+            if ($null -ne $result -and $onComplete) {
+                & $onComplete $result
+            }
+        }.GetNewClosure()
         $this.ShowDialog($input)
-        return $input.Result
     }
 
     [void] Cleanup() {
         # Nothing to cleanup in window-based model
-        Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
+        if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+            Write-Log -Level Debug -Message "DialogManager: Cleanup complete."
+        }
     }
 }
 

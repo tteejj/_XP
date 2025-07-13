@@ -1,3 +1,4 @@
+####\Base\ABC.005_Component.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Base Classes (Load First)
 # Core framework classes with NO external dependencies

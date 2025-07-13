@@ -28,9 +28,6 @@ class MultilineTextBoxComponent : UIElement {
     [int]$ScrollOffsetX = 0
     [bool]$ReadOnly = $false
     [scriptblock]$OnChange
-    hidden [string]$_backgroundColorValue = "#000000"
-    [string]$ForegroundColor = "#FFFFFF"
-    [string]$BorderColor = "#808080"
     
     MultilineTextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -242,6 +239,7 @@ class MultilineTextBoxComponent : UIElement {
                 try { & $this.OnChange $this $this.GetText() } catch {}
             }
             $this.RequestRedraw()
+            $global:TuiState.IsDirty = $true # Fixed: Added global:TuiState.IsDirty = $true
         }
         
         return $handled

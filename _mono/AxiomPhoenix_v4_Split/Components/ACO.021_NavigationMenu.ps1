@@ -24,8 +24,6 @@ class NavigationMenu : UIElement {
     [List[NavigationItem]]$Items
     [int]$SelectedIndex = 0
     [string]$Orientation = "Horizontal"  # Horizontal or Vertical
-    [string]$BackgroundColor = "#000000"
-    [string]$ForegroundColor = "#FFFFFF"
     [string]$SelectedBackgroundColor = "#0078D4"
     [string]$SelectedForegroundColor = "#FFFF00"
 

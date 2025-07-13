@@ -129,7 +129,6 @@ class ActionService {
     [void] RegisterDefaultActions() {
         # Register built-in actions
         $this.RegisterAction("app.exit", {
-            # Write-Verbose "Executing app.exit action"
             $global:TuiState.Running = $false
         }, @{
             Category = "Application"
@@ -137,74 +136,57 @@ class ActionService {
             Hotkey = "Ctrl+Q"
         })
         
+        $this.RegisterAction("app.exit.ctrlc", {
+            $global:TuiState.Running = $false
+        }, @{
+            Category = "Application"
+            Description = "Exit the application (Ctrl+C)"
+            Hotkey = "Ctrl+C"
+        })
+        
         $this.RegisterAction("app.help", {
-            # Write-Verbose "Executing app.help action"
-            # Would show help screen
+            # Placeholder for help screen
         }, @{
             Category = "Application"
             Description = "Show help"
             Hotkey = "F1"
         })
         
-        # Use CommandPalette dialog directly (it inherits from Dialog/Screen)
+        # FIXED: Use CommandPalette dialog correctly
         $this.RegisterAction("app.commandPalette", {
-            Write-Log -Level Debug -Message "app.commandPalette action triggered"
-            
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
             $actionService = $global:TuiState.Services.ActionService
             
-            if (-not $navService -or -not $container -or -not $actionService) {
-                Write-Log -Level Error -Message "Required services not found"
+            if (-not ($navService -and $container -and $actionService)) {
+                Write-Log -Level Error -Message "CommandPalette: Required services not found"
                 return
             }
             
-            # Create CommandPalette dialog
             $palette = [CommandPalette]::new("CommandPalette", $container)
             
-            # Get all registered actions
-            $allActions = @()
-            foreach ($actionName in $actionService.ActionRegistry.Keys) {
-                $actionData = $actionService.ActionRegistry[$actionName]
-                $allActions += @{
-                    Name = $actionName
-                    Category = $actionData.Category
-                    Description = $actionData.Description
-                    Hotkey = $actionData.Hotkey
+            $allActions = @($actionService.GetAllActions().Values | ForEach-Object {
+                @{
+                    Name = $_.Name
+                    Category = $_.Category
+                    Description = $_.Description
+                    Hotkey = $_.Hotkey
                 }
-            }
+            })
             
-            # Set actions and show
             $palette.SetActions($allActions)
             
-            # Set callback to execute selected action
+            # FIXED: Use OnClose with DeferredAction for robust execution
             $palette.OnClose = {
                 param($result)
-                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] CommandPalette OnClose called!"
                 if ($result -and $result.Name) {
-                    Write-Log -Level Debug -Message "CommandPalette OnClose: Selected action: $($result.Name)"
-                    Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Selected action: $($result.Name)"
-                    
-                    # Defer execution to avoid re-entrance issues in window-based model
-                    # Actions should execute AFTER the dialog closes and navigation completes
                     $evtMgr = $global:TuiState.Services.EventManager
                     if ($evtMgr) {
-                        Write-Log -Level Debug -Message "CommandPalette OnClose: Publishing DeferredAction event for: $($result.Name)"
-                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Publishing DeferredAction event..."
-                        $evtMgr.Publish("DeferredAction", @{
-                            ActionName = $result.Name
-                        })
-                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] DeferredAction event published!"
-                    } else {
-                        Write-Log -Level Error -Message "CommandPalette OnClose: EventManager not found!"
-                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] ERROR: EventManager not found!"
+                        $evtMgr.Publish("DeferredAction", @{ ActionName = $result.Name })
                     }
-                } else {
-                    Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] No action selected (result was null or had no Name)"
                 }
-            }
+            }.GetNewClosure()
             
-            # Navigate to the palette (it will handle its own lifecycle)
             $navService.NavigateTo($palette)
         }, @{
             Category = "Application"
@@ -212,116 +194,8 @@ class ActionService {
             Hotkey = "Ctrl+P"
         })
         
-        # Theme picker action
-        $this.RegisterAction("ui.themePicker", {
-            Write-Log -Level Info -Message "Opening Theme Selection screen"
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                try {
-                    $themeScreen = [ThemeScreen]::new($container)
-                    $themeScreen.Initialize()
-                    $navService.NavigateTo($themeScreen)
-                    Write-Log -Level Info -Message "Successfully navigated to ThemeScreen"
-                }
-                catch {
-                    Write-Log -Level Error -Message "Failed to navigate to ThemeScreen: $_"
-                }
-            }
-        }, @{
-            Category = "UI"
-            Description = "Change Theme"
-        })
-        
-        # Task list action
-        $this.RegisterAction("task.list", {
-            Write-Log -Level Info -Message "Navigating to Task List screen"
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                try {
-                    # Create and navigate to TaskListScreen
-                    $taskListScreen = [TaskListScreen]::new($container)
-                    $taskListScreen.Initialize()
-                    $navService.NavigateTo($taskListScreen)
-                    Write-Log -Level Info -Message "Successfully navigated to TaskListScreen"
-                }
-                catch {
-                    Write-Log -Level Error -Message "Failed to navigate to TaskListScreen: $_"
-                    Write-Log -Level Error -Message "Stack trace: $($_.ScriptStackTrace)"
-                }
-            }
-        }, @{
-            Category = "Tasks"
-            Description = "View All Tasks"
-        })
-        
-        # File browser action
-        $this.RegisterAction("tools.fileCommander", {
-            Write-Log -Level Info -Message "Navigating to File Commander screen"
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                try {
-                    $fileCommander = [FileCommanderScreen]::new($container)
-                    $fileCommander.Initialize()
-                    $navService.NavigateTo($fileCommander)
-                    Write-Log -Level Info -Message "Successfully navigated to FileCommanderScreen"
-                }
-                catch {
-                    Write-Log -Level Error -Message "Failed to navigate to FileCommanderScreen: $_"
-                }
-            }
-        }, @{
-            Category = "Tools"
-            Description = "File Browser"
-            Hotkey = "F9"
-        })
-        
-        # Text editor action
-        $this.RegisterAction("tools.textEditor", {
-            Write-Log -Level Info -Message "Navigating to Text Editor screen"
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                try {
-                    $editor = [TextEditorScreen]::new($container)
-                    $editor.Initialize()
-                    $navService.NavigateTo($editor)
-                    Write-Log -Level Info -Message "Successfully navigated to TextEditorScreen"
-                }
-                catch {
-                    Write-Log -Level Error -Message "Failed to navigate to TextEditorScreen: $_"
-                }
-            }
-        }, @{
-            Category = "Tools"
-            Description = "Text Editor"
-            Hotkey = "Ctrl+E"
-        })
-        
-        # Navigation actions
-        $this.RegisterAction("navigation.taskList", {
-            Write-Log -Level Info -Message "Navigating to Task List screen"
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                try {
-                    # Create and navigate to TaskListScreen
-                    $taskListScreen = [TaskListScreen]::new($container)
-                    $taskListScreen.Initialize()
-                    $navService.NavigateTo($taskListScreen)
-                    Write-Log -Level Info -Message "Successfully navigated to TaskListScreen"
-                }
-                catch {
-                    Write-Log -Level Error -Message "Failed to navigate to TaskListScreen: $_"
-                    Write-Log -Level Error -Message "Stack trace: $($_.ScriptStackTrace)"
-                }
-            }
-        }, @{
-            Category = "Navigation"
-            Description = "Go to Task List"
-        })
+        # FIXED: All navigation actions now defer screen creation until execution time
+        # This breaks the circular dependency at parse time.
         
         $this.RegisterAction("navigation.dashboard", {
             $navService = $global:TuiState.Services.NavigationService
@@ -333,56 +207,64 @@ class ActionService {
             Category = "Navigation"
             Description = "Go to Dashboard"
         })
-        
-        $this.RegisterAction("navigation.themePicker", {
-            Write-Log -Level Info -Message "Navigating to Theme Selection screen"
+
+        $this.RegisterAction("navigation.taskList", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                try {
-                    $themeScreen = [ThemeScreen]::new($container)
-                    $themeScreen.Initialize()
-                    $navService.NavigateTo($themeScreen)
-                    Write-Log -Level Info -Message "Successfully navigated to ThemeScreen"
-                }
-                catch {
-                    Write-Log -Level Error -Message "Failed to navigate to ThemeScreen: $_"
-                }
-            }
+            $taskListScreen = [TaskListScreen]::new($container)
+            $taskListScreen.Initialize()
+            $navService.NavigateTo($taskListScreen)
         }, @{
             Category = "Navigation"
-            Description = "Go to Theme Selection"
+            Description = "Go to Task List"
         })
-        
+
         $this.RegisterAction("navigation.projects", {
-            Write-Log -Level Info -Message "Navigating to Projects List screen"
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                try {
-                    $projectsScreen = [ProjectsListScreen]::new($container)
-                    $projectsScreen.Initialize()
-                    $navService.NavigateTo($projectsScreen)
-                    Write-Log -Level Info -Message "Successfully navigated to ProjectsListScreen"
-                }
-                catch {
-                    Write-Log -Level Error -Message "Failed to navigate to ProjectsListScreen: $_"
-                    Write-Log -Level Error -Message "Stack trace: $($_.ScriptStackTrace)"
-                }
-            }
+            $projectsScreen = [ProjectsListScreen]::new($container)
+            $projectsScreen.Initialize()
+            $navService.NavigateTo($projectsScreen)
         }, @{
             Category = "Navigation"
             Description = "Go to Projects List"
         })
-        
-        # Add navigation.commandPalette for menu option
-        $this.RegisterAction("navigation.commandPalette", {
-            $this.ExecuteAction("app.commandPalette", @{})
+
+        $this.RegisterAction("tools.fileCommander", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $fileCommander = [FileCommanderScreen]::new($container)
+            $fileCommander.Initialize()
+            $navService.NavigateTo($fileCommander)
+        }, @{
+            Category = "Tools"
+            Description = "File Browser"
+            Hotkey = "F9"
+        })
+
+        $this.RegisterAction("tools.textEditor", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $editor = [TextEditorScreen]::new($container)
+            $editor.Initialize()
+            $navService.NavigateTo($editor)
+        }, @{
+            Category = "Tools"
+            Description = "Text Editor"
+            Hotkey = "Ctrl+E"
+        })
+
+        $this.RegisterAction("navigation.themePicker", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $themeScreen = [ThemeScreen]::new($container)
+            $themeScreen.Initialize()
+            $navService.NavigateTo($themeScreen)
         }, @{
             Category = "Navigation"
-            Description = "Open Command Palette"
+            Description = "Go to Theme Selection"
         })
-        
+
         $this.RegisterAction("navigation.back", {
             $navService = $global:TuiState.Services.NavigationService
             if ($navService.CanGoBack()) {
@@ -392,70 +274,6 @@ class ActionService {
             Category = "Navigation"
             Description = "Go Back"
         })
-        
-        # Add missing navigation.nextComponent action
-        $this.RegisterAction("navigation.nextComponent", {
-            # Tab navigation is now handled directly by screens
-            # Each screen manages its own focus using ncurses-style window model
-            Write-Log -Level Debug -Message "Tab navigation handled by active screen"
-        }, @{
-            Category = "Navigation"
-            Description = "Focus Next Component"
-            Hotkey = "Tab"
-        })
-        
-        # Task CRUD actions (placeholders for now)
-        $this.RegisterAction("task.edit.selected", {
-            Write-Log -Level Info -Message "Edit task not implemented yet"
-        }, @{
-            Category = "Tasks"
-            Description = "Edit Selected Task"
-        })
-        
-        $this.RegisterAction("task.delete.selected", {
-            Write-Log -Level Info -Message "Delete task not implemented yet"
-        }, @{
-            Category = "Tasks"
-            Description = "Delete Selected Task"
-        })
-        
-        $this.RegisterAction("task.complete.selected", {
-            Write-Log -Level Info -Message "Complete task not implemented yet"
-        }, @{
-            Category = "Tasks"
-            Description = "Complete Selected Task"
-        })
-        
-        # Simple test action that returns to dashboard
-        $this.RegisterAction("test.simple", {
-            Write-Log -Level Info -Message "TEST ACTION EXECUTED: Showing test dialog"
-            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] >>> TEST ACTION EXECUTED! <<<"
-            
-            $dialogManager = $global:TuiState.Services.DialogManager
-            if ($dialogManager) {
-                # Show a simple message dialog
-                $dialogManager.ShowMessage(
-                    "Test Action Executed!", 
-                    "This confirms that command palette actions are working correctly.`n`nPress any key to continue.", 
-                    "Info"
-                )
-            }
-            
-            # Navigate back to dashboard
-            $navService = $global:TuiState.Services.NavigationService
-            $container = $global:TuiState.ServiceContainer
-            if ($navService -and $container) {
-                $dashboardScreen = [DashboardScreen]::new($container)
-                $dashboardScreen.Initialize()
-                $navService.NavigateTo($dashboardScreen)
-                Write-Log -Level Info -Message "Test complete - navigated to dashboard"
-            }
-        }, @{
-            Category = "Test"
-            Description = "Simple test - show dialog and refresh"
-        })
-        
-        # Write-Verbose "ActionService: Registered default actions"
     }
 }
 

@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Dashboard Screen
-# REFACTORED: Uses hybrid window model with focusable menu component
+# PROPERLY FIXED: Uses correct focus management and color properties
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -21,6 +21,7 @@ class MenuListComponent : Component {
     
     [void] AddMenuItem([string]$text) {
         $this._menuItems.Add($text)
+        $this.RequestRedraw()
     }
     
     [void] SetOnItemSelected([scriptblock]$callback) {
@@ -40,6 +41,8 @@ class MenuListComponent : Component {
     
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if (-not $this.IsFocused) { return $false }
+        
+        Write-Log -Level Debug -Message "MenuListComponent.HandleInput: Key=$($keyInfo.Key), IsFocused=$($this.IsFocused)"
         
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
@@ -77,6 +80,7 @@ class MenuListComponent : Component {
             }
             
             ([ConsoleKey]::Enter) {
+                Write-Log -Level Debug -Message "MenuListComponent: Enter pressed, selectedIndex=$($this._selectedIndex)"
                 if ($this._onItemSelected) {
                     & $this._onItemSelected $this._selectedIndex
                 }
@@ -99,46 +103,32 @@ class MenuListComponent : Component {
         return $false
     }
     
-    [void] OnFocus() {
-        # Assuming BorderColor is a property of Component or UIElement
-        # and that direct assignment is the intended way to set it here.
-        $this.BorderColor = Get-ThemeColor "Panel.Title" "#007acc"
-        $this.RequestRedraw()
-    }
+    # REMOVED: OnFocus() and OnBlur() methods - these will be overridden with Add-Member
     
-    [void] OnBlur() {
-        # Assuming BorderColor is a property of Component or UIElement
-        # and that direct assignment is the intended way to set it here.
-        $this.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
-        $this.RequestRedraw()
-    }
-    
-    [void] OnRender([TuiBuffer]$buffer) {
+    [void] OnRender() {
+        if ($null -eq $this._private_buffer) { 
+            Write-Log -Level Debug -Message "MenuListComponent.OnRender: _private_buffer is null!"
+            return 
+        }
+        
+        $buffer = $this._private_buffer
+        
         # Clear the component area
-        # Assuming GetEffectiveBackgroundColor/ForegroundColor are available on Component
-        # or that BackgroundColor/ForegroundColor are directly accessible properties.
-        # Given the context, direct access to $this.BackgroundColor and $this.ForegroundColor
-        # for rendering purposes is acceptable here, as MenuListComponent does not
-        # define SetBackgroundColor/SetForegroundColor methods.
         $bgColor = $this.GetEffectiveBackgroundColor()
         $fgColor = $this.GetEffectiveForegroundColor()
         
-        for ($y = 0; $y -lt $this.Height; $y++) {
-            for ($x = 0; $x -lt $this.Width; $x++) {
-                $buffer.SetCell($this.X + $x, $this.Y + $y, ' ', $fgColor, $bgColor)
-            }
-        }
+        $buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
         
         # Render menu items
         for ($i = 0; $i -lt $this._menuItems.Count -and $i -lt $this.Height; $i++) {
             $text = $this._menuItems[$i]
             if (-not [string]::IsNullOrWhiteSpace($text)) {
-                $fg = if ($i -eq $this._selectedIndex) { 
+                $itemFg = if ($i -eq $this._selectedIndex -and $this.IsFocused) { 
                     Get-ThemeColor "Panel.Title" "#007acc"
                 } else { 
                     Get-ThemeColor "Label.Foreground" "#d4d4d4"
                 }
-                $bg = if ($i -eq $this._selectedIndex) { 
+                $itemBg = if ($i -eq $this._selectedIndex -and $this.IsFocused) { 
                     Get-ThemeColor "List.ItemFocusedBackground" "#3a3a3a"
                 } else { 
                     $bgColor
@@ -146,19 +136,25 @@ class MenuListComponent : Component {
                 
                 # Truncate text if too long
                 $displayText = if ($text.Length -gt $this.Width - 4) { 
-                    $text.Substring(0, [Math]::Max(0, $this.Width - 7)) + "..." # Ensure substring length is not negative
+                    $text.Substring(0, [Math]::Max(0, $this.Width - 7)) + "..."
                 } else { 
-                    $text.PadRight($this.Width - 4) 
+                    $text
                 }
                 
-                $xPos = $this.X + 2
-                for ($j = 0; $j -lt $displayText.Length -and $j -lt $this.Width - 4; $j++) {
-                    $buffer.SetCell($xPos + $j, $this.Y + $i, $displayText[$j], $fg, $bg)
+                $xPos = 2
+                # Fill the background for the selected line
+                if ($i -eq $this._selectedIndex -and $this.IsFocused) {
+                    for ($x = 0; $x -lt $this.Width; $x++) {
+                        $buffer.SetCell($x, $i, [TuiCell]::new(' ', $itemFg, $itemBg))
+                    }
                 }
+
+                $buffer.WriteString($xPos, $i, $displayText, @{ FG = $itemFg; BG = $itemBg })
             }
         }
     }
 }
+
 class DashboardScreen : Screen {
     hidden [Panel] $_mainPanel
     hidden [Panel] $_menuPanel
@@ -186,8 +182,14 @@ class DashboardScreen : Screen {
         $this._mainPanel.HasBorder = $true
         $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.IsFocusable = $false
+        
+        # Set colors with PROPERTIES
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $this._mainPanel.ForegroundColor = Get-ThemeColor "Panel.Foreground" "#d4d4d4"
+        $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
+        
         $this.AddChild($this._mainPanel)
-
+        
         # === CREATE MENU PANEL ===
         $this._menuPanel = [Panel]::new("MenuPanel")
         $this._menuPanel.X = [Math]::Floor(($this.Width - 40) / 2)
@@ -198,6 +200,12 @@ class DashboardScreen : Screen {
         $this._menuPanel.BorderStyle = "Double"
         $this._menuPanel.Title = " Navigation "
         $this._menuPanel.IsFocusable = $false
+        
+        # Set colors with PROPERTIES
+        $this._menuPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $this._menuPanel.ForegroundColor = Get-ThemeColor "Panel.Foreground" "#d4d4d4"
+        $this._menuPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
+        
         $this._mainPanel.AddChild($this._menuPanel)
         
         # === CREATE FOCUSABLE MENU LIST ===
@@ -208,6 +216,12 @@ class DashboardScreen : Screen {
         $this._menuList.Height = 12
         $this._menuList.IsFocusable = $true
         $this._menuList.TabIndex = 0
+        $this._menuList.Visible = $true
+        
+        # Set colors with PROPERTIES
+        $this._menuList.BackgroundColor = Get-ThemeColor "Input.Background" "#262626"
+        $this._menuList.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4"
+        $this._menuList.BorderColor = Get-ThemeColor "Input.Border" "#404040"
         
         # Add menu items
         $this._menuList.AddMenuItem("[1] Dashboard (Current)")
@@ -226,6 +240,17 @@ class DashboardScreen : Screen {
             $this.ExecuteMenuItem($index)
         })
         
+        # PROPER FOCUS HANDLING: Add focus visual feedback with Add-Member -Force
+        $this._menuList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._menuList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "border" "#404040"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._menuPanel.AddChild($this._menuList)
         
         # === CREATE INSTRUCTIONS ===
@@ -234,8 +259,11 @@ class DashboardScreen : Screen {
         $instructions.X = [Math]::Floor(($this.Width - 42) / 2)
         $instructions.Y = 21
         $instructions.IsFocusable = $false
-        $instructions.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#9ca3af"))
+        $instructions.ForegroundColor = Get-ThemeColor "Label.Foreground" "#9ca3af"
+        $instructions.BackgroundColor = Get-ThemeColor "Label.Background" "#1e1e1e"
         $this._mainPanel.AddChild($instructions)
+        
+        $this._menuList.RequestRedraw()
         
         Write-Log -Level Debug -Message "DashboardScreen.Initialize: Completed"
     }
@@ -243,35 +271,43 @@ class DashboardScreen : Screen {
     [void] OnEnter() {
         Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
         
-        # Call base to set up focus management
+        # MUST call base to set initial focus
         ([Screen]$this).OnEnter()
         
-        # Refresh colors in case theme changed
-        $this.RefreshThemeColors()
+        # Explicitly focus the menu list if nothing is focused
+        if ($null -eq $this.GetFocusedChild() -and $this._menuList) {
+            $this.SetChildFocus($this._menuList)
+        }
         
-        # Request redraw
+        $this.RefreshThemeColors()
         $this.RequestRedraw()
     }
     
     hidden [void] RefreshThemeColors() {
         try {
             if ($this._mainPanel) {
-                # Panel has a BorderColor property and SetBackgroundColor method
+                $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+                $this._mainPanel.ForegroundColor = Get-ThemeColor "Panel.Foreground" "#d4d4d4"
                 $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
-                $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
             }
             
             if ($this._menuPanel) {
-                # Panel has a BorderColor property and SetBackgroundColor method
+                $this._menuPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+                $this._menuPanel.ForegroundColor = Get-ThemeColor "Panel.Foreground" "#d4d4d4"
                 $this._menuPanel.BorderColor = Get-ThemeColor "Panel.Border" "#404040"
-                $this._menuPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
+            }
+            
+            if ($this._menuList) {
+                $this._menuList.BackgroundColor = Get-ThemeColor "Input.Background" "#262626"
+                $this._menuList.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4"
+                $this._menuList.BorderColor = Get-ThemeColor "Input.Border" "#404040"
             }
             
             if ($this._mainPanel -and $this._mainPanel.Children) {
                 $instructions = $this._mainPanel.Children | Where-Object { $_.Name -eq "Instructions" }
-                if ($instructions -and ($instructions -is [LabelComponent])) {
-                    # LabelComponent has a SetForegroundColor method
-                    $instructions.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#9ca3af"))
+                if ($instructions -is [LabelComponent]) {
+                    $instructions.ForegroundColor = Get-ThemeColor "Label.Foreground" "#9ca3af"
+                    $instructions.BackgroundColor = Get-ThemeColor "Label.Background" "#1e1e1e"
                 }
             }
         }
@@ -283,11 +319,12 @@ class DashboardScreen : Screen {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
-        # HYBRID MODEL: Call base first for Tab navigation and component input
+        # ALWAYS FIRST - Let base handle Tab and component routing
         if (([Screen]$this).HandleInput($keyInfo)) {
             return $true
         }
         
+        # ONLY screen-level shortcuts here
         # Handle direct number key shortcuts (global shortcuts)
         $char = $keyInfo.KeyChar
         switch ($char) {
@@ -325,7 +362,6 @@ class DashboardScreen : Screen {
     
     hidden [void] ExecuteMenuItem([int]$index) {
         $actionService = $this.ServiceContainer?.GetService("ActionService")
-        $navService = $this.ServiceContainer?.GetService("NavigationService")
         
         if (-not $actionService) { 
             Write-Log -Level Error -Message "DashboardScreen: ActionService not found!"
@@ -334,6 +370,7 @@ class DashboardScreen : Screen {
         
         Write-Log -Level Debug -Message "DashboardScreen: Executing menu item $index"
         
+        # Use ActionService for ALL navigation - NO direct screen instantiation
         switch ($index) {
             0 { 
                 Write-Log -Level Debug -Message "Dashboard (current screen)"
@@ -342,11 +379,7 @@ class DashboardScreen : Screen {
                 $actionService.ExecuteAction("navigation.taskList", @{})
             }
             2 { 
-                if ($navService) {
-                    $projectsScreen = New-Object -TypeName "ProjectsListScreen" -ArgumentList $this.ServiceContainer
-                    $projectsScreen.Initialize()
-                    $navService.NavigateTo($projectsScreen)
-                }
+                $actionService.ExecuteAction("navigation.projects", @{})
             }
             3 { 
                 $actionService.ExecuteAction("tools.fileCommander", @{})

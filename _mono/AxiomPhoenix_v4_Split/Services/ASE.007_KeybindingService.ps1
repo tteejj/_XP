@@ -24,6 +24,7 @@ class KeybindingService {
     hidden [void] _InitializeDefaultBindings() {
         # Global navigation
         $this.SetBinding("Ctrl+Q", "app.exit", "Global")
+        $this.SetBinding("Ctrl+C", "app.exit.ctrlc", "Global")
         $this.SetBinding("F1", "app.help", "Global")
         $this.SetBinding("Ctrl+P", "app.commandPalette", "Global")
         

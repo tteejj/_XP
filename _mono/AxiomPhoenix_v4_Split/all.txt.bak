@@ -1,4 +1,5 @@
 ####\Base\ABC.001_TuiAnsiHelper.ps1
+####\Base\ABC.002_TuiCell.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Base Classes (Load First)
 # Core framework classes with NO external dependencies
@@ -20,62 +21,115 @@ using namespace System.Threading
 # Disable verbose output during TUI rendering
 $script:TuiVerbosePreference = 'SilentlyContinue'
 
-#region TuiAnsiHelper - ANSI Code Generation with Truecolor Support
-class TuiAnsiHelper {
-    # No caches needed, sequences are generated dynamically now.
+#region TuiCell Class - Core Compositor Unit with Truecolor Support
+class TuiCell {
+    [char] $Char = ' '
+    [string] $ForegroundColor = "#FFFFFF"
+    [string] $BackgroundColor = "#000000"
+    [bool] $Bold = $false
+    [bool] $Underline = $false
+    [bool] $Italic = $false
+    [bool] $Strikethrough = $false
+    [int] $ZIndex = 0        
+    [object] $Metadata = $null 
 
-    static [hashtable] HexToRgb([string]$hexColor) {
-        if ([string]::IsNullOrEmpty($hexColor) -or -not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
-            Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor'"
-            return $null
-        }
-        try {
-            return @{
-                R = [System.Convert]::ToInt32($hexColor.Substring(1, 2), 16)
-                G = [System.Convert]::ToInt32($hexColor.Substring(3, 2), 16)
-                B = [System.Convert]::ToInt32($hexColor.Substring(5, 2), 16)
-            }
-        } catch {
-            Write-Log -Level Warning -Message "Error parsing hex color '$hexColor': $($_.Exception.Message)"
-            return $null
-        }
+    TuiCell() { }
+    TuiCell([char]$char) { $this.Char = $char }
+    
+    # Constructor with 3 parameters (char, fg, bg)
+    TuiCell([char]$char, [string]$fg, [string]$bg) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+    }
+    
+    # Constructor with 4 parameters (char, fg, bg, bold)
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+    }
+    
+    # Full constructor with all parameters
+    TuiCell([char]$char, [string]$fg, [string]$bg, [bool]$bold, [bool]$italic, [bool]$underline, [bool]$strikethrough) {
+        $this.Char = $char
+        $this.ForegroundColor = $fg
+        $this.BackgroundColor = $bg
+        $this.Bold = $bold
+        $this.Italic = $italic
+        $this.Underline = $underline
+        $this.Strikethrough = $strikethrough
+    }
+    
+    # Copy Constructor: Ensure it copies all new properties
+    TuiCell([object]$other) {
+        $this.Char = $other.Char
+        $this.ForegroundColor = $other.ForegroundColor
+        $this.BackgroundColor = $other.BackgroundColor
+        $this.Bold = $other.Bold
+        $this.Underline = $other.Underline
+        $this.Italic = $other.Italic
+        $this.Strikethrough = $other.Strikethrough
+        $this.ZIndex = $other.ZIndex
+        $this.Metadata = $other.Metadata
     }
 
-    static [string] GetAnsiSequence([string]$fgHex, [string]$bgHex, [hashtable]$attributes) {
-        $sequences = [System.Collections.Generic.List[string]]::new()
-
-        # Foreground color (Truecolor - SGR 38;2)
-        if (-not [string]::IsNullOrEmpty($fgHex)) {
-            $rgb = [TuiAnsiHelper]::HexToRgb($fgHex)
-            if ($rgb) {
-                $sequences.Add("38;2;$($rgb.R);$($rgb.G);$($rgb.B)")
-            }
-        }
-
-        # Background color (Truecolor - SGR 48;2)
-        if (-not [string]::IsNullOrEmpty($bgHex)) {
-            $rgb = [TuiAnsiHelper]::HexToRgb($bgHex)
-            if ($rgb) {
-                $sequences.Add("48;2;$($rgb.R);$($rgb.G);$($rgb.B)")
-            }
-        }
-
-        # Style attributes
-        if ($attributes) {
-            if ($attributes.ContainsKey('Bold') -and [bool]$attributes['Bold']) { $sequences.Add("1") }
-            if ($attributes.ContainsKey('Italic') -and [bool]$attributes['Italic']) { $sequences.Add("3") }
-            if ($attributes.ContainsKey('Underline') -and [bool]$attributes['Underline']) { $sequences.Add("4") }
-            if ($attributes.ContainsKey('Strikethrough') -and [bool]$attributes['Strikethrough']) { $sequences.Add("9") }
-        }
-
-        if ($sequences.Count -eq 0) { return "" }
-        return "`e[$($sequences -join ';')m"
+    [TuiCell] WithStyle([string]$fg, [string]$bg) {
+        $copy = [TuiCell]::new($this)
+        $copy.ForegroundColor = $fg
+        $copy.BackgroundColor = $bg
+        return $copy
     }
 
-    static [string] Reset() { return "`e[0m" }
+    [TuiCell] WithChar([char]$char) {
+        $copy = [TuiCell]::new($this)
+        $copy.Char = $char
+        return $copy
+    }
+
+    [TuiCell] BlendWith([object]$other) {
+        if ($null -eq $other) { return $this }
+        
+        # If Z-Indexes are different, the higher one wins.
+        if ($other.ZIndex -gt $this.ZIndex) { return [TuiCell]::new($other) }
+        if ($other.ZIndex -lt $this.ZIndex) { return $this }
+
+        # If Z-Indexes are the same, the 'other' (top) cell wins by default.
+        return [TuiCell]::new($other)
+    }
+
+    [bool] DiffersFrom([object]$other) {
+        if ($null -eq $other) { return $true }
+        
+        return ($this.Char -ne $other.Char -or 
+                $this.ForegroundColor -ne $other.ForegroundColor -or 
+                $this.BackgroundColor -ne $other.BackgroundColor -or
+                $this.Bold -ne $other.Bold -or
+                $this.Underline -ne $other.Underline -or
+                $this.Italic -ne $other.Italic -or
+                $this.Strikethrough -ne $other.Strikethrough -or
+                $this.ZIndex -ne $other.ZIndex)
+    }
+
+    [string] ToAnsiString() {
+        $attributes = @{ 
+            Bold=$this.Bold; Italic=$this.Italic; Underline=$this.Underline; Strikethrough=$this.Strikethrough 
+        }
+        $sequence = [TuiAnsiHelper]::GetAnsiSequence($this.ForegroundColor, $this.BackgroundColor, $attributes)
+        return "$sequence$($this.Char)"
+    }
+
+    [hashtable] ToLegacyFormat() {
+        return @{ Char = $this.Char; FG = $this.ForegroundColor; BG = $this.BackgroundColor }
+    }
+    
+    [string] ToString() {
+        return "TuiCell(Char='$($this.Char)', FG='$($this.ForegroundColor)', BG='$($this.BackgroundColor)', Bold=$($this.Bold), Underline=$($this.Underline), Italic=$($this.Italic), Strikethrough=$($this.Strikethrough), ZIndex=$($this.ZIndex))"
+    }
 }
 #endregion
-#<!-- END_PAGE: ABC.001 -->
+#<!-- END_PAGE: ABC.002 -->
 
 
 ####\Base\ABC.001a_ServiceContainer.ps1
@@ -902,21 +956,11 @@ class UIElement {
 
     [void] OnFocus() 
     { 
-        # Default focus behavior - components should override with Add-Member
-        if ($this.BorderColor) {
-            $this.BorderColor = $this.GetThemeColor("primary.accent", "#0078d4")
-            $this.RequestRedraw()
-        }
         # Write-Verbose "OnFocus called for '$($this.Name)'." 
     }
     
     [void] OnBlur() 
     { 
-        # Default blur behavior - components should override with Add-Member
-        if ($this.BorderColor) {
-            $this.BorderColor = $this.GetThemeColor("border", "#404040")
-            $this.RequestRedraw()
-        }
         # Write-Verbose "OnBlur called for '$($this.Name)'." 
     }
 
@@ -2129,6 +2173,9 @@ class MultilineTextBoxComponent : UIElement {
     [int]$ScrollOffsetX = 0
     [bool]$ReadOnly = $false
     [scriptblock]$OnChange
+    hidden [string]$_backgroundColorValue = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     MultilineTextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -2402,6 +2449,9 @@ class NumericInputComponent : UIElement {
     [scriptblock]$OnChange
     hidden [string]$_textValue = "0"
     hidden [int]$_cursorPosition = 1
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
     NumericInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -2600,133 +2650,78 @@ using namespace System.Management.Automation
 
 #
 
-# ===== CLASS: DateInputComponent =====
+# ===== CLASS: NumericInputComponent =====
 # Module: advanced-input-components
 # Dependencies: UIElement, TuiCell
-# Purpose: Date picker with calendar interface
-class DateInputComponent : UIElement {
-    [DateTime]$Value = [DateTime]::Today
-    [DateTime]$MinDate = [DateTime]::MinValue
-    [DateTime]$MaxDate = [DateTime]::MaxValue
+# Purpose: Numeric input with spinners and validation
+class NumericInputComponent : UIElement {
+    [double]$Value = 0
+    [double]$Minimum = [double]::MinValue
+    [double]$Maximum = [double]::MaxValue
+    [double]$Step = 1
+    [int]$DecimalPlaces = 0
     [scriptblock]$OnChange
-    hidden [bool]$_showCalendar = $false
-    hidden [DateTime]$_viewMonth
+    hidden [string]$_textValue = "0"
+    hidden [int]$_cursorPosition = 1
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
+    [string]$BorderColor = "#808080"
     
-    DateInputComponent([string]$name) : base($name) {
+    NumericInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
-        $this.Width = 25
-        $this.Height = 1  # Expands to 10 when calendar shown
-        $this._viewMonth = $this.Value
+        $this.Width = 15
+        $this.Height = 3
+        $this._textValue = $this.FormatValue($this.Value)
+        $this._cursorPosition = $this._textValue.Length
     }
     
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = $this.GetEffectiveBackgroundColor()
-            $fgColor = $this.GetEffectiveForegroundColor()
-            if ($this.IsFocused) { 
-                $borderColorValue = Get-ThemeColor "Primary" "#00FFFF" 
-            } else { 
-                $borderColorValue = $this.GetEffectiveBorderColor()
-            }
-            
-            # Adjust height based on calendar visibility
-            if ($this._showCalendar) { 
-                $renderHeight = 10 
-            } else { 
-                $renderHeight = 3 
-            }
-            if ($this.Height -ne $renderHeight) {
-                $this.Height = $renderHeight
-                $this.RequestRedraw()
-                return
-            }
+            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
+            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
+            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
-            # Draw text box
+            # Draw border
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
-                -Width $this.Width -Height 3 `
+                -Width $this.Width -Height $this.Height `
                 -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
-            # Draw date value
-            $dateStr = $this.Value.ToString("yyyy-MM-dd")
-            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $dateStr -Style @{ FG = $fgColor; BG = $bgColor }
+            # Draw spinners
+            $spinnerColor = if ($this.IsFocused) { "#FFFF00" } else { "#808080" }
+            $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('▲', $spinnerColor, $bgColor))
+            $this._private_buffer.SetCell($this.Width - 2, $this.Height - 2, [TuiCell]::new('▼', $spinnerColor, $bgColor))
             
-            # Draw calendar icon
-            $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('📅', $borderColorValue, $bgColor))
+            # Draw value
+            $displayValue = $this._textValue
+            $maxTextWidth = $this.Width - 4  # Border + spinner
+            if ($displayValue.Length -gt $maxTextWidth) {
+                $displayValue = $displayValue.Substring(0, $maxTextWidth)
+            }
             
-            # Draw calendar if shown
-            if ($this._showCalendar) {
-                $this.DrawCalendar(0, 3)
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text $displayValue -Style @{ FG = $fgColor; BG = $bgColor }
+            
+            # Draw cursor if focused
+            if ($this.IsFocused -and $this._cursorPosition -le $displayValue.Length) {
+                $cursorX = 1 + $this._cursorPosition
+                if ($cursorX -lt $this.Width - 2) {
+                    if ($this._cursorPosition -lt $this._textValue.Length) {
+                        $cursorChar = $this._textValue[$this._cursorPosition]
+                    } else { 
+                        $cursorChar = ' ' 
+                    }
+                    
+                    $this._private_buffer.SetCell($cursorX, 1, 
+                        [TuiCell]::new($cursorChar, $bgColor, $fgColor))
+                }
             }
         }
-        catch {}
-    }
-    
-    hidden [void] DrawCalendar([int]$startX, [int]$startY) {
-        $bgColor = "#000000"
-        $fgColor = "#FFFFFF"
-        $headerColor = "#FFFF00"
-        $selectedColor = "#00FFFF"
-        $todayColor = "#00FF00"
-        
-        # Calendar border
-        Write-TuiBox -Buffer $this._private_buffer -X $startX -Y $startY `
-            -Width $this.Width -Height 7 `
-            -Style @{ BorderFG = "#808080"; BG = $bgColor; BorderStyle = "Single" }
-        
-        # Month/Year header
-        $monthYearStr = $this._viewMonth.ToString("MMMM yyyy")
-        $headerX = $startX + [Math]::Floor(($this.Width - $monthYearStr.Length) / 2)
-        Write-TuiText -Buffer $this._private_buffer -X $headerX -Y ($startY + 1) -Text $monthYearStr -Style @{ FG = $headerColor; BG = $bgColor }
-        
-        # Navigation arrows
-        $this._private_buffer.SetCell($startX + 1, $startY + 1, [TuiCell]::new('<', $headerColor, $bgColor))
-        $this._private_buffer.SetCell($startX + $this.Width - 2, $startY + 1, [TuiCell]::new('>', $headerColor, $bgColor))
-        
-        # Day headers
-        $dayHeaders = @("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
-        $dayX = $startX + 2
-        foreach ($day in $dayHeaders) {
-            Write-TuiText -Buffer $this._private_buffer -X $dayX -Y ($startY + 2) -Text $day -Style @{ FG = "#808080"; BG = $bgColor }
-            $dayX += 3
-        }
-        
-        # Calendar days
-        $firstDay = [DateTime]::new($this._viewMonth.Year, $this._viewMonth.Month, 1)
-        $startDayOfWeek = [int]$firstDay.DayOfWeek
-        $daysInMonth = [DateTime]::DaysInMonth($this._viewMonth.Year, $this._viewMonth.Month)
-        
-        $currentDay = 1
-        $today = [DateTime]::Today
-        
-        for ($week = 0; $week -lt 6; $week++) {
-            if ($currentDay -gt $daysInMonth) { break }
-            
-            for ($dayOfWeek = 0; $dayOfWeek -lt 7; $dayOfWeek++) {
-                if ($week -eq 0 -and $dayOfWeek -lt $startDayOfWeek) { continue }
-                if ($currentDay -gt $daysInMonth) { break }
-                
-                $dayX = $startX + 2 + ($dayOfWeek * 3)
-                $dayY = $startY + 3 + $week
-                
-                $currentDate = [DateTime]::new($this._viewMonth.Year, $this._viewMonth.Month, $currentDay)
-                $dayStr = $currentDay.ToString().PadLeft(2)
-                
-                # Determine color
-                $dayColor = $fgColor
-                if ($currentDate -eq $this.Value) {
-                    $dayColor = $selectedColor
-                }
-                elseif ($currentDate -eq $today) {
-                    $dayColor = $todayColor
-                }
-                
-                Write-TuiText -Buffer $this._private_buffer -X $dayX -Y $dayY -Text $dayStr -Style @{ FG = $dayColor; BG = $bgColor }
-                $currentDay++
-            }
+        catch {
+            # Log or handle rendering errors gracefully
+            # Write-Error "Error rendering NumericInputComponent '$($this.Name)': $($_.Exception.Message)"
         }
     }
     
@@ -2736,75 +2731,65 @@ class DateInputComponent : UIElement {
         $handled = $true
         $oldValue = $this.Value
         
-        if (-not $this._showCalendar) {
-            switch ($key.Key) {
-                ([ConsoleKey]::Enter) { $this._showCalendar = $true }
-                ([ConsoleKey]::Spacebar) { $this._showCalendar = $true }
-                ([ConsoleKey]::DownArrow) { $this._showCalendar = $true }
-                default { $handled = $false }
+        switch ($key.Key) {
+            ([ConsoleKey]::UpArrow) {
+                $this.IncrementValue()
             }
-        }
-        else {
-            switch ($key.Key) {
-                ([ConsoleKey]::Escape) { 
-                    $this._showCalendar = $false 
+            ([ConsoleKey]::DownArrow) {
+                $this.DecrementValue()
+            }
+            ([ConsoleKey]::LeftArrow) {
+                if ($this._cursorPosition -gt 0) {
+                    $this._cursorPosition--
                 }
-                ([ConsoleKey]::LeftArrow) {
-                    if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                        # Previous month
-                        $this._viewMonth = $this._viewMonth.AddMonths(-1)
+            }
+            ([ConsoleKey]::RightArrow) {
+                if ($this._cursorPosition -lt $this._textValue.Length) {
+                    $this._cursorPosition++
+                }
+            }
+            ([ConsoleKey]::Home) {
+                $this._cursorPosition = 0
+            }
+            ([ConsoleKey]::End) {
+                $this._cursorPosition = $this._textValue.Length
+            }
+            ([ConsoleKey]::Backspace) {
+                if ($this._cursorPosition -gt 0) {
+                    $this._textValue = $this._textValue.Remove($this._cursorPosition - 1, 1)
+                    $this._cursorPosition--
+                    $this.ParseAndValidate()
+                }
+            }
+            ([ConsoleKey]::Delete) {
+                if ($this._cursorPosition -lt $this._textValue.Length) {
+                    $this._textValue = $this._textValue.Remove($this._cursorPosition, 1)
+                    $this.ParseAndValidate()
+                }
+            }
+            ([ConsoleKey]::Enter) {
+                $this.ParseAndValidate()
+            }
+            default {
+                if ($key.KeyChar -and ($key.KeyChar -match '[0-9.\-]')) {
+                    # Allow only valid numeric characters
+                    if ($key.KeyChar -eq '.' -and $this._textValue.Contains('.')) {
+                        # Only one decimal point allowed
+                        $handled = $false
+                    }
+                    elseif ($key.KeyChar -eq '-' -and ($this._cursorPosition -ne 0 -or $this._textValue.Contains('-'))) {
+                        # Minus only at beginning
+                        $handled = $false
                     }
                     else {
-                        # Previous day
-                        $newDate = $this.Value.AddDays(-1)
-                        if ($newDate -ge $this.MinDate -and $newDate -le $this.MaxDate) {
-                            $this.Value = $newDate
-                            $this._viewMonth = $newDate
-                        }
+                        $this._textValue = $this._textValue.Insert($this._cursorPosition, $key.KeyChar)
+                        $this._cursorPosition++
+                        $this.ParseAndValidate()
                     }
                 }
-                ([ConsoleKey]::RightArrow) {
-                    if ($key.Modifiers -band [ConsoleModifiers]::Control) {
-                        # Next month
-                        $this._viewMonth = $this._viewMonth.AddMonths(1)
-                    }
-                    else {
-                        # Next day
-                        $newDate = $this.Value.AddDays(1)
-                        if ($newDate -ge $this.MinDate -and $newDate -le $this.MaxDate) {
-                            $this.Value = $newDate
-                            $this._viewMonth = $newDate
-                        }
-                    }
+                else {
+                    $handled = $false
                 }
-                ([ConsoleKey]::UpArrow) {
-                    # Previous week
-                    $newDate = $this.Value.AddDays(-7)
-                    if ($newDate -ge $this.MinDate -and $newDate -le $this.MaxDate) {
-                        $this.Value = $newDate
-                        $this._viewMonth = $newDate
-                    }
-                }
-                ([ConsoleKey]::DownArrow) {
-                    # Next week
-                    $newDate = $this.Value.AddDays(7)
-                    if ($newDate -ge $this.MinDate -and $newDate -le $this.MaxDate) {
-                        $this.Value = $newDate
-                        $this._viewMonth = $newDate
-                    }
-                }
-                ([ConsoleKey]::Enter) {
-                    $this._showCalendar = $false
-                }
-                ([ConsoleKey]::T) {
-                    # Today
-                    $today = [DateTime]::Today
-                    if ($today -ge $this.MinDate -and $today -le $this.MaxDate) {
-                        $this.Value = $today
-                        $this._viewMonth = $today
-                    }
-                }
-                default { $handled = $false }
             }
         }
         
@@ -2817,9 +2802,47 @@ class DateInputComponent : UIElement {
         
         return $handled
     }
+    
+    hidden [void] IncrementValue() {
+        $newValue = $this.Value + $this.Step
+        if ($newValue -le $this.Maximum) {
+            $this.Value = $newValue
+            $this._textValue = $this.FormatValue($this.Value)
+            $this._cursorPosition = $this._textValue.Length
+        }
+    }
+    
+    hidden [void] DecrementValue() {
+        $newValue = $this.Value - $this.Step
+        if ($newValue -ge $this.Minimum) {
+            $this.Value = $newValue
+            $this._textValue = $this.FormatValue($this.Value)
+            $this._cursorPosition = $this._textValue.Length
+        }
+    }
+    
+    hidden [void] ParseAndValidate() {
+        try {
+            $parsedValue = [double]::Parse($this._textValue)
+            $parsedValue = [Math]::Max($this.Minimum, [Math]::Min($this.Maximum, $parsedValue))
+            $this.Value = $parsedValue
+        }
+        catch {
+            # Keep current value if parse fails
+        }
+    }
+    
+    hidden [string] FormatValue([double]$value) {
+        if ($this.DecimalPlaces -eq 0) {
+            return [Math]::Truncate($value).ToString()
+        }
+        else {
+            return $value.ToString("F$($this.DecimalPlaces)")
+        }
+    }
 }
 
-#<!-- END_PAGE: ACO.008 -->
+#<!-- END_PAGE: ACO.007 -->
 
 
 ####\Components\ACO.009_ComboBoxComponent.ps1
@@ -3944,7 +3967,7 @@ class GroupPanel : Panel {
     GroupPanel([string]$name) : base($name) {
         $this.BorderStyle = "Double"
         $this.BorderColor = "#008B8B"     # FIXED: DarkCyan in hex
-        $this.BackgroundColor = "#000000" # FIXED: Use property assignment instead of method
+        $this.SetBackgroundColor("#000000") # FIXED: Black in hex
     }
 
     [void] OnRender() {
@@ -5119,6 +5142,8 @@ class NavigationMenu : UIElement {
     [List[NavigationItem]]$Items
     [int]$SelectedIndex = 0
     [string]$Orientation = "Horizontal"  # Horizontal or Vertical
+    [string]$BackgroundColor = "#000000"
+    [string]$ForegroundColor = "#FFFFFF"
     [string]$SelectedBackgroundColor = "#0078D4"
     [string]$SelectedForegroundColor = "#FFFF00"
 
@@ -5653,248 +5678,6 @@ class SidebarMenu : UIElement {
     }
 }
 
-
-
-####\Components\ACO.025_SimpleTaskDialog.ps1
-# ==============================================================================
-#
-#   Axiom-Phoenix v4.1 - Simple Task Dialog (Component)
-#
-#   File: Components\ACO.025_SimpleTaskDialog.ps1
-#   Status: NEW & VERIFIED
-#
-#   DESCRIPTION:
-#   This is a standalone dialog for creating or editing a basic task. It has been
-#   refactored to inherit from Screen, making it a proper window in the new
-#   Hybrid Window Manager model. It fully complies with all framework rules.
-#
-# ==============================================================================
-
-class SimpleTaskDialog : Screen {
-    #region UI Components
-    hidden [Panel] $_dialogPanel
-    hidden [TextBoxComponent] $_titleBox
-    hidden [TextBoxComponent] $_descriptionBox
-    hidden [ButtonComponent] $_saveButton
-    hidden [ButtonComponent] $_cancelButton
-    #endregion
-
-    #region State
-    hidden [PmcTask] $_task
-    hidden [bool] $_isNewTask
-    [scriptblock]$OnSave = {}
-    #endregion
-
-    SimpleTaskDialog([object]$serviceContainer, [PmcTask]$existingTask) : base("SimpleTaskDialog", $serviceContainer) {
-        $this.IsOverlay = $true # This tells the renderer to treat it as an overlay
-        if ($existingTask) {
-            $this._task = $existingTask
-            $this._isNewTask = $false
-        } else {
-            $this._task = [PmcTask]::new()
-            $this._isNewTask = $true
-        }
-    }
-
-    [void] Initialize() {
-        # Dialog Panel (centered)
-        $dialogWidth = 60
-        $dialogHeight = 15
-        $this._dialogPanel = [Panel]::new("DialogMain")
-        $this._dialogPanel.X = [Math]::Floor(($this.Width - $dialogWidth) / 2)
-        $this._dialogPanel.Y = [Math]::Floor(($this.Height - $dialogHeight) / 2)
-        $this._dialogPanel.Width = $dialogWidth
-        $this._dialogPanel.Height = $dialogHeight
-        $this._dialogPanel.Title = if ($this._isNewTask) { " New Task " } else { " Edit Task " }
-        $this._dialogPanel.BorderStyle = "Double"
-        $this._dialogPanel.IsFocusable = $false # Decorative
-        $this.AddChild($this._dialogPanel)
-
-        # Title Field
-        $this._titleBox = [TextBoxComponent]::new("TitleBox")
-        $this._titleBox.X = 2; $this._titleBox.Y = 2
-        $this._titleBox.Width = $dialogWidth - 4; $this._titleBox.Height = 3
-        $this._titleBox.Text = $this._task.Title
-        $this._titleBox.IsFocusable = $true; $this._titleBox.TabIndex = 0
-        $this._dialogPanel.AddChild($this._titleBox)
-
-        # Description Field
-        $this._descriptionBox = [TextBoxComponent]::new("DescBox")
-        $this._descriptionBox.X = 2; $this._descriptionBox.Y = 6
-        $this._descriptionBox.Width = $dialogWidth - 4; $this._descriptionBox.Height = 3
-        $this._descriptionBox.Text = $this._task.Description
-        $this._descriptionBox.IsFocusable = $true; $this._descriptionBox.TabIndex = 1
-        $this._dialogPanel.AddChild($this._descriptionBox)
-
-        # Save Button
-        $this._saveButton = [ButtonComponent]::new("SaveBtn")
-        $this._saveButton.Text = "Save"; $this._saveButton.X = 15; $this._saveButton.Y = 10
-        $this._saveButton.IsFocusable = $true; $this._saveButton.TabIndex = 2
-        $this._saveButton.OnClick = { $this._SaveTask() }
-        $this._dialogPanel.AddChild($this._saveButton)
-
-        # Cancel Button
-        $this._cancelButton = [ButtonComponent]::new("CancelBtn")
-        $this._cancelButton.Text = "Cancel"; $this._cancelButton.X = 35; $this._cancelButton.Y = 10
-        $this._cancelButton.IsFocusable = $true; $this._cancelButton.TabIndex = 3
-        $this._cancelButton.OnClick = { $this._Cancel() }
-        $this._dialogPanel.AddChild($this._cancelButton)
-    }
-
-    [void] OnEnter() {
-        # Base OnEnter will automatically focus the first component by TabIndex.
-        ([Screen]$this).OnEnter()
-        $this.RequestRedraw()
-    }
-
-    hidden [void] _SaveTask() {
-        if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
-            $this._titleBox.BorderColor = (Get-ThemeColor "Error")
-            $this.RequestRedraw()
-            return
-        }
-        $this._task.Title = $this._titleBox.Text
-        $this._task.Description = $this._descriptionBox.Text
-        if ($this.OnSave) { & $this.OnSave $this._task }
-        $this._NavigateBack()
-    }
-
-    hidden [void] _Cancel() {
-        $this._NavigateBack()
-    }
-
-    hidden [void] _NavigateBack() {
-        $navService = $this.ServiceContainer.GetService("NavigationService")
-        if ($navService.CanGoBack()) { $navService.GoBack() }
-    }
-
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Let the base class handle Tab navigation and routing to focused components FIRST.
-        if (([Screen]$this).HandleInput($keyInfo)) {
-            return $true
-        }
-
-        # Handle screen-level shortcuts if no component handled the key.
-        if ($keyInfo.Key -eq [ConsoleKey]::Escape) {
-            $this._Cancel()
-            return $true
-        }
-        return $false
-    }
-}
-
-
-####\Components\ACO.026_ConfirmDialog.ps1
-# ==============================================================================
-#
-#   Axiom-Phoenix v4.1 - Confirmation Dialog (Component)
-#
-#   File: Components\ACO.026_ConfirmDialog.ps1
-#   Status: NEW & VERIFIED
-#
-#   DESCRIPTION:
-#   This is a standalone dialog for Yes/No confirmations. It inherits from
-#   Screen to function as a modal window and fully complies with the new
-#   Hybrid Window Manager model.
-#
-# ==============================================================================
-
-class ConfirmDialog : Screen {
-    #region UI Components
-    hidden [Panel] $_dialogPanel
-    hidden [LabelComponent] $_messageLabel
-    hidden [ButtonComponent] $_yesButton
-    hidden [ButtonComponent] $_noButton
-    #endregion
-
-    #region Public Properties
-    [string]$Title = "Confirm"
-    [string]$Message = "Are you sure?"
-    [scriptblock]$OnConfirm = {}
-    #endregion
-
-    ConfirmDialog([object]$serviceContainer) : base("ConfirmDialog", $serviceContainer) {
-        $this.IsOverlay = $true
-    }
-
-    [void] Initialize() {
-        # Dialog Panel
-        $dialogWidth = 50; $dialogHeight = 10
-        $this._dialogPanel = [Panel]::new("DialogMain")
-        $this._dialogPanel.X = [Math]::Floor(($this.Width - $dialogWidth) / 2)
-        $this._dialogPanel.Y = [Math]::Floor(($this.Height - $dialogHeight) / 2)
-        $this._dialogPanel.Width = $dialogWidth; $this._dialogPanel.Height = $dialogHeight
-        $this._dialogPanel.Title = " $($this.Title) "
-        $this._dialogPanel.BorderStyle = "Double"
-        $this._dialogPanel.IsFocusable = $false
-        $this.AddChild($this._dialogPanel)
-
-        # Message Label
-        $this._messageLabel = [LabelComponent]::new("MessageLabel")
-        $this._messageLabel.X = 2; $this._messageLabel.Y = 2
-        $this._messageLabel.Width = $dialogWidth - 4; $this._messageLabel.Height = 3
-        $this._messageLabel.Text = $this.Message
-        $this._messageLabel.IsFocusable = $false
-        $this._dialogPanel.AddChild($this._messageLabel)
-
-        # Yes Button
-        $this._yesButton = [ButtonComponent]::new("YesButton")
-        $this._yesButton.Text = "Yes"; $this._yesButton.X = 10; $this._yesButton.Y = 6
-        $this._yesButton.IsFocusable = $true; $this._yesButton.TabIndex = 0
-        $this._yesButton.OnClick = { $this._Confirm() }
-        $this._dialogPanel.AddChild($this._yesButton)
-
-        # No Button
-        $this._noButton = [ButtonComponent]::new("NoButton")
-        $this._noButton.Text = "No"; $this._noButton.X = 30; $this._noButton.Y = 6
-        $this._noButton.IsFocusable = $true; $this._noButton.TabIndex = 1
-        $this._noButton.OnClick = { $this._Cancel() }
-        $this._dialogPanel.AddChild($this._noButton)
-    }
-
-    [void] OnEnter() {
-        # The base OnEnter will focus the first element (Yes button).
-        ([Screen]$this).OnEnter()
-        $this.RequestRedraw()
-    }
-
-    hidden [void] _Confirm() {
-        if ($this.OnConfirm) { & $this.OnConfirm }
-        $this._NavigateBack()
-    }
-
-    hidden [void] _Cancel() {
-        $this._NavigateBack()
-    }
-
-    hidden [void] _NavigateBack() {
-        $navService = $this.ServiceContainer.GetService("NavigationService")
-        if ($navService.CanGoBack()) { $navService.GoBack() }
-    }
-
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        # Let the base class handle Tab navigation and routing to focused button FIRST.
-        if (([Screen]$this).HandleInput($keyInfo)) {
-            return $true
-        }
-
-        # Add convenient Left/Right arrow key navigation between buttons.
-        $focusedChild = $this.GetFocusedChild()
-        if ($keyInfo.Key -eq [ConsoleKey]::LeftArrow -or $keyInfo.Key -eq [ConsoleKey]::RightArrow) {
-            if ($focusedChild -eq $this._yesButton) { $this.SetChildFocus($this._noButton) }
-            else { $this.SetChildFocus($this._yesButton) }
-            return $true
-        }
-
-        # Handle screen-level shortcuts if no component handled the key.
-        if ($keyInfo.Key -eq [ConsoleKey]::Escape) {
-            $this._Cancel()
-            return $true
-        }
-
-        return $false
-    }
-}
 
 
 ####\Components\ACO.100_TextEngine.ps1
@@ -6781,7 +6564,7 @@ function New-TuiLabel {
     $label.X = $X
     $label.Y = $Y
     if ($ForegroundColor) {
-        $label.ForegroundColor = $ForegroundColor
+        $label.SetForegroundColor($ForegroundColor)
     }
     return $label
 }
@@ -6938,41 +6721,41 @@ function Apply-ThemeToComponent {
     # Common theme applications
     switch ($ComponentType) {
         "Panel" {
-            $Component.BorderColor = Get-ThemeValue "Panel.Border" "#333333"
-            $Component.BackgroundColor = Get-ThemeValue "Panel.Background" "#000000"
+            $Component.SetBorderColor((Get-ThemeValue "Panel.Border" "#333333"))
+            $Component.SetBackgroundColor((Get-ThemeValue "Panel.Background" "#000000"))
             if ($Component.Title) {
                 # Title color handled internally by Panel
             }
         }
         "Button" {
-            $Component.BackgroundColor = Get-ThemeValue "Button.Background" "#1A1A1A"
-            $Component.ForegroundColor = Get-ThemeValue "Button.Foreground" "#E0E0E0"
+            $Component.SetBackgroundColor((Get-ThemeValue "Button.Background" "#1A1A1A"))
+            $Component.SetForegroundColor((Get-ThemeValue "Button.Foreground" "#E0E0E0"))
             # Focus states handled internally by Button
         }
         "TextBox" {
-            $Component.BackgroundColor = Get-ThemeValue "TextBox.Background" "#1A1A1A"
-            $Component.ForegroundColor = Get-ThemeValue "TextBox.Foreground" "#E0E0E0"
-            $Component.BorderColor = Get-ThemeValue "TextBox.Border" "#333333"
+            $Component.SetBackgroundColor((Get-ThemeValue "TextBox.Background" "#1A1A1A"))
+            $Component.SetForegroundColor((Get-ThemeValue "TextBox.Foreground" "#E0E0E0"))
+            $Component.SetBorderColor((Get-ThemeValue "TextBox.Border" "#333333"))
             # PlaceholderColor does not have a setter method, direct assignment is fine.
             $Component.PlaceholderColor = Get-ThemeValue "TextBox.Placeholder" "#666666"
         }
         "List" {
-            $Component.BackgroundColor = Get-ThemeValue "List.Background" "#000000"
-            $Component.ForegroundColor = Get-ThemeValue "List.Foreground" "#E0E0E0"
+            $Component.SetBackgroundColor((Get-ThemeValue "List.Background" "#000000"))
+            $Component.SetForegroundColor((Get-ThemeValue "List.Foreground" "#E0E0E0"))
             # SelectedBackgroundColor and SelectedForegroundColor do not have setter methods, direct assignment is fine.
             $Component.SelectedBackgroundColor = Get-ThemeValue "List.SelectedBackground" "#0066CC"
             $Component.SelectedForegroundColor = Get-ThemeValue "List.SelectedForeground" "#FFFFFF"
             if ($Component.HasBorder) {
-                $Component.BorderColor = Get-ThemeValue "List.Border" "#333333"
+                $Component.SetBorderColor((Get-ThemeValue "List.Border" "#333333"))
             }
         }
         "Label" {
             # Labels typically inherit from parent, but can be set explicitly
             $bg = Get-ThemeValue "Label.Background"
             if ($bg -and $bg -ne 'transparent') {
-                $Component.BackgroundColor = $bg
+                $Component.SetBackgroundColor($bg)
             }
-            $Component.ForegroundColor = Get-ThemeValue "Label.Foreground" "#E0E0E0"
+            $Component.SetForegroundColor((Get-ThemeValue "Label.Foreground" "#E0E0E0"))
         }
     }
 }
@@ -9181,17 +8964,6 @@ class DashboardScreen : Screen {
             $this.ExecuteMenuItem($index)
         })
         
-        # Add focus visual feedback
-        $this._menuList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._menuList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "border" "#404040"
-            $this.RequestRedraw()
-        } -Force
-        
         $this._menuPanel.AddChild($this._menuList)
         
         # === CREATE INSTRUCTIONS ===
@@ -11134,7 +10906,7 @@ class ThemeScreen : Screen {
         $this._titleLabel.X = 2
         $this._titleLabel.Y = 1
         $this._titleLabel.SetText("Select a theme for your terminal experience") # Use SetText
-        $this._titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        $this._titleLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Fixed Pattern 7
         $this._mainPanel.AddChild($this._titleLabel)
         
         # List panel (left side)
@@ -11231,7 +11003,7 @@ class ThemeScreen : Screen {
         $this._statusLabel.X = 2
         $this._statusLabel.Y = $this.Height - 3
         $this._statusLabel.SetText("Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel") # Use SetText
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666")) # Fixed Pattern 7
         $this._mainPanel.AddChild($this._statusLabel)
         
         # Populate theme list
@@ -11265,19 +11037,19 @@ class ThemeScreen : Screen {
             
             # Update description
             $this._descriptionLabel.SetText($selectedTheme.Description) # Use SetText
-            $this._descriptionLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
+            $this._descriptionLabel.SetForegroundColor($selectedTheme.Colors["Foreground"]) # Fixed Pattern 7
             
             # Update preview elements with theme colors
-            $this._previewTextLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
+            $this._previewTextLabel.SetForegroundColor($selectedTheme.Colors["Foreground"]) # Fixed Pattern 7
             
-            $this._previewButtonLabel.BackgroundColor = $selectedTheme.Colors["Primary"]
-            $this._previewButtonLabel.ForegroundColor = $selectedTheme.Colors["button.focused.fg"]
+            $this._previewButtonLabel.SetBackgroundColor($selectedTheme.Colors["Primary"]) # Fixed Pattern 7
+            $this._previewButtonLabel.SetForegroundColor($selectedTheme.Colors["button.focused.fg"]) # Fixed Pattern 7
             
-            $this._previewListLabel.BackgroundColor = $selectedTheme.Colors["list.item.selected.background"]
-            $this._previewListLabel.ForegroundColor = $selectedTheme.Colors["list.item.selected"]
+            $this._previewListLabel.SetBackgroundColor($selectedTheme.Colors["list.item.selected.background"]) # Fixed Pattern 7
+            $this._previewListLabel.SetForegroundColor($selectedTheme.Colors["list.item.selected"]) # Fixed Pattern 7
             
             # Update panel colors
-            $this._previewPanel.BackgroundColor = $selectedTheme.Colors["component.background"]
+            $this._previewPanel.SetBackgroundColor($selectedTheme.Colors["component.background"]) # Fixed Pattern 7
             # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this._previewPanel.BorderColor = $selectedTheme.Colors["component.border"]
             
@@ -11794,405 +11566,6 @@ class NewTaskScreen : Screen {
 
 
 
-####\Screens\ASC.004_NewTaskScreen_PROPERLY_FIXED.ps1
-# ==============================================================================
-# Axiom-Phoenix v4.0 - New Task Screen
-# HYBRID MODEL: Uses Screen focus management with component input delegation
-# FIXED according to FIX GUIDE: Use properties, not methods
-# ==============================================================================
-
-class NewTaskScreen : Screen {
-    hidden [Panel] $_mainPanel
-    hidden [Panel] $_formPanel
-    hidden [TextBoxComponent] $_titleBox
-    hidden [TextBoxComponent] $_descriptionBox
-    hidden [ButtonComponent] $_saveButton
-    hidden [ButtonComponent] $_cancelButton
-    hidden [LabelComponent] $_priorityLabel
-    hidden [LabelComponent] $_projectLabel
-    hidden [LabelComponent] $_priorityValue
-    hidden [LabelComponent] $_projectValue
-    
-    hidden [TaskPriority] $_selectedPriority = [TaskPriority]::Medium
-    hidden [string] $_selectedProject = "General"
-    
-    # No need for manual focus tracking - Screen base class handles it
-    
-    NewTaskScreen([object]$serviceContainer) : base("NewTaskScreen", $serviceContainer) {
-        $this.Title = " Create New Task "
-        Write-Log -Level Debug -Message "NewTaskScreen: Constructor called"
-    }
-    
-    [void] Initialize() {
-        Write-Log -Level Debug -Message "NewTaskScreen.Initialize: Starting"
-        
-        # Main panel (full screen with semi-transparent overlay effect)
-        $this._mainPanel = [Panel]::new("NewTaskMainPanel")
-        $this._mainPanel.X = 0
-        $this._mainPanel.Y = 0
-        $this._mainPanel.Width = $this.Width
-        $this._mainPanel.Height = $this.Height
-        $this._mainPanel.HasBorder = $false
-        # FIXED: Use property instead of method
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
-        $this.AddChild($this._mainPanel)
-        
-        # Form panel (centered dialog)
-        $formWidth = [Math]::Min(70, $this.Width - 10)
-        $formHeight = 20
-        $formX = [Math]::Floor(($this.Width - $formWidth) / 2)
-        $formY = [Math]::Floor(($this.Height - $formHeight) / 2)
-        
-        $this._formPanel = [Panel]::new("FormPanel")
-        $this._formPanel.X = $formX
-        $this._formPanel.Y = $formY
-        $this._formPanel.Width = $formWidth
-        $this._formPanel.Height = $formHeight
-        $this._formPanel.Title = " New Task "
-        $this._formPanel.BorderStyle = "Double"
-        # FIXED: Use properties
-        $this._formPanel.BorderColor = Get-ThemeColor "Panel.Title" "#007acc"
-        $this._formPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
-        $this._mainPanel.AddChild($this._formPanel)
-        
-        $y = 2
-        
-        # Title section
-        $titleLabel = [LabelComponent]::new("TitleLabel")
-        $titleLabel.Text = "Task Title:"
-        $titleLabel.X = 2
-        $titleLabel.Y = $y
-        # FIXED: Use property instead of method
-        $titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
-        $this._formPanel.AddChild($titleLabel)
-        
-        $y += 1
-        $this._titleBox = [TextBoxComponent]::new("TitleBox")
-        $this._titleBox.Placeholder = "Enter task title..."
-        $this._titleBox.X = 2
-        $this._titleBox.Y = $y
-        $this._titleBox.Width = $formWidth - 4
-        $this._titleBox.Height = 3  # TextBoxComponent expects height of 3
-        $this._titleBox.IsFocusable = $true  # Component handles its own input
-        $this._titleBox.TabIndex = 0  # First in tab order
-        # FIXED: Use properties instead of methods
-        $this._titleBox.BackgroundColor = Get-ThemeColor "Input.Background" "#2d2d30"
-        $this._titleBox.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4"
-        $this._titleBox.BorderColor = Get-ThemeColor "Input.Border" "#404040"
-        
-        # Override OnFocus/OnBlur to update border color
-        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#007acc"
-            $this.ShowCursor = $true
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#404040"
-            $this.ShowCursor = $false
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._formPanel.AddChild($this._titleBox)
-        
-        $y += 4  # 3 for textbox height + 1 spacing
-        
-        # Description section
-        $descLabel = [LabelComponent]::new("DescLabel")
-        $descLabel.Text = "Description (optional):"
-        $descLabel.X = 2
-        $descLabel.Y = $y
-        # FIXED: Use property
-        $descLabel.ForegroundColor = Get-ThemeColor "label" "#00D4FF"
-        $this._formPanel.AddChild($descLabel)
-        
-        $y += 1
-        $this._descriptionBox = [TextBoxComponent]::new("DescBox")
-        $this._descriptionBox.Placeholder = "Enter description..."
-        $this._descriptionBox.X = 2
-        $this._descriptionBox.Y = $y
-        $this._descriptionBox.Width = $formWidth - 4
-        $this._descriptionBox.Height = 3
-        $this._descriptionBox.IsFocusable = $true  # Component handles its own input
-        $this._descriptionBox.TabIndex = 1  # Second in tab order
-        # FIXED: Use properties
-        $this._descriptionBox.BackgroundColor = Get-ThemeColor "textbox.bg" "#2A2A2A"
-        $this._descriptionBox.ForegroundColor = Get-ThemeColor "textbox.fg" "#FFFFFF"
-        $this._descriptionBox.BorderColor = Get-ThemeColor "textbox.border" "#444444"
-        
-        # Override OnFocus/OnBlur
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#00D4FF"
-            $this.ShowCursor = $true
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "textbox.border" "#444444"
-            $this.ShowCursor = $false
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._formPanel.AddChild($this._descriptionBox)
-        
-        $y += 4
-        
-        # Priority and Project row
-        $this._priorityLabel = [LabelComponent]::new("PriorityLabel")
-        $this._priorityLabel.Text = "Priority:"
-        $this._priorityLabel.X = 2
-        $this._priorityLabel.Y = $y
-        # FIXED: Use property
-        $this._priorityLabel.ForegroundColor = Get-ThemeColor "label" "#FF69B4"
-        $this._formPanel.AddChild($this._priorityLabel)
-        
-        $this._priorityValue = [LabelComponent]::new("PriorityValue")
-        $this._priorityValue.Text = "[$($this._selectedPriority)]"
-        $this._priorityValue.X = 12
-        $this._priorityValue.Y = $y
-        # FIXED: Use property
-        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
-        $this._formPanel.AddChild($this._priorityValue)
-        
-        $this._projectLabel = [LabelComponent]::new("ProjectLabel")
-        $this._projectLabel.Text = "Project:"
-        $this._projectLabel.X = 30
-        $this._projectLabel.Y = $y
-        # FIXED: Use property
-        $this._projectLabel.ForegroundColor = Get-ThemeColor "label" "#8A2BE2"
-        $this._formPanel.AddChild($this._projectLabel)
-        
-        $this._projectValue = [LabelComponent]::new("ProjectValue")
-        $this._projectValue.Text = "[$($this._selectedProject)]"
-        $this._projectValue.X = 39
-        $this._projectValue.Y = $y
-        # FIXED: Use property
-        $this._projectValue.ForegroundColor = Get-ThemeColor "project" "#FFD700"
-        $this._formPanel.AddChild($this._projectValue)
-        
-        $y += 2
-        
-        # Help text
-        $helpLabel = [LabelComponent]::new("HelpLabel")
-        $helpLabel.Text = "[Tab] Next field | [P] Change priority | [Enter] Save | [Esc] Cancel"
-        $helpLabel.X = 2
-        $helpLabel.Y = $y
-        # FIXED: Use property
-        $helpLabel.ForegroundColor = Get-ThemeColor "muted" "#666666"
-        $this._formPanel.AddChild($helpLabel)
-        
-        $y += 2
-        
-        # Buttons
-        $buttonWidth = 12
-        $buttonSpacing = 4
-        $totalButtonWidth = ($buttonWidth * 2) + $buttonSpacing
-        $buttonStartX = [Math]::Floor(($formWidth - $totalButtonWidth) / 2)
-        
-        $this._saveButton = [ButtonComponent]::new("SaveButton")
-        $this._saveButton.Text = " [S]ave "
-        $this._saveButton.X = $buttonStartX
-        $this._saveButton.Y = $y
-        $this._saveButton.Width = $buttonWidth
-        $this._saveButton.Height = 3
-        $this._saveButton.IsFocusable = $true  # Component handles its own input
-        $this._saveButton.TabIndex = 2  # Third in tab order
-        # FIXED: Use properties
-        $this._saveButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
-        $this._saveButton.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
-        
-        # Override OnFocus/OnBlur for visual feedback
-        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
-            $this.RequestRedraw()
-        } -Force
-        
-        # Set OnClick handler
-        $thisScreen = $this
-        $this._saveButton.OnClick = { $thisScreen.SaveTask() }.GetNewClosure()
-        $this._formPanel.AddChild($this._saveButton)
-        
-        $this._cancelButton = [ButtonComponent]::new("CancelButton")
-        $this._cancelButton.Text = " [C]ancel "
-        $this._cancelButton.X = $buttonStartX + $buttonWidth + $buttonSpacing
-        $this._cancelButton.Y = $y
-        $this._cancelButton.Width = $buttonWidth
-        $this._cancelButton.Height = 3
-        $this._cancelButton.IsFocusable = $true  # Component handles its own input
-        $this._cancelButton.TabIndex = 3  # Fourth in tab order
-        # FIXED: Use properties
-        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
-        $this._cancelButton.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
-        
-        # Override OnFocus/OnBlur
-        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._cancelButton.OnClick = { $thisScreen.Cancel() }.GetNewClosure()
-        $this._formPanel.AddChild($this._cancelButton)
-        
-        Write-Log -Level Debug -Message "NewTaskScreen.Initialize: Completed"
-    }
-    
-    [void] OnEnter() {
-        Write-Log -Level Debug -Message "NewTaskScreen.OnEnter: Setting initial focus"
-        
-        # Reset form
-        $this._titleBox.Text = ""
-        $this._descriptionBox.Text = ""
-        $this._selectedPriority = [TaskPriority]::Medium
-        $this._selectedProject = "General"
-        
-        # Update display
-        $this._UpdatePriorityDisplay()
-        
-        # Let base Screen class handle focus - it will focus first focusable child
-        ([Screen]$this).OnEnter()
-        
-        $this.RequestRedraw()
-    }
-    
-    hidden [string] GetPriorityColor([TaskPriority]$priority) {
-        if ($priority -eq [TaskPriority]::Low) {
-            return Get-ThemeColor "Success" "#00FF88"
-        }
-        elseif ($priority -eq [TaskPriority]::Medium) {
-            return Get-ThemeColor "Warning" "#FFD700"
-        }
-        elseif ($priority -eq [TaskPriority]::High) {
-            return Get-ThemeColor "Error" "#FF4444"
-        }
-        else {
-            return Get-ThemeColor "Label.Foreground" "#E0E0E0"
-        }
-    }
-    
-    hidden [void] _UpdatePriorityDisplay() {
-        $this._priorityValue.Text = "[$($this._selectedPriority)]"
-        # FIXED: Use property
-        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
-    }
-    
-    hidden [void] CyclePriority() {
-        $priorities = @([TaskPriority]::Low, [TaskPriority]::Medium, [TaskPriority]::High)
-        $currentIndex = [Array]::IndexOf($priorities, $this._selectedPriority)
-        $this._selectedPriority = $priorities[($currentIndex + 1) % $priorities.Length]
-        
-        $this._UpdatePriorityDisplay()
-        $this.RequestRedraw()
-    }
-    
-    hidden [void] SaveTask() {
-        # Validate title
-        if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
-            # Flash the title box border to indicate error
-            # FIXED: Use property
-            $this._titleBox.BorderColor = Get-ThemeColor "error" "#FF0000"
-            $this.RequestRedraw()
-            # Focus title box
-            $this.SetChildFocus($this._titleBox)
-            return
-        }
-        
-        # Create new task
-        $task = [PmcTask]::new($this._titleBox.Text.Trim())
-        $task.Description = $this._descriptionBox.Text.Trim()
-        $task.Priority = $this._selectedPriority
-        $task.ProjectKey = $this._selectedProject
-        
-        # Save via DataManager
-        $dataManager = $this.ServiceContainer.GetService("DataManager")
-        if ($dataManager) {
-            $dataManager.AddTask($task)
-            
-            Write-Log -Level Info -Message "NewTaskScreen: Created task '$($task.Title)'"
-            
-            # Navigate back
-            $navService = $this.ServiceContainer.GetService("NavigationService")
-            if ($navService -and $navService.CanGoBack()) {
-                $navService.GoBack()
-            }
-        }
-    }
-    
-    hidden [void] Cancel() {
-        Write-Log -Level Debug -Message "NewTaskScreen: Cancelled"
-        $navService = $this.ServiceContainer.GetService("NavigationService")
-        if ($navService -and $navService.CanGoBack()) {
-            $navService.GoBack()
-        }
-    }
-    
-    # === INPUT HANDLING (HYBRID MODEL) ===
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if ($null -eq $keyInfo) {
-            Write-Log -Level Warning -Message "NewTaskScreen.HandleInput: Null keyInfo"
-            return $false
-        }
-        
-        Write-Log -Level Debug -Message "NewTaskScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
-        
-        # Let base Screen class handle Tab navigation and route to focused component
-        if (([Screen]$this).HandleInput($keyInfo)) {
-            return $true
-        }
-        
-        # Handle screen-level shortcuts (work regardless of which component has focus)
-        switch ($keyInfo.Key) {
-            ([ConsoleKey]::Escape) {
-                $this.Cancel()
-                return $true
-            }
-        }
-        
-        # Handle character shortcuts
-        switch ($keyInfo.KeyChar) {
-            { $_ -eq 'p' -or $_ -eq 'P' } {
-                $this.CyclePriority()
-                return $true
-            }
-            { $_ -eq 's' -or $_ -eq 'S' } {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -or $keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
-                    $this.SaveTask()
-                    return $true
-                }
-            }
-            { $_ -eq 'c' -or $_ -eq 'C' } {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -or $keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
-                    $this.Cancel()
-                    return $true
-                }
-            }
-        }
-        
-        # Ctrl+S to save
-        if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control -and $keyInfo.Key -eq [ConsoleKey]::S) {
-            $this.SaveTask()
-            return $true
-        }
-        
-        return $false
-    }
-}
-
-# ==============================================================================
-# END OF NEW TASK SCREEN
-# ==============================================================================
-
-
-
 ####\Screens\ASC.004_NewTaskScreen.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - New Task Screen
@@ -12231,7 +11604,8 @@ class NewTaskScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.HasBorder = $false
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        # Panel has a SetBackgroundColor method, which is correctly used here.
+        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this.AddChild($this._mainPanel)
         
         # Form panel (centered dialog)
@@ -12249,7 +11623,8 @@ class NewTaskScreen : Screen {
         $this._formPanel.BorderStyle = "Double"
         # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._formPanel.BorderColor = (Get-ThemeColor "Panel.Title" "#007acc")
-        $this._formPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        # Panel has a SetBackgroundColor method, which is correctly used here.
+        $this._formPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this._mainPanel.AddChild($this._formPanel)
         
         $y = 2
@@ -12259,7 +11634,8 @@ class NewTaskScreen : Screen {
         $titleLabel.Text = "Task Title:"
         $titleLabel.X = 2
         $titleLabel.Y = $y
-        $titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
+        # LabelComponent has a SetForegroundColor method, which is correctly used here.
+        $titleLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
         $this._formPanel.AddChild($titleLabel)
         
         $y += 1
@@ -12271,8 +11647,9 @@ class NewTaskScreen : Screen {
         $this._titleBox.Height = 3  # TextBoxComponent expects height of 3
         $this._titleBox.IsFocusable = $true  # Component handles its own input
         $this._titleBox.TabIndex = 0  # First in tab order
-        $this._titleBox.BackgroundColor = Get-ThemeColor "Input.Background" "#2d2d30"
-        $this._titleBox.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4"
+        # TextBoxComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
+        $this._titleBox.SetBackgroundColor((Get-ThemeColor "Input.Background" "#2d2d30"))
+        $this._titleBox.SetForegroundColor((Get-ThemeColor "Input.Foreground" "#d4d4d4"))
         # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._titleBox.BorderColor = (Get-ThemeColor "Input.Border" "#404040")
         
@@ -12300,7 +11677,8 @@ class NewTaskScreen : Screen {
         $descLabel.Text = "Description (optional):"
         $descLabel.X = 2
         $descLabel.Y = $y
-        $descLabel.ForegroundColor = Get-ThemeColor "label" "#00D4FF"
+        # LabelComponent has a SetForegroundColor method, correctly used.
+        $descLabel.SetForegroundColor((Get-ThemeColor "label" "#00D4FF"))
         $this._formPanel.AddChild($descLabel)
         
         $y += 1
@@ -12312,8 +11690,9 @@ class NewTaskScreen : Screen {
         $this._descriptionBox.Height = 3
         $this._descriptionBox.IsFocusable = $true  # Component handles its own input
         $this._descriptionBox.TabIndex = 1  # Second in tab order
-        $this._descriptionBox.BackgroundColor = Get-ThemeColor "textbox.bg" "#2A2A2A"
-        $this._descriptionBox.ForegroundColor = Get-ThemeColor "textbox.fg" "#FFFFFF"
+        # TextBoxComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
+        $this._descriptionBox.SetBackgroundColor((Get-ThemeColor "textbox.bg" "#2A2A2A"))
+        $this._descriptionBox.SetForegroundColor((Get-ThemeColor "textbox.fg" "#FFFFFF"))
         # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._descriptionBox.BorderColor = (Get-ThemeColor "textbox.border" "#444444")
         
@@ -12341,28 +11720,32 @@ class NewTaskScreen : Screen {
         $this._priorityLabel.Text = "Priority:"
         $this._priorityLabel.X = 2
         $this._priorityLabel.Y = $y
-        $this._priorityLabel.ForegroundColor = Get-ThemeColor "label" "#FF69B4"
+        # LabelComponent has a SetForegroundColor method, correctly used.
+        $this._priorityLabel.SetForegroundColor((Get-ThemeColor "label" "#FF69B4"))
         $this._formPanel.AddChild($this._priorityLabel)
         
         $this._priorityValue = [LabelComponent]::new("PriorityValue")
         $this._priorityValue.Text = "[$($this._selectedPriority)]"
         $this._priorityValue.X = 12
         $this._priorityValue.Y = $y
-        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
+        # LabelComponent has a SetForegroundColor method, correctly used.
+        $this._priorityValue.SetForegroundColor($this.GetPriorityColor($this._selectedPriority))
         $this._formPanel.AddChild($this._priorityValue)
         
         $this._projectLabel = [LabelComponent]::new("ProjectLabel")
         $this._projectLabel.Text = "Project:"
         $this._projectLabel.X = 30
         $this._projectLabel.Y = $y
-        $this._projectLabel.ForegroundColor = Get-ThemeColor "label" "#8A2BE2"
+        # LabelComponent has a SetForegroundColor method, correctly used.
+        $this._projectLabel.SetForegroundColor((Get-ThemeColor "label" "#8A2BE2"))
         $this._formPanel.AddChild($this._projectLabel)
         
         $this._projectValue = [LabelComponent]::new("ProjectValue")
         $this._projectValue.Text = "[$($this._selectedProject)]"
         $this._projectValue.X = 39
         $this._projectValue.Y = $y
-        $this._projectValue.ForegroundColor = Get-ThemeColor "project" "#FFD700"
+        # LabelComponent has a SetForegroundColor method, correctly used.
+        $this._projectValue.SetForegroundColor((Get-ThemeColor "project" "#FFD700"))
         $this._formPanel.AddChild($this._projectValue)
         
         $y += 2
@@ -12372,7 +11755,8 @@ class NewTaskScreen : Screen {
         $helpLabel.Text = "[Tab] Next field | [P] Change priority | [Enter] Save | [Esc] Cancel"
         $helpLabel.X = 2
         $helpLabel.Y = $y
-        $helpLabel.ForegroundColor = Get-ThemeColor "muted" "#666666"
+        # LabelComponent has a SetForegroundColor method, correctly used.
+        $helpLabel.SetForegroundColor((Get-ThemeColor "muted" "#666666"))
         $this._formPanel.AddChild($helpLabel)
         
         $y += 2
@@ -12391,17 +11775,20 @@ class NewTaskScreen : Screen {
         $this._saveButton.Height = 3
         $this._saveButton.IsFocusable = $true  # Component handles its own input
         $this._saveButton.TabIndex = 2  # Third in tab order
-        $this._saveButton.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
-        $this._saveButton.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
+        # ButtonComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
+        $this._saveButton.SetBackgroundColor((Get-ThemeColor "button.bg" "#0D47A1"))
+        $this._saveButton.SetForegroundColor((Get-ThemeColor "button.fg" "#FFFFFF"))
         
         # Override OnFocus/OnBlur for visual feedback
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.hover" "#1976D2"
+            # ButtonComponent has a SetBackgroundColor method, correctly used.
+            $this.SetBackgroundColor((Get-ThemeColor "button.hover" "#1976D2"))
             $this.RequestRedraw()
         } -Force
         
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.bg" "#0D47A1"
+            # ButtonComponent has a SetBackgroundColor method, correctly used.
+            $this.SetBackgroundColor((Get-ThemeColor "button.bg" "#0D47A1"))
             $this.RequestRedraw()
         } -Force
         
@@ -12418,17 +11805,20 @@ class NewTaskScreen : Screen {
         $this._cancelButton.Height = 3
         $this._cancelButton.IsFocusable = $true  # Component handles its own input
         $this._cancelButton.TabIndex = 3  # Fourth in tab order
-        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
-        $this._cancelButton.ForegroundColor = Get-ThemeColor "button.fg" "#FFFFFF"
+        # ButtonComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
+        $this._cancelButton.SetBackgroundColor((Get-ThemeColor "button.cancel.bg" "#B71C1C"))
+        $this._cancelButton.SetForegroundColor((Get-ThemeColor "button.fg" "#FFFFFF"))
         
         # Override OnFocus/OnBlur
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.cancel.hover" "#D32F2F"
+            # ButtonComponent has a SetBackgroundColor method, correctly used.
+            $this.SetBackgroundColor((Get-ThemeColor "button.cancel.hover" "#D32F2F"))
             $this.RequestRedraw()
         } -Force
         
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.cancel.bg" "#B71C1C"
+            # ButtonComponent has a SetBackgroundColor method, correctly used.
+            $this.SetBackgroundColor((Get-ThemeColor "button.cancel.bg" "#B71C1C"))
             $this.RequestRedraw()
         } -Force
         
@@ -12473,7 +11863,8 @@ class NewTaskScreen : Screen {
     
     hidden [void] _UpdatePriorityDisplay() {
         $this._priorityValue.Text = "[$($this._selectedPriority)]"
-        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
+        # LabelComponent has a SetForegroundColor method, correctly used.
+        $this._priorityValue.SetForegroundColor($this.GetPriorityColor($this._selectedPriority))
     }
     
     hidden [void] CyclePriority() {
@@ -12658,7 +12049,8 @@ class EditTaskScreen : Screen {
         $this._mainPanel.BorderStyle = "Double"
         # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#0A0A0A"
+        # Panel has a SetBackgroundColor method, which is correctly used here.
+        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0A0A0A"))
         $this.AddChild($this._mainPanel)
         
         # === FORM PANEL ===
@@ -12686,7 +12078,8 @@ class EditTaskScreen : Screen {
         $titleLabel.Text = "Task Title:"
         $titleLabel.X = $leftColumnX
         $titleLabel.Y = $y
-        $titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
+        # LabelComponent has a SetForegroundColor method, which is correctly used here.
+        $titleLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
         $this._formPanel.AddChild($titleLabel)
         
         $y++
@@ -12726,7 +12119,7 @@ class EditTaskScreen : Screen {
         $descLabel.X = $leftColumnX
         $descLabel.Y = $y
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $descLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
+        $descLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF"))
         $this._formPanel.AddChild($descLabel)
         
         $y++
@@ -12766,7 +12159,7 @@ class EditTaskScreen : Screen {
         $statusLabel.X = $leftColumnX
         $statusLabel.Y = $y
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF69B4"
+        $statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FF69B4"))
         $this._formPanel.AddChild($statusLabel)
         
         $y++
@@ -12807,7 +12200,7 @@ class EditTaskScreen : Screen {
         $priorityLabel.X = $rightColumnX
         $priorityLabel.Y = $y - 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $priorityLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFA500"
+        $priorityLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFA500"))
         $this._formPanel.AddChild($priorityLabel)
         
         $this._priorityList = [ListBox]::new("PriorityList")
@@ -12848,7 +12241,7 @@ class EditTaskScreen : Screen {
         $progressLabel.X = $leftColumnX
         $progressLabel.Y = $y
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $progressLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00FF88"
+        $progressLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00FF88"))
         $this._formPanel.AddChild($progressLabel)
         
         $y++
@@ -12901,7 +12294,7 @@ class EditTaskScreen : Screen {
         $progressBar = "█" * $filledWidth + "░" * ($barWidth - $filledWidth)
         $progressBarLabel.Text = $progressBar
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $progressBarLabel.ForegroundColor = if ($this._task.Progress -eq 100) { "#00FF88" } else { "#00BFFF" }
+        $progressBarLabel.SetForegroundColor((if ($this._task.Progress -eq 100) { "#00FF88" } else { "#00BFFF" }))
         $this._formPanel.AddChild($progressBarLabel)
         
         # Project (Right Column)
@@ -12910,7 +12303,7 @@ class EditTaskScreen : Screen {
         $projectLabel.X = $rightColumnX
         $projectLabel.Y = $y - 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $projectLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#8A2BE2"
+        $projectLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#8A2BE2"))
         $this._formPanel.AddChild($projectLabel)
         
         $this._projectList = [ListBox]::new("ProjectList")
@@ -12948,7 +12341,7 @@ class EditTaskScreen : Screen {
         $this._statusLabel.Y = $y
         $this._statusLabel.Text = "Ready to save changes"
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF"))
         $this._formPanel.AddChild($this._statusLabel)
         
         $y += 2
@@ -12963,19 +12356,19 @@ class EditTaskScreen : Screen {
         $this._saveButton.IsFocusable = $true
         $this._saveButton.TabIndex = 6
         # ButtonComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
-        $this._saveButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
+        $this._saveButton.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#0D47A1"))
         $this._saveButton.SetForegroundColor("#FFFFFF")
         
         # Add focus visual feedback and click handler
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
             # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#1976D2"
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Focused.Background" "#1976D2"))
             $this.RequestRedraw()
         } -Force
         
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
             # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#0D47A1"))
             $this.RequestRedraw()
         } -Force
         
@@ -12995,19 +12388,19 @@ class EditTaskScreen : Screen {
         $this._cancelButton.IsFocusable = $true
         $this._cancelButton.TabIndex = 7
         # ButtonComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
-        $this._cancelButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
+        $this._cancelButton.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#B71C1C"))
         $this._cancelButton.SetForegroundColor("#FFFFFF")
         
         # Add focus visual feedback and click handler
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
             # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#D32F2F"
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Focused.Background" "#D32F2F"))
             $this.RequestRedraw()
         } -Force
         
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
             # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
+            $this.SetBackgroundColor((Get-ThemeColor "Button.Normal.Background" "#B71C1C"))
             $this.RequestRedraw()
         } -Force
         
@@ -13034,7 +12427,7 @@ class EditTaskScreen : Screen {
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $false
         # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
+        $this._statusBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._mainPanel.AddChild($this._statusBar)
 
         # Separator line
@@ -13043,7 +12436,7 @@ class EditTaskScreen : Screen {
         $separator.Y = 0
         $separator.Text = "─" * ($this._statusBar.Width)
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $separator.ForegroundColor = Get-ThemeColor "Panel.Border" "#333333"
+        $separator.SetForegroundColor((Get-ThemeColor "Panel.Border" "#333333"))
         $this._statusBar.AddChild($separator)
 
         # Help text
@@ -13052,7 +12445,7 @@ class EditTaskScreen : Screen {
         $helpLabel.Y = 1
         $helpLabel.SetText("[Tab] Next Field | [↑↓] Navigate Lists | [Enter] Save | [Esc] Cancel | [F5] Reset") # Use SetText
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $helpLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $helpLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         $this._statusBar.AddChild($helpLabel)
         
         # Shortcut hints on right
@@ -13061,7 +12454,7 @@ class EditTaskScreen : Screen {
         $shortcutsLabel.Y = 1
         $shortcutsLabel.SetText("[P] Priority | [S] Status") # Use SetText
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $shortcutsLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#888888"
+        $shortcutsLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#888888"))
         $this._statusBar.AddChild($shortcutsLabel)
     }
     
@@ -13111,7 +12504,7 @@ class EditTaskScreen : Screen {
         # Validate input
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
             $this._statusLabel.SetText("Error: Title is required") # Use SetText
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF4444" # Use SetForegroundColor
+            $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FF4444")) # Use SetForegroundColor
             $this.RequestRedraw()
             return
         }
@@ -13120,7 +12513,7 @@ class EditTaskScreen : Screen {
         $progress = 0
         if (-not [int]::TryParse($this._progressBox.Text, [ref]$progress) -or $progress -lt 0 -or $progress -gt 100) {
             $this._statusLabel.SetText("Error: Progress must be 0-100") # Use SetText
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF4444" # Use SetForegroundColor
+            $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FF4444")) # Use SetForegroundColor
             $this.RequestRedraw()
             return
         }
@@ -13153,7 +12546,7 @@ class EditTaskScreen : Screen {
                 $dataManager.UpdateTask($this._task)
                 
                 $this._statusLabel.SetText("Task updated successfully!") # Use SetText
-                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00FF88" # Use SetForegroundColor
+                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00FF88")) # Use SetForegroundColor
                 $this.RequestRedraw()
                 
                 # Publish event
@@ -13169,7 +12562,7 @@ class EditTaskScreen : Screen {
         }
         catch {
             $this._statusLabel.SetText("Error: $($_.Exception.Message)") # Use SetText
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FF4444" # Use SetForegroundColor
+            $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FF4444")) # Use SetForegroundColor
             $this.RequestRedraw()
         }
     }
@@ -13216,7 +12609,7 @@ class EditTaskScreen : Screen {
         $this._LoadProjects()
         
         $this._statusLabel.SetText("Form reset to original values") # Use SetText
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF" # Use SetForegroundColor
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF")) # Use SetForegroundColor
         $this.RequestRedraw()
     }
     
@@ -13230,7 +12623,7 @@ class EditTaskScreen : Screen {
                 $bar = "█" * $filledWidth + "░" * ($barWidth - $filledWidth)
                 $progressBar.Text = $bar
                 # LabelComponent has a SetForegroundColor method, which is correctly used here.
-                $progressBar.ForegroundColor = if ($progress -eq 100) { "#00FF88" } else { "#00BFFF" }
+                $progressBar.SetForegroundColor((if ($progress -eq 100) { "#00FF88" } else { "#00BFFF" }))
             }
         }
     }
@@ -13240,7 +12633,7 @@ class EditTaskScreen : Screen {
         $currentIndex = $this._priorityList.SelectedIndex
         $this._priorityList.SelectedIndex = ($currentIndex + 1) % 3
         $this._statusLabel.SetText("Priority changed to $([TaskPriority]$this._priorityList.SelectedIndex)") # Use SetText
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF" # Use SetForegroundColor
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF")) # Use SetForegroundColor
         $this.RequestRedraw()
     }
     
@@ -13248,7 +12641,7 @@ class EditTaskScreen : Screen {
         $currentIndex = $this._statusList.SelectedIndex
         $this._statusList.SelectedIndex = ($currentIndex + 1) % 4
         $this._statusLabel.SetText("Status changed to $([TaskStatus]$this._statusList.SelectedIndex)") # Use SetText
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF" # Use SetForegroundColor
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF")) # Use SetForegroundColor
         $this.RequestRedraw()
     }
     
@@ -13416,7 +12809,7 @@ class FileCommanderScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.HasBorder = $false
         # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#0A0A0A"
+        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0A0A0A"))
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -13442,8 +12835,8 @@ class FileCommanderScreen : Screen {
         $this._leftPathLabel.Width = $halfWidth - 2
         $this._leftPathLabel.Height = 1
         # LabelComponent has SetForegroundColor and SetBackgroundColor methods, correctly used.
-        $this._leftPathLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
-        $this._leftPathLabel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
+        $this._leftPathLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
+        $this._leftPathLabel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._leftPanel.AddChild($this._leftPathLabel)
 
         # Left file list
@@ -13513,8 +12906,8 @@ class FileCommanderScreen : Screen {
         $this._rightPathLabel.Width = $this._rightPanel.Width - 2
         $this._rightPathLabel.Height = 1
         # LabelComponent has SetForegroundColor and SetBackgroundColor methods, correctly used.
-        $this._rightPathLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
-        $this._rightPathLabel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
+        $this._rightPathLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
+        $this._rightPathLabel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._rightPanel.AddChild($this._rightPathLabel)
 
         # Right file list
@@ -13572,7 +12965,7 @@ class FileCommanderScreen : Screen {
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $false
         # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
+        $this._statusBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
         $this._mainPanel.AddChild($this._statusBar)
 
         # Status label
@@ -13582,7 +12975,7 @@ class FileCommanderScreen : Screen {
         $this._statusLabel.Width = 60
         $this._statusLabel.Height = 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00FF88"
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00FF88"))
         $this._statusBar.AddChild($this._statusLabel)
 
         # Size label
@@ -13592,7 +12985,7 @@ class FileCommanderScreen : Screen {
         $this._sizeLabel.Width = 20
         $this._sizeLabel.Height = 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $this._sizeLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
+        $this._sizeLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
         $this._statusBar.AddChild($this._sizeLabel)
 
         # Item count label
@@ -13602,7 +12995,7 @@ class FileCommanderScreen : Screen {
         $this._itemCountLabel.Width = 24
         $this._itemCountLabel.Height = 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $this._itemCountLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
+        $this._itemCountLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF"))
         $this._statusBar.AddChild($this._itemCountLabel)
 
         # Function key bar
@@ -13613,7 +13006,7 @@ class FileCommanderScreen : Screen {
         $this._functionBar.Height = 2
         $this._functionBar.HasBorder = $false
         # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._functionBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#0D47A1"
+        $this._functionBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0D47A1"))
         $this._mainPanel.AddChild($this._functionBar)
 
         # Function key labels
@@ -13638,7 +13031,7 @@ class FileCommanderScreen : Screen {
             $keyLabel.Height = 1
             $keyLabel.Text = "$($func.Key):$($func.Text)"
             # LabelComponent has a SetForegroundColor method, which is correctly used here.
-            $keyLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFFFFF"
+            $keyLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFFFFF"))
             $this._functionBar.AddChild($keyLabel)
         }
 
@@ -13800,13 +13193,13 @@ class FileCommanderScreen : Screen {
         if ($leftDisplay.Length -gt $maxPathLength) {
             $leftDisplay = "..." + $leftDisplay.Substring($leftDisplay.Length - $maxPathLength + 3)
         }
-        $this._leftPathLabel.Text = " $leftDisplay "
+        $this._leftPathLabel.SetText(" $leftDisplay ") # Use SetText
         
         $rightDisplay = $this._rightPath
         if ($rightDisplay.Length -gt $maxPathLength) {
             $rightDisplay = "..." + $rightDisplay.Substring($rightDisplay.Length - $maxPathLength + 3)
         }
-        $this._rightPathLabel.Text = " $rightDisplay "
+        $this._rightPathLabel.SetText(" $rightDisplay ") # Use SetText
     }
 
     hidden [void] UpdateStatusBar() {
@@ -13826,18 +13219,18 @@ class FileCommanderScreen : Screen {
         if ($this._selectedItem) {
             $name = $this._selectedItem.Name
             if ($this._selectedItem.PSIsContainer -or $this._selectedItem.Attributes -band [System.IO.FileAttributes]::Directory) {
-                $this._statusLabel.Text = "Directory: $name"
-                $this._sizeLabel.Text = ""
+                $this._statusLabel.SetText("Directory: $name") # Use SetText
+                $this._sizeLabel.SetText("") # Use SetText
             } else {
-                $this._statusLabel.Text = "File: $name"
-                $this._sizeLabel.Text = "Size: $($this.FormatFileSize($this._selectedItem.Length))"
+                $this._statusLabel.SetText("File: $name") # Use SetText
+                $this._sizeLabel.SetText("Size: $($this.FormatFileSize($this._selectedItem.Length))") # Use SetText
             }
         }
         
         # Update item counts
         $leftCount = $this._leftItems.Count
         $rightCount = $this._rightItems.Count
-        $this._itemCountLabel.Text = "L: $leftCount | R: $rightCount items"
+        $this._itemCountLabel.SetText("L: $leftCount | R: $rightCount items") # Use SetText
     }
 
     hidden [void] NavigateToDirectory([string]$path) {
@@ -13915,7 +13308,7 @@ class FileCommanderScreen : Screen {
         
         if ($item -and $item.Name -ne "..") {
             $this._clipboard.Add($item.FullName)
-            $this._statusLabel.Text = "Copied: $($item.Name)"
+            $this._statusLabel.SetText("Copied: $($item.Name)") # Use SetText
         }
     }
 
@@ -13935,8 +13328,8 @@ class FileCommanderScreen : Screen {
             $actionService = $this.ServiceContainer.GetService("ActionService")
             if ($actionService) {
                 # Store the file path for the editor to open
-                $this._statusLabel.Text = "Opening: $($item.Name)"
-                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
+                $this._statusLabel.SetText("Opening: $($item.Name)") # Use SetText
+                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
                 # Navigate to text editor
                 $actionService.ExecuteAction("tools.textEditor", @{FilePath = $item.FullName})
             }
@@ -13958,8 +13351,8 @@ class FileCommanderScreen : Screen {
             $message = "Delete $itemType '$($item.Name)'?"
             
             # Simple confirmation - in real app would use dialog
-            $this._statusLabel.Text = "Press Y to confirm delete, any other key to cancel"
-            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500" # Use SetForegroundColor
+            $this._statusLabel.SetText("Press Y to confirm delete, any other key to cancel") # Use SetText
+            $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ffa500")) # Use SetForegroundColor
             $this.RequestRedraw()
             
             # Store for next keypress handling
@@ -13970,13 +13363,13 @@ class FileCommanderScreen : Screen {
     hidden [void] CreateDirectory() {
         # In a real implementation, would show input dialog
         # For now, just show status
-        $this._statusLabel.Text = "Create directory: Feature requires dialog system"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
+        $this._statusLabel.SetText("Create directory: Feature requires dialog system") # Use SetText
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
     }
 
     hidden [void] ShowHelp() {
-        $this._statusLabel.Text = "Help: Tab=Switch, Enter=Open, F5=Copy, F8=Delete, F10=Quit"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
+        $this._statusLabel.SetText("Help: Tab=Switch, Enter=Open, F5=Copy, F8=Delete, F10=Quit") # Use SetText
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
     }
 
     [void] OnEnter() {
@@ -14015,16 +13408,16 @@ class FileCommanderScreen : Screen {
             if ($key.KeyChar -eq 'y' -or $key.KeyChar -eq 'Y') {
                 try {
                     Remove-Item -Path $this._pendingDelete.FullName -Recurse -Force
-                    $this._statusLabel.Text = "Deleted: $($this._pendingDelete.Name)"
-                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88" # Use SetForegroundColor
+                    $this._statusLabel.SetText("Deleted: $($this._pendingDelete.Name)") # Use SetText
+                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88")) # Use SetForegroundColor
                     $this.RefreshPanels()
                 } catch {
-                    $this._statusLabel.Text = "Error: $($_.Exception.Message)"
-                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444" # Use SetForegroundColor
+                    $this._statusLabel.SetText("Error: $($_.Exception.Message)") # Use SetText
+                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ff4444")) # Use SetForegroundColor
                 }
             } else {
-                $this._statusLabel.Text = "Delete cancelled"
-                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
+                $this._statusLabel.SetText("Delete cancelled") # Use SetText
+                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
             }
             $this._pendingDelete = $null
             $this.RequestRedraw()
@@ -14111,18 +13504,18 @@ class FileCommanderScreen : Screen {
                     # Toggle hidden files
                     $this._showHidden = -not $this._showHidden
                     $this.RefreshPanels()
-                    $this._statusLabel.Text = (if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" })
+                    $this._statusLabel.SetText((if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" })) # Use SetText
                     return $true
                 }
                 ([ConsoleKey]::R) {
                     # Refresh
                     $this.RefreshPanels()
-                    $this._statusLabel.Text = "Refreshed"
+                    $this._statusLabel.SetText("Refreshed") # Use SetText
                     return $true
                 }
                 ([ConsoleKey]::L) {
                     # Go to path (would show input dialog)
-                    $this._statusLabel.Text = "Go to path: Feature requires dialog system"
+                    $this._statusLabel.SetText("Go to path: Feature requires dialog system") # Use SetText
                     return $true
                 }
             }
@@ -14212,7 +13605,7 @@ class TextEditorScreen : Screen {
         $this._editorPanel.Width = $this.Width
         $this._editorPanel.Height = $this.Height - 3  # Leave room for status bar
         $this._editorPanel.HasBorder = $false
-        $this._editorPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $this._editorPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this.AddChild($this._editorPanel)
         
         # Status bar
@@ -14223,31 +13616,31 @@ class TextEditorScreen : Screen {
         $this._statusBar.Height = 3
         $this._statusBar.HasBorder = $true
         $this._statusBar.BorderStyle = "Single"
-        $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $this._statusBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this.AddChild($this._statusBar)
         
         # Status label
         $this._statusLabel = [LabelComponent]::new("StatusLabel")
         $this._statusLabel.X = 2
         $this._statusLabel.Y = 1
-        $this._statusLabel.Text = "Ready"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        $this._statusLabel.SetText("Ready")
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
         $this._statusBar.AddChild($this._statusLabel)
         
         # Menu instructions - show available commands
         $menuLabel = [LabelComponent]::new("MenuLabel")
         $menuLabel.X = 25
         $menuLabel.Y = 1
-        $menuLabel.Text = "^O:Open ^S:Save ^F:Find ^Q:Quit"
-        $menuLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
+        $menuLabel.SetText("^O:Open ^S:Save ^F:Find ^Q:Quit")
+        $menuLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
         $this._statusBar.AddChild($menuLabel)
         
         # Position label
         $this._positionLabel = [LabelComponent]::new("PositionLabel")
         $this._positionLabel.X = $this.Width - 20
         $this._positionLabel.Y = 1
-        $this._positionLabel.Text = "Ln 1, Col 1"
-        $this._positionLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $this._positionLabel.SetText("Ln 1, Col 1")
+        $this._positionLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         $this._statusBar.AddChild($this._positionLabel)
         
         # Search panel (hidden by default)
@@ -14259,7 +13652,7 @@ class TextEditorScreen : Screen {
         $this._searchPanel.HasBorder = $true
         $this._searchPanel.BorderStyle = "Double"
         $this._searchPanel.Title = " Find & Replace "
-        $this._searchPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $this._searchPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this._searchPanel.Visible = $false
         $this._searchPanel.IsOverlay = $true
         $this.AddChild($this._searchPanel)
@@ -14268,7 +13661,7 @@ class TextEditorScreen : Screen {
         $searchLabel = [LabelComponent]::new("SearchLabel")
         $searchLabel.X = 2
         $searchLabel.Y = 1
-        $searchLabel.Text = "Find:"
+        $searchLabel.SetText("Find:")
         $this._searchPanel.AddChild($searchLabel)
         
         $this._searchBox = [TextBoxComponent]::new("SearchBox")
@@ -14287,7 +13680,7 @@ class TextEditorScreen : Screen {
         $replaceLabel = [LabelComponent]::new("ReplaceLabel")
         $replaceLabel.X = 2
         $replaceLabel.Y = 2
-        $replaceLabel.Text = "Replace:"
+        $replaceLabel.SetText("Replace:")
         $this._searchPanel.AddChild($replaceLabel)
         
         $this._replaceBox = [TextBoxComponent]::new("ReplaceBox")
@@ -14301,8 +13694,8 @@ class TextEditorScreen : Screen {
         $this._searchStatusLabel = [LabelComponent]::new("SearchStatus")
         $this._searchStatusLabel.X = 2
         $this._searchStatusLabel.Y = 4
-        $this._searchStatusLabel.Text = ""
-        $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        $this._searchStatusLabel.SetText("")
+        $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
         $this._searchPanel.AddChild($this._searchStatusLabel)
         
         # Load some initial text for demo
@@ -14375,7 +13768,7 @@ class TextEditorScreen : Screen {
         }
         
         # Update position label
-        $this._positionLabel.Text = "Ln $($this._cursorLine + 1), Col $($this._cursorColumn + 1)"
+        $this._positionLabel.SetText("Ln $($this._cursorLine + 1), Col $($this._cursorColumn + 1)")
         
         $this._lastRenderVersion = $this._buffer._version
     }
@@ -14609,14 +14002,14 @@ class TextEditorScreen : Screen {
     # File operations
     hidden [void] OpenFile() {
         # Would show file dialog
-        $this._statusLabel.Text = "Open file: Feature requires file dialog"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        $this._statusLabel.SetText("Open file: Feature requires file dialog")
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
     }
     
     hidden [void] SaveFile() {
         # Would save to file
-        $this._statusLabel.Text = "File saved (simulated)"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
+        $this._statusLabel.SetText("File saved (simulated)")
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
     }
     
     # Search operations
@@ -14678,7 +14071,7 @@ class TextEditorScreen : Screen {
         $this._searchPanel.Visible = $false
         $this._searchBox.Text = ""
         $this._replaceBox.Text = ""
-        $this._searchStatusLabel.Text = ""
+        $this._searchStatusLabel.SetText("")
         
         # Make search boxes non-focusable when hidden
         $this._searchBox.IsFocusable = $false
@@ -14694,14 +14087,14 @@ class TextEditorScreen : Screen {
     
     hidden [void] PerformIncrementalSearch() {
         if ([string]::IsNullOrEmpty($this._searchBox.Text)) {
-            $this._searchStatusLabel.Text = ""
+            $this._searchStatusLabel.SetText("")
             return
         }
         
         $results = $this._searchEngine.Search($this._searchBox.Text, $false, $false)
         if ($results.Count -gt 0) {
-            $this._searchStatusLabel.Text = "Found $($results.Count) matches"
-            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
+            $this._searchStatusLabel.SetText("Found $($results.Count) matches")
+            $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
             
             # Move to first result
             $firstResult = $this._searchEngine.GetCurrentResult()
@@ -14712,8 +14105,8 @@ class TextEditorScreen : Screen {
                 $this._selection.UpdateSelection($firstResult.Start + $firstResult.Length)
             }
         } else {
-            $this._searchStatusLabel.Text = "No matches found"
-            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Warning"
+            $this._searchStatusLabel.SetText("No matches found")
+            $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Warning"))
         }
         
         $this._fullRedrawNeeded = $true
@@ -14967,8 +14360,8 @@ Try typing, navigating, and searching to see the smooth performance!
                 if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
                     # Replace current
                     if ($this._searchEngine.ReplaceCurrent($this._replaceBox.Text)) {
-                        $this._searchStatusLabel.Text = "Replaced 1 occurrence"
-                        $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+                        $this._searchStatusLabel.SetText("Replaced 1 occurrence")
+                        $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Success"))
                         $this._fullRedrawNeeded = $true
                         $this.RequestRedraw()
                     }
@@ -14979,8 +14372,8 @@ Try typing, navigating, and searching to see the smooth performance!
                 if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
                     # Replace all
                     $count = $this._searchEngine.ReplaceAll($this._replaceBox.Text)
-                    $this._searchStatusLabel.Text = "Replaced $count occurrences"
-                    $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+                    $this._searchStatusLabel.SetText("Replaced $count occurrences")
+                    $this._searchStatusLabel.SetForegroundColor((Get-ThemeColor "Success"))
                     $this._fullRedrawNeeded = $true
                     $this.RequestRedraw()
                     return $true
@@ -15064,7 +14457,7 @@ class ProjectEditDialog : Dialog {
         $keyLabel.Text = "Project Key*:"
         $keyLabel.X = 2
         $keyLabel.Y = $y
-        $keyLabel.ForegroundColor = Get-ThemeColor "label"
+        $keyLabel.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($keyLabel)
         
         $keyField = [TextBoxComponent]::new("KeyField")
@@ -15087,7 +14480,7 @@ class ProjectEditDialog : Dialog {
         $nameLabel.Text = "Project Name*:"
         $nameLabel.X = 2
         $nameLabel.Y = $y
-        $nameLabel.ForegroundColor = Get-ThemeColor "label"
+        $nameLabel.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($nameLabel)
         
         $nameField = [TextBoxComponent]::new("NameField")
@@ -15109,7 +14502,7 @@ class ProjectEditDialog : Dialog {
         $id1Label.Text = "ID1 (Non-unique):"
         $id1Label.X = 2
         $id1Label.Y = $y
-        $id1Label.ForegroundColor = Get-ThemeColor "label"
+        $id1Label.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($id1Label)
         
         $id1Field = [TextBoxComponent]::new("ID1Field")
@@ -15131,7 +14524,7 @@ class ProjectEditDialog : Dialog {
         $id2Label.Text = "ID2 (Main Case):"
         $id2Label.X = 2
         $id2Label.Y = $y
-        $id2Label.ForegroundColor = Get-ThemeColor "label"
+        $id2Label.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($id2Label)
         
         $id2Field = [TextBoxComponent]::new("ID2Field")
@@ -15153,7 +14546,7 @@ class ProjectEditDialog : Dialog {
         $ownerLabel.Text = "Owner:"
         $ownerLabel.X = 2
         $ownerLabel.Y = $y
-        $ownerLabel.ForegroundColor = Get-ThemeColor "label"
+        $ownerLabel.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($ownerLabel)
         
         $ownerField = [TextBoxComponent]::new("OwnerField")
@@ -15175,7 +14568,7 @@ class ProjectEditDialog : Dialog {
         $clientLabel.Text = "Client ID (BN):"
         $clientLabel.X = 2
         $clientLabel.Y = $y
-        $clientLabel.ForegroundColor = Get-ThemeColor "label"
+        $clientLabel.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($clientLabel)
         
         $clientField = [TextBoxComponent]::new("ClientField")
@@ -15197,7 +14590,7 @@ class ProjectEditDialog : Dialog {
         $assignedLabel.Text = "Assigned Date:"
         $assignedLabel.X = 2
         $assignedLabel.Y = $y
-        $assignedLabel.ForegroundColor = Get-ThemeColor "label"
+        $assignedLabel.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($assignedLabel)
         
         $assignedField = [TextBoxComponent]::new("AssignedField")
@@ -15219,7 +14612,7 @@ class ProjectEditDialog : Dialog {
         $dueLabel.Text = "Due Date (BF):"
         $dueLabel.X = 2
         $dueLabel.Y = $y
-        $dueLabel.ForegroundColor = Get-ThemeColor "label"
+        $dueLabel.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($dueLabel)
         
         $dueField = [TextBoxComponent]::new("DueField")
@@ -15241,7 +14634,7 @@ class ProjectEditDialog : Dialog {
         $descLabel.Text = "Description:"
         $descLabel.X = 2
         $descLabel.Y = $y
-        $descLabel.ForegroundColor = Get-ThemeColor "label"
+        $descLabel.SetForegroundColor((Get-ThemeColor "label"))
         $this._scrollPanel.AddChild($descLabel)
         $y += 1
         
@@ -15338,12 +14731,12 @@ class ProjectEditDialog : Dialog {
         }
         elseif ($field -is [CheckBoxComponent]) {
             $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                $this.ForegroundColor = Get-ThemeColor "primary.accent"
+                $this.SetForegroundColor((Get-ThemeColor "primary.accent"))
                 $this.RequestRedraw()
             } -Force
             
             $field | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-                $this.ForegroundColor = Get-ThemeColor "text"
+                $this.SetForegroundColor((Get-ThemeColor "text"))
                 $this.RequestRedraw()
             } -Force
         }
@@ -15552,7 +14945,7 @@ class ProjectInfoScreen : Screen {
         $this._mainPanel.Title = " Project Details: $($this._project.Name) "
         $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -15689,7 +15082,7 @@ class ProjectInfoScreen : Screen {
         $instructionLabel.Text = $instructionText
         $instructionLabel.X = 2
         $instructionLabel.Y = $this.Height - 2
-        $instructionLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $instructionLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         $this._mainPanel.AddChild($instructionLabel)
 
         Write-Log -Level Debug -Message "ProjectInfoScreen.Initialize: Completed"
@@ -15700,14 +15093,14 @@ class ProjectInfoScreen : Screen {
         $labelComponent.Text = $label
         $labelComponent.X = 2
         $labelComponent.Y = $y
-        $labelComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
+        $labelComponent.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
         $this._detailsScrollPanel.AddChild($labelComponent)
 
         $valueComponent = [LabelComponent]::new("Value_$y")
         $valueComponent.Text = $value
         $valueComponent.X = 25
         $valueComponent.Y = $y
-        $valueComponent.ForegroundColor = if ($valueColor) { $valueColor } else { Get-ThemeColor "Label.Foreground" "#d4d4d4" }
+        $valueComponent.SetForegroundColor((if ($valueColor) { $valueColor } else { Get-ThemeColor "Label.Foreground" "#d4d4d4" }))
         $this._detailsScrollPanel.AddChild($valueComponent)
     }
 
@@ -15716,7 +15109,7 @@ class ProjectInfoScreen : Screen {
         $labelComponent.Text = $label
         $labelComponent.X = 2
         $labelComponent.Y = $y
-        $labelComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
+        $labelComponent.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
         $this._detailsScrollPanel.AddChild($labelComponent)
     }
 
@@ -15731,7 +15124,7 @@ class ProjectInfoScreen : Screen {
             $textComponent.Text = $line
             $textComponent.X = 2
             $textComponent.Y = $currentY
-            $textComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
+            $textComponent.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
             $this._detailsScrollPanel.AddChild($textComponent)
             $currentY++
         }
@@ -15958,7 +15351,7 @@ class ProjectsListScreen : Screen {
         $this._mainPanel.Title = " Projects Management "
         $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
         $this.AddChild($this._mainPanel)
         
         # Calculate dimensions
@@ -15985,8 +15378,8 @@ class ProjectsListScreen : Screen {
         $this._searchBox.Placeholder = "🔍 Search projects..."
         $this._searchBox.IsFocusable = $true  # HYBRID MODEL: Component handles its own input
         $this._searchBox.TabIndex = 0
-        $this._searchBox.BackgroundColor = Get-ThemeColor "Input.Background" "#2d2d30" # Added SetBackgroundColor
-        $this._searchBox.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4" # Added SetForegroundColor
+        $this._searchBox.SetBackgroundColor((Get-ThemeColor "Input.Background" "#2d2d30")) # Added SetBackgroundColor
+        $this._searchBox.SetForegroundColor((Get-ThemeColor "Input.Foreground" "#d4d4d4")) # Added SetForegroundColor
         $this._searchBox.BorderColor = (Get-ThemeColor "Input.Border" "#404040") # Direct assignment is fine for BorderColor
         
         # Add visual focus feedback for search box
@@ -16077,7 +15470,7 @@ class ProjectsListScreen : Screen {
         $viewBtn.Text = "[Enter] View"
         $viewBtn.X = 2
         $viewBtn.Y = $buttonY
-        $viewBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
+        $viewBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
         $this._actionPanel.AddChild($viewBtn)
         
         # New button
@@ -16085,7 +15478,7 @@ class ProjectsListScreen : Screen {
         $newBtn.Text = "[N] New"
         $newBtn.X = $viewBtn.X + $buttonSpacing
         $newBtn.Y = $buttonY
-        $newBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        $newBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
         $this._actionPanel.AddChild($newBtn)
         
         # Edit button
@@ -16093,7 +15486,7 @@ class ProjectsListScreen : Screen {
         $editBtn.Text = "[E] Edit"
         $editBtn.X = $newBtn.X + $buttonSpacing
         $editBtn.Y = $buttonY
-        $editBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500"
+        $editBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ffa500"))
         $this._actionPanel.AddChild($editBtn)
         
         # Delete button
@@ -16101,7 +15494,7 @@ class ProjectsListScreen : Screen {
         $deleteBtn.Text = "[D] Delete"
         $deleteBtn.X = $editBtn.X + $buttonSpacing
         $deleteBtn.Y = $buttonY
-        $deleteBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444"
+        $deleteBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ff4444"))
         $this._actionPanel.AddChild($deleteBtn)
         
         # Archive button
@@ -16109,7 +15502,7 @@ class ProjectsListScreen : Screen {
         $archiveBtn.Text = "[A] Archive"
         $archiveBtn.X = $deleteBtn.X + $buttonSpacing
         $archiveBtn.Y = $buttonY
-        $archiveBtn.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
+        $archiveBtn.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
         $this._actionPanel.AddChild($archiveBtn)
         
         # Tab hint
@@ -16117,7 +15510,7 @@ class ProjectsListScreen : Screen {
         $tabHint.Text = "[Tab] Focus"
         $tabHint.X = $archiveBtn.X + $buttonSpacing
         $tabHint.Y = $buttonY
-        $tabHint.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $tabHint.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         $this._actionPanel.AddChild($tabHint)
         
         # Status label
@@ -16125,7 +15518,7 @@ class ProjectsListScreen : Screen {
         $this._statusLabel.Text = "0 projects"
         $this._statusLabel.X = $this._actionPanel.Width - 20
         $this._statusLabel.Y = $buttonY
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         $this._actionPanel.AddChild($this._statusLabel)
         
         # Exit instructions
@@ -16133,7 +15526,7 @@ class ProjectsListScreen : Screen {
         $exitLabel.Text = "[Esc] Back"
         $exitLabel.X = $this._actionPanel.Width - 12
         $exitLabel.Y = $buttonY
-        $exitLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+        $exitLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         $this._actionPanel.AddChild($exitLabel)
         
         Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Completed"
@@ -16164,7 +15557,7 @@ class ProjectsListScreen : Screen {
         $keyValue = [LabelComponent]::new("KeyValue")
         $keyValue.X = 18
         $keyValue.Y = $y
-        $keyValue.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        $keyValue.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff"))
         $this._detailPanel.AddChild($keyValue)
         $this._detailLabels["Key"] = $keyValue
         $y += 2
@@ -16212,7 +15605,7 @@ class ProjectsListScreen : Screen {
         $statusValue = [LabelComponent]::new("StatusValue")
         $statusValue.X = 18
         $statusValue.Y = $y
-        $statusValue.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
+        $statusValue.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88"))
         $this._detailPanel.AddChild($statusValue)
         $this._detailLabels["Status"] = $statusValue
         $y += 2
@@ -16266,8 +15659,8 @@ class ProjectsListScreen : Screen {
         $this._descriptionBox.ReadOnly = $true
         $this._descriptionBox.BorderStyle = "Single"
         $this._descriptionBox.IsFocusable = $false  # Read-only, no focus needed
-        $this._descriptionBox.BackgroundColor = Get-ThemeColor "textbox.bg" "#2A2A2A" # Added SetBackgroundColor
-        $this._descriptionBox.ForegroundColor = Get-ThemeColor "textbox.fg" "#FFFFFF" # Added SetForegroundColor
+        $this._descriptionBox.SetBackgroundColor((Get-ThemeColor "textbox.bg" "#2A2A2A")) # Added SetBackgroundColor
+        $this._descriptionBox.SetForegroundColor((Get-ThemeColor "textbox.fg" "#FFFFFF")) # Added SetForegroundColor
         $this._detailPanel.AddChild($this._descriptionBox)
     }
     
@@ -16361,11 +15754,11 @@ class ProjectsListScreen : Screen {
         # Status with color
         $statusText = if ($project.IsActive) { "Active" } else { "Archived" }
         $this._detailLabels["Status"].SetText($statusText)
-        $this._detailLabels["Status"].ForegroundColor = if ($project.IsActive) { 
+        $this._detailLabels["Status"].SetForegroundColor((if ($project.IsActive) { 
             Get-ThemeColor "Label.Foreground" "#00ff88"
         } else { 
             Get-ThemeColor "Label.Foreground" "#666666"
-        }
+        }))
         
         # Client ID from metadata
         $clientId = $project.GetMetadata("ClientID")
@@ -16377,17 +15770,17 @@ class ProjectsListScreen : Screen {
             $dateText = $project.BFDate.ToString("yyyy-MM-dd")
             if ($daysUntil -lt 0) {
                 $dateText += " (Overdue!)"
-                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444"
+                $this._detailLabels["DueDate"].SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ff4444"))
             } elseif ($daysUntil -le 7) {
                 $dateText += " ($daysUntil days)"
-                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500"
+                $this._detailLabels["DueDate"].SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ffa500"))
             } else {
-                $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
+                $this._detailLabels["DueDate"].SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
             }
             $this._detailLabels["DueDate"].SetText($dateText)
         } else {
             $this._detailLabels["DueDate"].SetText("Not set")
-            $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
+            $this._detailLabels["DueDate"].SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
         }
         
         # Description
@@ -17905,69 +17298,73 @@ class DataManager : System.IDisposable {
 
 ####\Services\ASE.006_FocusManager.ps1
 # ==============================================================================
+# Axiom-Phoenix v4.0 - FocusManager Stub Service
+# DEPRECATED: This service is no longer used. Screens manage their own focus.
+# This stub exists only to prevent errors during transition.
+# ==============================================================================
+
+# ==============================================================================
+# DEPRECATION NOTICE:
+# FocusManager has been removed from the framework. The ncurses window model
+# means each Screen manages its own focus internally. This stub service exists
+# only to prevent errors in code that hasn't been updated yet.
 #
-#   Axiom-Phoenix v4.1 - FocusManager Service (DEPRECATED)
-#
-#   File: Services\ASE.006_FocusManager.ps1
-#   Status: DEPRECATED & VERIFIED
-#
-#   DESCRIPTION:
-#   This service is DEPRECATED and MUST NOT be used in new code. It has been
-#   replaced by the Hybrid Window Manager model where each Screen manages its
-#   own focus.
-#
-#   This stub implementation exists solely to prevent the application from
-#   crashing if legacy code attempts to access it. All methods are no-ops
-#   and will log a warning to the console upon first use to alert developers
-#   that a refactor is required.
-#
-#   Refer to the "Official UI Development Guide" for the correct input and
-#   focus handling model.
-#
+# DO NOT USE THIS SERVICE IN NEW CODE!
 # ==============================================================================
 
 class FocusManager {
-    hidden [bool] $_warningShown = $false
-
+    hidden [string] $_warningShown = $false
+    
     FocusManager() {
-        # This initial warning ensures the deprecation is noted at startup if the service is registered.
-        Write-Log -Level Warning -Message "DEPRECATION WARNING: The FocusManager service is obsolete and should be removed from service registration. All focus is now managed by Screen objects."
+        Write-Log -Level Warning -Message "FocusManager is DEPRECATED. Screens should manage their own focus."
     }
-
-    # Helper method to show the detailed warning only once.
-    hidden [void] _ShowDeprecationWarning([string]$methodName) {
+    
+    # Stub methods that do nothing but log warnings
+    [void] SetFocus([object]$component) {
         if (-not $this._warningShown) {
-            Write-Log -Level Warning -Message "DEPRECATION WARNING: A call was made to FocusManager.$methodName. This service is non-functional. The calling screen MUST be updated to use the new Hybrid Window Manager model (IsFocusable, TabIndex, Screen.HandleInput)."
+            Write-Log -Level Warning -Message "FocusManager.SetFocus called - this service is deprecated. Update your screen to manage focus internally."
             $this._warningShown = $true
         }
     }
-
-    [void] SetFocus([object]$component) {
-        $this._ShowDeprecationWarning("SetFocus")
-        # This method is a no-op.
-    }
-
+    
     [object] GetFocusedComponent() {
-        $this._ShowDeprecationWarning("GetFocusedComponent")
-        # Always return null as there is no global focused component.
+        if (-not $this._warningShown) {
+            Write-Log -Level Warning -Message "FocusManager.GetFocusedComponent called - this service is deprecated."
+            $this._warningShown = $true
+        }
         return $null
     }
-
+    
     [void] ClearFocus() {
-        $this._ShowDeprecationWarning("ClearFocus")
-        # This method is a no-op.
+        if (-not $this._warningShown) {
+            Write-Log -Level Warning -Message "FocusManager.ClearFocus called - this service is deprecated."
+            $this._warningShown = $true
+        }
     }
-
+    
     [void] FocusNext() {
-        $this._ShowDeprecationWarning("FocusNext")
-        # This method is a no-op.
+        if (-not $this._warningShown) {
+            Write-Log -Level Warning -Message "FocusManager.FocusNext called - this service is deprecated."
+            $this._warningShown = $true
+        }
     }
-
+    
     [void] FocusPrevious() {
-        $this._ShowDeprecationWarning("FocusPrevious")
-        # This method is a no-op.
+        if (-not $this._warningShown) {
+            Write-Log -Level Warning -Message "FocusManager.FocusPrevious called - this service is deprecated."
+            $this._warningShown = $true
+        }
+    }
+    
+    [bool] IsFocusedComponent([object]$component) {
+        return $false
     }
 }
+
+# ==============================================================================
+# END OF DEPRECATED FOCUSMANAGER
+# ==============================================================================
+
 
 
 ####\Services\ASE.007_KeybindingService.ps1

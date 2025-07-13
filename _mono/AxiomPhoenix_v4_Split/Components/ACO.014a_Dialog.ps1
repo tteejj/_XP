@@ -34,7 +34,7 @@ class Dialog : Screen {
     hidden [object]$_previousScreen = $null
 
     Dialog([string]$name, [object]$serviceContainer) : base($name, $serviceContainer) {
-        $this.IsOverlay = $true
+        $this.IsOverlay = $true # This tells the renderer to treat it as an overlay
         $this.Width = 50
         $this.Height = 10
         
@@ -47,6 +47,7 @@ class Dialog : Screen {
         $this._panel.BorderStyle = "Double"
         $this._panel.Width = $this.Width
         $this._panel.Height = $this.Height
+        # The panel is a child of the Dialog (Screen)
         $this.AddChild($this._panel)
     }
 
@@ -61,44 +62,26 @@ class Dialog : Screen {
     }
 
     [void] Complete([object]$result) {
-        Write-Log -Level Debug -Message "Dialog.Complete called on '$($this.Name)' with result: $(if ($null -ne $result) { $result | ConvertTo-Json -Compress } else { 'null' })"
-        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Dialog.Complete called for '$($this.Name)'"
-        
+        if ($this._isComplete) { return } # Prevent double execution
+
         $this.Result = $result
         $this._isComplete = $true
         
-        # Make dialog invisible immediately
-        $this.Visible = $false
-        $this.RequestRedraw()
-        $global:TuiState.IsDirty = $true
-        
         # Call the OnClose scriptblock if provided
         if ($this.OnClose) {
-            Write-Log -Level Debug -Message "Dialog '$($this.Name)': Calling OnClose callback"
-            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] Dialog calling OnClose callback..."
             try { 
                 & $this.OnClose $result 
-                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] OnClose callback completed"
             } catch { 
-                Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
-                Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] ERROR in OnClose: $_"
+                if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                    Write-Log -Level Warning -Message "Dialog '$($this.Name)': Error in OnClose callback: $($_.Exception.Message)" 
+                }
             }
-        } else {
-            Write-Log -Level Debug -Message "Dialog '$($this.Name)': No OnClose callback set"
-            Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] No OnClose callback set"
         }
         
         # Navigate back to previous screen
-        $navService = $null
-        if ($null -ne $this.ServiceContainer) {
-            $navService = $this.ServiceContainer.GetService("NavigationService")
-        }
-        if ($navService) {
-            if ($navService.CanGoBack()) {
-                $navService.GoBack()
-            } else {
-                Write-Log -Level Warning -Message "Dialog '$($this.Name)': Cannot go back, no previous screen"
-            }
+        $navService = $this.ServiceContainer.GetService("NavigationService")
+        if ($navService -and $navService.CanGoBack()) {
+            $navService.GoBack()
         }
     }
 
@@ -109,82 +92,39 @@ class Dialog : Screen {
 
     # Override Screen's OnEnter to set focus
     [void] OnEnter() {
+        # Call base Screen method to enable focus management
         ([Screen]$this).OnEnter()
-        $this.SetInitialFocus()
     }
 
     # Override HandleInput to provide Dialog-specific behavior
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
         
-        # Check for Escape at dialog level
+        # Check for Escape at dialog level to cancel
         if ($key.Key -eq [ConsoleKey]::Escape) {
             $this.Complete($null)
             return $true
         }
         
-        # Otherwise use default Screen behavior
+        # Otherwise use default Screen behavior (Tab navigation, route to focused child)
         return ([Screen]$this).HandleInput($key)
     }
 
-    [void] SetInitialFocus() {
-        # Find first focusable child
-        $firstFocusable = $null
-        $this.FindFocusableChild($this._panel, [ref]$firstFocusable)
-        
-        if ($firstFocusable) {
-            $focusManager = $null
-            if ($null -ne $this.ServiceContainer) {
-                $focusManager = $this.ServiceContainer.GetService("FocusManager")
-            }
-            if ($focusManager) {
-                $focusManager.SetFocus($firstFocusable)
-                Write-Log -Level Debug -Message "Dialog '$($this.Name)': Set initial focus to '$($firstFocusable.Name)'."
-            }
-        }
-    }
-    
-    hidden [void] FindFocusableChild([UIElement]$parent, [ref]$result) {
-        if ($result.Value) { return }
-        
-        foreach ($child in $parent.Children) {
-            if ($child.IsFocusable -and $child.Visible -and $child.Enabled) {
-                $result.Value = $child
-                return
-            }
-            if ($child.Children.Count -gt 0) {
-                $this.FindFocusableChild($child, $result)
-            }
-        }
-    }
-
-    # Override render to center the dialog
+    # Override render to center the dialog's panel
     [void] OnRender() {
-        # Center the panel
+        # Clear the entire screen buffer with a dimmed/overlay effect
+        # A simple way is to fill with a dark, semi-transparent character or just black
+        $overlayCell = [TuiCell]::new(' ', "#000000", "#000000") 
+        $this._private_buffer.Clear($overlayCell)
+
+        # Center the panel within the dialog's screen area
         $this._panel.X = [Math]::Floor(($this.Width - $this._panel.Width) / 2)
         $this._panel.Y = [Math]::Floor(($this.Height - $this._panel.Height) / 2)
         
         # Update panel title
         $this._panel.Title = " $this.Title "
-        
-        # Clear background with semi-transparent effect (simulate with darker color)
-        $bgColor = Get-ThemeColor "Overlay.Background" "#000000"
-        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-    }
 
-    [object] ShowDialog([string]$title, [string]$message) {
-        $this.Show($title, $message)
-        
-        # Navigate to this dialog
-        $navService = $null
-        if ($null -ne $this.ServiceContainer) {
-            $navService = $this.ServiceContainer.GetService("NavigationService")
-        }
-        if ($navService) {
-            $navService.NavigateTo($this)
-        }
-        
-        return $this.Result
+        # The base UIElement._RenderContent will handle rendering the child panel
     }
 }
 

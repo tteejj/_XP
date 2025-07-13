@@ -23,8 +23,9 @@ using namespace System.Management.Automation
 class AlertDialog : Dialog {
     hidden [ButtonComponent]$_okButton
 
-    AlertDialog([string]$name) : base($name) {
-        $this.Height = 8
+    AlertDialog([string]$name, [object]$serviceContainer) : base($name, $serviceContainer) {
+        $this.Height = 10
+        $this.Width = 50
         $this.InitializeAlert()
     }
 
@@ -33,39 +34,47 @@ class AlertDialog : Dialog {
         $this._okButton = [ButtonComponent]::new($this.Name + "_OK")
         $this._okButton.Text = "OK"
         $this._okButton.Width = 10
-        $this._okButton.Height = 3
+        $this._okButton.Height = 1 # A simple 1-line button is fine for a dialog
+        $this._okButton.IsFocusable = $true
+        $this._okButton.TabIndex = 0
+        $thisDialog = $this
         $this._okButton.OnClick = {
-            $this.Complete($true)
+            $thisDialog.Complete($true)
         }.GetNewClosure()
+
+        # Add the button to the dialog's main panel
         $this._panel.AddChild($this._okButton)
     }
 
-    [void] Show([string]$title, [string]$message) {
-        ([Dialog]$this).Show($title, $message)
-        
-        # Position OK button
-        $this._okButton.X = [Math]::Floor(($this.Width - $this._okButton.Width) / 2)
-        $this._okButton.Y = $this.Height - 4
+    # Override OnEnter to set focus to the OK button
+    [void] OnEnter() {
+        ([Dialog]$this).OnEnter() # Call base to set up focus management
+        $this.SetChildFocus($this._okButton)
     }
 
     [void] OnRender() {
+        # Call the base Dialog OnRender first. This clears the buffer and centers the panel.
         ([Dialog]$this).OnRender()
         
+        # Position OK button at the bottom-center of the panel's content area
+        $this._okButton.X = [Math]::Floor(($this._panel.ContentWidth - $this._okButton.Width) / 2)
+        $this._okButton.Y = $this._panel.ContentHeight - 2
+        
+        # Draw the message text inside the panel's content area
         if ($this.Visible -and $this.Message) {
-            # Draw message within the dialog's panel content area
             $panelContentX = $this._panel.ContentX
             $panelContentY = $this._panel.ContentY
-            $maxWidth = $this.Width - 4 # Panel width - 2*border - 2*padding
+            $maxWidth = $this._panel.ContentWidth - 2 # Leave a margin
 
-            # Simple word wrap (use Write-TuiText)
+            # Simple word wrap
             $words = $this.Message -split ' '
             $currentLine = ""
-            $currentY = $panelContentY + 1 # Start drawing message below title
+            $currentY = $panelContentY + 1 # Start drawing message below title area
 
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
                     if ($currentLine) {
-                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor "Label.Foreground" "#e0e0e0"; BG = Get-ThemeColor "Panel.Background" "#1e1e1e" }
+                        Write-TuiText -Buffer $this._panel.GetBuffer() -X ($panelContentX + 1) -Y $currentY -Text $currentLine -Style @{ FG = (Get-ThemeColor "Label.Foreground" "#e0e0e0"); BG = (Get-ThemeColor "Panel.Background" "#1e1e1e") }
                         $currentY++
                     }
                     $currentLine = $word
@@ -74,29 +83,15 @@ class AlertDialog : Dialog {
                     $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
                 }
             }
+            # Write the last line
             if ($currentLine) {
-                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor "Label.Foreground" "#e0e0e0"; BG = Get-ThemeColor "Panel.Background" "#1e1e1e" }
+                Write-TuiText -Buffer $this._panel.GetBuffer() -X ($panelContentX + 1) -Y $currentY -Text $currentLine -Style @{ FG = (Get-ThemeColor "Label.Foreground" "#e0e0e0"); BG = (Get-ThemeColor "Panel.Background" "#1e1e1e") }
             }
         }
     }
 
-    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key) { return $false }
-
-        # Let OK button handle input first
-        if ($this._okButton.HandleInput($key)) { return $true }
-        
-        if ($key.Key -eq [ConsoleKey]::Escape -or $key.Key -eq [ConsoleKey]::Enter) {
-            $this.Complete($true) # Complete dialog
-            return $true
-        }
-        return $false
-    }
-
-    [void] OnEnter() {
-        # Set focus to the OK button when dialog appears
-        $global:TuiState.Services.FocusManager?.SetFocus($this._okButton)
-    }
+    # FIXED: Input handling is now managed by the Dialog base class and the focused ButtonComponent.
+    # No custom HandleInput override is needed here.
 }
 
 #<!-- END_PAGE: ACO.018 -->

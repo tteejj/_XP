@@ -1,6 +1,6 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - New Task Screen
-# HYBRID MODEL: Uses Screen focus management with component input delegation
+# Axiom-Phoenix v4.1 - New Task Screen
+# FIXED: Proper color properties, focus management, and input handling
 # ==============================================================================
 
 class NewTaskScreen : Screen {
@@ -18,8 +18,6 @@ class NewTaskScreen : Screen {
     hidden [TaskPriority] $_selectedPriority = [TaskPriority]::Medium
     hidden [string] $_selectedProject = "General"
     
-    # No need for manual focus tracking - Screen base class handles it
-    
     NewTaskScreen([object]$serviceContainer) : base("NewTaskScreen", $serviceContainer) {
         $this.Title = " Create New Task "
         Write-Log -Level Debug -Message "NewTaskScreen: Constructor called"
@@ -35,8 +33,7 @@ class NewTaskScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.HasBorder = $false
-        # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
         
         # Form panel (centered dialog)
@@ -52,10 +49,8 @@ class NewTaskScreen : Screen {
         $this._formPanel.Height = $formHeight
         $this._formPanel.Title = " New Task "
         $this._formPanel.BorderStyle = "Double"
-        # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
-        $this._formPanel.BorderColor = (Get-ThemeColor "Panel.Title" "#007acc")
-        # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._formPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
+        $this._formPanel.BorderColor = Get-ThemeColor "panel.border" "#007acc"
+        $this._formPanel.BackgroundColor = Get-ThemeColor "panel.background" "#1e1e1e"
         $this._mainPanel.AddChild($this._formPanel)
         
         $y = 2
@@ -65,8 +60,7 @@ class NewTaskScreen : Screen {
         $titleLabel.Text = "Task Title:"
         $titleLabel.X = 2
         $titleLabel.Y = $y
-        # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $titleLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
+        $titleLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
         $this._formPanel.AddChild($titleLabel)
         
         $y += 1
@@ -75,26 +69,22 @@ class NewTaskScreen : Screen {
         $this._titleBox.X = 2
         $this._titleBox.Y = $y
         $this._titleBox.Width = $formWidth - 4
-        $this._titleBox.Height = 3  # TextBoxComponent expects height of 3
-        $this._titleBox.IsFocusable = $true  # Component handles its own input
-        $this._titleBox.TabIndex = 0  # First in tab order
-        # TextBoxComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
-        $this._titleBox.SetBackgroundColor((Get-ThemeColor "Input.Background" "#2d2d30"))
-        $this._titleBox.SetForegroundColor((Get-ThemeColor "Input.Foreground" "#d4d4d4"))
-        # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
-        $this._titleBox.BorderColor = (Get-ThemeColor "Input.Border" "#404040")
+        $this._titleBox.Height = 3
+        $this._titleBox.IsFocusable = $true
+        $this._titleBox.TabIndex = 0
+        $this._titleBox.BackgroundColor = Get-ThemeColor "input.background" "#2d2d30"
+        $this._titleBox.ForegroundColor = Get-ThemeColor "input.foreground" "#d4d4d4"
+        $this._titleBox.BorderColor = Get-ThemeColor "input.border" "#404040"
         
-        # Override OnFocus/OnBlur to update border color
+        # Focus visual feedback
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine as TextBoxComponent does not have a SetBorderColor method.
-            $this.BorderColor = (Get-ThemeColor "Input.FocusedBorder" "#007acc")
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#007acc"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = (Get-ThemeColor "Input.Border" "#404040")
+            $this.BorderColor = Get-ThemeColor "input.border" "#404040"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -108,8 +98,7 @@ class NewTaskScreen : Screen {
         $descLabel.Text = "Description (optional):"
         $descLabel.X = 2
         $descLabel.Y = $y
-        # LabelComponent has a SetForegroundColor method, correctly used.
-        $descLabel.SetForegroundColor((Get-ThemeColor "label" "#00D4FF"))
+        $descLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
         $this._formPanel.AddChild($descLabel)
         
         $y += 1
@@ -119,25 +108,21 @@ class NewTaskScreen : Screen {
         $this._descriptionBox.Y = $y
         $this._descriptionBox.Width = $formWidth - 4
         $this._descriptionBox.Height = 3
-        $this._descriptionBox.IsFocusable = $true  # Component handles its own input
-        $this._descriptionBox.TabIndex = 1  # Second in tab order
-        # TextBoxComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
-        $this._descriptionBox.SetBackgroundColor((Get-ThemeColor "textbox.bg" "#2A2A2A"))
-        $this._descriptionBox.SetForegroundColor((Get-ThemeColor "textbox.fg" "#FFFFFF"))
-        # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
-        $this._descriptionBox.BorderColor = (Get-ThemeColor "textbox.border" "#444444")
+        $this._descriptionBox.IsFocusable = $true
+        $this._descriptionBox.TabIndex = 1
+        $this._descriptionBox.BackgroundColor = Get-ThemeColor "input.background" "#2d2d30"
+        $this._descriptionBox.ForegroundColor = Get-ThemeColor "input.foreground" "#d4d4d4"
+        $this._descriptionBox.BorderColor = Get-ThemeColor "input.border" "#404040"
         
-        # Override OnFocus/OnBlur
+        # Focus visual feedback
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = (Get-ThemeColor "primary.accent" "#00D4FF")
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#007acc"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = (Get-ThemeColor "textbox.border" "#444444")
+            $this.BorderColor = Get-ThemeColor "input.border" "#404040"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -151,32 +136,28 @@ class NewTaskScreen : Screen {
         $this._priorityLabel.Text = "Priority:"
         $this._priorityLabel.X = 2
         $this._priorityLabel.Y = $y
-        # LabelComponent has a SetForegroundColor method, correctly used.
-        $this._priorityLabel.SetForegroundColor((Get-ThemeColor "label" "#FF69B4"))
+        $this._priorityLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
         $this._formPanel.AddChild($this._priorityLabel)
         
         $this._priorityValue = [LabelComponent]::new("PriorityValue")
         $this._priorityValue.Text = "[$($this._selectedPriority)]"
         $this._priorityValue.X = 12
         $this._priorityValue.Y = $y
-        # LabelComponent has a SetForegroundColor method, correctly used.
-        $this._priorityValue.SetForegroundColor($this.GetPriorityColor($this._selectedPriority))
+        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
         $this._formPanel.AddChild($this._priorityValue)
         
         $this._projectLabel = [LabelComponent]::new("ProjectLabel")
         $this._projectLabel.Text = "Project:"
         $this._projectLabel.X = 30
         $this._projectLabel.Y = $y
-        # LabelComponent has a SetForegroundColor method, correctly used.
-        $this._projectLabel.SetForegroundColor((Get-ThemeColor "label" "#8A2BE2"))
+        $this._projectLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
         $this._formPanel.AddChild($this._projectLabel)
         
         $this._projectValue = [LabelComponent]::new("ProjectValue")
         $this._projectValue.Text = "[$($this._selectedProject)]"
         $this._projectValue.X = 39
         $this._projectValue.Y = $y
-        # LabelComponent has a SetForegroundColor method, correctly used.
-        $this._projectValue.SetForegroundColor((Get-ThemeColor "project" "#FFD700"))
+        $this._projectValue.ForegroundColor = Get-ThemeColor "accent.secondary" "#FFD700"
         $this._formPanel.AddChild($this._projectValue)
         
         $y += 2
@@ -186,8 +167,7 @@ class NewTaskScreen : Screen {
         $helpLabel.Text = "[Tab] Next field | [P] Change priority | [Enter] Save | [Esc] Cancel"
         $helpLabel.X = 2
         $helpLabel.Y = $y
-        # LabelComponent has a SetForegroundColor method, correctly used.
-        $helpLabel.SetForegroundColor((Get-ThemeColor "muted" "#666666"))
+        $helpLabel.ForegroundColor = Get-ThemeColor "text.muted" "#666666"
         $this._formPanel.AddChild($helpLabel)
         
         $y += 2
@@ -204,26 +184,22 @@ class NewTaskScreen : Screen {
         $this._saveButton.Y = $y
         $this._saveButton.Width = $buttonWidth
         $this._saveButton.Height = 3
-        $this._saveButton.IsFocusable = $true  # Component handles its own input
-        $this._saveButton.TabIndex = 2  # Third in tab order
-        # ButtonComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
-        $this._saveButton.SetBackgroundColor((Get-ThemeColor "button.bg" "#0D47A1"))
-        $this._saveButton.SetForegroundColor((Get-ThemeColor "button.fg" "#FFFFFF"))
+        $this._saveButton.IsFocusable = $true
+        $this._saveButton.TabIndex = 2
+        $this._saveButton.BackgroundColor = Get-ThemeColor "button.primary" "#0078d4"
+        $this._saveButton.ForegroundColor = Get-ThemeColor "button.foreground" "#ffffff"
         
-        # Override OnFocus/OnBlur for visual feedback
+        # Focus visual feedback
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.SetBackgroundColor((Get-ThemeColor "button.hover" "#1976D2"))
+            $this.BackgroundColor = Get-ThemeColor "button.primary.hover" "#106ebe"
             $this.RequestRedraw()
         } -Force
         
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.SetBackgroundColor((Get-ThemeColor "button.bg" "#0D47A1"))
+            $this.BackgroundColor = Get-ThemeColor "button.primary" "#0078d4"
             $this.RequestRedraw()
         } -Force
         
-        # Set OnClick handler
         $thisScreen = $this
         $this._saveButton.OnClick = { $thisScreen.SaveTask() }.GetNewClosure()
         $this._formPanel.AddChild($this._saveButton)
@@ -234,22 +210,19 @@ class NewTaskScreen : Screen {
         $this._cancelButton.Y = $y
         $this._cancelButton.Width = $buttonWidth
         $this._cancelButton.Height = 3
-        $this._cancelButton.IsFocusable = $true  # Component handles its own input
-        $this._cancelButton.TabIndex = 3  # Fourth in tab order
-        # ButtonComponent has SetBackgroundColor and SetForegroundColor methods, correctly used.
-        $this._cancelButton.SetBackgroundColor((Get-ThemeColor "button.cancel.bg" "#B71C1C"))
-        $this._cancelButton.SetForegroundColor((Get-ThemeColor "button.fg" "#FFFFFF"))
+        $this._cancelButton.IsFocusable = $true
+        $this._cancelButton.TabIndex = 3
+        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.danger" "#d13438"
+        $this._cancelButton.ForegroundColor = Get-ThemeColor "button.foreground" "#ffffff"
         
-        # Override OnFocus/OnBlur
+        # Focus visual feedback
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.SetBackgroundColor((Get-ThemeColor "button.cancel.hover" "#D32F2F"))
+            $this.BackgroundColor = Get-ThemeColor "button.danger.hover" "#a4262c"
             $this.RequestRedraw()
         } -Force
         
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # ButtonComponent has a SetBackgroundColor method, correctly used.
-            $this.SetBackgroundColor((Get-ThemeColor "button.cancel.bg" "#B71C1C"))
+            $this.BackgroundColor = Get-ThemeColor "button.danger" "#d13438"
             $this.RequestRedraw()
         } -Force
         
@@ -278,24 +251,17 @@ class NewTaskScreen : Screen {
     }
     
     hidden [string] GetPriorityColor([TaskPriority]$priority) {
-        if ($priority -eq [TaskPriority]::Low) {
-            return (Get-ThemeColor "Success" "#00FF88")
-        }
-        elseif ($priority -eq [TaskPriority]::Medium) {
-            return (Get-ThemeColor "Warning" "#FFD700")
-        }
-        elseif ($priority -eq [TaskPriority]::High) {
-            return (Get-ThemeColor "Error" "#FF4444")
-        }
-        else {
-            return (Get-ThemeColor "Label.Foreground" "#E0E0E0")
+        switch ($priority) {
+            ([TaskPriority]::Low) { return Get-ThemeColor "status.success" "#00d563" }
+            ([TaskPriority]::Medium) { return Get-ThemeColor "status.warning" "#ffcc02" }
+            ([TaskPriority]::High) { return Get-ThemeColor "status.error" "#d13438" }
+            default { return Get-ThemeColor "label.foreground" "#d4d4d4" }
         }
     }
     
     hidden [void] _UpdatePriorityDisplay() {
         $this._priorityValue.Text = "[$($this._selectedPriority)]"
-        # LabelComponent has a SetForegroundColor method, correctly used.
-        $this._priorityValue.SetForegroundColor($this.GetPriorityColor($this._selectedPriority))
+        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
     }
     
     hidden [void] CyclePriority() {
@@ -311,8 +277,7 @@ class NewTaskScreen : Screen {
         # Validate title
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
             # Flash the title box border to indicate error
-            # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
-            $this._titleBox.BorderColor = (Get-ThemeColor "error" "#FF0000")
+            $this._titleBox.BorderColor = Get-ThemeColor "status.error" "#d13438"
             $this.RequestRedraw()
             # Focus title box
             $this.SetChildFocus($this._titleBox)
@@ -348,16 +313,13 @@ class NewTaskScreen : Screen {
         }
     }
     
-    # === INPUT HANDLING (HYBRID MODEL) ===
+    # Input handling - follows v4.1 pattern
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
-            Write-Log -Level Warning -Message "NewTaskScreen.HandleInput: Null keyInfo"
             return $false
         }
         
-        Write-Log -Level Debug -Message "NewTaskScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)'"
-        
-        # Let base Screen class handle Tab navigation and route to focused component
+        # Base class handles Tab navigation and routes to focused component
         if (([Screen]$this).HandleInput($keyInfo)) {
             return $true
         }
@@ -401,5 +363,5 @@ class NewTaskScreen : Screen {
 }
 
 # ==============================================================================
-# END OF NEW TASK SCREEN
+# End NewTaskScreen - Fixed for v4.1
 # ==============================================================================

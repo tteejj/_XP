@@ -54,6 +54,25 @@ class CommandPalette : Dialog {
         $this._searchBox.Visible = $true
         $this._searchBox.Enabled = $true
         $this._searchBox.IsFocusable = $true
+        $this._searchBox.TabIndex = 0  # First in tab order
+        
+        # Set colors using properties
+        $this._searchBox.BackgroundColor = Get-ThemeColor "Input.Background"
+        $this._searchBox.ForegroundColor = Get-ThemeColor "Input.Foreground"
+        $this._searchBox.BorderColor = Get-ThemeColor "Input.Border"
+        
+        # Add focus visual feedback
+        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+
+        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "Input.Border"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
         
         # Connect search box to filtering
         $paletteRef = $this
@@ -69,6 +88,25 @@ class CommandPalette : Dialog {
         $this._listBox.Y = 4
         $this._listBox.Width = $this.Width - 4
         $this._listBox.Height = $this.Height - 6
+        $this._listBox.IsFocusable = $true
+        $this._listBox.TabIndex = 1  # Second in tab order
+        
+        # Set colors using properties
+        $this._listBox.BackgroundColor = Get-ThemeColor "List.Background"
+        $this._listBox.ForegroundColor = Get-ThemeColor "List.Foreground"
+        $this._listBox.BorderColor = Get-ThemeColor "List.Border"
+        
+        # Add focus visual feedback
+        $this._listBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.RequestRedraw()
+        } -Force
+
+        $this._listBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "List.Border"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._panel.AddChild($this._listBox)
     }
 
@@ -111,89 +149,62 @@ class CommandPalette : Dialog {
         $this.RequestRedraw()
     }
 
-    [void] SetInitialFocus() {
+    [void] OnEnter() {
+        # Initialize search box
         if ($this._searchBox) {
-            # Clear any previous search text
             $this._searchBox.Text = ""
             $this._searchBox.CursorPosition = 0
-            
-            # Use FocusManager to properly set focus
-            $focusManager = $global:TuiState.Services.FocusManager
-            if ($focusManager) {
-                $focusManager.SetFocus($this._searchBox)
-            }
-            $this.RequestRedraw()
         }
+        
+        # Call base to set initial focus automatically
+        ([Dialog]$this).OnEnter()
     }
 
-    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key) { return $false }
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
         
-        $focusManager = $global:TuiState.Services.FocusManager
-        $focusedComponent = if ($focusManager) { $focusManager.FocusedComponent } else { $null }
+        # ALWAYS FIRST - Let base handle Tab and component routing
+        if (([Dialog]$this).HandleInput($keyInfo)) {
+            return $true
+        }
         
-        # Only handle container-level actions
-        switch ($key.Key) {
+        # ONLY screen-level shortcuts here
+        switch ($keyInfo.Key) {
             ([ConsoleKey]::Escape) { 
                 $this.Complete($null)  # Signal cancellation
                 return $true 
             }
             ([ConsoleKey]::Enter) {
-                $focusedName = if ($null -ne $focusedComponent) { $focusedComponent.Name } else { 'null' }
-                Write-Log -Level Debug -Message "CommandPalette: Enter key pressed, focused component: $focusedName"
-                
-                # Execute the currently selected action in the list, regardless of which component has focus
+                # Execute the currently selected action in the list
                 if ($this._filteredActions.Count -gt 0 -and $this._listBox.SelectedIndex -ge 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count) {
                     $selectedAction = $this._filteredActions[$this._listBox.SelectedIndex]
                     if ($selectedAction) {
-                        Write-Log -Level Debug -Message "CommandPalette: Executing selected action at index $($this._listBox.SelectedIndex): $($selectedAction.Name)"
-                        Add-Content -Path "$PSScriptRoot\..\debug-trace.log" -Value "[$(Get-Date -Format 'HH:mm:ss.fff')] CommandPalette calling Complete() with action: $($selectedAction.Name)"
+                        Write-Log -Level Debug -Message "CommandPalette: Executing selected action: $($selectedAction.Name)"
                         $this.Complete($selectedAction)
                         return $true
                     }
                 }
-                
-                Write-Log -Level Debug -Message "CommandPalette: No valid selection to execute"
                 return $false
             }
-            ([ConsoleKey]::Tab) {
-                # Toggle focus between search box and list
-                if ($focusManager) {
-                    if ($focusedComponent -eq $this._searchBox) {
-                        $focusManager.SetFocus($this._listBox)
-                    } else {
-                        $focusManager.SetFocus($this._searchBox)
-                    }
-                }
-                return $true
-            }
             ([ConsoleKey]::UpArrow) {
-                # If search box has focus, handle selection movement directly
-                if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    # Move selection up in the list (without changing focus)
-                    if ($this._listBox.SelectedIndex -gt 0) {
-                        $this._listBox.SelectedIndex--
-                        $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
-                        $this._listBox.RequestRedraw()
-                        $this.RequestRedraw()
-                    }
+                # Allow list navigation when search box has focus
+                if ($this._filteredActions.Count -gt 0 -and $this._listBox.SelectedIndex -gt 0) {
+                    $this._listBox.SelectedIndex--
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
                     return $true
                 }
-                return $false  # Let the list handle it if it has focus
+                return $false
             }
             ([ConsoleKey]::DownArrow) {
-                # If search box has focus, handle selection movement directly
-                if ($focusedComponent -eq $this._searchBox -and $this._filteredActions.Count -gt 0) {
-                    # Move selection down in the list (without changing focus)
-                    if ($this._listBox.SelectedIndex -lt $this._filteredActions.Count - 1) {
-                        $this._listBox.SelectedIndex++
-                        $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
-                        $this._listBox.RequestRedraw()
-                        $this.RequestRedraw()
-                    }
+                # Allow list navigation when search box has focus
+                if ($this._filteredActions.Count -gt 0 -and $this._listBox.SelectedIndex -lt $this._filteredActions.Count - 1) {
+                    $this._listBox.SelectedIndex++
+                    $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
+                    $this._listBox.RequestRedraw()
                     return $true
                 }
-                return $false  # Let the list handle it if it has focus
+                return $false
             }
             ([ConsoleKey]::PageUp) {
                 # Move selection up by a page
@@ -203,7 +214,6 @@ class CommandPalette : Dialog {
                     $this._listBox.SelectedIndex = $newIndex
                     $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
                     $this._listBox.RequestRedraw()
-                    $this.RequestRedraw()
                     return $true
                 }
                 return $false
@@ -216,7 +226,6 @@ class CommandPalette : Dialog {
                     $this._listBox.SelectedIndex = $newIndex
                     $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
                     $this._listBox.RequestRedraw()
-                    $this.RequestRedraw()
                     return $true
                 }
                 return $false
@@ -227,7 +236,6 @@ class CommandPalette : Dialog {
                     $this._listBox.SelectedIndex = 0
                     $this._listBox.EnsureVisible(0)
                     $this._listBox.RequestRedraw()
-                    $this.RequestRedraw()
                     return $true
                 }
                 return $false
@@ -238,18 +246,12 @@ class CommandPalette : Dialog {
                     $this._listBox.SelectedIndex = $this._filteredActions.Count - 1
                     $this._listBox.EnsureVisible($this._listBox.SelectedIndex)
                     $this._listBox.RequestRedraw()
-                    $this.RequestRedraw()
                     return $true
                 }
                 return $false
             }
-            default {
-                # Let the input routing system handle everything else
-                return $false
-            }
         }
         
-        # Add explicit return false at end to satisfy all code paths
         return $false
     }
 

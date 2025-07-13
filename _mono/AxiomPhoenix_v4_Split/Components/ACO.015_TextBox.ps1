@@ -29,7 +29,36 @@ class TextBox : UIElement {
         # CRITICAL FIX: Immediately size the inner component to match the wrapper's current size.
         $this._textBox.Resize($this.Width, $this.Height)
         $this.AddChild($this._textBox)
+        
+        # FIXED: Proper focus setup according to guide
         $this.IsFocusable = $true
+        $this.TabIndex = 0  # Set appropriate tab order
+        
+        # FIXED: Set colors using PROPERTIES, not methods
+        $this.BackgroundColor = Get-ThemeColor "Input.Background"
+        $this.ForegroundColor = Get-ThemeColor "Input.Foreground"
+        $this.BorderColor = Get-ThemeColor "Input.Border"
+        
+        # FIXED: Override focus methods with Add-Member as per guide
+        $this | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.ShowCursor = $true
+            if ($this._textBox) {
+                $this._textBox.IsFocused = $true
+                $this._textBox.OnFocus()
+            }
+            $this.RequestRedraw()
+        } -Force
+        
+        $this | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "border"
+            $this.ShowCursor = $false
+            if ($this._textBox) {
+                $this._textBox.IsFocused = $false
+                $this._textBox.OnBlur()
+            }
+            $this.RequestRedraw()
+        } -Force
     }
 
     [string] GetText() { return $this._textBox.Text }
@@ -41,31 +70,8 @@ class TextBox : UIElement {
         $this._textBox.RequestRedraw()
     }
 
-    [void] Focus() {
-        $focusManager = $global:TuiState.Services.FocusManager
-        if ($focusManager) {
-            $focusManager.SetFocus($this)
-        }
-    }
-
-    [void] OnFocus() {
-        ([UIElement]$this).OnFocus()
-        if ($this._textBox) {
-            $this._textBox.IsFocused = $true
-            $this._textBox.OnFocus()
-            $this._textBox.RequestRedraw()
-        }
-    }
-
-    [void] OnBlur() {
-        ([UIElement]$this).OnBlur()
-        if ($this._textBox) {
-            $this._textBox.IsFocused = $false
-            $this._textBox.OnBlur()
-            $this._textBox.RequestRedraw()
-        }
-    }
-
+    # FIXED: Removed deprecated FocusManager call - focus is now handled by framework
+    
     [void] OnResize() {
         if ($this._textBox) {
             $this._textBox.Width = $this.Width

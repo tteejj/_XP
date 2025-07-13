@@ -1,3 +1,4 @@
+####\Base\ABC.006_Screen.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Base Classes (Load First)
 # Core framework classes with NO external dependencies
@@ -48,12 +49,12 @@ $script:TuiVerbosePreference = 'SilentlyContinue'
 #   - Cleanup: Unsubscribe from events and release resources
 # ==============================================================================
 class Screen : UIElement {
-    [object]$ServiceContainer # Changed to object to avoid type conversion issues
+    [object]$ServiceContainer
     [System.Collections.Generic.Dictionary[string, object]]$State
     [System.Collections.Generic.List[UIElement]] $Panels
-    [bool]$IsOverlay = $false  # NEW: Indicates if this screen renders as an overlay
+    [bool]$IsOverlay = $false
     
-    # Focus management (per-screen, ncurses model)
+    # Focus management (per-screen, hybrid window model)
     hidden [UIElement]$_focusedChild = $null
     hidden [System.Collections.Generic.List[UIElement]]$_focusableCache = $null
     hidden [bool]$_focusCacheValid = $false
@@ -66,7 +67,6 @@ class Screen : UIElement {
         if ($null -eq $serviceContainer) {
             throw [System.ArgumentNullException]::new("serviceContainer")
         }
-        # Verify it's actually a ServiceContainer at runtime
         if ($serviceContainer.GetType().Name -ne 'ServiceContainer') {
             throw [System.ArgumentException]::new("Expected ServiceContainer but got $($serviceContainer.GetType().Name)")
         }
@@ -74,21 +74,17 @@ class Screen : UIElement {
         $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
         $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
         $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
-        # Set initial screen dimensions to console size
         $this.Width = [Math]::Max(80, [Console]::WindowWidth)
         $this.Height = [Math]::Max(24, [Console]::WindowHeight)
-        # Write-Verbose "Screen '$($this.Name)' created with ServiceContainer."
     }
 
     # Legacy constructor for backward compatibility (deprecated)
     Screen([string]$name, [hashtable]$services) : base($name) {
         Write-Warning "Screen '$($this.Name)': Using deprecated hashtable constructor. Please update to use ServiceContainer."
-        # This constructor is kept for backward compatibility but should be removed in future versions
         $this.ServiceContainer = $null
         $this.State = [System.Collections.Generic.Dictionary[string, object]]::new()
         $this.Panels = [System.Collections.Generic.List[UIElement]]::new()
         $this.EventSubscriptions = [System.Collections.Generic.Dictionary[string, string]]::new()
-        # Set initial screen dimensions to console size
         $this.Width = [Math]::Max(80, [Console]::WindowWidth)
         $this.Height = [Math]::Max(24, [Console]::WindowHeight)
     }
@@ -109,7 +105,7 @@ class Screen : UIElement {
         # Write-Verbose "OnResume called for Screen '$($this.Name)': Default (no-op)." 
     }
 
-    # ===== FOCUS MANAGEMENT (ncurses window model) =====
+    # ===== FOCUS MANAGEMENT (Hybrid Window Model) =====
     [UIElement] GetFocusedChild() {
         return $this._focusedChild
     }
@@ -161,7 +157,7 @@ class Screen : UIElement {
         $focusable = $this._GetFocusableChildren()
         if ($focusable.Count -eq 0) { return }
         
-        $currentIndex = $focusable.Count - 1
+        $currentIndex = 0 # Default to 0 if no focus
         if ($null -ne $this._focusedChild) {
             $currentIndex = $focusable.IndexOf($this._focusedChild)
         }
@@ -229,7 +225,7 @@ class Screen : UIElement {
             }
         }
         
-        # Check global keybindings
+        # If child did not handle it, check for global keybindings
         if ($null -ne $this.ServiceContainer) {
             $keybindingService = $this.ServiceContainer.GetService("KeybindingService")
             if ($keybindingService) {
@@ -242,7 +238,9 @@ class Screen : UIElement {
                             return $true
                         }
                         catch {
-                            Write-Log -Level Error -Message "Failed to execute action '$action': $($_.Exception.Message)"
+                            if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                                Write-Log -Level Error -Message "Failed to execute action '$action': $($_.Exception.Message)"
+                            }
                         }
                     }
                 }
@@ -265,7 +263,6 @@ class Screen : UIElement {
         try {
             # Write-Verbose "Cleanup called for Screen '$($this.Name)'."
             
-            # Clear focus before cleanup
             $this.ClearFocus()
             $this._focusableCache = $null
             $this._focusCacheValid = $false
@@ -284,7 +281,6 @@ class Screen : UIElement {
             }
             $this.EventSubscriptions.Clear()
             
-            # Clear screen-specific collections
             $this.Panels.Clear()
             $this.State.Clear()
             
@@ -303,7 +299,7 @@ class Screen : UIElement {
         try {
             $this.Panels.Add($panel)
             $this.AddChild($panel) 
-            $this.InvalidateFocusCache()  # Invalidate focus cache when adding children
+            $this.InvalidateFocusCache()
             Write-Verbose "Added panel '$($panel.Name)' to screen '$($this.Name)'."
         }
         catch {
@@ -345,7 +341,7 @@ class Screen : UIElement {
     
     hidden [void] _RenderContent() {
         ([UIElement]$this)._RenderContent()
-        Write-Verbose "_RenderContent called for Screen '$($this.Name)' (rendering UIElement children, including panels)."
+        # Write-Verbose "_RenderContent called for Screen '$($this.Name)' (rendering UIElement children, including panels)."
     }
 
     [string] ToString() {

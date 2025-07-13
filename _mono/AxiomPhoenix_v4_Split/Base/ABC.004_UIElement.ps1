@@ -1,3 +1,4 @@
+####\Base\ABC.004_UIElement.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Base Classes (Load First)
 # Core framework classes with NO external dependencies
@@ -249,15 +250,27 @@ class UIElement {
 
     # Get theme-aware color with fallback
     [string] GetThemeColor([string]$themePath, [string]$fallback = "#ffffff") {
+        # First try using the global Get-ThemeColor function if available
         if (Get-Command 'Get-ThemeColor' -ErrorAction SilentlyContinue) {
             return Get-ThemeColor $themePath $fallback
         }
+        
+        # Fallback to direct theme manager access
+        $themeManager = $global:TuiState?.Services?.ThemeManager
+        if (-not $themeManager) {
+            $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
+        }
+        
+        if ($themeManager) {
+            return $themeManager.GetColor($themePath, $fallback)
+        }
+        
         return $fallback
     }
     
     # Get effective foreground color (theme-aware)
     [string] GetEffectiveForegroundColor() {
-        if ($this.ForegroundColor -and $this.ForegroundColor -ne '$null') {
+        if ($this.ForegroundColor) {
             return $this.ForegroundColor
         }
         return $this.GetThemeColor("Label.Foreground", "#d4d4d4")
@@ -265,7 +278,7 @@ class UIElement {
     
     # Get effective background color (theme-aware)
     [string] GetEffectiveBackgroundColor() {
-        if ($this.BackgroundColor -and $this.BackgroundColor -ne '$null') {
+        if ($this.BackgroundColor) {
             return $this.BackgroundColor
         }
         return $this.GetThemeColor("Panel.Background", "#1e1e1e")
@@ -273,7 +286,7 @@ class UIElement {
     
     # Get effective border color (theme-aware)
     [string] GetEffectiveBorderColor() {
-        if ($this.BorderColor -and $this.BorderColor -ne '$null') {
+        if ($this.BorderColor) {
             return $this.BorderColor
         }
         return $this.GetThemeColor("Panel.Border", "#404040")
@@ -281,11 +294,21 @@ class UIElement {
 
     [void] OnFocus() 
     { 
+        # Default focus behavior - components should override with Add-Member
+        if ($this.BorderColor) {
+            $this.BorderColor = $this.GetThemeColor("primary.accent", "#0078d4")
+            $this.RequestRedraw()
+        }
         # Write-Verbose "OnFocus called for '$($this.Name)'." 
     }
     
     [void] OnBlur() 
     { 
+        # Default blur behavior - components should override with Add-Member
+        if ($this.BorderColor) {
+            $this.BorderColor = $this.GetThemeColor("border", "#404040")
+            $this.RequestRedraw()
+        }
         # Write-Verbose "OnBlur called for '$($this.Name)'." 
     }
 

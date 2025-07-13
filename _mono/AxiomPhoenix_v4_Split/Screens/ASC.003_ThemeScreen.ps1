@@ -1,5 +1,5 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Theme Selection Screen  
+# Axiom-Phoenix v4.0 - Theme Selection Screen
 # FIXED: Removed FocusManager dependency, uses direct input handling
 # ==============================================================================
 
@@ -182,7 +182,7 @@ class ThemeScreen : Screen {
         $this._titleLabel.X = 2
         $this._titleLabel.Y = 1
         $this._titleLabel.SetText("Select a theme for your terminal experience") # Use SetText
-        $this._titleLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
+        $this._titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._mainPanel.AddChild($this._titleLabel)
         
         # List panel (left side)
@@ -279,7 +279,7 @@ class ThemeScreen : Screen {
         $this._statusLabel.X = 2
         $this._statusLabel.Y = $this.Height - 3
         $this._statusLabel.SetText("Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel") # Use SetText
-        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666")) # Use SetForegroundColor
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._mainPanel.AddChild($this._statusLabel)
         
         # Populate theme list
@@ -309,23 +309,23 @@ class ThemeScreen : Screen {
     hidden [void] UpdatePreview() {
         $selectedIndex = $this._themeList.SelectedIndex
         if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$selectedIndex]
+            $selectedTheme = $this._themes[$selectedIndex] # Fixed Pattern 10
             
             # Update description
             $this._descriptionLabel.SetText($selectedTheme.Description) # Use SetText
-            $this._descriptionLabel.SetForegroundColor(($selectedTheme.Colors["Foreground"])) # Use SetForegroundColor
+            $this._descriptionLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
             
             # Update preview elements with theme colors
-            $this._previewTextLabel.SetForegroundColor(($selectedTheme.Colors["Foreground"])) # Use SetForegroundColor
+            $this._previewTextLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
             
-            $this._previewButtonLabel.SetBackgroundColor(($selectedTheme.Colors["Primary"]))
-            $this._previewButtonLabel.SetForegroundColor(($selectedTheme.Colors["button.focused.fg"])) # Use SetForegroundColor
+            $this._previewButtonLabel.BackgroundColor = $selectedTheme.Colors["Primary"]
+            $this._previewButtonLabel.ForegroundColor = $selectedTheme.Colors["button.focused.fg"]
             
-            $this._previewListLabel.SetBackgroundColor(($selectedTheme.Colors["list.item.selected.background"]))
-            $this._previewListLabel.SetForegroundColor(($selectedTheme.Colors["list.item.selected"])) # Use SetForegroundColor
+            $this._previewListLabel.BackgroundColor = $selectedTheme.Colors["list.item.selected.background"]
+            $this._previewListLabel.ForegroundColor = $selectedTheme.Colors["list.item.selected"]
             
             # Update panel colors
-            $this._previewPanel.SetBackgroundColor(($selectedTheme.Colors["component.background"]))
+            $this._previewPanel.BackgroundColor = $selectedTheme.Colors["component.background"]
             # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this._previewPanel.BorderColor = $selectedTheme.Colors["component.border"]
             
@@ -336,12 +336,12 @@ class ThemeScreen : Screen {
     hidden [void] ApplyTheme() {
         $selectedIndex = $this._themeList.SelectedIndex
         if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$selectedIndex]
+            $selectedTheme = $this._themes[$selectedIndex] # Fixed Pattern 10
             $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
             
             if ($themeManager) {
                 # Apply the theme colors
-                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) {
+                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) { # Fixed Pattern 9
                     $themeManager.SetColor($kvp.Key, $kvp.Value)
                 }
                 
@@ -362,11 +362,11 @@ class ThemeScreen : Screen {
         # Temporarily apply theme without saving
         $selectedIndex = $this._themeList.SelectedIndex
         if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$selectedIndex]
+            $selectedTheme = $this._themes[$selectedIndex] # Fixed Pattern 10
             $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
             
             if ($themeManager) {
-                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) {
+                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) { # Fixed Pattern 9
                     $themeManager.SetColor($kvp.Key, $kvp.Value)
                 }
                 

@@ -38,8 +38,9 @@ class LabelComponent : UIElement {
     
     # Generate cache key based on all rendering parameters
     hidden [string] _GenerateCacheKey() {
-        $fg = if ($this.ForegroundColor -and $this.ForegroundColor -ne '$null') { $this.ForegroundColor } else { "default" }
-        $bg = if ($this.BackgroundColor -and $this.BackgroundColor -ne '$null') { $this.BackgroundColor } else { "default" }
+        # FIXED: Correctly check for $null by just checking the property's truthiness
+        $fg = if ($this.ForegroundColor) { $this.ForegroundColor } else { "default" }
+        $bg = if ($this.BackgroundColor) { $this.BackgroundColor } else { "default" }
         return "$($this.Text)_$($this.Width)_$($this.Height)_$($fg)_$($bg)"
     }
     
@@ -50,30 +51,9 @@ class LabelComponent : UIElement {
         $this._renderCache = $null
     }
     
-    # Override property setters to invalidate cache
-    [void] SetText([string]$newText) {
-        if ($this.Text -ne $newText) {
-            $this.Text = $newText
-            $this._InvalidateCache()
-            $this.RequestRedraw()
-        }
-    }
-    
-    [void] SetForegroundColor([object]$color) {
-        if ($this.ForegroundColor -ne $color) {
-            $this.ForegroundColor = $color
-            $this._InvalidateCache()
-            $this.RequestRedraw()
-        }
-    }
-    
-    [void] SetBackgroundColor([object]$color) {
-        if ($this.BackgroundColor -ne $color) {
-            $this.BackgroundColor = $color
-            $this._InvalidateCache()
-            $this.RequestRedraw()
-        }
-    }
+    # FIXED: Removed SetText, SetForegroundColor, and SetBackgroundColor methods.
+    # Direct property assignment (e.g., $label.Text = "...") is now the correct way.
+    # The cache invalidation is handled automatically by the OnRender logic.
 
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
@@ -101,16 +81,8 @@ class LabelComponent : UIElement {
         }
         
         # Slow path: Render and cache
-        # Get background color
-        if ($this.BackgroundColor -and $this.BackgroundColor -ne '$null') { # Fixed null check
-            if ($this.BackgroundColor -is [ConsoleColor]) { # This branch is likely dead code as BackgroundColor is [string]
-                $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e" # Use theme default instead
-            } else {
-                $bgColor = $this.BackgroundColor # Assume it's already hex
-            }
-        } else {
-            $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
-        }
+        # Get background color using the effective color method from the base class
+        $bgColor = $this.GetEffectiveBackgroundColor()
         
         # Clear buffer with background color
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
@@ -126,20 +98,11 @@ class LabelComponent : UIElement {
             return
         }
         
-        # Get foreground color
-        if ($this.ForegroundColor -and $this.ForegroundColor -ne '$null') { # Fixed null check
-            if ($this.ForegroundColor -is [ConsoleColor]) { # This branch is likely dead code as ForegroundColor is [string]
-                # Convert ConsoleColor to hex if needed
-                $fg = Get-ThemeColor "Label.Foreground" "#d4d4d4" # Use theme default instead
-            } else {
-                $fg = $this.ForegroundColor # Assume it's already hex
-            }
-        } else {
-            $fg = Get-ThemeColor "Label.Foreground" "#d4d4d4"
-        }
+        # Get foreground color using the effective color method from the base class
+        $fgColor = $this.GetEffectiveForegroundColor()
         
         # Draw text
-        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -Style @{ FG = $fg; BG = $bgColor }
+        Write-TuiText -Buffer $this._private_buffer -X 0 -Y 0 -Text $this.Text -Style @{ FG = $fgColor; BG = $bgColor }
         
         # Cache the rendered result
         $this._renderCache = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Cache")

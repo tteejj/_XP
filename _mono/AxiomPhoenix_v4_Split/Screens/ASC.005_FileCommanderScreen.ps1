@@ -85,7 +85,7 @@ class FileCommanderScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.HasBorder = $false
         # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0A0A0A"))
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#0A0A0A"
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -111,8 +111,8 @@ class FileCommanderScreen : Screen {
         $this._leftPathLabel.Width = $halfWidth - 2
         $this._leftPathLabel.Height = 1
         # LabelComponent has SetForegroundColor and SetBackgroundColor methods, correctly used.
-        $this._leftPathLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
-        $this._leftPathLabel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
+        $this._leftPathLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
+        $this._leftPathLabel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
         $this._leftPanel.AddChild($this._leftPathLabel)
 
         # Left file list
@@ -182,8 +182,8 @@ class FileCommanderScreen : Screen {
         $this._rightPathLabel.Width = $this._rightPanel.Width - 2
         $this._rightPathLabel.Height = 1
         # LabelComponent has SetForegroundColor and SetBackgroundColor methods, correctly used.
-        $this._rightPathLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
-        $this._rightPathLabel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
+        $this._rightPathLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
+        $this._rightPathLabel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
         $this._rightPanel.AddChild($this._rightPathLabel)
 
         # Right file list
@@ -241,7 +241,7 @@ class FileCommanderScreen : Screen {
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $false
         # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._statusBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1A1A1A"))
+        $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1A1A1A"
         $this._mainPanel.AddChild($this._statusBar)
 
         # Status label
@@ -251,7 +251,7 @@ class FileCommanderScreen : Screen {
         $this._statusLabel.Width = 60
         $this._statusLabel.Height = 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00FF88"))
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00FF88"
         $this._statusBar.AddChild($this._statusLabel)
 
         # Size label
@@ -261,7 +261,7 @@ class FileCommanderScreen : Screen {
         $this._sizeLabel.Width = 20
         $this._sizeLabel.Height = 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $this._sizeLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFD700"))
+        $this._sizeLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFD700"
         $this._statusBar.AddChild($this._sizeLabel)
 
         # Item count label
@@ -271,7 +271,7 @@ class FileCommanderScreen : Screen {
         $this._itemCountLabel.Width = 24
         $this._itemCountLabel.Height = 1
         # LabelComponent has a SetForegroundColor method, which is correctly used here.
-        $this._itemCountLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00D4FF"))
+        $this._itemCountLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00D4FF"
         $this._statusBar.AddChild($this._itemCountLabel)
 
         # Function key bar
@@ -282,7 +282,7 @@ class FileCommanderScreen : Screen {
         $this._functionBar.Height = 2
         $this._functionBar.HasBorder = $false
         # Panel has a SetBackgroundColor method, which is correctly used here.
-        $this._functionBar.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#0D47A1"))
+        $this._functionBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#0D47A1"
         $this._mainPanel.AddChild($this._functionBar)
 
         # Function key labels
@@ -307,7 +307,7 @@ class FileCommanderScreen : Screen {
             $keyLabel.Height = 1
             $keyLabel.Text = "$($func.Key):$($func.Text)"
             # LabelComponent has a SetForegroundColor method, which is correctly used here.
-            $keyLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#FFFFFF"))
+            $keyLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#FFFFFF"
             $this._functionBar.AddChild($keyLabel)
         }
 
@@ -469,13 +469,13 @@ class FileCommanderScreen : Screen {
         if ($leftDisplay.Length -gt $maxPathLength) {
             $leftDisplay = "..." + $leftDisplay.Substring($leftDisplay.Length - $maxPathLength + 3)
         }
-        $this._leftPathLabel.SetText(" $leftDisplay ") # Use SetText
+        $this._leftPathLabel.Text = " $leftDisplay "
         
         $rightDisplay = $this._rightPath
         if ($rightDisplay.Length -gt $maxPathLength) {
             $rightDisplay = "..." + $rightDisplay.Substring($rightDisplay.Length - $maxPathLength + 3)
         }
-        $this._rightPathLabel.SetText(" $rightDisplay ") # Use SetText
+        $this._rightPathLabel.Text = " $rightDisplay "
     }
 
     hidden [void] UpdateStatusBar() {
@@ -495,18 +495,18 @@ class FileCommanderScreen : Screen {
         if ($this._selectedItem) {
             $name = $this._selectedItem.Name
             if ($this._selectedItem.PSIsContainer -or $this._selectedItem.Attributes -band [System.IO.FileAttributes]::Directory) {
-                $this._statusLabel.SetText("Directory: $name") # Use SetText
-                $this._sizeLabel.SetText("") # Use SetText
+                $this._statusLabel.Text = "Directory: $name"
+                $this._sizeLabel.Text = ""
             } else {
-                $this._statusLabel.SetText("File: $name") # Use SetText
-                $this._sizeLabel.SetText("Size: $($this.FormatFileSize($this._selectedItem.Length))") # Use SetText
+                $this._statusLabel.Text = "File: $name"
+                $this._sizeLabel.Text = "Size: $($this.FormatFileSize($this._selectedItem.Length))"
             }
         }
         
         # Update item counts
         $leftCount = $this._leftItems.Count
         $rightCount = $this._rightItems.Count
-        $this._itemCountLabel.SetText("L: $leftCount | R: $rightCount items") # Use SetText
+        $this._itemCountLabel.Text = "L: $leftCount | R: $rightCount items"
     }
 
     hidden [void] NavigateToDirectory([string]$path) {
@@ -584,7 +584,7 @@ class FileCommanderScreen : Screen {
         
         if ($item -and $item.Name -ne "..") {
             $this._clipboard.Add($item.FullName)
-            $this._statusLabel.SetText("Copied: $($item.Name)") # Use SetText
+            $this._statusLabel.Text = "Copied: $($item.Name)"
         }
     }
 
@@ -604,8 +604,8 @@ class FileCommanderScreen : Screen {
             $actionService = $this.ServiceContainer.GetService("ActionService")
             if ($actionService) {
                 # Store the file path for the editor to open
-                $this._statusLabel.SetText("Opening: $($item.Name)") # Use SetText
-                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
+                $this._statusLabel.Text = "Opening: $($item.Name)"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
                 # Navigate to text editor
                 $actionService.ExecuteAction("tools.textEditor", @{FilePath = $item.FullName})
             }
@@ -627,8 +627,8 @@ class FileCommanderScreen : Screen {
             $message = "Delete $itemType '$($item.Name)'?"
             
             # Simple confirmation - in real app would use dialog
-            $this._statusLabel.SetText("Press Y to confirm delete, any other key to cancel") # Use SetText
-            $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ffa500")) # Use SetForegroundColor
+            $this._statusLabel.Text = "Press Y to confirm delete, any other key to cancel"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ffa500" # Use SetForegroundColor
             $this.RequestRedraw()
             
             # Store for next keypress handling
@@ -639,13 +639,13 @@ class FileCommanderScreen : Screen {
     hidden [void] CreateDirectory() {
         # In a real implementation, would show input dialog
         # For now, just show status
-        $this._statusLabel.SetText("Create directory: Feature requires dialog system") # Use SetText
-        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
+        $this._statusLabel.Text = "Create directory: Feature requires dialog system"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
     }
 
     hidden [void] ShowHelp() {
-        $this._statusLabel.SetText("Help: Tab=Switch, Enter=Open, F5=Copy, F8=Delete, F10=Quit") # Use SetText
-        $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
+        $this._statusLabel.Text = "Help: Tab=Switch, Enter=Open, F5=Copy, F8=Delete, F10=Quit"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
     }
 
     [void] OnEnter() {
@@ -684,16 +684,16 @@ class FileCommanderScreen : Screen {
             if ($key.KeyChar -eq 'y' -or $key.KeyChar -eq 'Y') {
                 try {
                     Remove-Item -Path $this._pendingDelete.FullName -Recurse -Force
-                    $this._statusLabel.SetText("Deleted: $($this._pendingDelete.Name)") # Use SetText
-                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00ff88")) # Use SetForegroundColor
+                    $this._statusLabel.Text = "Deleted: $($this._pendingDelete.Name)"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88" # Use SetForegroundColor
                     $this.RefreshPanels()
                 } catch {
-                    $this._statusLabel.SetText("Error: $($_.Exception.Message)") # Use SetText
-                    $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#ff4444")) # Use SetForegroundColor
+                    $this._statusLabel.Text = "Error: $($_.Exception.Message)"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#ff4444" # Use SetForegroundColor
                 }
             } else {
-                $this._statusLabel.SetText("Delete cancelled") # Use SetText
-                $this._statusLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#00d4ff")) # Use SetForegroundColor
+                $this._statusLabel.Text = "Delete cancelled"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff" # Use SetForegroundColor
             }
             $this._pendingDelete = $null
             $this.RequestRedraw()
@@ -780,18 +780,18 @@ class FileCommanderScreen : Screen {
                     # Toggle hidden files
                     $this._showHidden = -not $this._showHidden
                     $this.RefreshPanels()
-                    $this._statusLabel.SetText((if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" })) # Use SetText
+                    $this._statusLabel.Text = (if ($this._showHidden) { "Hidden files: ON" } else { "Hidden files: OFF" })
                     return $true
                 }
                 ([ConsoleKey]::R) {
                     # Refresh
                     $this.RefreshPanels()
-                    $this._statusLabel.SetText("Refreshed") # Use SetText
+                    $this._statusLabel.Text = "Refreshed"
                     return $true
                 }
                 ([ConsoleKey]::L) {
                     # Go to path (would show input dialog)
-                    $this._statusLabel.SetText("Go to path: Feature requires dialog system") # Use SetText
+                    $this._statusLabel.Text = "Go to path: Feature requires dialog system"
                     return $true
                 }
             }

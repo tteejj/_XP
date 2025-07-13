@@ -23,10 +23,11 @@ using namespace System.Management.Automation
 class ConfirmDialog : Dialog {
     hidden [ButtonComponent]$_yesButton
     hidden [ButtonComponent]$_noButton
-    # Removed manual focus tracking - will use FocusManager instead
+    # FIXED: Removed manual focus tracking. The Screen base class will manage focus.
 
-    ConfirmDialog([string]$name) : base($name) {
-        $this.Height = 8
+    ConfirmDialog([string]$name, [object]$serviceContainer) : base($name, $serviceContainer) {
+        $this.Height = 10
+        $this.Width = 50
         $this.InitializeConfirm()
     }
 
@@ -35,10 +36,12 @@ class ConfirmDialog : Dialog {
         $this._yesButton = [ButtonComponent]::new($this.Name + "_Yes")
         $this._yesButton.Text = "Yes"
         $this._yesButton.Width = 10
-        $this._yesButton.Height = 3
-        $this._yesButton.TabIndex = 1 # Explicitly set tab order
+        $this._yesButton.Height = 1
+        $this._yesButton.IsFocusable = $true
+        $this._yesButton.TabIndex = 0 # First in tab order
+        $thisDialog = $this
         $this._yesButton.OnClick = {
-            $this.Complete($true)
+            $thisDialog.Complete($true)
         }.GetNewClosure()
         $this._panel.AddChild($this._yesButton)
 
@@ -46,21 +49,30 @@ class ConfirmDialog : Dialog {
         $this._noButton = [ButtonComponent]::new($this.Name + "_No")
         $this._noButton.Text = "No"
         $this._noButton.Width = 10
-        $this._noButton.Height = 3
-        $this._noButton.TabIndex = 2 # Explicitly set tab order
+        $this._noButton.Height = 1
+        $this._noButton.IsFocusable = $true
+        $this._noButton.TabIndex = 1 # Second in tab order
         $this._noButton.OnClick = {
-            $this.Complete($false)
+            $thisDialog.Complete($false)
         }.GetNewClosure()
         $this._panel.AddChild($this._noButton)
     }
 
-    [void] Show([string]$title, [string]$message) {
-        ([Dialog]$this).Show($title, $message)
+    # Override OnEnter to set initial focus
+    [void] OnEnter() {
+        ([Dialog]$this).OnEnter()
+        # When the dialog is shown, set focus to the "Yes" button by default.
+        $this.SetChildFocus($this._yesButton)
+    }
+
+    [void] OnRender() {
+        # Call the base Dialog OnRender first
+        ([Dialog]$this).OnRender()
         
         # Position buttons
-        $buttonY = $this.Height - 4
-        $totalWidth = $this._yesButton.Width + $this._noButton.Width + 4
-        $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
+        $buttonY = $this._panel.ContentHeight - 2
+        $totalWidth = $this._yesButton.Width + $this._noButton.Width + 4 # 4 for spacing
+        $startX = [Math]::Floor(($this._panel.ContentWidth - $totalWidth) / 2)
         
         $this._yesButton.X = $startX
         $this._yesButton.Y = $buttonY
@@ -68,22 +80,12 @@ class ConfirmDialog : Dialog {
         $this._noButton.X = $startX + $this._yesButton.Width + 4
         $this._noButton.Y = $buttonY
         
-    }
-
-    [void] OnEnter() {
-        # When the dialog is shown, tell the FocusManager to focus the first element (Yes button)
-        $global:TuiState.Services.FocusManager?.SetFocus($this._yesButton)
-    }
-
-    [void] OnRender() {
-        ([Dialog]$this).OnRender()
-        
+        # Draw message text
         if ($this.Visible -and $this.Message) {
-            # Draw message (same as AlertDialog)
             $panelContentX = $this._panel.ContentX
             $panelContentY = $this._panel.ContentY
-            $maxWidth = $this.Width - 4
-            
+            $maxWidth = $this._panel.ContentWidth - 2
+
             $words = $this.Message -split ' '
             $currentLine = ""
             $currentY = $panelContentY + 1
@@ -91,7 +93,7 @@ class ConfirmDialog : Dialog {
             foreach ($word in $words) {
                 if (($currentLine + " " + $word).Length -gt $maxWidth) {
                     if ($currentLine) {
-                        Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor "Label.Foreground" "#e0e0e0"; BG = Get-ThemeColor "Panel.Background" "#1e1e1e" }
+                        Write-TuiText -Buffer $this._panel.GetBuffer() -X ($panelContentX + 1) -Y $currentY -Text $currentLine -Style @{ FG = (Get-ThemeColor "Label.Foreground" "#e0e0e0"); BG = (Get-ThemeColor "Panel.Background" "#1e1e1e") }
                         $currentY++
                     }
                     $currentLine = $word
@@ -102,37 +104,31 @@ class ConfirmDialog : Dialog {
             }
             
             if ($currentLine) {
-                Write-TuiText -Buffer $this._panel._private_buffer -X $panelContentX -Y $currentY -Text $currentLine -Style @{ FG = Get-ThemeColor "Label.Foreground" "#e0e0e0"; BG = Get-ThemeColor "Panel.Background" "#1e1e1e" }
+                Write-TuiText -Buffer $this._panel.GetBuffer() -X ($panelContentX + 1) -Y $currentY -Text $currentLine -Style @{ FG = (Get-ThemeColor "Label.Foreground" "#e0e0e0"); BG = (Get-ThemeColor "Panel.Background" "#1e1e1e") }
             }
         }
     }
 
+    # FIXED: Simplified input handling to use the Hybrid Window Model
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
 
-        # Handle Escape to cancel
-        if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.Complete($false) # Using new Complete method
+        # Let the base Dialog/Screen class handle Tab, Escape, and routing to focused child first
+        if (([Dialog]$this).HandleInput($key)) {
             return $true
         }
 
-        # The global input handler will route Tab/Shift+Tab to the FocusManager.
-        # Left/Right arrow keys can be used to switch between Yes/No buttons
+        # Add convenient Left/Right arrow key navigation between buttons
         if ($key.Key -eq [ConsoleKey]::LeftArrow -or $key.Key -eq [ConsoleKey]::RightArrow) {
-            $focusManager = $global:TuiState.Services.FocusManager
-            if ($focusManager) {
-                # Toggle focus between the two buttons
-                if ($focusManager.FocusedComponent -eq $this._yesButton) {
-                    $focusManager.SetFocus($this._noButton)
-                } else {
-                    $focusManager.SetFocus($this._yesButton)
-                }
-                return $true
+            $focusedComponent = $this.GetFocusedChild()
+            if ($focusedComponent -eq $this._yesButton) {
+                $this.SetChildFocus($this._noButton)
+            } elseif ($focusedComponent -eq $this._noButton) {
+                $this.SetChildFocus($this._yesButton)
             }
+            return $true
         }
         
-        # Let the focused child handle the input
-        # The FocusManager will have already routed input to the focused button
         return $false
     }
 }

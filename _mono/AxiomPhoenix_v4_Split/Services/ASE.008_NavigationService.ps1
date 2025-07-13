@@ -23,8 +23,8 @@ using namespace System.Threading
 # Dependencies: ServiceContainer, EventManager (optional)
 # Purpose: Screen navigation and history management
 class NavigationService {
-    [System.Collections.Generic.Stack[object]]$NavigationStack = [System.Collections.Generic.Stack[object]]::new() # Changed from Stack[Screen] to Stack[object]
-    [object]$CurrentScreen # Changed from [Screen] to [object]
+    [System.Collections.Generic.Stack[object]]$NavigationStack = [System.Collections.Generic.Stack[object]]::new() # FIXED: Changed from Stack[Screen] to Stack[object]
+    [object]$CurrentScreen # FIXED: Changed from [Screen] to [object]
     [hashtable]$ScreenRegistry = @{}
     [int]$MaxStackSize = 10
     [object]$ServiceContainer # Store the container as object to avoid type issues
@@ -39,7 +39,6 @@ class NavigationService {
             throw [System.ArgumentException]::new("Expected ServiceContainer but got $($serviceContainer.GetType().Name)")
         }
         $this.ServiceContainer = $serviceContainer
-        # No need to store EventManager separately - get it when needed
     }
 
     # NEW: Get the window stack for rendering
@@ -47,13 +46,13 @@ class NavigationService {
         # Build array with current screen at the end (top of stack)
         $windows = @()
         
-        # Add all screens from navigation stack (bottom to top)
+        # FIXED: Add all screens from navigation stack (bottom to top)
         $stackArray = $this.NavigationStack.ToArray()
         for ($i = $stackArray.Length - 1; $i -ge 0; $i--) {
             $windows += $stackArray[$i]
         }
         
-        # Add current screen on top
+        # Add current screen on top if it exists
         if ($this.CurrentScreen) {
             $windows += $this.CurrentScreen
         }
@@ -73,30 +72,24 @@ class NavigationService {
         }
         
         try {
-            # Exit current screen if one exists
+            # Exit current screen if one exists and push it to the stack
             if ($this.CurrentScreen) {
-                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($this.CurrentScreen.Name)'"
                 $this.CurrentScreen.OnExit()
                 $this.NavigationStack.Push($this.CurrentScreen)
-                
-                # Limit stack size (optional, complex to trim from bottom of Stack)
-                # If MaxStackSize is critical, consider switching NavigationStack to List<Screen> and managing explicitly.
             }
             
-            # Enter new screen
+            # Set the new screen as current
             $this.CurrentScreen = $screen
-            # Write-Log -Level Debug -Message "NavigationService: Entering screen '$($screen.Name)'"
             
-            # Initialize if not already (screens passed via registry should be initialized via factory)
+            # Initialize if not already
             if (-not $screen._isInitialized) {
-                # Write-Log -Level Debug -Message "NavigationService: Initializing screen '$($screen.Name)'"
                 $screen.Initialize()
                 $screen._isInitialized = $true
             }
             
             # Resize screen to match current console dimensions
-            $width = [Math]::Max(80, $global:TuiState.BufferWidth)
-            $height = [Math]::Max(24, $global:TuiState.BufferHeight)
+            $width = $global:TuiState.BufferWidth
+            $height = $global:TuiState.BufferHeight
             $screen.Resize($width, $height)
             
             $screen.OnEnter() # Call lifecycle method
@@ -111,12 +104,10 @@ class NavigationService {
                 })
             }
             
-            # Update global TUI state (CRITICAL FIX)
-            Write-Log -Level Debug -Message "NavigationService: Setting CurrentScreen to $($screen.Name)"
+            # FIXED: Update global TUI state
             $global:TuiState.CurrentScreen = $screen
-            Write-Log -Level Debug -Message "NavigationService: CurrentScreen is now $($global:TuiState.CurrentScreen?.Name)"
-            $global:TuiState.IsDirty = $true # Force redraw
-            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnEnter should set new focus
+            $global:TuiState.IsDirty = $true
+            $global:TuiState.FocusedComponent = $null
 
         }
         catch {
@@ -140,24 +131,20 @@ class NavigationService {
     # IMPORTANT: Update GoBack method
     [void] GoBack() {
         if (-not $this.CanGoBack()) {
-            # Write-Log -Level Warning -Message "NavigationService: Cannot go back - navigation stack is empty"
             return
         }
         
         try {
-            # Exit current screen
+            # Exit and cleanup current screen
             $exitingScreen = $this.CurrentScreen
             if ($exitingScreen) {
-                # Write-Log -Level Debug -Message "NavigationService: Exiting screen '$($exitingScreen.Name)' (going back)"
                 $exitingScreen.OnExit()
-                $exitingScreen.Cleanup() # Clean up the screen being exited/popped
+                $exitingScreen.Cleanup()
             }
             
             # Pop and resume previous screen
             $previousScreen = $this.NavigationStack.Pop()
             $this.CurrentScreen = $previousScreen
-            
-            # Write-Log -Level Debug -Message "NavigationService: Resuming screen '$($previousScreen.Name)'"
             
             # Resize screen to match current console dimensions
             $previousScreen.Resize($global:TuiState.BufferWidth, $global:TuiState.BufferHeight)
@@ -174,10 +161,10 @@ class NavigationService {
                 })
             }
             
-            # Update global TUI state (CRITICAL FIX)
+            # FIXED: Update global TUI state
             $global:TuiState.CurrentScreen = $previousScreen
-            $global:TuiState.IsDirty = $true # Force redraw
-            $global:TuiState.FocusedComponent = $null # Clear focus, screen OnResume should set new focus
+            $global:TuiState.IsDirty = $true
+            $global:TuiState.FocusedComponent = $null
 
         }
         catch {
@@ -190,19 +177,16 @@ class NavigationService {
         # Cleanup all screens in stack and current screen
         while ($this.NavigationStack.Count -gt 0) {
             $screen = $this.NavigationStack.Pop()
-            try { $screen.Cleanup() } catch { # Write-Log -Level Warning -Message "NavigationService: Error cleaning up stacked screen '$($screen.Name)': $($_.Exception.Message)" }
-            }
+            try { $screen.Cleanup() } catch { }
         }
         
         if ($this.CurrentScreen) {
             try { 
                 $this.CurrentScreen.OnExit()
                 $this.CurrentScreen.Cleanup() 
-            } catch { # Write-Log -Level Warning -Message "NavigationService: Error cleaning up current screen '$($this.CurrentScreen.Name)': $($_.Exception.Message)" }
-            }
+            } catch { }
             $this.CurrentScreen = $null
         }
-        # Write-Log -Level Debug -Message "NavigationService: Reset complete, all screens cleaned up."
     }
 }
 

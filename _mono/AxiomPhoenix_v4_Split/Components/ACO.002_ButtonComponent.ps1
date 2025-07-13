@@ -34,14 +34,11 @@ class ButtonComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        # Clear buffer with theme background
-        $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
-        $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-        
-        # Determine colors based on state
-        $fgColor = "#FFFFFF"
-        $bgColor = "#333333"
-        
+        # Determine colors based on state, using effective colors for fallbacks
+        # FIXED: Initialize variables at declaration to satisfy Set-StrictMode
+        [string]$fgColor = $null
+        [string]$bgColor = $null
+
         if ($this.IsPressed) {
             $fgColor = Get-ThemeColor "Button.Pressed.Foreground" "#d4d4d4"
             $bgColor = Get-ThemeColor "Button.Pressed.Background" "#4a5568"
@@ -55,8 +52,10 @@ class ButtonComponent : UIElement {
             $bgColor = Get-ThemeColor "Button.Disabled.Background" "#2d2d30"
         }
         else {
-            $fgColor = Get-ThemeColor "Button.Normal.Foreground" "#ffffff"
-            $bgColor = Get-ThemeColor "Button.Normal.Background" "#007acc"
+            # Use the effective colors from the base class for the normal state.
+            # This allows instance-specific colors to override the theme.
+            $fgColor = $this.GetEffectiveForegroundColor()
+            $bgColor = $this.GetEffectiveBackgroundColor()
         }
         
         # Draw button background
@@ -76,16 +75,24 @@ class ButtonComponent : UIElement {
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
         if ($null -eq $key) { return $false }
+        if (-not $this.Enabled -or -not $this.IsFocused) { return $false }
+
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
             try {
                 $this.IsPressed = $true
                 $this.RequestRedraw()
                 
+                # Use a separate thread to show the pressed state before executing the action
+                $job = Start-ThreadJob {
+                    Start-Sleep -Milliseconds 100
+                }
+                Wait-Job $job
+                Remove-Job $job
+                
                 if ($this.OnClick) {
                     & $this.OnClick
                 }
                 
-                Start-Sleep -Milliseconds 50
                 $this.IsPressed = $false
                 $this.RequestRedraw()
                 
@@ -94,6 +101,7 @@ class ButtonComponent : UIElement {
             catch {
                 $this.IsPressed = $false
                 $this.RequestRedraw()
+                throw
             }
         }
         return $false

@@ -29,9 +29,6 @@ class NumericInputComponent : UIElement {
     [scriptblock]$OnChange
     hidden [string]$_textValue = "0"
     hidden [int]$_cursorPosition = 1
-    [string]$BackgroundColor = "#000000"
-    [string]$ForegroundColor = "#FFFFFF"
-    [string]$BorderColor = "#808080"
     
     NumericInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true

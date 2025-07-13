@@ -1,4 +1,3 @@
-####\AllRuntime.ps1
 # ==============================================================================
 # Axiom-Phoenix v4.0 - All Runtime (Load Last)
 # TUI engine, screen management, and main application loop
@@ -19,49 +18,33 @@ function Invoke-TuiRender {
     param()
     
     try {
-        $renderTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        
-        # Ensure compositor buffer exists
         if ($null -eq $global:TuiState.CompositorBuffer) {
-            # Write-Verbose "Compositor buffer is null, skipping render"
             return
         }
         
-        # Clear compositor buffer
-        $global:TuiState.CompositorBuffer.Clear()
+        # Clear the main compositor buffer with the base theme background
+        $bgColor = Get-ThemeColor "Screen.Background" "#000000"
+        $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
-        # Write-Verbose "Starting render frame $($global:TuiState.FrameCount)"
-        
-        # WINDOW-BASED MODEL: Render all windows in the stack
+        # FIXED: WINDOW-BASED MODEL: Render all windows in the stack
         $navService = $global:TuiState.Services.NavigationService
         if ($navService) {
-            $windows = $navService.GetWindows()
+            # GetWindows() returns the stack from bottom to top, with the current screen last.
+            $windowsToRender = $navService.GetWindows()
             
-            # Render each window from bottom to top
-            foreach ($window in $windows) {
-                if ($null -eq $window) { continue }
+            foreach ($window in $windowsToRender) {
+                if ($null -eq $window -or -not $window.Visible) { continue }
                 
                 try {
-                    # Render the window which will update its internal buffer
+                    # Render the window, which updates its internal buffer
                     $window.Render()
                     
-                    # Get the window's buffer
+                    # Get the window's buffer and blend it onto the main compositor
                     $windowBuffer = $window.GetBuffer()
-                    
                     if ($windowBuffer) {
-                        # For overlays, render with transparency effect
-                        if ($window.IsOverlay -and $window -ne $windows[0]) {
-                            # Dim the background for overlay effect
-                            # This is a simple approach - could be enhanced with alpha blending
-                            $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
-                        }
-                        else {
-                            # Normal window - full opaque blend
-                            $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
-                        }
-                    }
-                    else {
-                        Write-Log -Level Debug -Message "Window buffer is null for $($window.Name)"
+                        # The BlendBuffer method in TuiBuffer handles the Z-indexing and composition.
+                        # For overlays, the dialog's OnRender method should handle dimming the background.
+                        $global:TuiState.CompositorBuffer.BlendBuffer($windowBuffer, 0, 0)
                     }
                 }
                 catch {
@@ -71,14 +54,12 @@ function Invoke-TuiRender {
             }
         }
         
-        # Force full redraw on first frame by making previous buffer different
+        # FIXED: Force full redraw on first frame by making previous buffer different
         if ($global:TuiState.FrameCount -eq 0) {
-            # Write-Verbose "First frame - initializing previous buffer for differential rendering"
-            # Fill previous buffer with different content to force full redraw
             for ($y = 0; $y -lt $global:TuiState.PreviousCompositorBuffer.Height; $y++) {
                 for ($x = 0; $x -lt $global:TuiState.PreviousCompositorBuffer.Width; $x++) {
-                    $global:TuiState.PreviousCompositorBuffer.SetCell($x, $y, 
-                        [TuiCell]::new('?', "#404040", "#404040"))
+                    # Use a character and color that is unlikely to be the default
+                    $global:TuiState.PreviousCompositorBuffer.SetCell($x, $y, [TuiCell]::new('?', "#010101", "#010101"))
                 }
             }
         }
@@ -86,19 +67,9 @@ function Invoke-TuiRender {
         # Differential rendering - compare current compositor to previous
         Render-DifferentialBuffer
         
-        # Swap buffers for next frame - MUST happen AFTER rendering
-        # Use the efficient Clone() method instead of manual copying
+        # FIXED: Swap buffers for next frame using the efficient Clone() method
         $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer.Clone()
         
-        # Clear compositor for next frame
-        $bgColor = Get-ThemeColor -ColorName "Background" -DefaultColor "#000000"
-        $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
-        
-        $renderTimer.Stop()
-        
-        if ($renderTimer.ElapsedMilliseconds -gt 16) {
-            # Write-Verbose "Slow frame: $($renderTimer.ElapsedMilliseconds)ms"
-        }
     }
     catch {
         Write-Error "Render error: $_"
@@ -114,16 +85,19 @@ function Render-DifferentialBuffer {
         $current = $global:TuiState.CompositorBuffer
         $previous = $global:TuiState.PreviousCompositorBuffer
         
-        # Ensure both buffers exist
         if ($null -eq $current -or $null -eq $previous) {
-            # Write-Verbose "Compositor buffers not initialized, skipping differential render"
             return
         }
         
         $ansiBuilder = [System.Text.StringBuilder]::new()
-        $currentX = -1
-        $currentY = -1
-        $changeCount = 0
+        $lastFg = $null
+        $lastBg = $null
+        $lastBold = $false
+        $lastItalic = $false
+        $lastUnderline = $false
+        $lastStrikethrough = $false
+        
+        $needsReset = $true # Start with a reset
         
         for ($y = 0; $y -lt $current.Height; $y++) {
             for ($x = 0; $x -lt $current.Width; $x++) {
@@ -131,30 +105,39 @@ function Render-DifferentialBuffer {
                 $previousCell = $previous.GetCell($x, $y)
                 
                 if ($currentCell.DiffersFrom($previousCell)) {
-                    $changeCount++
+                    # Move cursor to the correct position
+                    [void]$ansiBuilder.Append("`e[$($y + 1);$($x + 1)H")
                     
-                    # Move cursor if needed
-                    if ($currentX -ne $x -or $currentY -ne $y) {
-                        [void]$ansiBuilder.Append("`e[$($y + 1);$($x + 1)H")
-                        $currentX = $x
-                        $currentY = $y
+                    # Check if styling has changed
+                    $styleChanged = ($currentCell.ForegroundColor -ne $lastFg) -or
+                                    ($currentCell.BackgroundColor -ne $lastBg) -or
+                                    ($currentCell.Bold -ne $lastBold) -or
+                                    ($currentCell.Italic -ne $lastItalic) -or
+                                    ($currentCell.Underline -ne $lastUnderline) -or
+                                    ($currentCell.Strikethrough -ne $lastStrikethrough)
+
+                    if ($styleChanged) {
+                        # Use the cell's ToAnsiString method which generates the full sequence
+                        [void]$ansiBuilder.Append($currentCell.ToAnsiString())
+                        
+                        # Update last known styles
+                        $lastFg = $currentCell.ForegroundColor
+                        $lastBg = $currentCell.BackgroundColor
+                        $lastBold = $currentCell.Bold
+                        $lastItalic = $currentCell.Italic
+                        $lastUnderline = $currentCell.Underline
+                        $lastStrikethrough = $currentCell.Strikethrough
+                    } else {
+                        # Style is the same, just print the character
+                        [void]$ansiBuilder.Append($currentCell.Char)
                     }
-                    
-                    # Use cell's ToAnsiString method which handles all styling
-                    [void]$ansiBuilder.Append($currentCell.ToAnsiString())
-                    $currentX++
                 }
             }
         }
         
-        # Log changes on first few frames
-        if ($global:TuiState.FrameCount -lt 5) {
-            # Write-Verbose "Frame $($global:TuiState.FrameCount): $changeCount cells changed"
-        }
-        
-        # Reset styling at end
+        # Reset styling at the very end of the string
         if ($ansiBuilder.Length -gt 0) {
-            [void]$ansiBuilder.Append("`e[0m")
+            [void]$ansiBuilder.Append([TuiAnsiHelper]::Reset())
             [Console]::Write($ansiBuilder.ToString())
         }
     }

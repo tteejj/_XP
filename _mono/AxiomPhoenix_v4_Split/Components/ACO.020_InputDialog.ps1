@@ -24,11 +24,11 @@ class InputDialog : Dialog {
     hidden [TextBoxComponent]$_inputBox
     hidden [ButtonComponent]$_okButton
     hidden [ButtonComponent]$_cancelButton
-    hidden [bool]$_focusOnInput = $true
-    hidden [int]$_focusIndex = 0  # 0=input, 1=ok, 2=cancel
+    # FIXED: Removed manual focus tracking. The Screen base class will manage focus.
 
-    InputDialog([string]$name) : base($name) {
-        $this.Height = 10
+    InputDialog([string]$name, [object]$serviceContainer) : base($name, $serviceContainer) {
+        $this.Height = 12
+        $this.Width = 60
         $this.InitializeInput()
     }
 
@@ -39,15 +39,21 @@ class InputDialog : Dialog {
         $this._inputBox.Height = 3
         $this._inputBox.X = 2
         $this._inputBox.Y = 4
+        $this._inputBox.IsFocusable = $true
+        $this._inputBox.TabIndex = 0
         $this._panel.AddChild($this._inputBox)
 
         # OK button
         $this._okButton = [ButtonComponent]::new($this.Name + "_OK")
         $this._okButton.Text = "OK"
         $this._okButton.Width = 10
-        $this._okButton.Height = 3
+        $this._okButton.Height = 1
+        $this._okButton.IsFocusable = $true
+        $this._okButton.TabIndex = 1
+        $thisDialog = $this
         $this._okButton.OnClick = {
-            $this.Close($this._inputBox.Text)
+            # FIXED: Use the Complete method from the base Dialog class
+            $thisDialog.Complete($thisDialog._inputBox.Text)
         }.GetNewClosure()
         $this._panel.AddChild($this._okButton)
 
@@ -55,9 +61,12 @@ class InputDialog : Dialog {
         $this._cancelButton = [ButtonComponent]::new($this.Name + "_Cancel")
         $this._cancelButton.Text = "Cancel"
         $this._cancelButton.Width = 10
-        $this._cancelButton.Height = 3
+        $this._cancelButton.Height = 1
+        $this._cancelButton.IsFocusable = $true
+        $this._cancelButton.TabIndex = 2
         $this._cancelButton.OnClick = {
-            $this.Close($null)
+            # FIXED: Use the Complete method from the base Dialog class
+            $thisDialog.Complete($null)
         }.GetNewClosure()
         $this._panel.AddChild($this._cancelButton)
     }
@@ -67,11 +76,22 @@ class InputDialog : Dialog {
         
         $this._inputBox.Text = $defaultValue
         $this._inputBox.CursorPosition = $defaultValue.Length
+    }
+
+    # Override OnEnter to set initial focus
+    [void] OnEnter() {
+        ([Dialog]$this).OnEnter()
+        $this.SetChildFocus($this._inputBox)
+    }
+
+    [void] OnRender() {
+        # Call base Dialog render
+        ([Dialog]$this).OnRender()
         
         # Position buttons
-        $buttonY = $this.Height - 4
+        $buttonY = $this._panel.ContentHeight - 2
         $totalWidth = $this._okButton.Width + $this._cancelButton.Width + 4
-        $startX = [Math]::Floor(($this.Width - $totalWidth) / 2)
+        $startX = [Math]::Floor(($this._panel.ContentWidth - $totalWidth) / 2)
         
         $this._okButton.X = $startX
         $this._okButton.Y = $buttonY
@@ -79,236 +99,20 @@ class InputDialog : Dialog {
         $this._cancelButton.X = $startX + $this._okButton.Width + 4
         $this._cancelButton.Y = $buttonY
         
-        # Set initial focus
-        $this._focusIndex = 0
-        $this.UpdateFocus()
-    }
-
-    hidden [void] UpdateFocus() {
-        $this._inputBox.IsFocused = ($this._focusIndex -eq 0)
-        $this._okButton.IsFocused = ($this._focusIndex -eq 1)
-        $this._cancelButton.IsFocused = ($this._focusIndex -eq 2)
-    }
-
-    [void] OnRender() {
-        ([Dialog]$this).OnRender()
-        
+        # Draw message prompt
         if ($this.Visible -and $this.Message) {
-            # Draw message
-            $this._panel._private_buffer.WriteString(2, 2, 
-                $this.Message, [ConsoleColor]::White, [ConsoleColor]::Black)
+            Write-TuiText -Buffer $this._panel.GetBuffer() -X ($this._panel.ContentX + 1) -Y ($this._panel.ContentY + 1) `
+                -Text $this.Message -Style @{ FG = (Get-ThemeColor "Label.Foreground" "#e0e0e0") }
         }
     }
 
-    [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($key.Key -eq [ConsoleKey]::Escape) {
-            $this.Close($null)
-            return $true
-        }
-        
-        if ($key.Key -eq [ConsoleKey]::Tab) {
-            $this._focusIndex = ($this._focusIndex + 1) % 3
-            $this.UpdateFocus()
-            $this.RequestRedraw()
-            return $true
-        }
-        
-        switch ($this._focusIndex) {
-            0 { return $this._inputBox.HandleInput($key) }
-            1 { return $this._okButton.HandleInput($key) }
-            2 { return $this._cancelButton.HandleInput($key) }
-        }
-        
-        return $false
-    }
+    # FIXED: Input handling is now managed by the Dialog base class and focused components.
+    # No custom HandleInput override is needed here, as the base class handles Escape,
+    # Tab navigation, and routes Enter/Space to the focused button.
 }
 
-# Task Create/Edit Dialog
-class TaskDialog : Dialog {
-    hidden [TextBoxComponent] $_titleBox
-    hidden [MultilineTextBoxComponent] $_descriptionBox
-    hidden [ComboBoxComponent] $_statusCombo
-    hidden [ComboBoxComponent] $_priorityCombo
-    hidden [NumericInputComponent] $_progressInput
-    hidden [ButtonComponent] $_saveButton
-    hidden [ButtonComponent] $_cancelButton
-    hidden [PmcTask] $_task
-    hidden [bool] $_isNewTask
-    
-    TaskDialog([string]$title, [PmcTask]$task) : base($title) {
-        $this._task = if ($task) { $task } else { [PmcTask]::new() }
-        $this._isNewTask = ($null -eq $task)
-        $this.Width = 60
-        $this.Height = 20
-    }
-    
-    [void] Initialize() {
-        ([Dialog]$this).Initialize()
-        
-        $contentY = 2
-        $labelWidth = 12
-        $inputX = $labelWidth + 2
-        $inputWidth = $this.ContentWidth - $inputX - 2
-        
-        # Title
-        $titleLabel = [LabelComponent]::new("TitleLabel")
-        $titleLabel.Text = "Title:"
-        $titleLabel.X = 2
-        $titleLabel.Y = $contentY
-        $this._panel.AddChild($titleLabel)
-        
-        $this._titleBox = [TextBoxComponent]::new("TitleBox")
-        $this._titleBox.X = $inputX
-        $this._titleBox.Y = $contentY
-        $this._titleBox.Width = $inputWidth
-        $this._titleBox.Height = 1
-        $this._titleBox.Text = $this._task.Title
-        $this._panel.AddChild($this._titleBox)
-        $contentY += 2
-        
-        # Description
-        $descLabel = [LabelComponent]::new("DescLabel")
-        $descLabel.Text = "Description:"
-        $descLabel.X = 2
-        $descLabel.Y = $contentY
-        $this._panel.AddChild($descLabel)
-        
-        $this._descriptionBox = [MultilineTextBoxComponent]::new("DescBox")
-        $this._descriptionBox.X = $inputX
-        $this._descriptionBox.Y = $contentY
-        $this._descriptionBox.Width = $inputWidth
-        $this._descriptionBox.Height = 3
-        $this._descriptionBox.Text = $this._task.Description
-        $this._panel.AddChild($this._descriptionBox)
-        $contentY += 4
-        
-        # Status
-        $statusLabel = [LabelComponent]::new("StatusLabel")
-        $statusLabel.Text = "Status:"
-        $statusLabel.X = 2
-        $statusLabel.Y = $contentY
-        $this._panel.AddChild($statusLabel)
-        
-        $this._statusCombo = [ComboBoxComponent]::new("StatusCombo")
-        $this._statusCombo.X = $inputX
-        $this._statusCombo.Y = $contentY
-        $this._statusCombo.Width = $inputWidth
-        $this._statusCombo.Height = 1
-        $this._statusCombo.Items = @([TaskStatus]::GetEnumNames())
-        $this._statusCombo.SelectedIndex = [Array]::IndexOf($this._statusCombo.Items, $this._task.Status.ToString())
-        $this._panel.AddChild($this._statusCombo)
-        $contentY += 2
-        
-        # Priority
-        $priorityLabel = [LabelComponent]::new("PriorityLabel")
-        $priorityLabel.Text = "Priority:"
-        $priorityLabel.X = 2
-        $priorityLabel.Y = $contentY
-        $this._panel.AddChild($priorityLabel)
-        
-        $this._priorityCombo = [ComboBoxComponent]::new("PriorityCombo")
-        $this._priorityCombo.X = $inputX
-        $this._priorityCombo.Y = $contentY
-        $this._priorityCombo.Width = $inputWidth
-        $this._priorityCombo.Height = 1
-        $this._priorityCombo.Items = @([TaskPriority]::GetEnumNames())
-        $this._priorityCombo.SelectedIndex = [Array]::IndexOf($this._priorityCombo.Items, $this._task.Priority.ToString())
-        $this._panel.AddChild($this._priorityCombo)
-        $contentY += 2
-        
-        # Progress
-        $progressLabel = [LabelComponent]::new("ProgressLabel")
-        $progressLabel.Text = "Progress %:"
-        $progressLabel.X = 2
-        $progressLabel.Y = $contentY
-        $this._panel.AddChild($progressLabel)
-        
-        $this._progressInput = [NumericInputComponent]::new("ProgressInput")
-        $this._progressInput.X = $inputX
-        $this._progressInput.Y = $contentY
-        $this._progressInput.Width = 10
-        $this._progressInput.Height = 1
-        $this._progressInput.MinValue = 0
-        $this._progressInput.MaxValue = 100
-        $this._progressInput.Value = $this._task.Progress
-        $this._panel.AddChild($this._progressInput)
-        $contentY += 3
-        
-        # Buttons
-        $buttonY = $this.ContentHeight - 3
-        $buttonWidth = 12
-        $spacing = 2
-        $totalButtonWidth = ($buttonWidth * 2) + $spacing
-        $startX = [Math]::Floor(($this.ContentWidth - $totalButtonWidth) / 2)
-        
-        $this._saveButton = [ButtonComponent]::new("SaveButton")
-        $this._saveButton.Text = "Save"
-        $this._saveButton.X = $startX
-        $this._saveButton.Y = $buttonY
-        $this._saveButton.Width = $buttonWidth
-        $this._saveButton.Height = 1
-        $thisDialog = $this
-        $this._saveButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::OK
-            $thisDialog.Complete($thisDialog.DialogResult)
-        }.GetNewClosure()
-        $this._panel.AddChild($this._saveButton)
-        
-        $this._cancelButton = [ButtonComponent]::new("CancelButton")
-        $this._cancelButton.Text = "Cancel"
-        $this._cancelButton.X = $startX + $buttonWidth + $spacing
-        $this._cancelButton.Y = $buttonY
-        $this._cancelButton.Width = $buttonWidth
-        $this._cancelButton.Height = 1
-        $this._cancelButton.OnClick = {
-            $thisDialog.DialogResult = [DialogResult]::Cancel
-            $thisDialog.Complete($thisDialog.DialogResult)
-        }.GetNewClosure()
-        $this._panel.AddChild($this._cancelButton)
-        
-        # Set initial focus
-        Set-ComponentFocus -Component $this._titleBox
-    }
-    
-    [PmcTask] GetTask() {
-        if ($this.DialogResult -eq [DialogResult]::OK) {
-            # Update task with form values
-            $this._task.Title = $this._titleBox.Text
-            $this._task.Description = $this._descriptionBox.Text
-            $this._task.Status = [TaskStatus]::($this._statusCombo.Items[$this._statusCombo.SelectedIndex])
-            $this._task.Priority = [TaskPriority]::($this._priorityCombo.Items[$this._priorityCombo.SelectedIndex])
-            $this._task.SetProgress($this._progressInput.Value)
-            $this._task.UpdatedAt = [DateTime]::Now
-        }
-        return $this._task
-    }
-}
-
-# Task Delete Confirmation Dialog
-class TaskDeleteDialog : ConfirmDialog { 
-    hidden [PmcTask] $_task
-    
-    TaskDeleteDialog([PmcTask]$task) : base("Confirm Delete", "Are you sure you want to delete this task?") {
-        $this._task = $task
-    }
-    
-    [void] Initialize() {
-        ([ConfirmDialog]$this).Initialize()
-        
-        # Add task details to the message
-        if ($this._task) {
-            $detailsLabel = [LabelComponent]::new("TaskDetails")
-            $detailsLabel.Text = "Task: $($this._task.Title)"
-            $detailsLabel.X = 2
-            $detailsLabel.Y = 4
-            $detailsLabel.ForegroundColor = [ConsoleColor]::Yellow
-            $this._panel.AddChild($detailsLabel)
-        }
-    }
-}
-
-#endregion Dialog Components
-
-#region Navigation Components
+# FIXED: Removed TaskDialog and TaskDeleteDialog from this file to resolve
+# circular dependencies and load order issues. These complex dialogs should
+# be in their own files and loaded after all their component dependencies.
 
 #<!-- END_PAGE: ACO.020 -->

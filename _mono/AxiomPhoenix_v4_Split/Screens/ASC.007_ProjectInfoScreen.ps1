@@ -46,7 +46,7 @@ class ProjectInfoScreen : Screen {
         $this._mainPanel.Title = " Project Details: $($this._project.Name) "
         $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
-        $this._mainPanel.SetBackgroundColor((Get-ThemeColor "Panel.Background" "#1e1e1e"))
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -183,7 +183,7 @@ class ProjectInfoScreen : Screen {
         $instructionLabel.Text = $instructionText
         $instructionLabel.X = 2
         $instructionLabel.Y = $this.Height - 2
-        $instructionLabel.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#666666"))
+        $instructionLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._mainPanel.AddChild($instructionLabel)
 
         Write-Log -Level Debug -Message "ProjectInfoScreen.Initialize: Completed"
@@ -194,14 +194,14 @@ class ProjectInfoScreen : Screen {
         $labelComponent.Text = $label
         $labelComponent.X = 2
         $labelComponent.Y = $y
-        $labelComponent.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
+        $labelComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._detailsScrollPanel.AddChild($labelComponent)
 
         $valueComponent = [LabelComponent]::new("Value_$y")
         $valueComponent.Text = $value
         $valueComponent.X = 25
         $valueComponent.Y = $y
-        $valueComponent.SetForegroundColor((if ($valueColor) { $valueColor } else { Get-ThemeColor "Label.Foreground" "#d4d4d4" }))
+        $valueComponent.ForegroundColor = if ($valueColor) { $valueColor } else { Get-ThemeColor "Label.Foreground" "#d4d4d4" }
         $this._detailsScrollPanel.AddChild($valueComponent)
     }
 
@@ -210,7 +210,7 @@ class ProjectInfoScreen : Screen {
         $labelComponent.Text = $label
         $labelComponent.X = 2
         $labelComponent.Y = $y
-        $labelComponent.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
+        $labelComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
         $this._detailsScrollPanel.AddChild($labelComponent)
     }
 
@@ -225,7 +225,7 @@ class ProjectInfoScreen : Screen {
             $textComponent.Text = $line
             $textComponent.X = 2
             $textComponent.Y = $currentY
-            $textComponent.SetForegroundColor((Get-ThemeColor "Label.Foreground" "#d4d4d4"))
+            $textComponent.ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
             $this._detailsScrollPanel.AddChild($textComponent)
             $currentY++
         }

@@ -23,8 +23,8 @@ using namespace System.Management.Automation
 class Panel : UIElement {
     [string]$Title = ""
     [string]$BorderStyle = "Single"
-    [string]$BorderColor = "#808080"     # FIXED: Changed from ConsoleColor to hex string
-    [string]$BackgroundColor = "#000000" # FIXED: Changed from ConsoleColor to hex string
+    # FIXED: Removed explicit BorderColor and BackgroundColor properties.
+    # They are now correctly inherited from UIElement, allowing for proper theme fallback.
     [bool]$HasBorder = $true
     [string]$LayoutType = "Manual"  # Manual, Vertical, Horizontal, Grid
     [int]$Padding = 0
@@ -49,8 +49,8 @@ class Panel : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            # Get theme-aware background color for the panel
-            $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+            # FIXED: Get theme-aware background color using the effective method from the base class.
+            $bgColor = $this.GetEffectiveBackgroundColor()
             $bgCell = [TuiCell]::new(' ', $bgColor, $bgColor)
             $this._private_buffer.Clear($bgCell)
 
@@ -58,17 +58,17 @@ class Panel : UIElement {
             $this.UpdateContentDimensions()
 
             if ($this.HasBorder) {
-                # Determine border color based on focus state
-                if ($this.IsFocused) { 
-                    $borderColorValue = Get-ThemeColor "Panel.Title" "#007acc"
+                # FIXED: Determine border color based on focus state and effective properties.
+                $borderColorValue = if ($this.IsFocused) { 
+                    Get-ThemeColor "Panel.Title" "#007acc"
                 } else { 
-                    $borderColorValue = Get-ThemeColor "Panel.Border" "#404040"
+                    $this.GetEffectiveBorderColor()
                 }
                 
                 # Draw the panel border and title
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = Get-ThemeColor "Panel.Title" "#007acc" } `
+                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = (Get-ThemeColor "Panel.Title" "#007acc") } `
                     -Title $this.Title
             }
 
@@ -77,7 +77,9 @@ class Panel : UIElement {
         }
         catch {
             # Log or handle rendering errors gracefully
-            # Write-Error "Error rendering Panel '$($this.Name)': $($_.Exception.Message)"
+            if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                Write-Log -Level Error -Message "Error rendering Panel '$($this.Name)': $($_.Exception.Message)"
+            }
         }
     }
 

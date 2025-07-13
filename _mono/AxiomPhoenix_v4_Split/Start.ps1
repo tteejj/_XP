@@ -41,7 +41,9 @@ try {
         }
 
         Write-Host "Loading $folder..." -ForegroundColor Gray
-        $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Sort-Object Name
+        $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | 
+            Where-Object { -not $_.Name.EndsWith('.backup') -and -not $_.Name.EndsWith('.old') } |
+            Sort-Object Name
         foreach ($file in $files) {
             Write-Verbose "  - Dot-sourcing $($file.Name)"
             try {
