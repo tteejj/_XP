@@ -76,18 +76,21 @@ class NewTaskScreen : Screen {
         $this._titleBox.ForegroundColor = Get-ThemeColor "input.foreground" "#d4d4d4"
         $this._titleBox.BorderColor = Get-ThemeColor "input.border" "#404040"
         
-        # Focus visual feedback
+        # Focus visual feedback - store colors before closure
+        $inputFocusBorder = Get-ThemeColor "primary.accent" "#007acc"
+        $inputNormalBorder = Get-ThemeColor "input.border" "#404040"
+        
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#007acc"
+            $this.BorderColor = $inputFocusBorder
             $this.ShowCursor = $true
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#404040"
+            $this.BorderColor = $inputNormalBorder
             $this.ShowCursor = $false
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._formPanel.AddChild($this._titleBox)
         
@@ -114,18 +117,18 @@ class NewTaskScreen : Screen {
         $this._descriptionBox.ForegroundColor = Get-ThemeColor "input.foreground" "#d4d4d4"
         $this._descriptionBox.BorderColor = Get-ThemeColor "input.border" "#404040"
         
-        # Focus visual feedback
+        # Focus visual feedback - reuse same colors
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#007acc"
+            $this.BorderColor = $inputFocusBorder
             $this.ShowCursor = $true
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#404040"
+            $this.BorderColor = $inputNormalBorder
             $this.ShowCursor = $false
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._formPanel.AddChild($this._descriptionBox)
         
@@ -189,16 +192,19 @@ class NewTaskScreen : Screen {
         $this._saveButton.BackgroundColor = Get-ThemeColor "button.primary" "#0078d4"
         $this._saveButton.ForegroundColor = Get-ThemeColor "button.foreground" "#ffffff"
         
-        # Focus visual feedback
+        # Focus visual feedback - store colors before closure
+        $saveButtonFocusBg = Get-ThemeColor "button.primary.hover" "#106ebe"
+        $saveButtonNormalBg = Get-ThemeColor "button.primary" "#0078d4"
+        
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.primary.hover" "#106ebe"
+            $this.BackgroundColor = $saveButtonFocusBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.primary" "#0078d4"
+            $this.BackgroundColor = $saveButtonNormalBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $thisScreen = $this
         $this._saveButton.OnClick = { $thisScreen.SaveTask() }.GetNewClosure()
@@ -215,16 +221,19 @@ class NewTaskScreen : Screen {
         $this._cancelButton.BackgroundColor = Get-ThemeColor "button.danger" "#d13438"
         $this._cancelButton.ForegroundColor = Get-ThemeColor "button.foreground" "#ffffff"
         
-        # Focus visual feedback
+        # Focus visual feedback - store colors before closure
+        $cancelButtonFocusBg = Get-ThemeColor "button.danger.hover" "#a4262c"
+        $cancelButtonNormalBg = Get-ThemeColor "button.danger" "#d13438"
+        
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.danger.hover" "#a4262c"
+            $this.BackgroundColor = $cancelButtonFocusBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.danger" "#d13438"
+            $this.BackgroundColor = $cancelButtonNormalBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._cancelButton.OnClick = { $thisScreen.Cancel() }.GetNewClosure()
         $this._formPanel.AddChild($this._cancelButton)

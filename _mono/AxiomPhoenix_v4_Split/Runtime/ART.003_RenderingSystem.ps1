@@ -89,7 +89,8 @@ function Render-DifferentialBuffer {
             return
         }
         
-        $ansiBuilder = [System.Text.StringBuilder]::new()
+        # PERFORMANCE OPTIMIZATION: Batch consecutive changes to reduce console calls
+        $ansiBuilder = [System.Text.StringBuilder]::new(8192) # Pre-allocate larger buffer
         $lastFg = $null
         $lastBg = $null
         $lastBold = $false
@@ -97,7 +98,9 @@ function Render-DifferentialBuffer {
         $lastUnderline = $false
         $lastStrikethrough = $false
         
-        $needsReset = $true # Start with a reset
+        # Track current run of consecutive changes
+        $currentRun = $null
+        $runCells = [System.Collections.Generic.List[object]]::new()
         
         for ($y = 0; $y -lt $current.Height; $y++) {
             for ($x = 0; $x -lt $current.Width; $x++) {
@@ -105,33 +108,34 @@ function Render-DifferentialBuffer {
                 $previousCell = $previous.GetCell($x, $y)
                 
                 if ($currentCell.DiffersFrom($previousCell)) {
-                    # Move cursor to the correct position
-                    [void]$ansiBuilder.Append("`e[$($y + 1);$($x + 1)H")
-                    
-                    # Check if styling has changed
-                    $styleChanged = ($currentCell.ForegroundColor -ne $lastFg) -or
-                                    ($currentCell.BackgroundColor -ne $lastBg) -or
-                                    ($currentCell.Bold -ne $lastBold) -or
-                                    ($currentCell.Italic -ne $lastItalic) -or
-                                    ($currentCell.Underline -ne $lastUnderline) -or
-                                    ($currentCell.Strikethrough -ne $lastStrikethrough)
-
-                    if ($styleChanged) {
-                        # Use the cell's ToAnsiString method which generates the full sequence
-                        [void]$ansiBuilder.Append($currentCell.ToAnsiString())
+                    # Start new run if we don't have one, or if this cell isn't consecutive
+                    if ($null -eq $currentRun -or $currentRun.Y -ne $y -or $currentRun.X + $currentRun.Length -ne $x) {
+                        # Flush previous run if we have one
+                        if ($null -ne $currentRun) {
+                            FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                        }
                         
-                        # Update last known styles
-                        $lastFg = $currentCell.ForegroundColor
-                        $lastBg = $currentCell.BackgroundColor
-                        $lastBold = $currentCell.Bold
-                        $lastItalic = $currentCell.Italic
-                        $lastUnderline = $currentCell.Underline
-                        $lastStrikethrough = $currentCell.Strikethrough
-                    } else {
-                        # Style is the same, just print the character
-                        [void]$ansiBuilder.Append($currentCell.Char)
+                        # Start new run
+                        $currentRun = @{ X = $x; Y = $y; Length = 0 }
+                        $runCells.Clear()
+                    }
+                    
+                    # Add cell to current run
+                    $runCells.Add($currentCell)
+                    $currentRun.Length++
+                } else {
+                    # End current run if we have one
+                    if ($null -ne $currentRun) {
+                        FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                        $currentRun = $null
                     }
                 }
+            }
+            
+            # End run at end of line
+            if ($null -ne $currentRun) {
+                FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                $currentRun = $null
             }
         }
         
@@ -144,6 +148,98 @@ function Render-DifferentialBuffer {
     catch {
         Write-Error "Differential rendering error: $_"
         throw
+    }
+}
+
+# PERFORMANCE OPTIMIZATION: Helper function to flush a run of consecutive changes
+function FlushRun {
+    [CmdletBinding()]
+    param(
+        [System.Text.StringBuilder]$ansiBuilder,
+        [hashtable]$run,
+        [System.Collections.Generic.List[object]]$cells,
+        [ref]$lastFg,
+        [ref]$lastBg,
+        [ref]$lastBold,
+        [ref]$lastItalic,
+        [ref]$lastUnderline,
+        [ref]$lastStrikethrough
+    )
+    
+    if ($cells.Count -eq 0) { return }
+    
+    # Move cursor to start of run
+    [void]$ansiBuilder.Append("`e[$($run.Y + 1);$($run.X + 1)H")
+    
+    # Optimize for runs with same styling
+    $firstCell = $cells[0]
+    $allSameStyle = $true
+    
+    for ($i = 1; $i -lt $cells.Count; $i++) {
+        $cell = $cells[$i]
+        if ($cell.ForegroundColor -ne $firstCell.ForegroundColor -or
+            $cell.BackgroundColor -ne $firstCell.BackgroundColor -or
+            $cell.Bold -ne $firstCell.Bold -or
+            $cell.Italic -ne $firstCell.Italic -or
+            $cell.Underline -ne $firstCell.Underline -or
+            $cell.Strikethrough -ne $firstCell.Strikethrough) {
+            $allSameStyle = $false
+            break
+        }
+    }
+    
+    if ($allSameStyle -and $cells.Count -gt 1) {
+        # Optimized path: Set style once for entire run  
+        # Use TuiAnsiHelper directly to get just the style sequence
+        $attributes = @{ 
+            Bold=$firstCell.Bold; Italic=$firstCell.Italic; 
+            Underline=$firstCell.Underline; Strikethrough=$firstCell.Strikethrough 
+        }
+        $sequence = [TuiAnsiHelper]::GetAnsiSequence($firstCell.ForegroundColor, $firstCell.BackgroundColor, $attributes)
+        
+        $styleChanged = ($firstCell.ForegroundColor -ne $lastFg.Value) -or
+                       ($firstCell.BackgroundColor -ne $lastBg.Value) -or
+                       ($firstCell.Bold -ne $lastBold.Value) -or
+                       ($firstCell.Italic -ne $lastItalic.Value) -or
+                       ($firstCell.Underline -ne $lastUnderline.Value) -or
+                       ($firstCell.Strikethrough -ne $lastStrikethrough.Value)
+        
+        if ($styleChanged) {
+            [void]$ansiBuilder.Append($sequence)
+            $lastFg.Value = $firstCell.ForegroundColor
+            $lastBg.Value = $firstCell.BackgroundColor
+            $lastBold.Value = $firstCell.Bold
+            $lastItalic.Value = $firstCell.Italic
+            $lastUnderline.Value = $firstCell.Underline
+            $lastStrikethrough.Value = $firstCell.Strikethrough
+        }
+        
+        # Output all characters in run
+        foreach ($cell in $cells) {
+            [void]$ansiBuilder.Append($cell.Char)
+        }
+    } else {
+        # Regular path: Handle each cell individually
+        foreach ($cell in $cells) {
+            $styleChanged = ($cell.ForegroundColor -ne $lastFg.Value) -or
+                           ($cell.BackgroundColor -ne $lastBg.Value) -or
+                           ($cell.Bold -ne $lastBold.Value) -or
+                           ($cell.Italic -ne $lastItalic.Value) -or
+                           ($cell.Underline -ne $lastUnderline.Value) -or
+                           ($cell.Strikethrough -ne $lastStrikethrough.Value)
+            
+            if ($styleChanged) {
+                [void]$ansiBuilder.Append($cell.ToAnsiString())
+                $lastFg.Value = $cell.ForegroundColor
+                $lastBg.Value = $cell.BackgroundColor
+                $lastBold.Value = $cell.Bold
+                $lastItalic.Value = $cell.Italic
+                $lastUnderline.Value = $cell.Underline
+                $lastStrikethrough.Value = $cell.Strikethrough
+            } else {
+                [void]$ansiBuilder.Append($cell.Char)
+            }
+        }
     }
 }
 

@@ -44,7 +44,6 @@ class ProjectInfoScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Project Details: $($this._project.Name) "
-        $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
         $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
@@ -63,7 +62,6 @@ class ProjectInfoScreen : Screen {
         $this._detailsScrollPanel.Width = $detailsWidth
         $this._detailsScrollPanel.Height = $this.Height - 4
         $this._detailsScrollPanel.Title = " General Information "
-        $this._detailsScrollPanel.BorderStyle = "Single"
         $this._detailsScrollPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._detailsScrollPanel.ShowScrollbar = $true
         $this._mainPanel.AddChild($this._detailsScrollPanel)
@@ -75,7 +73,6 @@ class ProjectInfoScreen : Screen {
         $this._tasksPanel.Width = $rightPanelWidth
         $this._tasksPanel.Height = $tasksHeight
         $this._tasksPanel.Title = " Associated Tasks "
-        $this._tasksPanel.BorderStyle = "Single"
         $this._tasksPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._tasksPanel)
 
@@ -86,7 +83,6 @@ class ProjectInfoScreen : Screen {
         $this._filesPanel.Width = $rightPanelWidth
         $this._filesPanel.Height = $filesHeight
         $this._filesPanel.Title = " Client Documents "
-        $this._filesPanel.BorderStyle = "Single"
         $this._filesPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._filesPanel)
 

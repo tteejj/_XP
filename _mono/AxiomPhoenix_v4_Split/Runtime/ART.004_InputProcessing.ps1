@@ -59,12 +59,16 @@ function Process-TuiInput {
     }
     
     # Third priority: Current screen (handles its own focus management)
-    if ($global:TuiState.CurrentScreen) {
-        Write-Log -Level Debug -Message "Routing input to current screen: $($global:TuiState.CurrentScreen.Name)"
-        if ($global:TuiState.CurrentScreen.HandleInput($KeyInfo)) {
+    $navService = $global:TuiState.Services.NavigationService
+    $currentScreen = if ($navService) { $navService.CurrentScreen } else { $null }
+    if ($currentScreen) {
+        Write-Log -Level Debug -Message "Routing input to current screen: $($currentScreen.Name)"
+        if ($currentScreen.HandleInput($KeyInfo)) {
             $global:TuiState.IsDirty = $true
             return
         }
+    } else {
+        Write-Log -Level Warning -Message "No current screen available for input routing"
     }
     
     Write-Log -Level Debug -Message "Input not handled by any component"

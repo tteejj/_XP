@@ -633,7 +633,7 @@ Try typing, navigating, and searching to see the smooth performance!
         $this.UpdateCursorPosition()
     }
     
-    # === INPUT HANDLING (HYBRID MODEL FOR SEARCH, DIRECT FOR EDITING) ===
+    # === INPUT HANDLING (PROPER SCREEN PATTERN) ===
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) {
             Write-Log -Level Warning -Message "TextEditorScreen.HandleInput: Null keyInfo"
@@ -642,17 +642,17 @@ Try typing, navigating, and searching to see the smooth performance!
         
         Write-Log -Level Debug -Message "TextEditorScreen.HandleInput: Key=$($keyInfo.Key), SearchMode=$($this._isSearchMode)"
         
-        # When search panel is open, use hybrid model for Tab navigation
+        # ALWAYS FIRST - Let base handle Tab and component routing
+        if (([Screen]$this).HandleInput($keyInfo)) {
+            return $true
+        }
+        
+        # Handle editor-specific input based on mode
         if ($this._isSearchMode) {
-            # Let base Screen handle Tab navigation between search components
-            if (([Screen]$this).HandleInput($keyInfo)) {
-                return $true
-            }
-            # Handle search-specific shortcuts
             return $this.HandleSearchInput($keyInfo)
         }
         
-        # Main editor input handling
+        # Main editor input handling - only when no components have focus
         $handled = $true
         
         # Ctrl combinations
@@ -808,8 +808,7 @@ Try typing, navigating, and searching to see the smooth performance!
             }
         }
         
-        # Let base Screen handle any unhandled keys (global shortcuts, etc.)
-        return ([Screen]$this).HandleInput($keyInfo)
+        return $false
     }
     
     hidden [bool] HandleSearchInput([System.ConsoleKeyInfo]$keyInfo) {

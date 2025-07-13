@@ -58,6 +58,7 @@ class Screen : UIElement {
     hidden [UIElement]$_focusedChild = $null
     hidden [System.Collections.Generic.List[UIElement]]$_focusableCache = $null
     hidden [bool]$_focusCacheValid = $false
+    hidden [bool]$_collectingFocus = $false  # Prevent recursive collection
     
     hidden [bool] $_isInitialized = $false
     hidden [System.Collections.Generic.Dictionary[string, string]] $EventSubscriptions 
@@ -94,9 +95,13 @@ class Screen : UIElement {
     }
     [void] OnEnter() { 
         # Focus first focusable component when entering screen
+        Write-Log -Level Debug -Message "Screen.OnEnter: Setting initial focus for $($this.Name)"
         $this.InvalidateFocusCache()
+        $focusable = $this.GetFocusableChildren()
+        Write-Log -Level Debug -Message "Screen.OnEnter: Found $($focusable.Count) focusable components"
         $this.FocusFirstChild()
-        # Write-Verbose "OnEnter called for Screen '$($this.Name)': Default (no-op)." 
+        $focused = $this.GetFocusedChild()
+        Write-Log -Level Debug -Message "Screen.OnEnter: Initial focus set to: $(if ($focused) { $focused.Name } else { 'none' })"
     }
     [void] OnExit() { 
         # Write-Verbose "OnExit called for Screen '$($this.Name)': Default (no-op)." 
@@ -111,10 +116,16 @@ class Screen : UIElement {
     }
     
     [bool] SetChildFocus([UIElement]$component) {
-        if ($this._focusedChild -eq $component) { return $true }
+        Write-Log -Level Debug -Message "Screen.SetChildFocus: Attempting to focus $(if ($component) { $component.Name } else { 'null' }) on screen $($this.Name)"
+        
+        if ($this._focusedChild -eq $component) { 
+            Write-Log -Level Debug -Message "Screen.SetChildFocus: Component already has focus"
+            return $true 
+        }
         
         # Blur current component
         if ($null -ne $this._focusedChild) {
+            Write-Log -Level Debug -Message "Screen.SetChildFocus: Blurring current focus: $($this._focusedChild.Name)"
             $this._focusedChild.IsFocused = $false
             $this._focusedChild.OnBlur()
             $this._focusedChild.RequestRedraw()
@@ -123,12 +134,15 @@ class Screen : UIElement {
         # Focus new component
         $this._focusedChild = $component
         if ($null -ne $component) {
+            Write-Log -Level Debug -Message "Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: $($component.IsFocusable), Enabled: $($component.Enabled), Visible: $($component.Visible)"
             if ($component.IsFocusable -and $component.Enabled -and $component.Visible) {
+                Write-Log -Level Debug -Message "Screen.SetChildFocus: Setting focus on $($component.Name)"
                 $component.IsFocused = $true
                 $component.OnFocus()
                 $component.RequestRedraw()
                 return $true
             } else {
+                Write-Log -Level Debug -Message "Screen.SetChildFocus: Component $($component.Name) cannot receive focus"
                 $this._focusedChild = $null
                 return $false
             }
@@ -142,67 +156,166 @@ class Screen : UIElement {
     
     [void] FocusNextChild() {
         $focusable = $this._GetFocusableChildren()
-        if ($focusable.Count -eq 0) { return }
+        Write-Log -Level Debug -Message "navigation.nextComponent: Found $($focusable.Count) focusable components"
+        if ($focusable.Count -eq 0) { 
+            Write-Log -Level Debug -Message "navigation.nextComponent: No focusable components found"
+            return 
+        }
         
         $currentIndex = -1
         if ($null -ne $this._focusedChild) {
             $currentIndex = $focusable.IndexOf($this._focusedChild)
+            Write-Log -Level Debug -Message "navigation.nextComponent: Current focus: $($this._focusedChild.Name)"
+        } else {
+            Write-Log -Level Debug -Message "navigation.nextComponent: No current focus"
         }
         
         $nextIndex = ($currentIndex + 1) % $focusable.Count
-        $this.SetChildFocus($focusable[$nextIndex])
+        $nextComponent = $focusable[$nextIndex]
+        Write-Log -Level Debug -Message "navigation.nextComponent: Attempting to focus $($nextComponent.Name) at index $nextIndex"
+        $this.SetChildFocus($nextComponent)
+        Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $(if ($this._focusedChild) { $this._focusedChild.Name } else { 'none' })"
     }
     
     [void] FocusPreviousChild() {
         $focusable = $this._GetFocusableChildren()
-        if ($focusable.Count -eq 0) { return }
+        Write-Log -Level Debug -Message "navigation.previousComponent: Found $($focusable.Count) focusable components"
+        if ($focusable.Count -eq 0) { 
+            Write-Log -Level Debug -Message "navigation.previousComponent: No focusable components found"
+            return 
+        }
         
         $currentIndex = 0 # Default to 0 if no focus
         if ($null -ne $this._focusedChild) {
             $currentIndex = $focusable.IndexOf($this._focusedChild)
+            Write-Log -Level Debug -Message "navigation.previousComponent: Current focus: $($this._focusedChild.Name)"
+        } else {
+            Write-Log -Level Debug -Message "navigation.previousComponent: No current focus"
         }
         
         $prevIndex = ($currentIndex - 1 + $focusable.Count) % $focusable.Count
-        $this.SetChildFocus($focusable[$prevIndex])
+        $prevComponent = $focusable[$prevIndex]
+        Write-Log -Level Debug -Message "navigation.previousComponent: Attempting to focus $($prevComponent.Name) at index $prevIndex"
+        $this.SetChildFocus($prevComponent)
+        Write-Log -Level Debug -Message "navigation.previousComponent: New focus: $(if ($this._focusedChild) { $this._focusedChild.Name } else { 'none' })"
     }
     
     [void] FocusFirstChild() {
         $focusable = $this._GetFocusableChildren()
+        Write-Log -Level Debug -Message "Screen.FocusFirstChild: Found $($focusable.Count) focusable children"
         if ($focusable.Count -gt 0) {
+            Write-Log -Level Debug -Message "Screen.FocusFirstChild: Attempting to focus first child: $($focusable[0].Name)"
             $this.SetChildFocus($focusable[0])
+        } else {
+            Write-Log -Level Debug -Message "Screen.FocusFirstChild: No focusable children found"
         }
     }
     
+    # PERFORMANCE FIX: Prevent duplicate focus collection with circular reference protection
     hidden [System.Collections.Generic.List[UIElement]] _GetFocusableChildren() {
+        # Prevent recursive calls during focus collection
+        if ($this._collectingFocus) {
+            Write-Log -Level Warning -Message "Screen._GetFocusableChildren: Recursive call detected, returning empty list"
+            return [System.Collections.Generic.List[UIElement]]::new()
+        }
+        
         if (-not $this._focusCacheValid -or $null -eq $this._focusableCache) {
-            $this._focusableCache = [System.Collections.Generic.List[UIElement]]::new()
-            $this._CollectFocusableRecursive($this, $this._focusableCache)
-            
-            # Sort by TabIndex for predictable tab order
-            $sorted = $this._focusableCache | Sort-Object TabIndex
-            $this._focusableCache.Clear()
-            foreach ($item in $sorted) {
-                $this._focusableCache.Add($item)
+            $this._collectingFocus = $true
+            try {
+                $this._focusableCache = [System.Collections.Generic.List[UIElement]]::new()
+                $visitedElements = [System.Collections.Generic.HashSet[UIElement]]::new()
+                $this._CollectFocusableRecursive($this, $this._focusableCache, $visitedElements)
+                
+                # CRITICAL FIX: Use PowerShell-native object identity tracking for reliable deduplication
+                $uniqueTracker = @{}
+                $cleanList = [System.Collections.Generic.List[UIElement]]::new()
+                foreach ($element in $this._focusableCache) {
+                    $objectId = $element.GetHashCode().ToString() + "_" + $element.Name
+                    if (-not $uniqueTracker.ContainsKey($objectId)) {
+                        $uniqueTracker[$objectId] = $true
+                        $cleanList.Add($element)
+                        Write-Log -Level Debug -Message "Screen._GetFocusableChildren: Added unique element: $($element.Name) (ID: $objectId)"
+                    } else {
+                        Write-Log -Level Debug -Message "Screen._GetFocusableChildren: Skipping duplicate element: $($element.Name) (ID: $objectId)"
+                    }
+                }
+                
+                # Sort by TabIndex for predictable tab order
+                $sorted = $cleanList | Sort-Object TabIndex
+                $this._focusableCache.Clear()
+                foreach ($item in $sorted) {
+                    $this._focusableCache.Add($item)
+                }
+                
+                Write-Log -Level Debug -Message "Screen._GetFocusableChildren: Final focus list for $($this.Name) has $($this._focusableCache.Count) unique components"
+                foreach ($component in $this._focusableCache) {
+                    Write-Log -Level Debug -Message "  - Focusable: $($component.Name) (TabIndex: $($component.TabIndex), IsFocusable: $($component.IsFocusable), Visible: $($component.Visible), Enabled: $($component.Enabled))"
+                }
+                
+                $this._focusCacheValid = $true
             }
-            
-            $this._focusCacheValid = $true
+            finally {
+                $this._collectingFocus = $false
+            }
         }
         return $this._focusableCache
     }
     
-    hidden [void] _CollectFocusableRecursive([UIElement]$element, [System.Collections.Generic.List[UIElement]]$result) {
-        # Don't include the screen itself
+    # PERFORMANCE FIX: Add circular reference protection to prevent infinite loops
+    hidden [void] _CollectFocusableRecursive([UIElement]$element, [System.Collections.Generic.List[UIElement]]$result, [System.Collections.Generic.HashSet[UIElement]]$visited) {
+        # Create a simple tracking key using object hash and name to identify unique visits
+        $visitKey = "$($element.GetHashCode())_$($element.Name)"
+        
+        # Check if we've already processed this exact element instance
+        $alreadyVisited = $false
+        foreach ($visitedElement in $visited) {
+            $existingKey = "$($visitedElement.GetHashCode())_$($visitedElement.Name)"
+            if ($visitKey -eq $existingKey) {
+                $alreadyVisited = $true
+                Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Already visited $visitKey, skipping"
+                break
+            }
+        }
+        if ($alreadyVisited) { return }
+        
+        $visited.Add($element) | Out-Null
+        Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Visiting element: $($element.Name) ($visitKey)"
+        
+        # If the current element is focusable, add it.
+        # We must exclude the screen itself from being a focusable child.
         if ($element -ne $this -and $element.IsFocusable -and $element.Visible -and $element.Enabled) {
+            Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Found focusable element: $($element.Name) (TabIndex: $($element.TabIndex))"
             $result.Add($element)
+        } else {
+            Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Skipping element: $($element.Name) - IsFocusable: $($element.IsFocusable), Visible: $($element.Visible), Enabled: $($element.Enabled), IsScreen: $($element -eq $this)"
+        }
+
+        # CRITICAL FIX: Always recurse into the children of the current element,
+        # regardless of whether the element itself is focusable. This allows the
+        # search to find focusable components inside non-focusable containers like Panels.
+        Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Checking $($element.Children.Count) children of $($element.Name)"
+        foreach ($child in $element.Children) {
+            if ($child.Visible -and $child.Enabled) { # Only search visible and enabled branches
+                $this._CollectFocusableRecursive($child, $result, $visited)
+            } else {
+                Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Skipping invisible/disabled child: $($child.Name)"
+            }
         }
         
-        foreach ($child in $element.Children) {
-            $this._CollectFocusableRecursive($child, $result)
-        }
+        # DO NOT REMOVE from visited set - keep permanent record to prevent duplicates
+        # Elements can be reached through multiple paths in complex UI hierarchies
     }
     
     [void] InvalidateFocusCache() {
-        $this._focusCacheValid = $false
+        # Only invalidate if not currently collecting to prevent cascading invalidations
+        if (-not $this._collectingFocus) {
+            $this._focusCacheValid = $false
+        }
+    }
+
+    # Public method for debugging focus issues
+    [System.Collections.Generic.List[UIElement]] GetFocusableChildren() {
+        return $this._GetFocusableChildren()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
@@ -266,6 +379,7 @@ class Screen : UIElement {
             $this.ClearFocus()
             $this._focusableCache = $null
             $this._focusCacheValid = $false
+            $this._collectingFocus = $false
             
             # Screen-specific cleanup: Unsubscribe from events
             foreach ($kvp in $this.EventSubscriptions.GetEnumerator()) {

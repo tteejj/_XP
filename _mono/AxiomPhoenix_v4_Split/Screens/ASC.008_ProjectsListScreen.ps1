@@ -41,7 +41,6 @@ class ProjectsListScreen : Screen {
         $this._mainPanel.Width = $this.Width
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Projects Management "
-        $this._mainPanel.BorderStyle = "Double"
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00d4ff"
         $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._mainPanel)
@@ -55,9 +54,8 @@ class ProjectsListScreen : Screen {
         $this._listPanel.X = 1
         $this._listPanel.Y = 1
         $this._listPanel.Width = $listWidth
-        $this._listPanel.Height = $this.Height - 6  # Leave room for action panel
+        $this._listPanel.Height = $this.Height - 6
         $this._listPanel.Title = " Projects "
-        $this._listPanel.BorderStyle = "Single"
         $this._listPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._listPanel)
         
@@ -68,11 +66,11 @@ class ProjectsListScreen : Screen {
         $this._searchBox.Width = $this._listPanel.Width - 4
         $this._searchBox.Height = 1
         $this._searchBox.Placeholder = "🔍 Search projects..."
-        $this._searchBox.IsFocusable = $true  # HYBRID MODEL: Component handles its own input
+        $this._searchBox.IsFocusable = $true
         $this._searchBox.TabIndex = 0
-        $this._searchBox.BackgroundColor = Get-ThemeColor "Input.Background" "#2d2d30" # Added SetBackgroundColor
-        $this._searchBox.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4" # Added SetForegroundColor
-        $this._searchBox.BorderColor = (Get-ThemeColor "Input.Border" "#404040") # Direct assignment is fine for BorderColor
+        $this._searchBox.BackgroundColor = Get-ThemeColor "Input.Background" "#2d2d30"
+        $this._searchBox.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4"
+        $this._searchBox.BorderColor = Get-ThemeColor "Input.Border" "#404040"
         
         # Add visual focus feedback for search box
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
@@ -104,19 +102,19 @@ class ProjectsListScreen : Screen {
         $this._projectListBox.Width = $this._listPanel.Width - 2
         $this._projectListBox.Height = $this._listPanel.Height - 5
         $this._projectListBox.HasBorder = $false
-        $this._projectListBox.IsFocusable = $true  # HYBRID MODEL: Component handles its own input
+        $this._projectListBox.IsFocusable = $true
         $this._projectListBox.TabIndex = 1
-        $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc" # Direct assignment is fine
-        $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff" # Direct assignment is fine
+        $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+        $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
         
         # Add visual focus feedback for list box
         $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff" # Direct assignment is fine
+            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
             $this.RequestRedraw()
         } -Force
         
         $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "Panel.Border" "#666666" # Direct assignment is fine
+            $this.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
             $this.RequestRedraw()
         } -Force
         
@@ -134,10 +132,9 @@ class ProjectsListScreen : Screen {
         $this._detailPanel.X = $listWidth + 2
         $this._detailPanel.Y = 1
         $this._detailPanel.Width = $detailWidth
-        $this._detailPanel.Height = $this.Height - 6  # Leave room for action panel
+        $this._detailPanel.Height = $this.Height - 6
         $this._detailPanel.Title = " Project Details "
-        $this._detailPanel.BorderStyle = "Single"
-        $this._detailPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666" # Direct assignment is fine
+        $this._detailPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._detailPanel)
         
         # Create detail components
@@ -149,8 +146,7 @@ class ProjectsListScreen : Screen {
         $this._actionPanel.Y = $this.Height - 4
         $this._actionPanel.Width = $this.Width - 2
         $this._actionPanel.Height = 3
-        $this._actionPanel.BorderStyle = "Single"
-        $this._actionPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666" # Direct assignment is fine
+        $this._actionPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
         $this._mainPanel.AddChild($this._actionPanel)
         
         # Action buttons and status
@@ -243,7 +239,7 @@ class ProjectsListScreen : Screen {
         $keyLabel.Text = "Project Key:"
         $keyLabel.X = 2
         $keyLabel.Y = $y
-        $keyLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $keyLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($keyLabel)
         
         $keyValue = [LabelComponent]::new("KeyValue")
@@ -259,13 +255,13 @@ class ProjectsListScreen : Screen {
         $nameLabel.Text = "Name:"
         $nameLabel.X = 2
         $nameLabel.Y = $y
-        $nameLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $nameLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($nameLabel)
         
         $nameValue = [LabelComponent]::new("NameValue")
         $nameValue.X = 18
         $nameValue.Y = $y
-        $nameValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $nameValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($nameValue)
         $this._detailLabels["Name"] = $nameValue
         $y += 2
@@ -275,13 +271,13 @@ class ProjectsListScreen : Screen {
         $ownerLabel.Text = "Owner:"
         $ownerLabel.X = 2
         $ownerLabel.Y = $y
-        $ownerLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $ownerLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($ownerLabel)
         
         $ownerValue = [LabelComponent]::new("OwnerValue")
         $ownerValue.X = 18
         $ownerValue.Y = $y
-        $ownerValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $ownerValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($ownerValue)
         $this._detailLabels["Owner"] = $ownerValue
         $y += 2
@@ -291,7 +287,7 @@ class ProjectsListScreen : Screen {
         $statusLabel.Text = "Status:"
         $statusLabel.X = 2
         $statusLabel.Y = $y
-        $statusLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $statusLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($statusLabel)
         
         $statusValue = [LabelComponent]::new("StatusValue")
@@ -307,13 +303,13 @@ class ProjectsListScreen : Screen {
         $clientLabel.Text = "Client ID:"
         $clientLabel.X = 2
         $clientLabel.Y = $y
-        $clientLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $clientLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($clientLabel)
         
         $clientValue = [LabelComponent]::new("ClientValue")
         $clientValue.X = 18
         $clientValue.Y = $y
-        $clientValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $clientValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($clientValue)
         $this._detailLabels["ClientID"] = $clientValue
         $y += 2
@@ -323,13 +319,13 @@ class ProjectsListScreen : Screen {
         $dueDateLabel.Text = "Due Date:"
         $dueDateLabel.X = 2
         $dueDateLabel.Y = $y
-        $dueDateLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $dueDateLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($dueDateLabel)
         
         $dueDateValue = [LabelComponent]::new("DueDateValue")
         $dueDateValue.X = 18
         $dueDateValue.Y = $y
-        $dueDateValue.SetForegroundColor($valueStyle.ForegroundColor)
+        $dueDateValue.ForegroundColor = $valueStyle.ForegroundColor
         $this._detailPanel.AddChild($dueDateValue)
         $this._detailLabels["DueDate"] = $dueDateValue
         $y += 3
@@ -339,7 +335,7 @@ class ProjectsListScreen : Screen {
         $descLabel.Text = "Description:"
         $descLabel.X = 2
         $descLabel.Y = $y
-        $descLabel.SetForegroundColor($labelStyle.ForegroundColor)
+        $descLabel.ForegroundColor = $labelStyle.ForegroundColor
         $this._detailPanel.AddChild($descLabel)
         $y += 1
         
@@ -349,10 +345,10 @@ class ProjectsListScreen : Screen {
         $this._descriptionBox.Width = $this._detailPanel.Width - 4
         $this._descriptionBox.Height = $this._detailPanel.Height - $y - 2
         $this._descriptionBox.ReadOnly = $true
-        $this._descriptionBox.BorderStyle = "Single"
-        $this._descriptionBox.IsFocusable = $false  # Read-only, no focus needed
-        $this._descriptionBox.BackgroundColor = Get-ThemeColor "textbox.bg" "#2A2A2A" # Added SetBackgroundColor
-        $this._descriptionBox.ForegroundColor = Get-ThemeColor "textbox.fg" "#FFFFFF" # Added SetForegroundColor
+        $this._descriptionBox.IsFocusable = $false
+        $this._descriptionBox.BackgroundColor = Get-ThemeColor "textbox.bg" "#2A2A2A"
+        $this._descriptionBox.ForegroundColor = Get-ThemeColor "textbox.fg" "#FFFFFF"
+        $this._descriptionBox.BorderColor = Get-ThemeColor "Input.Border" "#666666"
         $this._detailPanel.AddChild($this._descriptionBox)
     }
     
@@ -368,11 +364,18 @@ class ProjectsListScreen : Screen {
         
         # Initial display
         $this._searchText = ""
-        $this._searchBox.Text = ""
-        $this.FilterProjects($this._searchText) # Pass the empty string to filter
+        if ($this._searchBox) {
+            $this._searchBox.Text = ""
+        }
+        $this.FilterProjects($this._searchText)
         
         # Call base class to handle focus management
         ([Screen]$this).OnEnter()
+        
+        # GUIDE: Ensure ListBox gets initial focus if no search text
+        if ([string]::IsNullOrEmpty($this._searchText) -and $this._projectListBox.Items.Count -gt 0) {
+            $this.SetChildFocus($this._projectListBox)
+        }
         
         $this.RequestRedraw()
     }
@@ -409,9 +412,9 @@ class ProjectsListScreen : Screen {
         $count = $this._filteredProjects.Count
         $total = $this._allProjects.Count
         if ([string]::IsNullOrWhiteSpace($searchTerm)) {
-            $this._statusLabel.SetText("$count projects")
+            $this._statusLabel.Text = "$count projects"
         } else {
-            $this._statusLabel.SetText("$count of $total")
+            $this._statusLabel.Text = "$count of $total"
         }
         
         # Select first item if available
@@ -430,7 +433,7 @@ class ProjectsListScreen : Screen {
             $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
             # Clear all details
             foreach ($label in $this._detailLabels.Values) {
-                $label.SetText("")
+                $label.Text = ""
             }
             $this._descriptionBox.SetText("")
             return
@@ -439,22 +442,28 @@ class ProjectsListScreen : Screen {
         $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
         
         # Update basic fields
-        $this._detailLabels["Key"].SetText($project.Key)
-        $this._detailLabels["Name"].SetText($project.Name)
-        $this._detailLabels["Owner"].SetText((if ($project.Owner) { $project.Owner } else { "Unassigned" }))
+        $this._detailLabels["Key"].Text = $project.Key
+        $this._detailLabels["Name"].Text = $project.Name
+        
+        # Owner with proper variable assignment
+        $ownerText = "Unassigned"
+        if ($project.Owner) { $ownerText = $project.Owner }
+        $this._detailLabels["Owner"].Text = $ownerText
         
         # Status with color
         $statusText = if ($project.IsActive) { "Active" } else { "Archived" }
-        $this._detailLabels["Status"].SetText($statusText)
+        $this._detailLabels["Status"].Text = $statusText
         $this._detailLabels["Status"].ForegroundColor = if ($project.IsActive) { 
             Get-ThemeColor "Label.Foreground" "#00ff88"
         } else { 
             Get-ThemeColor "Label.Foreground" "#666666"
         }
         
-        # Client ID from metadata
+        # Client ID from metadata with proper variable assignment
         $clientId = $project.GetMetadata("ClientID")
-        $this._detailLabels["ClientID"].SetText((if ($clientId) { $clientId } else { "N/A" }))
+        $clientText = "N/A"
+        if ($clientId) { $clientText = $clientId }
+        $this._detailLabels["ClientID"].Text = $clientText
         
         # Due date
         if ($project.BFDate) {
@@ -469,9 +478,9 @@ class ProjectsListScreen : Screen {
             } else {
                 $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#d4d4d4"
             }
-            $this._detailLabels["DueDate"].SetText($dateText)
+            $this._detailLabels["DueDate"].Text = $dateText
         } else {
-            $this._detailLabels["DueDate"].SetText("Not set")
+            $this._detailLabels["DueDate"].Text = "Not set"
             $this._detailLabels["DueDate"].ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         }
         

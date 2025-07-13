@@ -54,6 +54,7 @@ class TaskListScreen : Screen {
     hidden [string] $_sortBy = "Priority"
     hidden [bool] $_sortDescending = $true
     hidden [string] $_taskChangeSubscriptionId = $null
+    hidden [bool] $_isInitialized = $false
     #endregion
 
     TaskListScreen([object]$serviceContainer) : base("TaskListScreen", $serviceContainer) {
@@ -62,6 +63,12 @@ class TaskListScreen : Screen {
 
     [void] Initialize() {
         Write-Log -Level Debug -Message "TaskListScreen.Initialize: Starting"
+        
+        # Guard against multiple initialization calls
+        if ($this._isInitialized) {
+            Write-Log -Level Debug -Message "TaskListScreen.Initialize: Already initialized, skipping"
+            return
+        }
         
         if (-not $this.ServiceContainer) { 
             Write-Log -Level Error -Message "TaskListScreen.Initialize: ServiceContainer is null!"
@@ -110,16 +117,19 @@ class TaskListScreen : Screen {
         $this._projectButton.IsFocusable = $true
         $this._projectButton.TabIndex = 0
         
-        # Add visual focus feedback
+        # Add visual focus feedback - store colors before closure
+        $buttonFocusedBg = Get-ThemeColor "Button.Focused.Background" "#0e7490"
+        $buttonNormalBg = Get-ThemeColor "Button.Normal.Background" "#007acc"
+        
         $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = (Get-ThemeColor "Button.Focused.Background" "#0e7490")
+            $this.BackgroundColor = $buttonFocusedBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = (Get-ThemeColor "Button.Normal.Background" "#007acc")
+            $this.BackgroundColor = $buttonNormalBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         # Add keyboard handling to ProjectButton  
         $this._projectButton | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
@@ -156,17 +166,21 @@ class TaskListScreen : Screen {
         $this._taskListBox.SelectedForegroundColor = (Get-ThemeColor "List.ItemSelected" "#ffffff")
         $this._taskListBox.ItemForegroundColor = (Get-ThemeColor "List.ItemNormal" "#d4d4d4")
         
-        # Add visual focus feedback for list panel
-        $listPanel = $this._listPanel
+        # Proper visual focus feedback - store colors before closure
+        $listFocusedBg = Get-ThemeColor "List.ItemFocusedBackground" "#0078d4"
+        $listSelectedBg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+        
         $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $listPanel.BorderColor = (Get-ThemeColor "Panel.Title" "#007acc")
+            # Set visual feedback on the component itself
+            $this.SelectedBackgroundColor = $listFocusedBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $listPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#404040")
+            # Reset visual feedback
+            $this.SelectedBackgroundColor = $listSelectedBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         # Add selection change handler to update details
         $thisScreen = $this
@@ -264,20 +278,28 @@ class TaskListScreen : Screen {
         $this._filterBox.IsFocusable = $true
         $this._filterBox.TabIndex = 2
         
-        # Add visual focus feedback for context panel
-        $contextPanel = $this._contextPanel
+        # Proper visual focus feedback - store colors before closure  
         $thisScreen = $this
+        $inputFocusedBorder = Get-ThemeColor "Input.BorderFocused" "#0078d4"
+        $inputNormalBorder = Get-ThemeColor "Input.Border" "#404040"
+        
         $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $contextPanel.BorderColor = (Get-ThemeColor "Panel.Title" "#007acc")
-            $this.ShowCursor = $true
+            # Set visual feedback on the component itself
+            $this.BorderColor = $inputFocusedBorder
+            if ($this.PSObject.Properties.Name -contains 'ShowCursor') {
+                $this.ShowCursor = $true
+            }
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $contextPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#404040")
-            $this.ShowCursor = $false
+            # Reset visual feedback
+            $this.BorderColor = $inputNormalBorder 
+            if ($this.PSObject.Properties.Name -contains 'ShowCursor') {
+                $this.ShowCursor = $false
+            }
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         # Add text change handler to trigger filtering
         $this._filterBox.OnChange = {
@@ -321,6 +343,9 @@ class TaskListScreen : Screen {
         # Initialize empty task lists
         $this._tasks = [System.Collections.Generic.List[PmcTask]]::new()
         $this._filteredTasks = [System.Collections.Generic.List[PmcTask]]::new()
+        
+        # Mark as initialized
+        $this._isInitialized = $true
         
         Write-Log -Level Debug -Message "TaskListScreen.Initialize: Completed"
     }
@@ -616,7 +641,9 @@ class TaskListScreen : Screen {
         $filledWidth = [Math]::Floor($barWidth * $task.Progress / 100)
         $progressBar = "█" * $filledWidth + "░" * ($barWidth - $filledWidth)
         $progressLabel.Text = "Progress: $progressBar $($task.Progress)%"
-        $progressLabel.ForegroundColor = (if ($task.Progress -eq 100) { "#00FF88" } else { "#00BFFF" })
+        $progressColor = "#00BFFF"
+        if ($task.Progress -eq 100) { $progressColor = "#00FF88" }
+        $progressLabel.ForegroundColor = $progressColor
         $panel.AddChild($progressLabel)
         
         $y += 2

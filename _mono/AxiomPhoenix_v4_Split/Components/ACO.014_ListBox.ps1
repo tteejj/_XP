@@ -32,6 +32,14 @@ class ListBox : UIElement {
     [string]$Title = ""
     [scriptblock]$SelectedIndexChanged = $null
     hidden [int]$ScrollOffset = 0
+    
+    # PERFORMANCE OPTIMIZATIONS
+    hidden [hashtable]$_itemRenderCache = @{}
+    hidden [int]$_firstVisibleIndex = 0
+    hidden [int]$_lastVisibleIndex = 0
+    hidden [int]$_lastSelectedIndex = -1
+    hidden [int]$_lastScrollOffset = -1
+    hidden [int]$_cacheVersion = 0
 
     ListBox([string]$name) : base($name) {
         $this.IsFocusable = $true
@@ -42,6 +50,8 @@ class ListBox : UIElement {
 
     [void] AddItem([object]$item) {
         $this.Items.Add($item)
+        $this._itemRenderCache.Clear()
+        $this._cacheVersion = $this.Items.Count
         if ($this.SelectedIndex -eq -1 -and $this.Items.Count -eq 1) {
             $this.SelectedIndex = 0
         }
@@ -50,6 +60,8 @@ class ListBox : UIElement {
 
     [void] ClearItems() {
         $this.Items.Clear()
+        $this._itemRenderCache.Clear()
+        $this._cacheVersion = 0
         $this.SelectedIndex = -1
         $this.ScrollOffset = 0
         $this.RequestRedraw()
@@ -58,78 +70,202 @@ class ListBox : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        # FIXED: Use effective colors from base class
+        # Get background color using the effective color method from the base class
         $bgColor = $this.GetEffectiveBackgroundColor()
+        
+        # Clear buffer with background color
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Draw border if enabled
         if ($this.HasBorder) {
-            # FIXED: Use effective border color from base class
             $borderColor = $this.GetEffectiveBorderColor()
-            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height `
-                -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = $this.BorderStyle; Title = $this.Title }
+            
+            $style = @{ 
+                BorderFG = $borderColor
+                BG = $bgColor
+                BorderStyle = $this.BorderStyle
+                Title = $this.Title 
+            }
+            
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style $style
         }
             
         # Calculate visible area
-        $contentY = if ($this.HasBorder) { 1 } else { 0 }
-        $contentHeight = if ($this.HasBorder) { $this.Height - 2 } else { $this.Height }
-        $contentX = if ($this.HasBorder) { 1 } else { 0 }
-        $contentWidth = if ($this.HasBorder) { $this.Width - 2 } else { $this.Width }
+        $contentY = 1
+        $contentHeight = $this.Height - 2
+        $contentX = 1
+        $contentWidth = $this.Width - 2
+        
+        if (-not $this.HasBorder) {
+            $contentY = 0
+            $contentHeight = $this.Height
+            $contentX = 0
+            $contentWidth = $this.Width
+        }
             
         # Ensure selected item is visible
         $this.EnsureVisible($this.SelectedIndex)
             
-        # Draw items
-        for ($i = 0; $i -lt $contentHeight -and ($i + $this.ScrollOffset) -lt $this.Items.Count; $i++) {
+        # PERFORMANCE: Calculate visible range and check for changes
+        $this._firstVisibleIndex = $this.ScrollOffset
+        $this._lastVisibleIndex = [Math]::Min(
+            $this.ScrollOffset + $contentHeight - 1,
+            $this.Items.Count - 1
+        )
+        
+        $selectionChanged = ($this._lastSelectedIndex -ne $this.SelectedIndex)
+        $scrollChanged = ($this._lastScrollOffset -ne $this.ScrollOffset)
+        
+        # Clear cache if structure changed
+        if ($this.Items.Count -ne $this._cacheVersion) {
+            $this._itemRenderCache.Clear()
+            $this._cacheVersion = $this.Items.Count
+        }
+        
+        # Draw items with optimized rendering
+        $maxIndex = $this.Items.Count
+        for ($i = 0; $i -lt $contentHeight; $i++) {
             $itemIndex = $i + $this.ScrollOffset
-            $item = $this.Items[$itemIndex]
-            $itemText = if ($item -is [string]) { $item } else { $item.ToString() }
+            if ($itemIndex -ge $maxIndex) { break }
             
-            if ($itemText.Length -gt $contentWidth) {
-                $itemText = $itemText.Substring(0, [Math]::Max(0, $contentWidth - 3)) + "..."
-            }
+            # PERFORMANCE: Check if this item needs redrawing
+            $needsRedraw = $scrollChanged -or $this._needs_redraw -or 
+                          ($itemIndex -eq $this.SelectedIndex -and $selectionChanged) -or
+                          ($itemIndex -eq $this._lastSelectedIndex -and $selectionChanged) -or
+                          (-not $this._itemRenderCache.ContainsKey($itemIndex))
             
-            $isSelected = ($itemIndex -eq $this.SelectedIndex)
-            
-            # Use theme colors with fallbacks
-            if ($isSelected -and $this.IsFocused) { 
-                # FIXED: Correctly check for $null properties
-                $fgColor = if ($this.SelectedForegroundColor) { $this.SelectedForegroundColor } else { Get-ThemeColor "List.ItemSelected" "#ffffff" }
-                $itemBgColor = if ($this.SelectedBackgroundColor) { $this.SelectedBackgroundColor } else { Get-ThemeColor "List.ItemSelectedBackground" "#007acc" }
-            } else { 
-                $fgColor = if ($this.ItemForegroundColor) { $this.ItemForegroundColor } else { Get-ThemeColor "List.ItemNormal" "#d4d4d4" }
-                $itemBgColor = $bgColor
-            }
-            
-            # Draw selection background only for the text area if selected and focused
-            if ($isSelected -and $this.IsFocused) {
-                for ($x = $contentX; $x -lt ($contentX + $contentWidth); $x++) {
-                    $this._private_buffer.SetCell($x, $contentY + $i, [TuiCell]::new(' ', $fgColor, $itemBgColor))
+            if ($needsRedraw) {
+                $this.RenderItem($itemIndex, $i, $contentX, $contentY, $contentWidth, $bgColor)
+            } else {
+                # Use cached rendering
+                $cachedInfo = $this._itemRenderCache[$itemIndex]
+                if ($cachedInfo) {
+                    # Apply cached render to buffer
+                    $this.ApplyCachedItem($cachedInfo, $contentX, $contentY + $i, $contentWidth)
                 }
             }
-            
-            # Draw item text
-            Write-TuiText -Buffer $this._private_buffer -X $contentX -Y ($contentY + $i) -Text $itemText `
-                -Style @{ FG = $fgColor; BG = $itemBgColor }
         }
+        
+        # Update tracking variables
+        $this._lastSelectedIndex = $this.SelectedIndex
+        $this._lastScrollOffset = $this.ScrollOffset
             
         # Draw scrollbar if needed
         if ($this.Items.Count -gt $contentHeight) {
-            $scrollbarX = $this.Width - (if ($this.HasBorder) { 2 } else { 1 })
+            $scrollbarX = 0
+            if ($this.HasBorder) {
+                $scrollbarX = $this.Width - 2
+            } else {
+                $scrollbarX = $this.Width - 1
+            }
+            
             $scrollbarHeight = $contentHeight
             $thumbSize = [Math]::Max(1, [int]($scrollbarHeight * $scrollbarHeight / $this.Items.Count))
-            $thumbPos = if ($this.Items.Count -gt $scrollbarHeight) {
-                [int](($scrollbarHeight - $thumbSize) * $this.ScrollOffset / ($this.Items.Count - $scrollbarHeight))
-            } else { 0 }
+            
+            $thumbPos = 0
+            if ($this.Items.Count -gt $scrollbarHeight) {
+                $thumbPos = [int](($scrollbarHeight - $thumbSize) * $this.ScrollOffset / ($this.Items.Count - $scrollbarHeight))
+            }
             
             $scrollbarColor = Get-ThemeColor "list.scrollbar" "#666666"
-            for ($i = 0; $i -lt $scrollbarHeight; $i++) {
-                $char = if ($i -ge $thumbPos -and $i -lt ($thumbPos + $thumbSize)) { '█' } else { '│' }
-                $this._private_buffer.SetCell($scrollbarX, $contentY + $i, 
-                    [TuiCell]::new($char, $scrollbarColor, $bgColor))
+            
+            for ($j = 0; $j -lt $scrollbarHeight; $j++) {
+                $char = '│'
+                if ($j -ge $thumbPos -and $j -lt ($thumbPos + $thumbSize)) {
+                    $char = '█'
+                }
+                $cell = [TuiCell]::new($char, $scrollbarColor, $bgColor)
+                $this._private_buffer.SetCell($scrollbarX, $contentY + $j, $cell)
             }
         }
+        
+        $this._needs_redraw = $false
     }
+
+    # PERFORMANCE: Optimized item rendering with caching
+    [void] RenderItem([int]$itemIndex, [int]$displayIndex, [int]$contentX, [int]$contentY, [int]$contentWidth, [string]$bgColor) {
+        $item = $this.Items[$itemIndex]
+        $itemText = ""
+        
+        if ($item -is [string]) {
+            $itemText = $item
+        } else {
+            $itemText = $item.ToString()
+        }
+        
+        if ($itemText.Length -gt $contentWidth) {
+            $maxLen = $contentWidth - 3
+            if ($maxLen -gt 0) {
+                $itemText = $itemText.Substring(0, $maxLen) + "..."
+            } else {
+                $itemText = "..."
+            }
+        }
+        
+        $isSelected = ($itemIndex -eq $this.SelectedIndex)
+        
+        # Determine colors
+        [string]$fgColor = ""
+        [string]$itemBgColor = ""
+        
+        if ($isSelected -and $this.IsFocused) {
+            if ($this.SelectedForegroundColor) {
+                $fgColor = $this.SelectedForegroundColor
+            } else {
+                $fgColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
+            }
+            
+            if ($this.SelectedBackgroundColor) {
+                $itemBgColor = $this.SelectedBackgroundColor
+            } else {
+                $itemBgColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+            }
+        } else {
+            if ($this.ItemForegroundColor) {
+                $fgColor = $this.ItemForegroundColor
+            } else {
+                $fgColor = Get-ThemeColor "List.ItemNormal" "#d4d4d4"
+            }
+            $itemBgColor = $bgColor
+        }
+        
+        # Cache render info
+        $this._itemRenderCache[$itemIndex] = @{
+            Text = $itemText
+            FgColor = $fgColor
+            BgColor = $itemBgColor
+            IsSelected = $isSelected
+            IsFocused = $this.IsFocused
+        }
+        
+        # Draw selection background
+        if ($isSelected -and $this.IsFocused) {
+            for ($x = $contentX; $x -lt ($contentX + $contentWidth); $x++) {
+                $cell = [TuiCell]::new(' ', $fgColor, $itemBgColor)
+                $this._private_buffer.SetCell($x, $contentY + $displayIndex, $cell)
+            }
+        }
+        
+        # Draw item text
+        $style = @{ FG = $fgColor; BG = $itemBgColor }
+        Write-TuiText -Buffer $this._private_buffer -X $contentX -Y ($contentY + $displayIndex) -Text $itemText -Style $style
+    }
+    
+    [void] ApplyCachedItem([hashtable]$cachedInfo, [int]$x, [int]$y, [int]$width) {
+        # Apply cached colors and text (cache already validated)
+        
+        # Apply cached colors and text
+        if ($cachedInfo.IsSelected -and $cachedInfo.IsFocused) {
+            for ($cx = $x; $cx -lt ($x + $width); $cx++) {
+                $cell = [TuiCell]::new(' ', $cachedInfo.FgColor, $cachedInfo.BgColor)
+                $this._private_buffer.SetCell($cx, $y, $cell)
+            }
+        }
+        
+        $style = @{ FG = $cachedInfo.FgColor; BG = $cachedInfo.BgColor }
+        Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $cachedInfo.Text -Style $style
+    }
+
 
     # FIXED: Add OnFocus and OnBlur for visual feedback
     [void] OnFocus() {
@@ -168,11 +304,15 @@ class ListBox : UIElement {
                 $this.SelectedIndex = $this.Items.Count - 1
             }
             ([ConsoleKey]::PageUp) {
-                $pageSize = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+                $borderOffset = 0
+                if ($this.HasBorder) { $borderOffset = 2 }
+                $pageSize = $this.Height - $borderOffset
                 $this.SelectedIndex = [Math]::Max(0, $this.SelectedIndex - $pageSize)
             }
             ([ConsoleKey]::PageDown) {
-                $pageSize = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+                $borderOffset = 0
+                if ($this.HasBorder) { $borderOffset = 2 }
+                $pageSize = $this.Height - $borderOffset
                 $this.SelectedIndex = [Math]::Min($this.Items.Count - 1, $this.SelectedIndex + $pageSize)
             }
             default {
@@ -185,7 +325,6 @@ class ListBox : UIElement {
             
             # Trigger SelectedIndexChanged event if index changed
             if ($oldIndex -ne $this.SelectedIndex -and $this.SelectedIndexChanged) {
-                # FIXED: Use robust .Invoke() method
                 $this.SelectedIndexChanged.Invoke($this, $this.SelectedIndex)
             }
         }
@@ -196,7 +335,10 @@ class ListBox : UIElement {
     [void] EnsureVisible([int]$index) {
         if ($index -lt 0 -or $index -ge $this.Items.Count) { return }
         
-        $visibleHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+        $borderOffset = 0
+        if ($this.HasBorder) { $borderOffset = 2 }
+        $visibleHeight = $this.Height - $borderOffset
+        
         if ($visibleHeight -le 0) { return }
         
         if ($index -lt $this.ScrollOffset) {

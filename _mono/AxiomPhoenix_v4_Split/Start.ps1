@@ -66,7 +66,7 @@ try {
     $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
     $logger.EnableFileLogging = $true
     $logger.MinimumLevel = "Debug"  # Enable debug logging to see what's happening
-    $logger.EnableConsoleLogging = $false  # Set to true if you want console output
+    $logger.EnableConsoleLogging = $true  # ENABLE CONSOLE LOGGING FOR DEBUGGING
     $container.Register("Logger", $logger)
     
     # Write initial log entry
@@ -101,21 +101,22 @@ try {
     
     Write-Host "Services initialized successfully!" -ForegroundColor Green
 
-    # Initialize global state
-    $global:TuiState.ServiceContainer = $container
-    $global:TuiState.Services = @{
-        Logger = $container.GetService("Logger")
-        EventManager = $container.GetService("EventManager") 
-        ThemeManager = $container.GetService("ThemeManager")
-        DataManager = $container.GetService("DataManager")
-        ActionService = $container.GetService("ActionService")
-        KeybindingService = $container.GetService("KeybindingService")
-        NavigationService = $container.GetService("NavigationService")
-        DialogManager = $container.GetService("DialogManager")
-        ViewDefinitionService = $container.GetService("ViewDefinitionService")
-        FileSystemService = $container.GetService("FileSystemService")
+    # Initialize global state (CRITICAL FIX)
+    $global:TuiState = @{
+        ServiceContainer = $container
+        Services = @{
+            Logger = $container.GetService("Logger")
+            EventManager = $container.GetService("EventManager") 
+            ThemeManager = $container.GetService("ThemeManager")
+            DataManager = $container.GetService("DataManager")
+            ActionService = $container.GetService("ActionService")
+            KeybindingService = $container.GetService("KeybindingService")
+            NavigationService = $container.GetService("NavigationService")
+            DialogManager = $container.GetService("DialogManager")
+            ViewDefinitionService = $container.GetService("ViewDefinitionService")
+            FileSystemService = $container.GetService("FileSystemService")
+        }
     }
-    $global:TuiState.ServiceContainer = $container
 
     # Apply theme and register default actions
     $themeManager = $container.GetService("ThemeManager")

@@ -53,6 +53,26 @@ class DialogManager {
         }
     }
     
+    [bool] HasActiveDialog() {
+        # In window-based model, check if current screen is a Dialog
+        if ($this.NavigationService -and $this.NavigationService.CurrentScreen) {
+            $currentScreen = $this.NavigationService.CurrentScreen
+            return $currentScreen -is [Dialog]
+        }
+        return $false
+    }
+    
+    [object] GetActiveDialog() {
+        # In window-based model, return current screen if it's a Dialog
+        if ($this.NavigationService -and $this.NavigationService.CurrentScreen) {
+            $currentScreen = $this.NavigationService.CurrentScreen
+            if ($currentScreen -is [Dialog]) {
+                return $currentScreen
+            }
+        }
+        return $null
+    }
+    
     [void] ShowAlert([string]$title, [string]$message) {
         # FIXED: Pass the service container to the constructor
         $alert = [AlertDialog]::new("Alert", $this.ServiceContainer)

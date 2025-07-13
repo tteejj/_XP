@@ -274,6 +274,44 @@ class ActionService {
             Category = "Navigation"
             Description = "Go Back"
         })
+
+        # Component navigation actions - work with current screen
+        $this.RegisterAction("navigation.nextComponent", {
+            $navService = $global:TuiState.Services.NavigationService
+            if ($navService -and $navService.CurrentScreen) {
+                Write-Log -Level Debug -Message "navigation.nextComponent: Calling FocusNextChild on $($navService.CurrentScreen.Name)"
+                $focusable = $navService.CurrentScreen.GetFocusableChildren()
+                Write-Log -Level Debug -Message "navigation.nextComponent: Found $($focusable.Count) focusable components"
+                if ($focusable.Count -gt 0) {
+                    foreach ($comp in $focusable) {
+                        Write-Log -Level Debug -Message "  - Focusable: $($comp.Name) (TabIndex: $($comp.TabIndex), IsFocusable: $($comp.IsFocusable), Visible: $($comp.Visible), Enabled: $($comp.Enabled))"
+                    }
+                }
+                $currentFocus = $navService.CurrentScreen.GetFocusedChild()
+                Write-Log -Level Debug -Message "navigation.nextComponent: Current focus: $(if ($currentFocus) { $currentFocus.Name } else { 'none' })"
+                $navService.CurrentScreen.FocusNextChild()
+                $newFocus = $navService.CurrentScreen.GetFocusedChild()
+                Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $(if ($newFocus) { $newFocus.Name } else { 'none' })"
+            }
+        }, @{
+            Category = "Navigation"
+            Description = "Focus Next Component"
+            Hotkey = "Tab"
+        })
+
+        $this.RegisterAction("navigation.previousComponent", {
+            $navService = $global:TuiState.Services.NavigationService
+            if ($navService -and $navService.CurrentScreen) {
+                Write-Log -Level Debug -Message "navigation.previousComponent: Calling FocusPreviousChild on $($navService.CurrentScreen.Name)"
+                $navService.CurrentScreen.FocusPreviousChild()
+                $newFocus = $navService.CurrentScreen.GetFocusedChild()
+                Write-Log -Level Debug -Message "navigation.previousComponent: New focus: $(if ($newFocus) { $newFocus.Name } else { 'none' })"
+            }
+        }, @{
+            Category = "Navigation"
+            Description = "Focus Previous Component"
+            Hotkey = "Shift+Tab"
+        })
     }
 }
 

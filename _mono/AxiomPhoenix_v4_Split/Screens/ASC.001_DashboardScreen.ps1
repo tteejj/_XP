@@ -48,7 +48,7 @@ class MenuListComponent : Component {
             return $false 
         }
         
-        Write-Log -Level Debug -Message "MenuListComponent.HandleInput: Key=$($keyInfo.Key), IsFocused=$($this.IsFocused)"
+        Write-Log -Level Debug -Message "MenuListComponent.HandleInput: Key=$($keyInfo.Key), IsFocused=$($this.IsFocused), SelectedIndex=$($this._selectedIndex)"
         
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
@@ -167,6 +167,7 @@ class DashboardScreen : Screen {
     hidden [Panel] $_mainPanel
     hidden [Panel] $_menuPanel
     hidden [MenuListComponent] $_menuList
+    hidden [bool] $_isInitialized = $false
     
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {
         Write-Log -Level Debug -Message "DashboardScreen: Constructor called"
@@ -174,6 +175,12 @@ class DashboardScreen : Screen {
 
     [void] Initialize() {
         Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting initialization"
+        
+        # Guard against multiple initialization calls
+        if ($this._isInitialized) {
+            Write-Log -Level Debug -Message "DashboardScreen.Initialize: Already initialized, skipping"
+            return
+        }
         
         if (-not $this.ServiceContainer) { 
             Write-Log -Level Error -Message "DashboardScreen.Initialize: ServiceContainer is null!"
@@ -246,21 +253,25 @@ class DashboardScreen : Screen {
         $this._menuList.AddMenuItem("[Q] Quit")
         
         # Set selection handler
+        $screenRef = $this
         $this._menuList.SetOnItemSelected({
             param($index)
-            $this.ExecuteMenuItem($index)
-        })
+            $screenRef.ExecuteMenuItem($index)
+        }.GetNewClosure())
         
-        # PROPER FOCUS HANDLING: Add focus visual feedback with Add-Member -Force
+        # PROPER FOCUS HANDLING: Store colors before closure
+        $menuFocusBorder = Get-ThemeColor "primary.accent" "#0078d4"
+        $menuBlurBorder = Get-ThemeColor "border" "#404040"
+        
         $this._menuList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
+            $this.BorderColor = $menuFocusBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._menuList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "border" "#404040"
+            $this.BorderColor = $menuBlurBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._menuPanel.AddChild($this._menuList)
         
@@ -276,6 +287,9 @@ class DashboardScreen : Screen {
         
         $this._menuList.RequestRedraw()
         
+        # Mark as initialized
+        $this._isInitialized = $true
+        
         Write-Log -Level Debug -Message "DashboardScreen.Initialize: Completed"
     }
 
@@ -289,11 +303,18 @@ class DashboardScreen : Screen {
         
         # Explicitly focus the menu list if nothing is focused
         $focusedChild = $this.GetFocusedChild()
+        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Current focused child: $(if ($focusedChild) { $focusedChild.Name } else { 'none' })"
+        
         if ($null -eq $focusedChild -and $this._menuList) {
             Write-Log -Level Debug -Message "DashboardScreen.OnEnter: No focused child, setting focus to menu list"
-            $this.SetChildFocus($this._menuList)
+            $result = $this.SetChildFocus($this._menuList)
+            Write-Log -Level Debug -Message "DashboardScreen.OnEnter: SetChildFocus result: $result"
+            
+            # Verify focus was set
+            $newFocusedChild = $this.GetFocusedChild()
+            Write-Log -Level Debug -Message "DashboardScreen.OnEnter: New focused child: $(if ($newFocusedChild) { $newFocusedChild.Name } else { 'none' })"
         } else {
-            Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Focused child is $($focusedChild.Name)"
+            Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Focused child is $(if ($focusedChild) { $focusedChild.Name } else { 'none' })"
         }
         
         $this.RefreshThemeColors()
@@ -338,6 +359,10 @@ class DashboardScreen : Screen {
         
         Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Modifiers=$($keyInfo.Modifiers)"
         
+        # Check current focus state
+        $focusedChild = $this.GetFocusedChild()
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Current focused child: $(if ($focusedChild) { $focusedChild.Name } else { 'none' })"
+        
         # ALWAYS FIRST - Let base handle Tab and component routing
         if (([Screen]$this).HandleInput($keyInfo)) {
             Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Base class handled input"
@@ -350,14 +375,14 @@ class DashboardScreen : Screen {
         # Handle direct number key shortcuts (global shortcuts)
         $char = $keyInfo.KeyChar
         switch ($char) {
-            '1' { $this.ExecuteMenuItem(0); return $true }
-            '2' { $this.ExecuteMenuItem(1); return $true }
-            '3' { $this.ExecuteMenuItem(2); return $true }
-            '4' { $this.ExecuteMenuItem(3); return $true }
-            '5' { $this.ExecuteMenuItem(4); return $true }
-            '6' { $this.ExecuteMenuItem(5); return $true }
-            '7' { $this.ExecuteMenuItem(6); return $true }
-            { $_ -eq 'q' -or $_ -eq 'Q' } { $this.ExecuteMenuItem(8); return $true }
+            '1' { Write-Log -Level Debug -Message "Number key 1 pressed"; $this.ExecuteMenuItem(0); return $true }
+            '2' { Write-Log -Level Debug -Message "Number key 2 pressed"; $this.ExecuteMenuItem(1); return $true }
+            '3' { Write-Log -Level Debug -Message "Number key 3 pressed"; $this.ExecuteMenuItem(2); return $true }
+            '4' { Write-Log -Level Debug -Message "Number key 4 pressed"; $this.ExecuteMenuItem(3); return $true }
+            '5' { Write-Log -Level Debug -Message "Number key 5 pressed"; $this.ExecuteMenuItem(4); return $true }
+            '6' { Write-Log -Level Debug -Message "Number key 6 pressed"; $this.ExecuteMenuItem(5); return $true }
+            '7' { Write-Log -Level Debug -Message "Number key 7 pressed"; $this.ExecuteMenuItem(6); return $true }
+            { $_ -eq 'q' -or $_ -eq 'Q' } { Write-Log -Level Debug -Message "Q pressed"; $this.ExecuteMenuItem(8); return $true }
         }
         
         # Handle console number keys

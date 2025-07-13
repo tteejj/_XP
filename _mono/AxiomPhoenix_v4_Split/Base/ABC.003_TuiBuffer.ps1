@@ -1,14 +1,6 @@
 # ==============================================================================
-# Axiom-Phoenix v4.0 - Base Classes (Load First)
-# Core framework classes with NO external dependencies
-# ==============================================================================
-#
-# TABLE OF CONTENTS DIRECTIVE:
-# When modifying this file, ensure page markers remain accurate and update
-# TableOfContents.md to reflect any structural changes.
-#
-# Search for "PAGE: ABC.###" to find specific sections.
-# Each section ends with "END_PAGE: ABC.###"
+# Axiom-Phoenix v4.0 - Performance-Optimized TuiBuffer Class
+# Removes excessive debug logging and adds performance optimizations
 # ==============================================================================
 
 using namespace System.Collections.Generic
@@ -26,6 +18,10 @@ class TuiBuffer {
     [int] $Height            
     [string] $Name            
     [bool] $IsDirty = $true  
+    
+    # Performance tracking
+    hidden [System.Collections.Generic.HashSet[int]]$_dirtyRows = $null
+    hidden [bool]$_trackDirtyRegions = $true
 
     # Constructor with 2 parameters
     TuiBuffer([int]$width, [int]$height) {
@@ -34,6 +30,7 @@ class TuiBuffer {
         $this.Width = $width
         $this.Height = $height
         $this.Name = "Unnamed"
+        $this._dirtyRows = [System.Collections.Generic.HashSet[int]]::new()
         # Initialize cells in a simple way
         $this.InitializeCells()
         # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
@@ -46,6 +43,7 @@ class TuiBuffer {
         $this.Width = $width
         $this.Height = $height
         $this.Name = $name
+        $this._dirtyRows = [System.Collections.Generic.HashSet[int]]::new()
         # Initialize cells in a simple way
         $this.InitializeCells()
         # Write-Verbose "TuiBuffer '$($this.Name)' initialized with dimensions: $($this.Width)x$($this.Height)."
@@ -71,6 +69,10 @@ class TuiBuffer {
             }
         }
         $this.IsDirty = $true
+        $this._dirtyRows.Clear()
+        for ($y = 0; $y -lt $this.Height; $y++) {
+            $this._dirtyRows.Add($y) | Out-Null
+        }
         # Write-Verbose "TuiBuffer '$($this.Name)' cleared with specified cell."
     }
 
@@ -83,14 +85,22 @@ class TuiBuffer {
         if ($x -ge 0 -and $x -lt $this.Width -and $y -ge 0 -and $y -lt $this.Height) {
             $this.Cells[$y, $x] = $cell
             $this.IsDirty = $true
+            # Track which rows are dirty for optimized rendering
+            if ($this._trackDirtyRegions) {
+                $this._dirtyRows.Add($y) | Out-Null
+            }
         } else {
             Write-Log -Level Warning -Message "Attempted to set cell out of bounds in TuiBuffer '$($this.Name)': ($x, $y) is outside 0..$($this.Width-1), 0..$($this.Height-1). Cell: '$($cell.Char)'."
         }
     }
 
+    # PERFORMANCE OPTIMIZATION: Batch string writing to reduce logging overhead
     [void] WriteString([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
         if ([string]::IsNullOrEmpty($text) -or $y -lt 0 -or $y -ge $this.Height) {
-            Write-Log -Level Debug -Message "WriteString: Skipped for buffer '$($this.Name)' due to empty text or out-of-bounds Y."
+            # Only log significant issues, not empty strings (common case)
+            if (-not [string]::IsNullOrEmpty($text)) {
+                Write-Log -Level Debug -Message "WriteString: Skipped for buffer '$($this.Name)' due to out-of-bounds Y."
+            }
             return
         }
         
@@ -116,24 +126,61 @@ class TuiBuffer {
             $currentX++
         }
         $this.IsDirty = $true
-        Write-Log -Level Debug -Message "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
+        # PERFORMANCE CRITICAL: Removed debug logging that was called thousands of times per frame
+        # Original line: Write-Log -Level Debug -Message "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
     }
 
+    # PERFORMANCE OPTIMIZATION: Smart blending that skips empty cells
     [void] BlendBuffer([object]$other, [int]$offsetX, [int]$offsetY) {
-        for ($y = 0; $y -lt $other.Height; $y++) {
-            for ($x = 0; $x -lt $other.Width; $x++) {
+        # Early exit if source buffer is empty or completely out of bounds
+        if ($null -eq $other -or 
+            $offsetX -ge $this.Width -or $offsetY -ge $this.Height -or
+            $offsetX + $other.Width -le 0 -or $offsetY + $other.Height -le 0) {
+            return
+        }
+        
+        # Calculate clipped bounds to avoid unnecessary iterations
+        $startX = [Math]::Max(0, -$offsetX)
+        $endX = [Math]::Min($other.Width, $this.Width - $offsetX)
+        $startY = [Math]::Max(0, -$offsetY)
+        $endY = [Math]::Min($other.Height, $this.Height - $offsetY)
+        
+        for ($y = $startY; $y -lt $endY; $y++) {
+            for ($x = $startX; $x -lt $endX; $x++) {
                 $targetX = $offsetX + $x
                 $targetY = $offsetY + $y
-                if ($targetX -ge 0 -and $targetX -lt $this.Width -and $targetY -ge 0 -and $targetY -lt $this.Height) {
-                    $sourceCell = $other.GetCell($x, $y)
-                    $targetCell = $this.GetCell($targetX, $targetY)
-                    $blendedCell = $targetCell.BlendWith($sourceCell)
-                    $this.SetCell($targetX, $targetY, $blendedCell)
+                
+                $sourceCell = $other.GetCell($x, $y)
+                # Skip blending empty/default cells for performance
+                if ($sourceCell.Char -eq ' ' -and $sourceCell.Background -eq "#000000") {
+                    continue
                 }
+                
+                $targetCell = $this.GetCell($targetX, $targetY)
+                $blendedCell = $targetCell.BlendWith($sourceCell)
+                $this.SetCell($targetX, $targetY, $blendedCell)
             }
         }
         $this.IsDirty = $true
         # Write-Verbose "BlendBuffer: Blended buffer '$($other.Name)' onto '$($this.Name)' at ($offsetX, $offsetY)."
+    }
+
+    # Get only dirty rows for optimized rendering
+    [int[]] GetDirtyRows() {
+        if ($this._trackDirtyRegions) {
+            return @($this._dirtyRows)
+        }
+        # If not tracking, assume all rows are dirty
+        $allRows = @()
+        for ($i = 0; $i -lt $this.Height; $i++) {
+            $allRows += $i
+        }
+        return $allRows
+    }
+    
+    [void] ClearDirtyTracking() {
+        $this._dirtyRows.Clear()
+        $this.IsDirty = $false
     }
 
     [TuiBuffer] GetSubBuffer([int]$x, [int]$y, [int]$width, [int]$height) {
@@ -151,60 +198,91 @@ class TuiBuffer {
     }
 
     [void] Resize([int]$newWidth, [int]$newHeight) {
-        if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "New width must be positive.") }
-        if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "New height must be positive.") }
+        if ($newWidth -le 0) { throw [System.ArgumentOutOfRangeException]::new("newWidth", "Width must be positive.") }
+        if ($newHeight -le 0) { throw [System.ArgumentOutOfRangeException]::new("newHeight", "Height must be positive.") }
+        
+        # Don't resize if dimensions haven't changed
+        if ($this.Width -eq $newWidth -and $this.Height -eq $newHeight) {
+            return
+        }
+        
+        # Save old buffer content
         $oldCells = $this.Cells
         $oldWidth = $this.Width
         $oldHeight = $this.Height
+        
+        # Update dimensions and reinitialize
         $this.Width = $newWidth
         $this.Height = $newHeight
-        # Create new 2D array using helper method
         $this.InitializeCells()
+        
+        # Copy over existing content (clipped to new dimensions)
         $copyWidth = [Math]::Min($oldWidth, $newWidth)
         $copyHeight = [Math]::Min($oldHeight, $newHeight)
+        
         for ($y = 0; $y -lt $copyHeight; $y++) {
             for ($x = 0; $x -lt $copyWidth; $x++) {
                 $this.Cells[$y, $x] = $oldCells[$y, $x]
             }
         }
+        
         $this.IsDirty = $true
-        # Write-Verbose "TuiBuffer '$($this.Name)' resized from $($oldWidth)x$($oldHeight) to $($newWidth)x$($newHeight)."
+        $this._dirtyRows.Clear()
+        for ($y = 0; $y -lt $this.Height; $y++) {
+            $this._dirtyRows.Add($y) | Out-Null
+        }
+        
+        Write-Verbose "TuiBuffer '$($this.Name)' resized from $($oldWidth)x$($oldHeight) to $($newWidth)x$($newHeight)."
+    }
+    
+    # PERFORMANCE FIX: Add missing FillRect method
+    [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$fillChar, [hashtable]$style) {
+        if ($width -le 0 -or $height -le 0) { return }
+        
+        # Extract style properties
+        $fg = if ($style.ContainsKey('FG')) { $style['FG'] } else { "#FFFFFF" }
+        $bg = if ($style.ContainsKey('BG')) { $style['BG'] } else { "#000000" }
+        $bold = if ($style.ContainsKey('Bold')) { [bool]$style['Bold'] } else { $false }
+        $italic = if ($style.ContainsKey('Italic')) { [bool]$style['Italic'] } else { $false }
+        $underline = if ($style.ContainsKey('Underline')) { [bool]$style['Underline'] } else { $false }
+        $strikethrough = if ($style.ContainsKey('Strikethrough')) { [bool]$style['Strikethrough'] } else { $false }
+        
+        # Fill the rectangle
+        for ($fy = $y; $fy -lt ($y + $height); $fy++) {
+            for ($fx = $x; $fx -lt ($x + $width); $fx++) {
+                if ($fx -ge 0 -and $fx -lt $this.Width -and $fy -ge 0 -and $fy -lt $this.Height) {
+                    $cell = [TuiCell]::new($fillChar, $fg, $bg, $bold, $italic, $underline, $strikethrough)
+                    $this.SetCell($fx, $fy, $cell)
+                }
+            }
+        }
     }
 
     [string] ToString() {
-        return "TuiBuffer(Name='$($this.Name)', Width=$($this.Width), Height=$($this.Height), IsDirty=$($this.IsDirty))"
-    }
-
-    # Additional helper methods needed by rendering pipeline
-    [void] DrawText([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
-        $this.WriteString($x, $y, $text, $style)
+        return "TuiBuffer(Name='$($this.Name)', Size=$($this.Width)x$($this.Height), Dirty=$($this.IsDirty))"
     }
     
-    [void] DrawBox([int]$x, [int]$y, [int]$width, [int]$height, [hashtable]$style = @{}) {
-        # This will now internally call the new Write-TuiBox function in AllFunctions.ps1
-        # It's better to delegate complex drawing like boxes to the global functions.
-        Write-TuiBox -Buffer $this -X $x -Y $y -Width $width -Height $height -Style $style
-    }
-    
-    [void] FillRect([int]$x, [int]$y, [int]$width, [int]$height, [char]$char, [hashtable]$style = @{}) {
-        # Create a single character string and use WriteString to fill the rectangle
-        # This simplifies the logic by leveraging WriteString's styling capabilities.
-        $charString = "$char" # Convert char to string
-        for ($py = $y; $py -lt $y + $height; $py++) {
-            # Write a line of characters
-            $this.WriteString($x, $py, $charString * $width, $style)
-        }
-    }
-    
+    # PERFORMANCE FIX: Add Clone method for efficient buffer copying
     [TuiBuffer] Clone() {
-        $clone = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name)_Clone")
+        $clone = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Clone")
+        
+        # Copy all cells
         for ($y = 0; $y -lt $this.Height; $y++) {
             for ($x = 0; $x -lt $this.Width; $x++) {
-                $clone.Cells[$y, $x] = [TuiCell]::new($this.Cells[$y, $x])
+                $sourceCell = $this.GetCell($x, $y)
+                $clone.SetCell($x, $y, [TuiCell]::new($sourceCell))
             }
         }
+        
+        # Copy state
+        $clone.IsDirty = $this.IsDirty
+        if ($this._trackDirtyRegions) {
+            foreach ($row in $this._dirtyRows) {
+                $clone._dirtyRows.Add($row) | Out-Null
+            }
+        }
+        
         return $clone
     }
 }
 #endregion
-#<!-- END_PAGE: ABC.003 -->

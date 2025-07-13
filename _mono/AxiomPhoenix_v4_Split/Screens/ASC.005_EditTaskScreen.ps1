@@ -70,7 +70,6 @@ class EditTaskScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " ╔═ Edit Task ═╗ "
         $this._mainPanel.BorderStyle = "Double"
-        # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._mainPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"
         $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#0A0A0A"
         $this.AddChild($this._mainPanel)
@@ -83,7 +82,6 @@ class EditTaskScreen : Screen {
         $this._formPanel.Height = $this.Height - 5  # Leave room for status bar
         $this._formPanel.Title = " Task Details "
         $this._formPanel.BorderStyle = "Single"
-        # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._formPanel.BorderColor = Get-ThemeColor "Panel.Border" "#333333"
         $this._mainPanel.AddChild($this._formPanel)
         
@@ -92,6 +90,14 @@ class EditTaskScreen : Screen {
         $leftColumnX = 2
         $rightColumnX = [Math]::Floor($contentWidth / 2) + 2
         $fieldWidth = [Math]::Floor($contentWidth / 2) - 2
+        
+        # Store common theme colors for all inputs
+        $inputFocusBorder = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+        $inputNormalBorder = Get-ThemeColor "Input.Border" "#444444"
+        $buttonFocusBg = Get-ThemeColor "Button.Focused.Background" "#1976D2"
+        $buttonNormalBg = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
+        $buttonDangerFocusBg = Get-ThemeColor "Button.Focused.Background" "#D32F2F"
+        $buttonDangerNormalBg = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
         
         $y = 2
         
@@ -112,23 +118,20 @@ class EditTaskScreen : Screen {
         $this._titleBox.Text = $this._task.Title
         $this._titleBox.IsFocusable = $true
         $this._titleBox.TabIndex = 0
-        # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._titleBox.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         
-        # Add focus visual feedback
+        # Add focus visual feedback - FIXED SYNTAX
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine as TextBoxComponent does not have a SetBorderColor method.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+            $this.BorderColor = $inputFocusBorder
             $this.ShowCursor = $true
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
+            $this.BorderColor = $inputNormalBorder
             $this.ShowCursor = $false
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._formPanel.AddChild($this._titleBox)
         
@@ -151,23 +154,20 @@ class EditTaskScreen : Screen {
         $this._descriptionBox.Text = $this._task.Description
         $this._descriptionBox.IsFocusable = $true
         $this._descriptionBox.TabIndex = 1
-        # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._descriptionBox.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         
-        # Add focus visual feedback
+        # Add focus visual feedback - FIXED SYNTAX
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+            $this.BorderColor = $inputFocusBorder
             $this.ShowCursor = $true
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
+            $this.BorderColor = $inputNormalBorder
             $this.ShowCursor = $false
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._formPanel.AddChild($this._descriptionBox)
         
@@ -188,7 +188,6 @@ class EditTaskScreen : Screen {
         $this._statusList.Width = $fieldWidth
         $this._statusList.Height = 6
         $this._statusList.HasBorder = $true
-        # ListBox inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._statusList.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         $this._statusList.AddItem("○ Pending")
         $this._statusList.AddItem("◐ InProgress")
@@ -198,18 +197,16 @@ class EditTaskScreen : Screen {
         $this._statusList.IsFocusable = $true
         $this._statusList.TabIndex = 2
         
-        # Add focus visual feedback  
+        # Add focus visual feedback - FIXED SYNTAX
         $this._statusList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+            $this.BorderColor = $inputFocusBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._statusList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
+            $this.BorderColor = $inputNormalBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._formPanel.AddChild($this._statusList)
         
@@ -227,7 +224,6 @@ class EditTaskScreen : Screen {
         $this._priorityList.Width = $fieldWidth
         $this._priorityList.Height = 5
         $this._priorityList.HasBorder = $true
-        # ListBox inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._priorityList.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         $this._priorityList.AddItem("↓ Low")
         $this._priorityList.AddItem("- Medium")
@@ -236,18 +232,16 @@ class EditTaskScreen : Screen {
         $this._priorityList.IsFocusable = $true
         $this._priorityList.TabIndex = 3
         
-        # Add focus visual feedback
+        # Add focus visual feedback - FIXED SYNTAX
         $this._priorityList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+            $this.BorderColor = $inputFocusBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._priorityList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
+            $this.BorderColor = $inputNormalBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._formPanel.AddChild($this._priorityList)
         
@@ -271,25 +265,23 @@ class EditTaskScreen : Screen {
         $this._progressBox.MaxLength = 3
         $this._progressBox.IsFocusable = $true
         $this._progressBox.TabIndex = 4
-        # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._progressBox.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         
-        # Add focus visual feedback
+        # Add focus visual feedback - FIXED SYNTAX
         $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+            $this.BorderColor = $inputFocusBorder
             $this.ShowCursor = $true
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
+            $this.BorderColor = $inputNormalBorder
             $this.ShowCursor = $false
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         # Add progress bar update when text changes
+        $screenRef = $this
         $this._progressBox | Add-Member -MemberType ScriptMethod -Name OnTextChanged -Value {
             $parent = $this.Parent
             if ($parent) {
@@ -327,24 +319,21 @@ class EditTaskScreen : Screen {
         $this._projectList.Width = $fieldWidth
         $this._projectList.Height = 5
         $this._projectList.HasBorder = $true
-        # ListBox inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
         $this._projectList.BorderColor = Get-ThemeColor "Input.Border" "#444444"
         $this._projectList.AddItem("None")
         $this._projectList.IsFocusable = $true
         $this._projectList.TabIndex = 5
         
-        # Add focus visual feedback
+        # Add focus visual feedback - FIXED SYNTAX
         $this._projectList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+            $this.BorderColor = $inputFocusBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._projectList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
+            $this.BorderColor = $inputNormalBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._formPanel.AddChild($this._projectList)
         
@@ -372,16 +361,16 @@ class EditTaskScreen : Screen {
         $this._saveButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
         $this._saveButton.ForegroundColor = "#FFFFFF"
         
-        # Add focus visual feedback and click handler
+        # Add focus visual feedback and click handler - FIXED SYNTAX
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#1976D2"
+            $this.BackgroundColor = $buttonFocusBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
+            $this.BackgroundColor = $buttonNormalBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._saveButton.OnClick = { 
             $screen = $this.Parent.Parent
@@ -401,16 +390,16 @@ class EditTaskScreen : Screen {
         $this._cancelButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
         $this._cancelButton.ForegroundColor = "#FFFFFF"
         
-        # Add focus visual feedback and click handler
+        # Add focus visual feedback and click handler - FIXED SYNTAX
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#D32F2F"
+            $this.BackgroundColor = $buttonDangerFocusBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
+            $this.BackgroundColor = $buttonDangerNormalBg
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._cancelButton.OnClick = {
             $screen = $this.Parent.Parent

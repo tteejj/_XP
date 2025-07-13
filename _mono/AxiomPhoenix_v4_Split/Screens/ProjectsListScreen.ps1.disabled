@@ -1,0 +1,6 @@
+# ==============================================================================
+# Axiom-Phoenix v4.1 - Projects List Screen with Performance Optimizations
+# Applied: Dirty tracking, viewport culling, caching, smart updates
+# ==============================================================================
+
+using namespace

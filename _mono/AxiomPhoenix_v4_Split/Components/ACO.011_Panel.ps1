@@ -59,10 +59,9 @@ class Panel : UIElement {
 
             if ($this.HasBorder) {
                 # FIXED: Determine border color based on focus state and effective properties.
-                $borderColorValue = if ($this.IsFocused) { 
-                    Get-ThemeColor "Panel.Title" "#007acc"
-                } else { 
-                    $this.GetEffectiveBorderColor()
+                $borderColorValue = $this.GetEffectiveBorderColor()
+                if ($this.IsFocused) {
+                    $borderColorValue = Get-ThemeColor "Panel.Title" "#007acc"
                 }
                 
                 # Draw the panel border and title
@@ -149,7 +148,8 @@ class Panel : UIElement {
     
     # Method to update content dimensions based on border and padding
     [void] UpdateContentDimensions() {
-        $borderSize = if ($this.HasBorder) { 1 } else { 0 }
+        $borderSize = 0
+        if ($this.HasBorder) { $borderSize = 1 }
         
         # Content area starts after border and padding
         $this.ContentX = $borderSize + $this.Padding

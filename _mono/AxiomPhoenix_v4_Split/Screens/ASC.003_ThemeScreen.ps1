@@ -181,7 +181,7 @@ class ThemeScreen : Screen {
         $this._titleLabel = [LabelComponent]::new("Title")
         $this._titleLabel.X = 2
         $this._titleLabel.Y = 1
-        $this._titleLabel.SetText("Select a theme for your terminal experience") # Use SetText
+        $this._titleLabel.Text = "Select a theme for your terminal experience"
         $this._titleLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
         $this._mainPanel.AddChild($this._titleLabel)
         
@@ -242,7 +242,7 @@ class ThemeScreen : Screen {
         $this._descriptionLabel = [LabelComponent]::new("Description")
         $this._descriptionLabel.X = 2
         $this._descriptionLabel.Y = 1
-        $this._descriptionLabel.SetText("") # Use SetText
+        $this._descriptionLabel.Text = ""
         # Don't set colors during initialization - UpdatePreview will handle it
         $this._previewPanel.AddChild($this._descriptionLabel)
         
@@ -252,7 +252,7 @@ class ThemeScreen : Screen {
         $this._previewTextLabel = [LabelComponent]::new("PreviewText")
         $this._previewTextLabel.X = 2
         $this._previewTextLabel.Y = $previewY
-        $this._previewTextLabel.SetText("This is sample text in the selected theme") # Use SetText
+        $this._previewTextLabel.Text = "This is sample text in the selected theme"
         # Don't set colors during initialization
         $this._previewPanel.AddChild($this._previewTextLabel)
         
@@ -261,7 +261,7 @@ class ThemeScreen : Screen {
         $this._previewButtonLabel = [LabelComponent]::new("PreviewButton")
         $this._previewButtonLabel.X = 2
         $this._previewButtonLabel.Y = $previewY
-        $this._previewButtonLabel.SetText(" [Sample Button] ") # Use SetText
+        $this._previewButtonLabel.Text = " [Sample Button] "
         # Don't set colors during initialization
         $this._previewPanel.AddChild($this._previewButtonLabel)
         
@@ -270,7 +270,7 @@ class ThemeScreen : Screen {
         $this._previewListLabel = [LabelComponent]::new("PreviewList")
         $this._previewListLabel.X = 2
         $this._previewListLabel.Y = $previewY
-        $this._previewListLabel.SetText("> Selected List Item") # Use SetText
+        $this._previewListLabel.Text = "> Selected List Item"
         # Don't set colors during initialization
         $this._previewPanel.AddChild($this._previewListLabel)
         
@@ -278,7 +278,7 @@ class ThemeScreen : Screen {
         $this._statusLabel = [LabelComponent]::new("Status")
         $this._statusLabel.X = 2
         $this._statusLabel.Y = $this.Height - 3
-        $this._statusLabel.SetText("Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel") # Use SetText
+        $this._statusLabel.Text = "Tab: Focus | ↑↓ Navigate | Enter: Apply | P: Preview | Esc: Cancel"
         $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._mainPanel.AddChild($this._statusLabel)
         
@@ -312,7 +312,7 @@ class ThemeScreen : Screen {
             $selectedTheme = $this._themes[$selectedIndex] # Fixed Pattern 10
             
             # Update description
-            $this._descriptionLabel.SetText($selectedTheme.Description) # Use SetText
+            $this._descriptionLabel.Text = $selectedTheme.Description
             $this._descriptionLabel.ForegroundColor = $selectedTheme.Colors["Foreground"]
             
             # Update preview elements with theme colors

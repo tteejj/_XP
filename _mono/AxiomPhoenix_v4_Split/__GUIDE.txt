@@ -1,0 +1,223 @@
+5. CRITICAL: No Inline If Expressions in Class Methods
+
+# WRONG - These break PowerShell class execution context
+$pageSize = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+$visibleHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+$result = $this.Calculate(if ($condition) { $value1 } else { $value2 })
+
+# RIGHT - Use proper variable assignments
+$borderOffset = 0
+if ($this.HasBorder) { $borderOffset = 2 }
+$pageSize = $this.Height - $borderOffset
+
+# NEVER use ternary-style if expressions within parentheses in class methods!
+# They corrupt the PowerShell execution context and cause "The term 'if' is not recognized" errors.
+ADD TO COMMON FIXES SECTION:
+"The term 'if' is not recognized"
+Remove all inline if expressions from class methods
+Use proper variable assignments instead
+Example: Replace (if ($condition) { 2 } else { 0 }) with separate if statement
+
+
+
+
+
+Axiom-Phoenix v4.1 - THE ACTUAL WORKING GUIDE
+Core Rules That Actually Work
+1. Color Setting - Use Properties ONLY
+powershell# WRONG - These methods don't exist
+$component.SetBackgroundColor("#123456")
+
+# RIGHT - Use properties
+$component.BackgroundColor = "#123456"
+$component.ForegroundColor = Get-ThemeColor "foreground"
+$component.BorderColor = Get-ThemeColor "border"
+2. Components MUST Be Focusable
+powershell# WRONG - Never do this
+$textBox.IsFocusable = $false
+
+# RIGHT - Interactive components are focusable
+$textBox.IsFocusable = $true
+$textBox.TabIndex = 0  # Set order: 0, 1, 2, etc.
+3. Override Focus Methods with Add-Member
+powershell# After creating any focusable component:
+$component | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+    $this.BorderColor = Get-ThemeColor "primary.accent"
+    $this.ShowCursor = $true  # For text inputs only
+    $this.RequestRedraw()
+} -Force
+
+$component | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+    $this.BorderColor = Get-ThemeColor "border"
+    $this.ShowCursor = $false
+    $this.RequestRedraw()
+} -Force
+4. Screen HandleInput Pattern
+powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    if ($null -eq $keyInfo) { return $false }
+    
+    # ALWAYS FIRST - Let base handle Tab and component routing
+    if (([Screen]$this).HandleInput($keyInfo)) {
+        return $true
+    }
+    
+    # ONLY screen-level shortcuts here
+    switch ($keyInfo.Key) {
+        ([ConsoleKey]::Escape) {
+            $navService = $this.ServiceContainer.GetService("NavigationService")
+            if ($navService.CanGoBack()) {
+                $navService.GoBack()
+            }
+            return $true
+        }
+        ([ConsoleKey]::F5) {
+            $this.RefreshData()
+            return $true
+        }
+    }
+    
+    return $false
+}
+Step-by-Step Migration for ANY Screen
+Step 1: Remove ALL Manual Focus Tracking
+DELETE these lines:
+
+hidden [string] $_activeComponent = "list"
+hidden [int] $_focusIndex = 0
+hidden [string[]] $_fieldOrder = @()
+Any _UpdateVisualFocus() method
+Any manual Tab handling
+
+Step 2: Fix Component Creation in Initialize()
+powershell[void] Initialize() {
+    # Create component
+    $this._titleBox = [TextBoxComponent]::new("TitleBox")
+    
+    # Make it focusable
+    $this._titleBox.IsFocusable = $true
+    $this._titleBox.TabIndex = 0  # First in tab order
+    
+    # Set colors with PROPERTIES
+    $this._titleBox.BackgroundColor = Get-ThemeColor "Input.Background"
+    $this._titleBox.ForegroundColor = Get-ThemeColor "Input.Foreground"
+    $this._titleBox.BorderColor = Get-ThemeColor "Input.Border"
+    
+    # Add focus visual feedback
+    $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+        $this.BorderColor = Get-ThemeColor "primary.accent"
+        $this.ShowCursor = $true
+        $this.RequestRedraw()
+    } -Force
+    
+    $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+        $this.BorderColor = Get-ThemeColor "border"
+        $this.ShowCursor = $false
+        $this.RequestRedraw()
+    } -Force
+    
+    # Position and add to screen
+    $this._titleBox.X = 2
+    $this._titleBox.Y = 3
+    $this._titleBox.Width = 40
+    $this.AddChild($this._titleBox)
+}
+Step 3: Fix OnEnter Method
+powershell[void] OnEnter() {
+    # Your initialization code...
+    
+    # MUST call base to set initial focus
+    ([Screen]$this).OnEnter()
+}
+Step 4: Fix HandleInput Method
+powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    if ($null -eq $keyInfo) { return $false }
+    
+    # Base class handles Tab and routes to components
+    if (([Screen]$this).HandleInput($keyInfo)) {
+        return $true
+    }
+    
+    # Only screen shortcuts
+    if ($keyInfo.Key -eq [ConsoleKey]::Escape) {
+        # Navigate back
+        return $true
+    }
+    
+    return $false
+}
+Component-Specific Patterns
+TextBox Components
+powershell$textBox = [TextBoxComponent]::new("MyTextBox")
+$textBox.IsFocusable = $true
+$textBox.TabIndex = 0
+$textBox.Placeholder = "Enter text..."
+
+# Focus feedback
+$textBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+    $this.BorderColor = Get-ThemeColor "primary.accent"
+    $this.ShowCursor = $true
+    $this.RequestRedraw()
+} -Force
+ListBox Components
+powershell$listBox = [ListBox]::new("MyList")
+$listBox.IsFocusable = $true
+$listBox.TabIndex = 1
+
+# Focus feedback
+$listBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+    $this.BorderColor = Get-ThemeColor "primary.accent"
+    $this.RequestRedraw()
+} -Force
+Button Components
+powershell$button = [ButtonComponent]::new("Save")
+$button.IsFocusable = $true
+$button.TabIndex = 2
+$button.OnClick = { $this.SaveData() }
+
+# Focus feedback
+$button | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+    $this.BackgroundColor = Get-ThemeColor "button.focused"
+    $this.RequestRedraw()
+} -Force
+Non-Focusable Elements
+powershell# Labels, panels, decorative elements
+$label = [LabelComponent]::new("Title")
+$label.IsFocusable = $false  # Cannot receive focus
+$label.Text = "My Form"
+What NOT to Do
+
+DON'T handle Tab in your screen
+DON'T manually track active component
+DON'T handle text input in the screen
+DON'T use SetBackgroundColor() methods
+DON'T set IsFocusable = false on interactive components
+
+Testing Your Fixed Screen
+
+Tab moves forward through components
+Shift+Tab moves backward
+Text boxes accept typing
+Backspace works in text fields
+Arrow keys work in lists
+Enter activates buttons
+Escape goes back
+Visual focus indicators update
+
+Common Fixes
+"Method not found: SetBackgroundColor"
+Change $component.SetBackgroundColor("#123") to $component.BackgroundColor = "#123"
+"Tab doesn't work"
+
+Ensure IsFocusable = $true on all interactive components
+Remove any manual Tab handling
+Call ([Screen]$this).HandleInput($keyInfo) first
+
+"Focus doesn't show"
+Add the OnFocus/OnBlur overrides with Add-Member -Force
+"Text input doesn't work"
+
+Component must be focusable
+Component needs proper HandleInput method
+Don't handle text input in the screen
+
+Follow this guide exactly and your screens will work.
