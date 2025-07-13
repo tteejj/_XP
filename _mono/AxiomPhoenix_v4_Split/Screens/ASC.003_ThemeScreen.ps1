@@ -206,18 +206,19 @@ class ThemeScreen : Screen {
         $this._themeList.IsFocusable = $true   # HYBRID MODEL: Component handles its own input
         $this._themeList.TabIndex = 0
         
-        # Add visual focus feedback
+        # Add visual focus feedback - store colors before closure
+        $listFocusBorder = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+        $listNormalBorder = Get-ThemeColor "Panel.Border" "#666666"
+        
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # ListBox inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+            $this.BorderColor = $listFocusBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # ListBox inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
-            $this.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
+            $this.BorderColor = $listNormalBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         # Handle selection changes
         $screenRef = $this
@@ -309,7 +310,7 @@ class ThemeScreen : Screen {
     hidden [void] UpdatePreview() {
         $selectedIndex = $this._themeList.SelectedIndex
         if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$selectedIndex] # Fixed Pattern 10
+            $selectedTheme = $this._themes[$selectedIndex]
             
             # Update description
             $this._descriptionLabel.Text = $selectedTheme.Description
@@ -326,7 +327,6 @@ class ThemeScreen : Screen {
             
             # Update panel colors
             $this._previewPanel.BackgroundColor = $selectedTheme.Colors["component.background"]
-            # Panel inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
             $this._previewPanel.BorderColor = $selectedTheme.Colors["component.border"]
             
             $this.RequestRedraw()
@@ -336,12 +336,12 @@ class ThemeScreen : Screen {
     hidden [void] ApplyTheme() {
         $selectedIndex = $this._themeList.SelectedIndex
         if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$selectedIndex] # Fixed Pattern 10
+            $selectedTheme = $this._themes[$selectedIndex]
             $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
             
             if ($themeManager) {
                 # Apply the theme colors
-                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) { # Fixed Pattern 9
+                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) {
                     $themeManager.SetColor($kvp.Key, $kvp.Value)
                 }
                 
@@ -362,11 +362,11 @@ class ThemeScreen : Screen {
         # Temporarily apply theme without saving
         $selectedIndex = $this._themeList.SelectedIndex
         if ($selectedIndex -ge 0 -and $selectedIndex -lt $this._themes.Count) {
-            $selectedTheme = $this._themes[$selectedIndex] # Fixed Pattern 10
+            $selectedTheme = $this._themes[$selectedIndex]
             $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
             
             if ($themeManager) {
-                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) { # Fixed Pattern 9
+                foreach ($kvp in $selectedTheme.Colors.GetEnumerator()) {
                     $themeManager.SetColor($kvp.Key, $kvp.Value)
                 }
                 

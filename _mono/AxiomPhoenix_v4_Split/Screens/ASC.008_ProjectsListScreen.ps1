@@ -72,18 +72,21 @@ class ProjectsListScreen : Screen {
         $this._searchBox.ForegroundColor = Get-ThemeColor "Input.Foreground" "#d4d4d4"
         $this._searchBox.BorderColor = Get-ThemeColor "Input.Border" "#404040"
         
-        # Add visual focus feedback for search box
+        # Add visual focus feedback for search box - store colors before closure
+        $searchFocusBorder = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+        $searchNormalBorder = Get-ThemeColor "Input.Border" "#666666"
+        
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+            $this.BorderColor = $searchFocusBorder
             $this.ShowCursor = $true
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#666666"
+            $this.BorderColor = $searchNormalBorder
             $this.ShowCursor = $false
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         # Handle search text changes
         $screenRef = $this
@@ -107,16 +110,19 @@ class ProjectsListScreen : Screen {
         $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
         $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
         
-        # Add visual focus feedback for list box
+        # Add visual focus feedback for list box - store colors before closure
+        $listFocusBorder = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+        $listNormalBorder = Get-ThemeColor "Panel.Border" "#666666"
+        
         $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+            $this.BorderColor = $listFocusBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "Panel.Border" "#666666"
+            $this.BorderColor = $listNormalBorder
             $this.RequestRedraw()
-        } -Force
+        }.GetNewClosure() -Force
         
         # Handle list selection changes
         $screenRef = $this
