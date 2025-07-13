@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - ThemeManager with Palette-Based Architecture
-# Core application services: action, navigation, data, theming, logging, events
+# FIXED: LoadTheme now properly updates all existing UI components
 # ==============================================================================
 
 #region ThemeManager Class
@@ -112,14 +112,137 @@ class ThemeManager {
         }
     }
     
+    # CRITICAL FIX: LoadTheme now properly updates all existing UI components
     [void] LoadTheme([string]$themeName) {
         if ($this.Themes.ContainsKey($themeName)) {
+            Write-Host "ThemeManager: Loading theme '$themeName'" -ForegroundColor Yellow
+            
             $this.CurrentTheme = $this.Themes[$themeName].Clone()
             $this.ThemeName = $themeName
-            # Force redraw
+            
+            # CRITICAL: Update all existing UI components with new theme colors
+            $this.RefreshAllComponents()
+            
+            # Force complete redraw
             if ($global:TuiState) {
                 $global:TuiState.IsDirty = $true
+                
+                # Clear buffer to force complete re-render
+                if ($global:TuiState.PSObject.Properties['MainBuffer'] -and $global:TuiState.MainBuffer) {
+                    $global:TuiState.MainBuffer.Clear()
+                }
             }
+            
+            Write-Host "ThemeManager: Theme '$themeName' applied successfully" -ForegroundColor Green
+        } else {
+            Write-Warning "ThemeManager: Theme '$themeName' not found"
+        }
+    }
+    
+    # NEW: Refresh all existing UI components with current theme colors
+    [void] RefreshAllComponents() {
+        if (-not $global:TuiState -or -not $global:TuiState.CurrentScreen) {
+            return
+        }
+        
+        Write-Host "ThemeManager: Refreshing all UI components..." -ForegroundColor Cyan
+        
+        # Recursively update all components starting from current screen
+        $this.UpdateComponentThemeRecursive($global:TuiState.CurrentScreen)
+        
+        # Also update any overlays or dialogs
+        if ($global:TuiState.PSObject.Properties['OverlayStack']) {
+            foreach ($overlay in $global:TuiState.OverlayStack) {
+                $this.UpdateComponentThemeRecursive($overlay)
+            }
+        }
+    }
+    
+    # NEW: Recursively update component colors
+    hidden [void] UpdateComponentThemeRecursive([object]$component) {
+        if (-not $component) { return }
+        
+        try {
+            $componentType = $component.GetType().Name
+            
+            # Update component based on its type
+            switch -Regex ($componentType) {
+                "Screen" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Screen.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Screen.Foreground")
+                    }
+                }
+                "Panel" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Panel.Background")
+                    }
+                    if ($component.PSObject.Properties['BorderColor']) {
+                        $component.BorderColor = $this.GetColor("Panel.Border")
+                    }
+                    if ($component.PSObject.Properties['TitleColor']) {
+                        $component.TitleColor = $this.GetColor("Panel.Title")
+                    }
+                }
+                ".*Label.*|LabelComponent" {
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Label.Foreground")
+                    }
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $bgColor = $this.GetColor("Panel.Background")
+                        if ($bgColor) {
+                            $component.BackgroundColor = $bgColor
+                        }
+                    }
+                }
+                ".*Button.*|ButtonComponent" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Button.Normal.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Button.Normal.Foreground")
+                    }
+                }
+                ".*List.*|ListBox" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("List.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("List.ItemNormal")
+                    }
+                    if ($component.PSObject.Properties['BorderColor']) {
+                        $component.BorderColor = $this.GetColor("Input.Border")
+                    }
+                }
+                ".*TextBox.*|.*Input.*" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Input.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Input.Foreground")
+                    }
+                    if ($component.PSObject.Properties['BorderColor']) {
+                        $component.BorderColor = $this.GetColor("Input.Border")
+                    }
+                }
+            }
+            
+            # Force the component to redraw
+            if ($component.PSObject.Methods['RequestRedraw']) {
+                $component.RequestRedraw()
+            }
+            
+            # Recursively update all children
+            if ($component.PSObject.Properties['Children']) {
+                foreach ($child in $component.Children) {
+                    $this.UpdateComponentThemeRecursive($child)
+                }
+            }
+        }
+        catch {
+            # Silently ignore errors for components that don't support theme updates
         }
     }
     
@@ -127,7 +250,7 @@ class ThemeManager {
         $availableThemes = $this.GetAvailableThemes()
         if ($availableThemes.Count -gt 0) {
             # Load first external theme if available, otherwise fallback
-            $preferredOrder = @("Cyberpunk", "Modern Dark", "Synthwave", "RetroAmber", "HighContrast", "Fallback")
+            $preferredOrder = @("Default", "Retro Amber", "Synthwave", "Green Console", "Fallback")
             $themeToLoad = "Fallback"  # Default fallback
             
             foreach ($preferred in $preferredOrder) {
@@ -206,6 +329,18 @@ class ThemeManager {
         $currentIndex = [array]::IndexOf($availableThemes, $this.ThemeName)
         $nextIndex = ($currentIndex + 1) % $availableThemes.Count
         $this.LoadTheme($availableThemes[$nextIndex])
+    }
+    
+    # NEW: Force save theme (for compatibility)
+    [void] SaveTheme() {
+        # In this system, themes are loaded from files, not saved
+        # This method exists for compatibility but doesn't need to do anything
+        Write-Host "ThemeManager: Theme settings applied (file-based system)" -ForegroundColor Green
+    }
+    
+    # NEW: Refresh all colors (for compatibility)
+    [void] RefreshAllColors() {
+        $this.RefreshAllComponents()
     }
 }
 

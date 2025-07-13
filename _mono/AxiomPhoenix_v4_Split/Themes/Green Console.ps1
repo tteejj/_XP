@@ -1,40 +1,40 @@
 @{
-    Name = "Synthwave"
-    Description = "Retro 80s neon colors"
+    Name = "Green Console"
+    Description = "Classic green phosphor terminal look"
     
     Palette = @{
-        Black = "#0A0A0A"
-        White = "#FF00FF"
-        Primary = "#FF00FF"
-        Secondary = "#00FFFF"
-        Accent = "#FF00FF"
-        Success = "#00FF88"
-        Warning = "#FFD700"
-        Error = "#FF0066"
-        Info = "#00D4FF"
-        Background = "#0A0A0A"
-        Surface = "#1A0A1A"
-        Border = "#FF00FF"
-        TextPrimary = "#FF00FF"
-        TextSecondary = "#00FFFF"
-        TextDisabled = "#663366"
-        FocusedBorder = "#00FFFF"
-        ButtonFocusedBg = "#FF00FF"
+        Black = "#000000"
+        White = "#00FF00"
+        Primary = "#00FF00"
+        Secondary = "#008000"
+        Accent = "#00FF00"
+        Success = "#00FF00"
+        Warning = "#FFFF00"
+        Error = "#FF0000"
+        Info = "#00FF00"
+        Background = "#000000"
+        Surface = "#001100"
+        Border = "#008000"
+        TextPrimary = "#00FF00"
+        TextSecondary = "#008000"
+        TextDisabled = "#004400"
+        FocusedBorder = "#00FF00"
+        ButtonFocusedBg = "#00FF00"
         ButtonFocusedFg = "#000000"
-        ListSelectedBg = "#FF00FF"
+        ListSelectedBg = "#00FF00"
         ListSelectedFg = "#000000"
     }
     
     Components = @{
         Screen = @{ Background = '$Palette.Background'; Foreground = '$Palette.TextPrimary' }
-        Panel = @{ Background = '$Palette.Surface'; Border = '$Palette.Border'; Title = '$Palette.Secondary' }
+        Panel = @{ Background = '$Palette.Background'; Border = '$Palette.Border'; Title = '$Palette.Primary' }
         Label = @{ Foreground = '$Palette.TextPrimary'; Disabled = '$Palette.TextDisabled' }
         Button = @{
             Normal = @{ Foreground = '$Palette.ButtonFocusedFg'; Background = '$Palette.Primary' }
             Focused = @{ Foreground = '$Palette.ButtonFocusedFg'; Background = '$Palette.ButtonFocusedBg' }
         }
         Input = @{ 
-            Background = '$Palette.Surface'
+            Background = '$Palette.Background'
             Foreground = '$Palette.TextPrimary'
             Border = '$Palette.Border'
             FocusedBorder = '$Palette.FocusedBorder'

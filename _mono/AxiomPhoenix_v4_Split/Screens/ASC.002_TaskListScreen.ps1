@@ -115,41 +115,24 @@ class TaskListScreen : Screen {
         $this._projectButton.Width = $listWidth - 4
         $this._projectButton.Height = 1
         $this._projectButton.IsFocusable = $true
-        $this._projectButton.TabIndex = 0
+        $this._projectButton.TabIndex = 2
         
-        # Add visual focus feedback - store colors before closure
-        $buttonFocusedBg = Get-ThemeColor "Button.Focused.Background" "#0e7490"
-        $buttonNormalBg = Get-ThemeColor "Button.Normal.Background" "#007acc"
-        
+        # Add visual focus feedback
         $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = $buttonFocusedBg
+            $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0e7490"
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
         $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = $buttonNormalBg
+            $this.BackgroundColor = Get-ThemeColor "button.normal.background" "#007acc"
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
-        # Add keyboard handling to ProjectButton  
-        $this._projectButton | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
-            param([System.ConsoleKeyInfo]$keyInfo)
-            
-            if ($null -eq $keyInfo) { return $false }
-            
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::Enter) {
-                    # Show project selection dialog
-                    return $true
-                }
-                ([ConsoleKey]::Spacebar) {
-                    # Show project selection dialog
-                    return $true
-                }
-            }
-            
-            return $false
-        }.GetNewClosure() -Force
+        # Add click handler
+        $this._projectButton.OnClick = {
+            # TODO: Show project selection dialog
+            Write-Log -Level Debug -Message "Project button clicked"
+        }
         
         $this._listPanel.AddChild($this._projectButton)
 
@@ -161,26 +144,23 @@ class TaskListScreen : Screen {
         $this._taskListBox.Height = $this._listPanel.Height - 5
         $this._taskListBox.HasBorder = $false
         $this._taskListBox.IsFocusable = $true
-        $this._taskListBox.TabIndex = 1
+        $this._taskListBox.TabIndex = 0
         $this._taskListBox.SelectedBackgroundColor = (Get-ThemeColor "List.ItemSelectedBackground" "#007acc")
         $this._taskListBox.SelectedForegroundColor = (Get-ThemeColor "List.ItemSelected" "#ffffff")
         $this._taskListBox.ItemForegroundColor = (Get-ThemeColor "List.ItemNormal" "#d4d4d4")
         
-        # Proper visual focus feedback - store colors before closure
-        $listFocusedBg = Get-ThemeColor "List.ItemFocusedBackground" "#0078d4"
-        $listSelectedBg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
-        
+        # Add visual focus feedback
         $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Set visual feedback on the component itself
-            $this.SelectedBackgroundColor = $listFocusedBg
+            $this.SelectedBackgroundColor = Get-ThemeColor "listbox.focusedselectedbackground" "#0078d4"
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
         $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Reset visual feedback
-            $this.SelectedBackgroundColor = $listSelectedBg
+            $this.SelectedBackgroundColor = Get-ThemeColor "listbox.selectedbackground" "#007acc"
+            $this.BorderColor = Get-ThemeColor "border" "#404040"
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
         # Add selection change handler to update details
         $thisScreen = $this
@@ -193,60 +173,7 @@ class TaskListScreen : Screen {
             }
         }.GetNewClosure()
         
-        # Add keyboard handling to ListBox
-        $this._taskListBox | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
-            param([System.ConsoleKeyInfo]$keyInfo)
-            
-            if ($null -eq $keyInfo) { return $false }
-            
-            switch ($keyInfo.Key) {
-                ([ConsoleKey]::Enter) {
-                    if ($thisScreen._selectedTask) {
-                        $thisScreen._ShowEditTaskDialog()
-                        return $true
-                    }
-                }
-                ([ConsoleKey]::Spacebar) {
-                    if ($thisScreen._selectedTask) {
-                        # Toggle task completion
-                        $dataManager = $thisScreen.ServiceContainer?.GetService("DataManager")
-                        if ($dataManager) {
-                            if ($thisScreen._selectedTask.Progress -eq 100) {
-                                $thisScreen._selectedTask.SetProgress(0)
-                            } else {
-                                $thisScreen._selectedTask.SetProgress(100)
-                            }
-                            $dataManager.UpdateTask($thisScreen._selectedTask)
-                            $thisScreen._RefreshTasks()
-                        }
-                        return $true
-                    }
-                }
-                ([ConsoleKey]::Delete) {
-                    if ($thisScreen._selectedTask) {
-                        $thisScreen._DeleteTask()
-                        return $true
-                    }
-                }
-            }
-            
-            # Handle letter shortcuts
-            switch ($keyInfo.KeyChar) {
-                'n' { $thisScreen._ShowNewTaskDialog(); return $true }
-                'N' { $thisScreen._ShowNewTaskDialog(); return $true }
-                'e' { if ($thisScreen._selectedTask) { $thisScreen._ShowEditTaskDialog(); return $true } }
-                'E' { if ($thisScreen._selectedTask) { $thisScreen._ShowEditTaskDialog(); return $true } }
-                'd' { if ($thisScreen._selectedTask) { $thisScreen._DeleteTask(); return $true } }
-                'D' { if ($thisScreen._selectedTask) { $thisScreen._DeleteTask(); return $true } }
-                'c' { if ($thisScreen._selectedTask) { $thisScreen._CompleteTask(); return $true } }
-                'C' { if ($thisScreen._selectedTask) { $thisScreen._CompleteTask(); return $true } }
-                's' { $thisScreen._CycleSortMode(); return $true }
-                'S' { $thisScreen._CycleSortMode(); return $true }
-                '/' { $thisScreen.SetChildFocus($thisScreen._filterBox); return $true }
-            }
-            
-            return $false
-        }.GetNewClosure() -Force
+        # ListBox already handles arrow keys internally, no need to override
         
         $this._listPanel.AddChild($this._taskListBox)
 
@@ -276,30 +203,20 @@ class TaskListScreen : Screen {
         $this._filterBox.Width = [Math]::Floor($detailWidth * 0.5)
         $this._filterBox.Height = 3
         $this._filterBox.IsFocusable = $true
-        $this._filterBox.TabIndex = 2
+        $this._filterBox.TabIndex = 1
         
-        # Proper visual focus feedback - store colors before closure  
-        $thisScreen = $this
-        $inputFocusedBorder = Get-ThemeColor "Input.BorderFocused" "#0078d4"
-        $inputNormalBorder = Get-ThemeColor "Input.Border" "#404040"
-        
+        # Add visual focus feedback
         $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            # Set visual feedback on the component itself
-            $this.BorderColor = $inputFocusedBorder
-            if ($this.PSObject.Properties.Name -contains 'ShowCursor') {
-                $this.ShowCursor = $true
-            }
+            $this.BorderColor = Get-ThemeColor "input.borderfocused" "#0078d4"
+            $this.ShowCursor = $true
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
         $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            # Reset visual feedback
-            $this.BorderColor = $inputNormalBorder 
-            if ($this.PSObject.Properties.Name -contains 'ShowCursor') {
-                $this.ShowCursor = $false
-            }
+            $this.BorderColor = Get-ThemeColor "input.border" "#404040" 
+            $this.ShowCursor = $false
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
         # Add text change handler to trigger filtering
         $this._filterBox.OnChange = {
@@ -787,7 +704,7 @@ class TaskListScreen : Screen {
             return $true
         }
         
-        # ONLY screen-level shortcuts here
+        # Handle screen-level shortcuts and actions
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Escape) {
                 $navService = $this.ServiceContainer?.GetService("NavigationService")
@@ -808,6 +725,85 @@ class TaskListScreen : Screen {
             ([ConsoleKey]::F1) {
                 # Show help dialog
                 return $true
+            }
+            ([ConsoleKey]::Enter) {
+                # If task list has focus and a task is selected, edit it
+                if ($this.FocusedChild -eq $this._taskListBox -and $this._selectedTask) {
+                    $this._ShowEditTaskDialog()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::Spacebar) {
+                # If task list has focus and a task is selected, toggle completion
+                if ($this.FocusedChild -eq $this._taskListBox -and $this._selectedTask) {
+                    $this._CompleteTask()
+                    return $true
+                }
+                return $false
+            }
+            ([ConsoleKey]::Delete) {
+                # If task list has focus and a task is selected, delete it
+                if ($this.FocusedChild -eq $this._taskListBox -and $this._selectedTask) {
+                    $this._DeleteTask()
+                    return $true
+                }
+                return $false
+            }
+        }
+        
+        # Handle letter shortcuts
+        switch ($keyInfo.KeyChar) {
+            'n' { $this._ShowNewTaskDialog(); return $true }
+            'N' { $this._ShowNewTaskDialog(); return $true }
+            'e' { 
+                if ($this._selectedTask) { 
+                    $this._ShowEditTaskDialog()
+                    return $true 
+                }
+                return $false
+            }
+            'E' { 
+                if ($this._selectedTask) { 
+                    $this._ShowEditTaskDialog()
+                    return $true 
+                }
+                return $false
+            }
+            'd' { 
+                if ($this._selectedTask) { 
+                    $this._DeleteTask()
+                    return $true 
+                }
+                return $false
+            }
+            'D' { 
+                if ($this._selectedTask) { 
+                    $this._DeleteTask()
+                    return $true 
+                }
+                return $false
+            }
+            'c' { 
+                if ($this._selectedTask) { 
+                    $this._CompleteTask()
+                    return $true 
+                }
+                return $false
+            }
+            'C' { 
+                if ($this._selectedTask) { 
+                    $this._CompleteTask()
+                    return $true 
+                }
+                return $false
+            }
+            's' { $this._CycleSortMode(); return $true }
+            'S' { $this._CycleSortMode(); return $true }
+            '/' { 
+                # Focus the filter box
+                $this.SetChildFocus($this._filterBox)
+                return $true 
             }
         }
         

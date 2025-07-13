@@ -58,6 +58,21 @@ class SimpleTaskDialog : Screen {
         $this._titleBox.Width = $dialogWidth - 4; $this._titleBox.Height = 3
         $this._titleBox.Text = $this._task.Title
         $this._titleBox.IsFocusable = $true; $this._titleBox.TabIndex = 0
+        $this._titleBox.Placeholder = "Enter task title..."
+        
+        # Add focus visual feedback
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "border" "#404040"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._dialogPanel.AddChild($this._titleBox)
 
         # Description Field
@@ -66,20 +81,61 @@ class SimpleTaskDialog : Screen {
         $this._descriptionBox.Width = $dialogWidth - 4; $this._descriptionBox.Height = 3
         $this._descriptionBox.Text = $this._task.Description
         $this._descriptionBox.IsFocusable = $true; $this._descriptionBox.TabIndex = 1
+        $this._descriptionBox.Placeholder = "Enter task description..."
+        
+        # Add focus visual feedback
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "border" "#404040"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._dialogPanel.AddChild($this._descriptionBox)
 
         # Save Button
         $this._saveButton = [ButtonComponent]::new("SaveBtn")
         $this._saveButton.Text = "Save"; $this._saveButton.X = 15; $this._saveButton.Y = 10
         $this._saveButton.IsFocusable = $true; $this._saveButton.TabIndex = 2
-        $this._saveButton.OnClick = { $this._SaveTask() }
+        $screenRef = $this
+        $this._saveButton.OnClick = { $screenRef._SaveTask() }
+        
+        # Add focus visual feedback
+        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0e7490"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.normal.background" "#007acc"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._dialogPanel.AddChild($this._saveButton)
 
         # Cancel Button
         $this._cancelButton = [ButtonComponent]::new("CancelBtn")
         $this._cancelButton.Text = "Cancel"; $this._cancelButton.X = 35; $this._cancelButton.Y = 10
         $this._cancelButton.IsFocusable = $true; $this._cancelButton.TabIndex = 3
-        $this._cancelButton.OnClick = { $this._Cancel() }
+        $screenRef = $this
+        $this._cancelButton.OnClick = { $screenRef._Cancel() }
+        
+        # Add focus visual feedback
+        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0e7490"
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BackgroundColor = Get-ThemeColor "button.normal.background" "#007acc"
+            $this.RequestRedraw()
+        } -Force
+        
         $this._dialogPanel.AddChild($this._cancelButton)
     }
 

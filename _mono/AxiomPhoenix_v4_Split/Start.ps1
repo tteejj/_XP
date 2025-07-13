@@ -13,13 +13,21 @@ $ErrorActionPreference = 'Stop'
 $VerbosePreference = if ($env:AXIOM_VERBOSE -eq '1') { 'Continue' } else { 'SilentlyContinue' }
 $WarningPreference = $VerbosePreference
 
+# Initialize scriptDir FIRST
+$scriptDir = $PSScriptRoot
+if ([string]::IsNullOrEmpty($scriptDir)) {
+    $scriptDir = Get-Location
+}
+
 try {
-    Write-Host "Loading Axiom-Phoenix v4.0 (Split Architecture)..." -ForegroundColor Cyan
-    
-    $scriptDir = $PSScriptRoot
-    if ([string]::IsNullOrEmpty($scriptDir)) {
-        $scriptDir = Get-Location
+    # Load the file logger FIRST before any other logging
+    $fileLoggerPath = Join-Path $scriptDir "Functions\AFU.006a_FileLogger.ps1"
+    if (Test-Path $fileLoggerPath) {
+        . $fileLoggerPath
+        Write-Host "File logger initialized. Log file: $global:AxiomPhoenixLogFile" -ForegroundColor Yellow
     }
+    
+    Write-Host "Loading Axiom-Phoenix v4.0 (Split Architecture)..." -ForegroundColor Cyan
 
     # Define the correct loading order for the framework directories
     $loadOrder = @(

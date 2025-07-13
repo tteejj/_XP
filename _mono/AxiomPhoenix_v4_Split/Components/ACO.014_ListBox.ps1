@@ -49,7 +49,12 @@ class ListBox : UIElement {
     }
 
     [void] AddItem([object]$item) {
-        $this.Items.Add($item)
+        # Handle empty/null items
+        if ($null -eq $item -or ($item -is [string] -and [string]::IsNullOrEmpty($item))) {
+            $this.Items.Add(" ")  # Use space instead of empty
+        } else {
+            $this.Items.Add($item)
+        }
         $this._itemRenderCache.Clear()
         $this._cacheVersion = $this.Items.Count
         if ($this.SelectedIndex -eq -1 -and $this.Items.Count -eq 1) {
@@ -188,9 +193,9 @@ class ListBox : UIElement {
         $itemText = ""
         
         if ($item -is [string]) {
-            $itemText = $item
+            $itemText = if ([string]::IsNullOrEmpty($item)) { " " } else { $item }
         } else {
-            $itemText = $item.ToString()
+            $itemText = if ($null -eq $item) { " " } else { $item.ToString() }
         }
         
         if ($itemText.Length -gt $contentWidth) {

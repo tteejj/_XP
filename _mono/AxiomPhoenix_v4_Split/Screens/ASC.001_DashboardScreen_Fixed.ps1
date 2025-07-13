@@ -1,6 +1,6 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Dashboard Screen
-# FIXED: Proper theme handling and color consistency
+# FIXED: Properly responds to theme changes and uses Get-ThemeColor
 # ==============================================================================
 
 class DashboardScreen : Screen {
@@ -35,20 +35,6 @@ class DashboardScreen : Screen {
         
         Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting"
         
-        # Subscribe to theme changes
-        $eventManager = $this.ServiceContainer?.GetService("EventManager")
-        if ($eventManager) {
-            $thisScreen = $this
-            $handler = {
-                param($eventData)
-                Write-Log -Level Debug -Message "DashboardScreen: Theme changed, updating colors"
-                $thisScreen.UpdateThemeColors()
-                $thisScreen.RequestRedraw()
-            }.GetNewClosure()
-            
-            $this._themeChangeSubscriptionId = $eventManager.Subscribe("Theme.Changed", $handler)
-        }
-        
         # Create simple Panel container following the guide
         $panelWidth = [Math]::Min(60, $this.Width - 4)
         $panelHeight = [Math]::Min(16, $this.Height - 4)
@@ -63,23 +49,7 @@ class DashboardScreen : Screen {
         $this._panel.HasBorder = $true
         $this._panel.Title = " Axiom-Phoenix v4.0 - Main Menu "
         
-        # Set colors with PROPERTIES (following guide) - use theme colors
-        $this._panel.BackgroundColor = Get-ThemeColor "panel.background" "#1e1e1e"
-        $this._panel.BorderColor = Get-ThemeColor "panel.border" "#007acc"
-        $this._panel.ForegroundColor = Get-ThemeColor "panel.foreground" "#d4d4d4"
-        
-        # Add focus behavior with Add-Member (following guide)
-        $this._panel | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._panel | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "panel.border" "#007acc"
-            $this.RequestRedraw()
-        } -Force
-        
-        # Add Panel to screen - NO custom OnRender on Panel
+        # Add Panel to screen
         $this.AddChild($this._panel)
         $this.UpdateThemeColors()
         
@@ -105,6 +75,13 @@ class DashboardScreen : Screen {
             $contentWidth = $panelWidth - 4
             $contentHeight = $panelHeight - 2
             
+            # Get theme colors
+            $normalFg = Get-ThemeColor "foreground"
+            $normalBg = Get-ThemeColor "background"
+            $selectedFg = Get-ThemeColor "listbox.selectedforeground"
+            $selectedBg = Get-ThemeColor "listbox.selectedbackground"
+            $separatorFg = Get-ThemeColor "muted"
+            
             # Draw menu items
             for ($i = 0; $i -lt $this._menuItems.Count -and $i -lt $contentHeight; $i++) {
                 $item = $this._menuItems[$i]
@@ -112,23 +89,19 @@ class DashboardScreen : Screen {
                 
                 if ($i -eq $this._selectedIndex) {
                     # Highlighted item
-                    $selFg = Get-ThemeColor "listbox.selectedforeground" "#ffffff"
-                    $selBg = Get-ThemeColor "listbox.selectedbackground" "#007acc"
-                    
                     # Fill selection background
                     for ($xx = $contentX; $xx -lt ($contentX + $contentWidth); $xx++) {
-                        $this._private_buffer.SetCell($xx, $y, [TuiCell]::new(' ', $selFg, $selBg))
+                        $this._private_buffer.SetCell($xx, $y, [TuiCell]::new(' ', $selectedFg, $selectedBg))
                     }
                     
                     # Write highlighted text
                     if ($item -ne "────────────────") {
-                        Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $selFg; BG = $selBg }
+                        Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $selectedFg; BG = $selectedBg }
                     }
                 } else {
                     # Normal item
-                    $itemFg = if ($item -eq "────────────────") { Get-ThemeColor "text.muted" "#666666" } else { Get-ThemeColor "foreground" "#d4d4d4" }
-                    $itemBg = Get-ThemeColor "background" "#1e1e1e"
-                    Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $itemFg; BG = $itemBg }
+                    $itemFg = if ($item -eq "────────────────") { $separatorFg } else { $normalFg }
+                    Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $itemFg; BG = $normalBg }
                 }
             }
         }
@@ -138,18 +111,25 @@ class DashboardScreen : Screen {
         Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
         $this.UpdateThemeColors()
         $this.UpdatePanelLayout()
+        
+        # Subscribe to theme change events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            $thisScreen = $this
+            $handler = {
+                param($eventData)
+                Write-Log -Level Debug -Message "DashboardScreen: Theme changed event received"
+                $thisScreen.UpdateThemeColors()
+                $thisScreen.RequestRedraw()
+            }.GetNewClosure()
+            
+            $this._themeChangeSubscriptionId = $eventManager.Subscribe("Theme.Changed", $handler)
+            Write-Log -Level Debug -Message "DashboardScreen: Subscribed to Theme.Changed events"
+        }
+        
         # MUST call base to set initial focus
         ([Screen]$this).OnEnter()
         $this.RequestRedraw()
-    }
-    
-    [void] OnExit() {
-        # Unsubscribe from theme changes
-        $eventManager = $this.ServiceContainer?.GetService("EventManager")
-        if ($eventManager -and $this._themeChangeSubscriptionId) {
-            $eventManager.Unsubscribe("Theme.Changed", $this._themeChangeSubscriptionId)
-            $this._themeChangeSubscriptionId = $null
-        }
     }
     
     [void] OnResize() {
@@ -172,35 +152,29 @@ class DashboardScreen : Screen {
     
     hidden [void] UpdateThemeColors() {
         try {
-            # Update panel with theme colors
+            # Update panel colors using Get-ThemeColor
             if ($this._panel) {
-                $this._panel.BackgroundColor = Get-ThemeColor "panel.background" "#1e1e1e"
-                $this._panel.BorderColor = Get-ThemeColor "panel.border" "#007acc"
-                $this._panel.ForegroundColor = Get-ThemeColor "panel.foreground" "#d4d4d4"
+                $this._panel.BackgroundColor = Get-ThemeColor "background"
+                $this._panel.BorderColor = Get-ThemeColor "border"
+                $this._panel.ForegroundColor = Get-ThemeColor "foreground"
                 
-                # Update focus colors in the closures
-                $focusBorder = Get-ThemeColor "primary.accent" "#0078d4"
-                $normalBorder = Get-ThemeColor "panel.border" "#007acc"
-                
+                # Update focus colors
                 $this._panel | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                    $this.BorderColor = $focusBorder
+                    $this.BorderColor = Get-ThemeColor "primary.accent"
                     $this.RequestRedraw()
-                }.GetNewClosure() -Force
+                } -Force
                 
                 $this._panel | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-                    $this.BorderColor = $normalBorder
+                    $this.BorderColor = Get-ThemeColor "border"
                     $this.RequestRedraw()
-                }.GetNewClosure() -Force
+                } -Force
             }
             
-            # Update screen background
-            $this.BackgroundColor = Get-ThemeColor "background" "#1e1e1e"
-            $this.ForegroundColor = Get-ThemeColor "foreground" "#d4d4d4"
+            # Update screen colors
+            $this.BackgroundColor = Get-ThemeColor "background"
+            $this.ForegroundColor = Get-ThemeColor "foreground"
             
-            $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
-            if ($themeManager) {
-                Write-Log -Level Info -Message "DashboardScreen: Updated colors for '$($themeManager.ThemeName)'"
-            }
+            Write-Log -Level Info -Message "DashboardScreen: Updated theme colors"
         } catch {
             Write-Log -Level Error -Message "DashboardScreen: Error updating colors: $_"
         }
@@ -233,60 +207,68 @@ class DashboardScreen : Screen {
                 return $true
             }
             ([ConsoleKey]::Enter) {
-                $this.ExecuteSelectedItem()
-                return $true
-            }
-            ([ConsoleKey]::Escape) {
-                # Back/Exit
-                $actionService = $this.ServiceContainer?.GetService("ActionService")
-                if ($actionService) {
-                    $actionService.ExecuteAction("app.quit", @{})
-                }
+                $this.ExecuteMenuItem($this._selectedIndex)
                 return $true
             }
         }
         
-        # Handle number key shortcuts
-        if ($keyInfo.KeyChar -ge '1' -and $keyInfo.KeyChar -le '7') {
-            $index = [int]($keyInfo.KeyChar.ToString()) - 1
-            if ($index -ge 0 -and $index -lt $this._menuItems.Count) {
-                $this._selectedIndex = $index
-                $this.ExecuteSelectedItem()
-                return $true
-            }
+        # Handle direct number keys
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::D1) { $this.ExecuteMenuItem(0); return $true }
+            ([ConsoleKey]::D2) { $this.ExecuteMenuItem(1); return $true }
+            ([ConsoleKey]::D3) { $this.ExecuteMenuItem(2); return $true }
+            ([ConsoleKey]::D4) { $this.ExecuteMenuItem(3); return $true }
+            ([ConsoleKey]::D5) { $this.ExecuteMenuItem(4); return $true }
+            ([ConsoleKey]::D6) { $this.ExecuteMenuItem(5); return $true }
+            ([ConsoleKey]::D7) { $this.ExecuteMenuItem(6); return $true }
+            ([ConsoleKey]::Q) { $this.ExecuteMenuItem(8); return $true }
         }
         
-        # Handle Q for quit
-        if ($keyInfo.KeyChar -eq 'q' -or $keyInfo.KeyChar -eq 'Q') {
-            $actionService = $this.ServiceContainer?.GetService("ActionService")
-            if ($actionService) {
-                $actionService.ExecuteAction("app.quit", @{})
-            }
-            return $true
+        # Handle character keys
+        switch ($keyInfo.KeyChar) {
+            '1' { $this.ExecuteMenuItem(0); return $true }
+            '2' { $this.ExecuteMenuItem(1); return $true }
+            '3' { $this.ExecuteMenuItem(2); return $true }
+            '4' { $this.ExecuteMenuItem(3); return $true }
+            '5' { $this.ExecuteMenuItem(4); return $true }
+            '6' { $this.ExecuteMenuItem(5); return $true }
+            '7' { $this.ExecuteMenuItem(6); return $true }
+            { $_ -eq 'q' -or $_ -eq 'Q' } { $this.ExecuteMenuItem(8); return $true }
         }
         
         return $false
     }
     
-    hidden [void] ExecuteSelectedItem() {
-        Write-Log -Level Debug -Message "DashboardScreen: Executing menu item $($this._selectedIndex)"
-        
+    hidden [void] ExecuteMenuItem([int]$index) {
         $actionService = $this.ServiceContainer?.GetService("ActionService")
-        if (-not $actionService) { return }
+        if (-not $actionService) { 
+            Write-Log -Level Error -Message "DashboardScreen: ActionService not found!"
+            return
+        }
         
-        switch ($this._selectedIndex) {
-            0 { } # Already on dashboard
-            1 { $actionService.ExecuteAction("navigation.tasklist", @{}) }
+        Write-Log -Level Debug -Message "DashboardScreen: Executing menu item $index"
+        
+        switch ($index) {
+            0 { Write-Log -Level Debug -Message "Dashboard (current)" }
+            1 { $actionService.ExecuteAction("navigation.taskList", @{}) }
             2 { $actionService.ExecuteAction("navigation.projects", @{}) }
-            3 { $actionService.ExecuteAction("navigation.filebrowser", @{}) }
-            4 { $actionService.ExecuteAction("navigation.texteditor", @{}) }
-            5 { $actionService.ExecuteAction("navigation.themepicker", @{}) }
-            6 { $actionService.ExecuteAction("app.commandpalette", @{}) }
-            8 { $actionService.ExecuteAction("app.quit", @{}) } # Quit option
+            3 { $actionService.ExecuteAction("tools.fileCommander", @{}) }
+            4 { $actionService.ExecuteAction("tools.textEditor", @{}) }
+            5 { $actionService.ExecuteAction("navigation.themePicker", @{}) }
+            6 { $actionService.ExecuteAction("app.commandPalette", @{}) }
+            8 { $actionService.ExecuteAction("app.exit", @{}) }
+        }
+    }
+    
+    [void] OnExit() {
+        Write-Log -Level Debug -Message "DashboardScreen.OnExit: Cleaning up"
+        
+        # Unsubscribe from theme change events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager -and $this._themeChangeSubscriptionId) {
+            $eventManager.Unsubscribe("Theme.Changed", $this._themeChangeSubscriptionId)
+            $this._themeChangeSubscriptionId = $null
+            Write-Log -Level Debug -Message "DashboardScreen: Unsubscribed from Theme.Changed events"
         }
     }
 }
-
-# ==============================================================================
-# END OF DASHBOARD SCREEN
-# ==============================================================================

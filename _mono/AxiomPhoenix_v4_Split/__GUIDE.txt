@@ -1,5 +1,10 @@
-5. CRITICAL: No Inline If Expressions in Class Methods
+# Axiom-Phoenix v4.1 - THE ACTUAL WORKING GUIDE
 
+## Critical Issues to Avoid
+
+### 1. CRITICAL: No Inline If Expressions in Class Methods
+
+```powershell
 # WRONG - These break PowerShell class execution context
 $pageSize = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
 $visibleHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
@@ -12,35 +17,64 @@ $pageSize = $this.Height - $borderOffset
 
 # NEVER use ternary-style if expressions within parentheses in class methods!
 # They corrupt the PowerShell execution context and cause "The term 'if' is not recognized" errors.
-ADD TO COMMON FIXES SECTION:
-"The term 'if' is not recognized"
-Remove all inline if expressions from class methods
-Use proper variable assignments instead
-Example: Replace (if ($condition) { 2 } else { 0 }) with separate if statement
+```
 
+### 2. Screen Rendering Order - Override _RenderContent Not OnRender
 
+```powershell
+# WRONG - This draws BEFORE children render, so Panel clears your content
+[void] OnRender() {
+    ([Screen]$this).OnRender()  # Renders Panel
+    # Your menu items drawn here get CLEARED by Panel's background
+}
 
+# RIGHT - Override _RenderContent to draw AFTER children
+hidden [void] _RenderContent() {
+    # First let base render all children (Panel renders here)
+    ([UIElement]$this)._RenderContent()
+    
+    # Then draw your content on TOP of rendered children
+    if ($this._panel -and $this._private_buffer) {
+        # Your menu items drawn here appear OVER Panel's content area
+    }
+}
 
+# The rendering pipeline:
+# 1. Screen._RenderContent() is called
+# 2. Base._RenderContent() renders all children (Panel, etc.)
+# 3. Your code runs AFTER, drawing on top of children
+# 4. Everything displays correctly
+```
 
-Axiom-Phoenix v4.1 - THE ACTUAL WORKING GUIDE
-Core Rules That Actually Work
+## Core Rules That Actually Work
+
 1. Color Setting - Use Properties ONLY
-powershell# WRONG - These methods don't exist
+```powershell
+# WRONG - These methods don't exist
 $component.SetBackgroundColor("#123456")
 
 # RIGHT - Use properties
 $component.BackgroundColor = "#123456"
 $component.ForegroundColor = Get-ThemeColor "foreground"
 $component.BorderColor = Get-ThemeColor "border"
+```
+
 2. Components MUST Be Focusable
-powershell# WRONG - Never do this
+```powershell
+# WRONG - Never do this
 $textBox.IsFocusable = $false
 
 # RIGHT - Interactive components are focusable
 $textBox.IsFocusable = $true
 $textBox.TabIndex = 0  # Set order: 0, 1, 2, etc.
+```
+
 3. Override Focus Methods with Add-Member
-powershell# After creating any focusable component:
+```powershell
+# ONLY for components that DON'T already have OnFocus/OnBlur methods
+# Check first: ListBox, ComboBox, and some others already have these!
+
+# After creating any focusable component that needs focus methods:
 $component | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
     $this.BorderColor = Get-ThemeColor "primary.accent"
     $this.ShowCursor = $true  # For text inputs only
@@ -52,8 +86,10 @@ $component | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
     $this.ShowCursor = $false
     $this.RequestRedraw()
 } -Force
+```
+
 4. Screen HandleInput Pattern
-powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+```powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
     if ($null -eq $keyInfo) { return $false }
     
     # ALWAYS FIRST - Let base handle Tab and component routing
@@ -78,6 +114,53 @@ powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
     
     return $false
 }
+```
+
+5. Screen-Panel Architecture Pattern
+When screens need to display content (like menus) inside a panel:
+
+```powershell
+# In Initialize() - Create Panel as container
+$this._panel = [Panel]::new("MainPanel")
+$this._panel.IsFocusable = $true
+$this._panel.HasBorder = $true
+$this._panel.Title = " My Screen Title "
+
+# Position and size the panel
+$panelWidth = [Math]::Min(60, $this.Width - 4)
+$panelHeight = [Math]::Min(16, $this.Height - 4)
+$this._panel.X = [Math]::Floor(($this.Width - $panelWidth) / 2)
+$this._panel.Y = [Math]::Floor(($this.Height - $panelHeight) / 2)
+$this._panel.Width = $panelWidth
+$this._panel.Height = $panelHeight
+
+# Add to screen
+$this.AddChild($this._panel)
+
+# CRITICAL: Override _RenderContent NOT OnRender to draw INSIDE panel
+hidden [void] _RenderContent() {
+    # Let base render Panel first
+    ([UIElement]$this)._RenderContent()
+    
+    # Then draw your content on TOP
+    if ($this._panel -and $this._private_buffer) {
+        # Calculate Panel's content area (inside border)
+        $contentX = $this._panel.X + 2
+        $contentY = $this._panel.Y + 1
+        $contentWidth = $this._panel.Width - 4
+        $contentHeight = $this._panel.Height - 2
+        
+        # Draw your menu/content here
+        Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $contentY -Text "Menu Item"
+    }
+}
+
+# WRONG - OnRender draws BEFORE children, Panel clears your content!
+[void] OnRender() {
+    ([Screen]$this).OnRender()
+    # Drawing here gets cleared by Panel's background
+}
+```
 Step-by-Step Migration for ANY Screen
 Step 1: Remove ALL Manual Focus Tracking
 DELETE these lines:
@@ -89,7 +172,8 @@ Any _UpdateVisualFocus() method
 Any manual Tab handling
 
 Step 2: Fix Component Creation in Initialize()
-powershell[void] Initialize() {
+```powershell
+[void] Initialize() {
     # Create component
     $this._titleBox = [TextBoxComponent]::new("TitleBox")
     
@@ -121,15 +205,20 @@ powershell[void] Initialize() {
     $this._titleBox.Width = 40
     $this.AddChild($this._titleBox)
 }
+```
 Step 3: Fix OnEnter Method
-powershell[void] OnEnter() {
+```powershell
+[void] OnEnter() {
     # Your initialization code...
     
     # MUST call base to set initial focus
     ([Screen]$this).OnEnter()
 }
+```
+
 Step 4: Fix HandleInput Method
-powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+```powershell
+[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
     if ($null -eq $keyInfo) { return $false }
     
     # Base class handles Tab and routes to components
@@ -145,9 +234,11 @@ powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
     
     return $false
 }
+```
 Component-Specific Patterns
 TextBox Components
-powershell$textBox = [TextBoxComponent]::new("MyTextBox")
+```powershell
+$textBox = [TextBoxComponent]::new("MyTextBox")
 $textBox.IsFocusable = $true
 $textBox.TabIndex = 0
 $textBox.Placeholder = "Enter text..."
@@ -158,18 +249,21 @@ $textBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
     $this.ShowCursor = $true
     $this.RequestRedraw()
 } -Force
+```
+
 ListBox Components
-powershell$listBox = [ListBox]::new("MyList")
+```powershell
+$listBox = [ListBox]::new("MyList")
 $listBox.IsFocusable = $true
 $listBox.TabIndex = 1
 
-# Focus feedback
-$listBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-    $this.BorderColor = Get-ThemeColor "primary.accent"
-    $this.RequestRedraw()
-} -Force
+# NOTE: ListBox already has OnFocus/OnBlur methods - DO NOT override with Add-Member
+# They handle focus automatically
+```
+
 Button Components
-powershell$button = [ButtonComponent]::new("Save")
+```powershell
+$button = [ButtonComponent]::new("Save")
 $button.IsFocusable = $true
 $button.TabIndex = 2
 $button.OnClick = { $this.SaveData() }
@@ -179,11 +273,15 @@ $button | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
     $this.BackgroundColor = Get-ThemeColor "button.focused"
     $this.RequestRedraw()
 } -Force
+```
+
 Non-Focusable Elements
-powershell# Labels, panels, decorative elements
+```powershell
+# Labels, panels, decorative elements
 $label = [LabelComponent]::new("Title")
 $label.IsFocusable = $false  # Cannot receive focus
 $label.Text = "My Form"
+```
 What NOT to Do
 
 DON'T handle Tab in your screen
@@ -204,20 +302,31 @@ Escape goes back
 Visual focus indicators update
 
 Common Fixes
+
+"The term 'if' is not recognized"
+Remove all inline if expressions from class methods
+Use proper variable assignments instead
+Example: Replace (if ($condition) { 2 } else { 0 }) with separate if statement
+
 "Method not found: SetBackgroundColor"
 Change $component.SetBackgroundColor("#123") to $component.BackgroundColor = "#123"
-"Tab doesn't work"
 
+"Tab doesn't work"
 Ensure IsFocusable = $true on all interactive components
 Remove any manual Tab handling
 Call ([Screen]$this).HandleInput($keyInfo) first
 
 "Focus doesn't show"
 Add the OnFocus/OnBlur overrides with Add-Member -Force
-"Text input doesn't work"
 
+"Text input doesn't work"
 Component must be focusable
 Component needs proper HandleInput method
 Don't handle text input in the screen
+
+"Menu/content not showing in Panel"
+Override _RenderContent() NOT OnRender() in your screen
+Call ([UIElement]$this)._RenderContent() FIRST
+Then draw your content - it will appear on TOP of Panel
 
 Follow this guide exactly and your screens will work.
