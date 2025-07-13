@@ -234,12 +234,22 @@ function Start-AxiomPhoenix {
         foreach ($serviceName in $serviceNames) {
             try {
                 $service = $ServiceContainer.GetService($serviceName)
-                if ($service) { $global:TuiState.Services[$serviceName] = $service }
+                if ($service) { 
+                    $global:TuiState.Services[$serviceName] = $service
+                    # Log successful service registration
+                    if ($serviceName -eq 'Logger' -and $service) {
+                        $service.Log("Logger service registered in global state", "Debug")
+                    }
+                }
             }
             catch {
-                Write-Log -Level Warning -Message "Failed to get service '$serviceName': $($_.Exception.Message)"
+                # Can't use Write-Log yet if Logger isn't loaded
+                Write-Host "Failed to get service '$serviceName': $($_.Exception.Message)" -ForegroundColor Red
             }
         }
+        
+        # Now that Logger is loaded, write a startup log
+        Write-Log -Level Info -Message "Start-AxiomPhoenix: Services loaded, initializing engine"
         
         Initialize-TuiEngine
         

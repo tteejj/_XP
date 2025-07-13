@@ -252,11 +252,21 @@ class NewTaskScreen : Screen {
     
     hidden [string] GetPriorityColor([TaskPriority]$priority) {
         switch ($priority) {
-            ([TaskPriority]::Low) { return Get-ThemeColor "status.success" "#00d563" }
-            ([TaskPriority]::Medium) { return Get-ThemeColor "status.warning" "#ffcc02" }
-            ([TaskPriority]::High) { return Get-ThemeColor "status.error" "#d13438" }
-            default { return Get-ThemeColor "label.foreground" "#d4d4d4" }
+            ([TaskPriority]::Low) { 
+                return Get-ThemeColor "status.success" "#00d563" 
+            }
+            ([TaskPriority]::Medium) { 
+                return Get-ThemeColor "status.warning" "#ffcc02" 
+            }
+            ([TaskPriority]::High) { 
+                return Get-ThemeColor "status.error" "#d13438" 
+            }
+            default { 
+                return Get-ThemeColor "label.foreground" "#d4d4d4" 
+            }
         }
+        # Explicit fallback return to satisfy PowerShell parser
+        return Get-ThemeColor "label.foreground" "#d4d4d4"
     }
     
     hidden [void] _UpdatePriorityDisplay() {

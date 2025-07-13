@@ -73,6 +73,21 @@ class KeybindingService {
         return $false
     }
     
+    # Defensive overload to catch incorrect calls with stack trace
+    [bool] IsAction([System.ConsoleKeyInfo]$keyInfo) {
+        $stack = Get-PSCallStack
+        $caller = if ($stack.Count -gt 1) { $stack[1].Command } else { "Unknown" }
+        Write-Log -Level Warning -Message "IsAction called with only 1 parameter from: $caller. This is incorrect usage - IsAction requires (keyInfo, actionName)"
+        
+        # Log the full stack for debugging
+        Write-Log -Level Debug -Message "Full stack trace:"
+        foreach ($frame in $stack) {
+            Write-Log -Level Debug -Message "  - $($frame.Command) at $($frame.Location)"
+        }
+        
+        return $false
+    }
+    
     [string] GetAction([System.ConsoleKeyInfo]$keyInfo) {
         $keyPattern = $this._GetKeyPattern($keyInfo)
         

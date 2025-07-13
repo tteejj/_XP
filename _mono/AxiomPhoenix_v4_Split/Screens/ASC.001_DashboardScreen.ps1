@@ -17,6 +17,9 @@ class MenuListComponent : Component {
         $this._menuItems = [List[string]]::new()
         $this.IsFocusable = $true
         $this.TabIndex = 0
+        $this.Enabled = $true  # Make sure it's enabled
+        $this.Visible = $true  # Make sure it's visible
+        Write-Log -Level Debug -Message "MenuListComponent constructor: IsFocusable=$($this.IsFocusable), TabIndex=$($this.TabIndex)"
     }
     
     [void] AddMenuItem([string]$text) {
@@ -40,7 +43,10 @@ class MenuListComponent : Component {
     }
     
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if (-not $this.IsFocused) { return $false }
+        if (-not $this.IsFocused) { 
+            Write-Log -Level Debug -Message "MenuListComponent.HandleInput: Not focused, returning false"
+            return $false 
+        }
         
         Write-Log -Level Debug -Message "MenuListComponent.HandleInput: Key=$($keyInfo.Key), IsFocused=$($this.IsFocused)"
         
@@ -110,6 +116,8 @@ class MenuListComponent : Component {
             Write-Log -Level Debug -Message "MenuListComponent.OnRender: _private_buffer is null!"
             return 
         }
+        
+        Write-Log -Level Debug -Message "MenuListComponent.OnRender: IsFocused=$($this.IsFocused), SelectedIndex=$($this._selectedIndex)"
         
         $buffer = $this._private_buffer
         
@@ -217,6 +225,9 @@ class DashboardScreen : Screen {
         $this._menuList.IsFocusable = $true
         $this._menuList.TabIndex = 0
         $this._menuList.Visible = $true
+        $this._menuList.Enabled = $true  # Ensure it's enabled
+        
+        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Created MenuList - IsFocusable=$($this._menuList.IsFocusable), Visible=$($this._menuList.Visible), Enabled=$($this._menuList.Enabled)"
         
         # Set colors with PROPERTIES
         $this._menuList.BackgroundColor = Get-ThemeColor "Input.Background" "#262626"
@@ -274,9 +285,15 @@ class DashboardScreen : Screen {
         # MUST call base to set initial focus
         ([Screen]$this).OnEnter()
         
+        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Base OnEnter called"
+        
         # Explicitly focus the menu list if nothing is focused
-        if ($null -eq $this.GetFocusedChild() -and $this._menuList) {
+        $focusedChild = $this.GetFocusedChild()
+        if ($null -eq $focusedChild -and $this._menuList) {
+            Write-Log -Level Debug -Message "DashboardScreen.OnEnter: No focused child, setting focus to menu list"
             $this.SetChildFocus($this._menuList)
+        } else {
+            Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Focused child is $($focusedChild.Name)"
         }
         
         $this.RefreshThemeColors()
@@ -319,10 +336,15 @@ class DashboardScreen : Screen {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Key=$($keyInfo.Key), Char='$($keyInfo.KeyChar)', Modifiers=$($keyInfo.Modifiers)"
+        
         # ALWAYS FIRST - Let base handle Tab and component routing
         if (([Screen]$this).HandleInput($keyInfo)) {
+            Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Base class handled input"
             return $true
         }
+        
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: Base class did not handle, checking screen shortcuts"
         
         # ONLY screen-level shortcuts here
         # Handle direct number key shortcuts (global shortcuts)
@@ -353,10 +375,12 @@ class DashboardScreen : Screen {
         
         # Check for Ctrl+P (Command Palette)
         if ($keyInfo.Key -eq [ConsoleKey]::P -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) {
+            Write-Log -Level Debug -Message "DashboardScreen: Ctrl+P detected"
             $this.ExecuteMenuItem(6)
             return $true
         }
         
+        Write-Log -Level Debug -Message "DashboardScreen.HandleInput: No handler found for input"
         return $false
     }
     

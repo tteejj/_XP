@@ -63,7 +63,14 @@ try {
     
     # Register core services
     Write-Host "  • Registering Logger..." -ForegroundColor Gray
-    $container.Register("Logger", [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log")))
+    $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
+    $logger.EnableFileLogging = $true
+    $logger.MinimumLevel = "Debug"  # Enable debug logging to see what's happening
+    $logger.EnableConsoleLogging = $false  # Set to true if you want console output
+    $container.Register("Logger", $logger)
+    
+    # Write initial log entry
+    $logger.Log("Axiom-Phoenix v4.0 starting up at $(Get-Date)", "Info")
     
     Write-Host "  • Registering EventManager..." -ForegroundColor Gray  
     $container.Register("EventManager", [EventManager]::new())
@@ -268,11 +275,18 @@ try {
     Write-Host "`nStarting Axiom-Phoenix v4.0..." -ForegroundColor Cyan
     Write-Host "Press Ctrl+P to open command palette, Ctrl+Q to quit" -ForegroundColor Yellow
     Write-Host "Press 3 from Dashboard to view Projects (full CRUD support)" -ForegroundColor Yellow
+    Write-Host "Log file: $(Join-Path $env:TEMP "axiom-phoenix.log")" -ForegroundColor Gray
     Start-Sleep -Seconds 1
+    
+    # Write log before creating dashboard
+    $logger.Log("Creating Dashboard screen instance", "Debug")
     
     $dashboardScreen = [DashboardScreen]::new($container)
     Write-Host "Initializing Dashboard screen..." -ForegroundColor Yellow
+    
+    $logger.Log("Initializing Dashboard screen", "Debug")
     $dashboardScreen.Initialize()
+    $logger.Log("Dashboard initialized successfully", "Debug")
     
     # Ensure theme is applied after services are available
     Write-Host "Applying theme to dashboard..." -ForegroundColor Yellow

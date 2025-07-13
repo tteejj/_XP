@@ -46,7 +46,7 @@ function Process-TuiInput {
         }
         
         # Check other global hotkeys with proper method signature
-        $actionName = $keybindingService.GetActionForKey($KeyInfo.Key, $KeyInfo.Modifiers)
+        $actionName = $keybindingService.GetAction($KeyInfo)
         if ($actionName) {
             Write-Log -Level Debug -Message "Global hotkey detected: $actionName"
             $actionService = $global:TuiState.Services.ActionService

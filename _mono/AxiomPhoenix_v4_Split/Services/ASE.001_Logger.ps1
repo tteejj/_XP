@@ -80,8 +80,8 @@ class Logger {
         # Add to queue
         $this.LogQueue.Enqueue($logEntry)
         
-        # Flush if queue is getting large
-        if ($this.LogQueue.Count -ge $this.MaxQueueSize) {
+        # FIXED: Always write to file immediately for TUI apps
+        if ($this.EnableFileLogging) {
             $this.Flush()
         }
         
