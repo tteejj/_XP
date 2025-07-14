@@ -44,7 +44,8 @@ class NumericInputComponent : UIElement {
         try {
             $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
             $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            $borderColorValue = Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor
+            if ($this.IsFocused) { $borderColorValue = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" }
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             
@@ -54,7 +55,8 @@ class NumericInputComponent : UIElement {
                 -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = "Single" }
             
             # Draw spinners
-            $spinnerColor = if ($this.IsFocused) { "#FFFF00" } else { "#808080" }
+            $spinnerColor = "#808080"
+            if ($this.IsFocused) { $spinnerColor = "#FFFF00" }
             $this._private_buffer.SetCell($this.Width - 2, 1, [TuiCell]::new('▲', $spinnerColor, $bgColor))
             $this._private_buffer.SetCell($this.Width - 2, $this.Height - 2, [TuiCell]::new('▼', $spinnerColor, $bgColor))
             

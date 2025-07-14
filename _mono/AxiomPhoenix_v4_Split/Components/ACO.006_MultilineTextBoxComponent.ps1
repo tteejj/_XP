@@ -44,7 +44,8 @@ class MultilineTextBoxComponent : UIElement {
             # Get theme-aware colors, using component properties as defaults if not found in theme
             $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
             $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
-            $borderColorValue = if ($this.IsFocused) { Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" } else { Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor }
+            $borderColorValue = Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor
+            if ($this.IsFocused) { $borderColorValue = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" }
             
             # Clear buffer with background color
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))

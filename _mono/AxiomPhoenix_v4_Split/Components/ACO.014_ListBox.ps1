@@ -193,9 +193,11 @@ class ListBox : UIElement {
         $itemText = ""
         
         if ($item -is [string]) {
-            $itemText = if ([string]::IsNullOrEmpty($item)) { " " } else { $item }
+            $itemText = $item
+            if ([string]::IsNullOrEmpty($item)) { $itemText = " " }
         } else {
-            $itemText = if ($null -eq $item) { " " } else { $item.ToString() }
+            $itemText = " "
+            if ($null -ne $item) { $itemText = $item.ToString() }
         }
         
         if ($itemText.Length -gt $contentWidth) {

@@ -49,7 +49,8 @@ class GroupPanel : Panel {
 
         # Add expand/collapse indicator to title
         if ($this.CanCollapse -and $this.Title) {
-            $indicator = if ($this.IsExpanded) { "[-]" } else { "[+]" }
+            $indicator = "[+]"
+            if ($this.IsExpanded) { $indicator = "[-]" }
             # Ensure the title doesn't accumulate indicators
             $this.Title = "$indicator $($this.Title.TrimStart('[+]', '[-]').Trim())"
         }

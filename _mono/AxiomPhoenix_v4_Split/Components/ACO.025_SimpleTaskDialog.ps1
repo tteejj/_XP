@@ -47,7 +47,9 @@ class SimpleTaskDialog : Screen {
         $this._dialogPanel.Y = [Math]::Floor(($this.Height - $dialogHeight) / 2)
         $this._dialogPanel.Width = $dialogWidth
         $this._dialogPanel.Height = $dialogHeight
-        $this._dialogPanel.Title = if ($this._isNewTask) { " New Task " } else { " Edit Task " }
+        $dialogTitle = " Edit Task "
+        if ($this._isNewTask) { $dialogTitle = " New Task " }
+        $this._dialogPanel.Title = $dialogTitle
         $this._dialogPanel.BorderStyle = "Double"
         $this._dialogPanel.IsFocusable = $false # Decorative
         $this.AddChild($this._dialogPanel)

@@ -48,7 +48,8 @@ class TextBoxComponent : UIElement {
         # FIXED: Use effective colors from base class
         $bgColor = $this.GetEffectiveBackgroundColor()
         $fgColor = $this.GetEffectiveForegroundColor()
-        $borderColorValue = if ($this.IsFocused) { Get-ThemeColor "Input.FocusedBorder" "#007acc" } else { $this.GetEffectiveBorderColor() }
+        $borderColorValue = $this.GetEffectiveBorderColor()
+        if ($this.IsFocused) { $borderColorValue = Get-ThemeColor "Input.FocusedBorder" "#007acc" }
         
         # Clear buffer with the correct background color
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
@@ -65,9 +66,10 @@ class TextBoxComponent : UIElement {
 
         if ($this.Text.Length -eq 0 -and -not [string]::IsNullOrEmpty($this.Placeholder)) {
             # Draw placeholder
-            $placeholderText = if ($this.Placeholder.Length -gt $contentWidth) {
-                $this.Placeholder.Substring(0, $contentWidth)
-            } else { $this.Placeholder }
+            $placeholderText = $this.Placeholder
+            if ($this.Placeholder.Length -gt $contentWidth) {
+                $placeholderText = $this.Placeholder.Substring(0, $contentWidth)
+            }
             
             $textStyle = @{ FG = $this.PlaceholderColor; BG = $bgColor }
             Write-TuiText -Buffer $this._private_buffer -X $contentStartX -Y $contentY -Text $placeholderText -Style $textStyle
@@ -101,7 +103,9 @@ class TextBoxComponent : UIElement {
                 $cursorX = $contentStartX + $cursorScreenPos
                 
                 # FIXED: Simplified cursor rendering
-                $charUnderCursor = if ($this.CursorPosition -lt $this.Text.Length) { $this.Text[$this.CursorPosition] } else { ' ' }
+                $charUnderCursor = ' '
+                if ($this.CursorPosition -lt $this.Text.Length) { $charUnderCursor = $this.Text[$this.CursorPosition] }
+                
                 $cursorFg = $bgColor
                 $cursorBg = $fgColor
                 

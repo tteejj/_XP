@@ -236,7 +236,8 @@ class Table : UIElement {
         $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         
         for ($i = 0; $i -lt $height; $i++) {
-            $char = if ($i -ge $scrollbarPos -and $i -lt $scrollbarPos + $scrollbarHeight) { '█' } else { '│' }
+            $char = '│'
+            if ($i -ge $scrollbarPos -and $i -lt $scrollbarPos + $scrollbarHeight) { $char = '█' }
             $this._private_buffer.SetCell($x, $y + $i, [TuiCell]::new($char, $scrollbarColor, $bgColor))
         }
     }

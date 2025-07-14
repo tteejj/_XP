@@ -122,11 +122,10 @@ class CommandPalette : Dialog {
         $this._filteredActions.Clear()
         $this._listBox.ClearItems()
         
-        $actionsToDisplay = if ([string]::IsNullOrWhiteSpace($searchText)) { 
-            $this._allActions 
-        } else {
+        $actionsToDisplay = $this._allActions
+        if (-not [string]::IsNullOrWhiteSpace($searchText)) {
             $searchLower = $searchText.ToLower()
-            @($this._allActions | Where-Object {
+            $actionsToDisplay = @($this._allActions | Where-Object {
                 $_.Name.ToLower().Contains($searchLower) -or
                 ($_.Description -and $_.Description.ToLower().Contains($searchLower)) -or
                 ($_.Category -and $_.Category.ToLower().Contains($searchLower))
@@ -135,11 +134,8 @@ class CommandPalette : Dialog {
 
         foreach ($action in $actionsToDisplay) {
             $this._filteredActions.Add($action)
-            $displayText = if ($action.Category) { 
-                "[$($action.Category)] $($action.Name)" 
-            } else { 
-                $action.Name 
-            }
+            $displayText = $action.Name
+            if ($action.Category) { $displayText = "[$($action.Category)] $($action.Name)" }
             $this._listBox.AddItem("$displayText - $($action.Description)")
         }
         

@@ -93,11 +93,13 @@ class ServiceContainer {
         
         foreach ($key in $this._serviceFactories.Keys) {
             $factoryInfo = $this._serviceFactories[$key]
+            $lifestyle = 'Transient'
+            if ($factoryInfo.IsSingleton) { $lifestyle = 'Singleton' }
             $list.Add([pscustomobject]@{
                 Name = $key
                 Type = 'Factory'
                 Initialized = ($null -ne $factoryInfo.Instance)
-                Lifestyle = if ($factoryInfo.IsSingleton) { 'Singleton' } else { 'Transient' }
+                Lifestyle = $lifestyle
             })
         }
         

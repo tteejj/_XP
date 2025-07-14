@@ -39,8 +39,12 @@ class LabelComponent : UIElement {
     # Generate cache key based on all rendering parameters
     hidden [string] _GenerateCacheKey() {
         # FIXED: Correctly check for $null by just checking the property's truthiness
-        $fg = if ($this.ForegroundColor) { $this.ForegroundColor } else { "default" }
-        $bg = if ($this.BackgroundColor) { $this.BackgroundColor } else { "default" }
+        $fg = "default"
+        if ($this.ForegroundColor) { $fg = $this.ForegroundColor }
+        
+        $bg = "default"
+        if ($this.BackgroundColor) { $bg = $this.BackgroundColor }
+        
         return "$($this.Text)_$($this.Width)_$($this.Height)_$($fg)_$($bg)"
     }
     

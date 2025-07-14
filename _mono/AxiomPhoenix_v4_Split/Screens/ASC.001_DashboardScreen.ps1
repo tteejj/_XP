@@ -126,7 +126,8 @@ class DashboardScreen : Screen {
                     }
                 } else {
                     # Normal item
-                    $itemFg = if ($item -eq "────────────────") { Get-ThemeColor "text.muted" "#666666" } else { Get-ThemeColor "foreground" "#d4d4d4" }
+                    $itemFg = Get-ThemeColor "foreground" "#d4d4d4"
+                    if ($item -eq "────────────────") { $itemFg = Get-ThemeColor "text.muted" "#666666" }
                     $itemBg = Get-ThemeColor "background" "#1e1e1e"
                     Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $itemFg; BG = $itemBg }
                 }

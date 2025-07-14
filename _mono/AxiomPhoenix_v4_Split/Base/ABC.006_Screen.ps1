@@ -101,7 +101,9 @@ class Screen : UIElement {
         Write-Log -Level Debug -Message "Screen.OnEnter: Found $($focusable.Count) focusable components"
         $this.FocusFirstChild()
         $focused = $this.GetFocusedChild()
-        Write-Log -Level Debug -Message "Screen.OnEnter: Initial focus set to: $(if ($focused) { $focused.Name } else { 'none' })"
+        $focusedName = "none"
+        if ($focused) { $focusedName = $focused.Name }
+        Write-Log -Level Debug -Message "Screen.OnEnter: Initial focus set to: $focusedName"
     }
     [void] OnExit() { 
         # Write-Verbose "OnExit called for Screen '$($this.Name)': Default (no-op)." 
@@ -116,7 +118,9 @@ class Screen : UIElement {
     }
     
     [bool] SetChildFocus([UIElement]$component) {
-        Write-Log -Level Debug -Message "Screen.SetChildFocus: Attempting to focus $(if ($component) { $component.Name } else { 'null' }) on screen $($this.Name)"
+        $componentName = "null"
+        if ($component) { $componentName = $component.Name }
+        Write-Log -Level Debug -Message "Screen.SetChildFocus: Attempting to focus $componentName on screen $($this.Name)"
         
         if ($this._focusedChild -eq $component) { 
             Write-Log -Level Debug -Message "Screen.SetChildFocus: Component already has focus"
@@ -174,7 +178,9 @@ class Screen : UIElement {
         $nextComponent = $focusable[$nextIndex]
         Write-Log -Level Debug -Message "navigation.nextComponent: Attempting to focus $($nextComponent.Name) at index $nextIndex"
         $this.SetChildFocus($nextComponent)
-        Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $(if ($this._focusedChild) { $this._focusedChild.Name } else { 'none' })"
+        $focusedName = "none"
+        if ($this._focusedChild) { $focusedName = $this._focusedChild.Name }
+        Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $focusedName"
     }
     
     [void] FocusPreviousChild() {
@@ -197,7 +203,9 @@ class Screen : UIElement {
         $prevComponent = $focusable[$prevIndex]
         Write-Log -Level Debug -Message "navigation.previousComponent: Attempting to focus $($prevComponent.Name) at index $prevIndex"
         $this.SetChildFocus($prevComponent)
-        Write-Log -Level Debug -Message "navigation.previousComponent: New focus: $(if ($this._focusedChild) { $this._focusedChild.Name } else { 'none' })"
+        $focusedName = "none"
+        if ($this._focusedChild) { $focusedName = $this._focusedChild.Name }
+        Write-Log -Level Debug -Message "navigation.previousComponent: New focus: $focusedName"
     }
     
     [void] FocusFirstChild() {
@@ -459,7 +467,8 @@ class Screen : UIElement {
     }
 
     [string] ToString() {
-        $panelCount = if ($this.Panels) { $this.Panels.Count } else { 0 }
+        $panelCount = 0
+        if ($this.Panels) { $panelCount = $this.Panels.Count }
         return "Screen(Name='$($this.Name)', Panels=$panelCount, Visible=$($this.Visible))"
     }
 

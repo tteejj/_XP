@@ -106,13 +106,26 @@ class TuiBuffer {
         
         # Extract properties from the style object, providing safe defaults (now expecting hex colors)
         # Use hashtable indexing syntax to avoid "property not found" errors
-        $fg = if ($style.ContainsKey('FG')) { $style['FG'] } else { "#FFFFFF" } # Default Foreground hex
-        $bg = if ($style.ContainsKey('BG')) { $style['BG'] } else { "#000000" } # Default Background hex
-        $bold = if ($style.ContainsKey('Bold')) { [bool]$style['Bold'] } else { $false }
-        $italic = if ($style.ContainsKey('Italic')) { [bool]$style['Italic'] } else { $false }
-        $underline = if ($style.ContainsKey('Underline')) { [bool]$style['Underline'] } else { $false }
-        $strikethrough = if ($style.ContainsKey('Strikethrough')) { [bool]$style['Strikethrough'] } else { $false }
-        $zIndex = if ($style.ContainsKey('ZIndex')) { [int]$style['ZIndex'] } else { 0 }
+        $fg = "#FFFFFF"  # Default Foreground hex
+        if ($style.ContainsKey('FG')) { $fg = $style['FG'] }
+        
+        $bg = "#000000"  # Default Background hex
+        if ($style.ContainsKey('BG')) { $bg = $style['BG'] }
+        
+        $bold = $false
+        if ($style.ContainsKey('Bold')) { $bold = [bool]$style['Bold'] }
+        
+        $italic = $false
+        if ($style.ContainsKey('Italic')) { $italic = [bool]$style['Italic'] }
+        
+        $underline = $false
+        if ($style.ContainsKey('Underline')) { $underline = [bool]$style['Underline'] }
+        
+        $strikethrough = $false
+        if ($style.ContainsKey('Strikethrough')) { $strikethrough = [bool]$style['Strikethrough'] }
+        
+        $zIndex = 0
+        if ($style.ContainsKey('ZIndex')) { $zIndex = [int]$style['ZIndex'] }
 
         $currentX = $x
         foreach ($char in $text.ToCharArray()) {
@@ -240,12 +253,23 @@ class TuiBuffer {
         if ($width -le 0 -or $height -le 0) { return }
         
         # Extract style properties
-        $fg = if ($style.ContainsKey('FG')) { $style['FG'] } else { "#FFFFFF" }
-        $bg = if ($style.ContainsKey('BG')) { $style['BG'] } else { "#000000" }
-        $bold = if ($style.ContainsKey('Bold')) { [bool]$style['Bold'] } else { $false }
-        $italic = if ($style.ContainsKey('Italic')) { [bool]$style['Italic'] } else { $false }
-        $underline = if ($style.ContainsKey('Underline')) { [bool]$style['Underline'] } else { $false }
-        $strikethrough = if ($style.ContainsKey('Strikethrough')) { [bool]$style['Strikethrough'] } else { $false }
+        $fg = "#FFFFFF"
+        if ($style.ContainsKey('FG')) { $fg = $style['FG'] }
+        
+        $bg = "#000000"
+        if ($style.ContainsKey('BG')) { $bg = $style['BG'] }
+        
+        $bold = $false
+        if ($style.ContainsKey('Bold')) { $bold = [bool]$style['Bold'] }
+        
+        $italic = $false
+        if ($style.ContainsKey('Italic')) { $italic = [bool]$style['Italic'] }
+        
+        $underline = $false
+        if ($style.ContainsKey('Underline')) { $underline = [bool]$style['Underline'] }
+        
+        $strikethrough = $false
+        if ($style.ContainsKey('Strikethrough')) { $strikethrough = [bool]$style['Strikethrough'] }
         
         # Fill the rectangle
         for ($fy = $y; $fy -lt ($y + $height); $fy++) {
