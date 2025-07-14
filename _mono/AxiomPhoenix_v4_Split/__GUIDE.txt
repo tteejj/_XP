@@ -34,12 +34,28 @@ SCREENS handle:
 $value = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
 $result = $this.Method(if ($condition) { $a } else { $b })
 
+# ❌ FATAL - Variable assignments INSIDE hashtables break parser
+return @{
+    Name = $this.Name
+    $dateStr = $null  # PARSER ERROR - assignments not allowed here
+    if ($this.Date) { $dateStr = $this.Date.ToString() }  # PARSER ERROR
+    Date = $dateStr
+}
+
 # ✅ ONLY WAY - Separate statements
 $borderOffset = 0
 if ($this.HasBorder) { $borderOffset = 2 }
 $value = $this.Height - $borderOffset
+
+# ✅ ONLY WAY - Variables BEFORE hashtables
+$dateStr = $null
+if ($this.Date) { $dateStr = $this.Date.ToString() }
+return @{
+    Name = $this.Name
+    Date = $dateStr
+}
 ```
-**WHY:** PowerShell's parser fails with inline if expressions inside class methods. This is a language limitation, not a style choice.
+**WHY:** PowerShell's parser fails with inline if expressions inside class methods. Variables cannot be assigned inside hashtable literals. This is a language limitation, not a style choice.
 
 ### Rule 2: GetFocusedChild() is a METHOD, Not a Property
 ```powershell

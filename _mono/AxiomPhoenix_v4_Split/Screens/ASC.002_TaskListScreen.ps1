@@ -729,7 +729,8 @@ class TaskListScreen : Screen {
             }
             ([ConsoleKey]::Enter) {
                 # If task list has focus and a task is selected, edit it
-                if ($this.FocusedChild -eq $this._taskListBox -and $this._selectedTask) {
+                $focusedChild = $this.GetFocusedChild()
+                if ($focusedChild -eq $this._taskListBox -and $this._selectedTask) {
                     $this._ShowEditTaskDialog()
                     return $true
                 }
@@ -737,7 +738,8 @@ class TaskListScreen : Screen {
             }
             ([ConsoleKey]::Spacebar) {
                 # If task list has focus and a task is selected, toggle completion
-                if ($this.FocusedChild -eq $this._taskListBox -and $this._selectedTask) {
+                $focusedChild = $this.GetFocusedChild()
+                if ($focusedChild -eq $this._taskListBox -and $this._selectedTask) {
                     $this._CompleteTask()
                     return $true
                 }
@@ -745,7 +747,8 @@ class TaskListScreen : Screen {
             }
             ([ConsoleKey]::Delete) {
                 # If task list has focus and a task is selected, delete it
-                if ($this.FocusedChild -eq $this._taskListBox -and $this._selectedTask) {
+                $focusedChild = $this.GetFocusedChild()
+                if ($focusedChild -eq $this._taskListBox -and $this._selectedTask) {
                     $this._DeleteTask()
                     return $true
                 }

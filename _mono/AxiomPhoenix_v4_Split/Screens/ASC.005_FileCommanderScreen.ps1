@@ -146,23 +146,7 @@ class FileCommanderScreen : Screen {
             $this.RequestRedraw()
         }.GetNewClosure() -Force
         
-        # Handle item selection and directory navigation
-        $this._leftFileList | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
-            param([System.ConsoleKeyInfo]$keyInfo)
-            
-            if (-not $this.IsFocused) { return $false }
-            
-            # Handle Enter for directory navigation
-            if ($keyInfo.Key -eq [ConsoleKey]::Enter) {
-                $screen = $this.Parent.Parent.Parent  # Go up to screen level
-                $screen.EnterDirectoryLeft()
-                return $true
-            }
-            
-            # Let base ListBox handle navigation (arrows, page up/down, etc.)
-            # This ensures default ListBox navigation still works
-            return ([ListBox]$this).HandleInput($keyInfo)
-        }.GetNewClosure() -Force
+        # Handle item selection and directory navigation - NO HandleInput override
         
         $this._leftPanel.AddChild($this._leftFileList)
 
@@ -215,22 +199,7 @@ class FileCommanderScreen : Screen {
             $this.RequestRedraw()
         }.GetNewClosure() -Force
         
-        # Handle item selection and directory navigation
-        $this._rightFileList | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
-            param([System.ConsoleKeyInfo]$keyInfo)
-            
-            if (-not $this.IsFocused) { return $false }
-            
-            # Handle Enter for directory navigation
-            if ($keyInfo.Key -eq [ConsoleKey]::Enter) {
-                $screen = $this.Parent.Parent.Parent  # Go up to screen level
-                $screen.EnterDirectoryRight()
-                return $true
-            }
-            
-            # Let base ListBox handle navigation (arrows, page up/down, etc.)
-            return ([ListBox]$this).HandleInput($keyInfo)
-        }.GetNewClosure() -Force
+        # Handle item selection and directory navigation - NO HandleInput override
         
         $this._rightPanel.AddChild($this._rightFileList)
 
@@ -708,6 +677,17 @@ class FileCommanderScreen : Screen {
         
         # Handle global shortcuts that work regardless of focus
         switch ($key.Key) {
+            ([ConsoleKey]::Enter) {
+                # Handle Enter for directory navigation based on focused list
+                $focusedChild = $this.GetFocusedChild()
+                if ($focusedChild -eq $this._leftFileList) {
+                    $this.EnterDirectoryLeft()
+                    return $true
+                } elseif ($focusedChild -eq $this._rightFileList) {
+                    $this.EnterDirectoryRight()
+                    return $true
+                }
+            }
             # Function keys
             ([ConsoleKey]::F1) {
                 $this.ShowHelp()
