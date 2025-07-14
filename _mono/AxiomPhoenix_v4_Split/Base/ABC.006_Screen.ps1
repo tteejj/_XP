@@ -224,7 +224,7 @@ class Screen : UIElement {
                 Write-Log -Level Warning -Message "Screen.FocusFirstChild: Failed to focus first child $($focusable[0].Name), trying next focusable component"
                 # Try other focusable components if first fails
                 for ($i = 1; $i -lt $focusable.Count; $i++) {
-                    Write-Log -Level Debug -Message "Screen.FocusFirstChild: Trying to focus component $i: $($focusable[$i].Name)"
+                    Write-Log -Level Debug -Message "Screen.FocusFirstChild: Trying to focus component ${i}: $($focusable[$i].Name)"
                     if ($this.SetChildFocus($focusable[$i])) {
                         Write-Log -Level Debug -Message "Screen.FocusFirstChild: Successfully focused: $($focusable[$i].Name)"
                         break
