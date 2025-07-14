@@ -1,332 +1,425 @@
-# Axiom-Phoenix v4.1 - THE ACTUAL WORKING GUIDE
+Of course. It's critical to have the guide handy. Here is the definitive guide for the Axiom-Phoenix v4.1 framework, restored from the provided `diff`.
 
-## Critical Issues to Avoid
+---
 
-### 1. CRITICAL: No Inline If Expressions in Class Methods
+### File: `Guide.txt`
 
+```
+# Axiom-Phoenix v4.1 - DEFINITIVE IMPLEMENTATION GUIDE
+
+## FUNDAMENTAL TRUTHS ABOUT THIS FRAMEWORK
+
+### The Architecture Philosophy
+```
+COMPONENTS handle:
+  - Visual rendering (how they look)
+  - Internal state (selected index, text content)
+  - Navigation within component (arrows, scrolling)
+  - Their own focus visuals
+
+SCREENS handle:
+  - Component interactions (what happens when)
+  - Business logic (save, delete, create)
+  - Action handling (what Enter/Delete/etc. do)
+  - Service coordination
+```
+
+**This separation is INTENTIONAL and GOOD. Don't fight it.**
+
+## ABSOLUTE RULES - NO EXCEPTIONS
+
+### Rule 1: NO Inline If Expressions in Class Methods
 ```powershell
-# WRONG - These break PowerShell class execution context
-$pageSize = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
-$visibleHeight = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
-$result = $this.Calculate(if ($condition) { $value1 } else { $value2 })
+# ❌ FATAL - This BREAKS PowerShell itself
+$value = $this.Height - (if ($this.HasBorder) { 2 } else { 0 })
+$result = $this.Method(if ($condition) { $a } else { $b })
 
-# RIGHT - Use proper variable assignments
+# ✅ ONLY WAY - Separate statements
 $borderOffset = 0
 if ($this.HasBorder) { $borderOffset = 2 }
-$pageSize = $this.Height - $borderOffset
-
-# NEVER use ternary-style if expressions within parentheses in class methods!
-# They corrupt the PowerShell execution context and cause "The term 'if' is not recognized" errors.
+$value = $this.Height - $borderOffset
 ```
+**WHY:** PowerShell's parser fails with inline if expressions inside class methods. This is a language limitation, not a style choice.
 
-### 2. Screen Rendering Order - Override _RenderContent Not OnRender
-
+### Rule 2: GetFocusedChild() is a METHOD, Not a Property
 ```powershell
-# WRONG - This draws BEFORE children render, so Panel clears your content
+# ❌ WRONG - FocusedChild is NOT a property
+if ($this.FocusedChild -eq $this._listBox) { }
+
+# ✅ CORRECT - Use the METHOD
+$focused = $this.GetFocusedChild()
+if ($focused -eq $this._listBox) { }
+```
+**WHY:** The framework uses a method to ensure the focused child is always calculated correctly. A property could become stale.
+
+### Rule 3: Screen Rendering - Use _RenderContent for Overlays
+```powershell
+# ❌ WRONG - Your content gets ERASED
 [void] OnRender() {
-    ([Screen]$this).OnRender()  # Renders Panel
-    # Your menu items drawn here get CLEARED by Panel's background
+    ([Screen]$this).OnRender()  # Panel renders and CLEARS everything
+    # Your beautiful menu is now gone
 }
 
-# RIGHT - Override _RenderContent to draw AFTER children
+# ✅ CORRECT - Content draws AFTER children
 hidden [void] _RenderContent() {
-    # First let base render all children (Panel renders here)
-    ([UIElement]$this)._RenderContent()
-    
-    # Then draw your content on TOP of rendered children
-    if ($this._panel -and $this._private_buffer) {
-        # Your menu items drawn here appear OVER Panel's content area
-    }
+    ([UIElement]$this)._RenderContent()  # Panel renders first
+    # NOW your content draws on TOP of the panel
 }
-
-# The rendering pipeline:
-# 1. Screen._RenderContent() is called
-# 2. Base._RenderContent() renders all children (Panel, etc.)
-# 3. Your code runs AFTER, drawing on top of children
-# 4. Everything displays correctly
 ```
+**WHY:** The rendering pipeline is: Background → Children → Content. OnRender happens too early.
 
-## Core Rules That Actually Work
-
-1. Color Setting - Use Properties ONLY
+### Rule 4: NEVER Override Existing Component Methods
 ```powershell
-# WRONG - These methods don't exist
-$component.SetBackgroundColor("#123456")
+# ❌ FATAL - This BREAKS the component
+$listBox | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
+    # This overrides ListBox's navigation!
+} -Force
 
-# RIGHT - Use properties
+# ✅ CORRECT - Let components do their job
+# ListBox already handles arrows/scrolling
+# Your SCREEN handles what Enter does
+```
+**WHY:** Components have carefully designed behaviors. Overriding breaks their functionality.
+
+### Rule 5: Color Setting - Properties ONLY
+```powershell
+# ❌ THESE METHODS DO NOT EXIST
+$component.SetBackgroundColor("#123456")
+$component.SetForegroundColor("#FFFFFF")
+
+# ✅ USE PROPERTIES
 $component.BackgroundColor = "#123456"
 $component.ForegroundColor = Get-ThemeColor "foreground"
-$component.BorderColor = Get-ThemeColor "border"
 ```
+**WHY:** The framework uses properties for all visual attributes. There are no setter methods.
 
-2. Components MUST Be Focusable
+## COMPONENT REFERENCE - WHAT EACH COMPONENT HANDLES
+
+### ListBox
+**Built-in Methods:** HandleInput, OnFocus, OnBlur  
+**Handles:** Up/Down arrows, PageUp/PageDown, Home/End  
+**Does NOT Handle:** Enter key (intentionally!)  
+**Triggers:** SelectedIndexChanged event when selection changes  
+**Your Screen Must:** Decide what Enter does (edit? delete? navigate?)
+
+### TextBox
+**Built-in Methods:** HandleInput  
+**Missing:** OnFocus, OnBlur (you must add these)  
+**Handles:** All typing, backspace, cursor movement  
+**Your Screen Must:** Add focus handlers if you want visual feedback
+
+### ButtonComponent
+**Built-in Methods:** HandleInput  
+**Handles:** Space and Enter when focused (triggers OnClick)  
+**Your Screen Must:** Set the OnClick handler
+
+### ComboBox
+**Built-in Methods:** HandleInput, OnFocus, OnBlur  
+**Handles:** Dropdown navigation, selection  
+**Your Screen Must:** Handle selection changes
+
+### Panel
+**Built-in Methods:** Basic rendering  
+**Not Focusable:** By default (container only)  
+**Your Screen Must:** Nothing - it's just a container
+
+## THE STANDARD SCREEN PATTERN - USE THIS EVERY TIME
+
+### 1. Constructor - Get ALL Services Here
 ```powershell
-# WRONG - Never do this
-$textBox.IsFocusable = $false
-
-# RIGHT - Interactive components are focusable
-$textBox.IsFocusable = $true
-$textBox.TabIndex = 0  # Set order: 0, 1, 2, etc.
-```
-
-3. Override Focus Methods with Add-Member
-```powershell
-# ONLY for components that DON'T already have OnFocus/OnBlur methods
-# Check first: ListBox, ComboBox, and some others already have these!
-
-# After creating any focusable component that needs focus methods:
-$component | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-    $this.BorderColor = Get-ThemeColor "primary.accent"
-    $this.ShowCursor = $true  # For text inputs only
-    $this.RequestRedraw()
-} -Force
-
-$component | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-    $this.BorderColor = Get-ThemeColor "border"
-    $this.ShowCursor = $false
-    $this.RequestRedraw()
-} -Force
-```
-
-4. Screen HandleInput Pattern
-```powershell[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-    if ($null -eq $keyInfo) { return $false }
+class MyScreen : Screen {
+    # Declare ALL services as hidden fields
+    hidden [NavigationService] $_navService
+    hidden [DialogManager] $_dialogManager
+    hidden [DataManager] $_dataManager
+    hidden [FocusManager] $_focusManager
     
-    # ALWAYS FIRST - Let base handle Tab and component routing
-    if (([Screen]$this).HandleInput($keyInfo)) {
-        return $true
-    }
-    
-    # ONLY screen-level shortcuts here
-    switch ($keyInfo.Key) {
-        ([ConsoleKey]::Escape) {
-            $navService = $this.ServiceContainer.GetService("NavigationService")
-            if ($navService.CanGoBack()) {
-                $navService.GoBack()
-            }
-            return $true
-        }
-        ([ConsoleKey]::F5) {
-            $this.RefreshData()
-            return $true
-        }
-    }
-    
-    return $false
-}
-```
-
-5. Screen-Panel Architecture Pattern
-When screens need to display content (like menus) inside a panel:
-
-```powershell
-# In Initialize() - Create Panel as container
-$this._panel = [Panel]::new("MainPanel")
-$this._panel.IsFocusable = $true
-$this._panel.HasBorder = $true
-$this._panel.Title = " My Screen Title "
-
-# Position and size the panel
-$panelWidth = [Math]::Min(60, $this.Width - 4)
-$panelHeight = [Math]::Min(16, $this.Height - 4)
-$this._panel.X = [Math]::Floor(($this.Width - $panelWidth) / 2)
-$this._panel.Y = [Math]::Floor(($this.Height - $panelHeight) / 2)
-$this._panel.Width = $panelWidth
-$this._panel.Height = $panelHeight
-
-# Add to screen
-$this.AddChild($this._panel)
-
-# CRITICAL: Override _RenderContent NOT OnRender to draw INSIDE panel
-hidden [void] _RenderContent() {
-    # Let base render Panel first
-    ([UIElement]$this)._RenderContent()
-    
-    # Then draw your content on TOP
-    if ($this._panel -and $this._private_buffer) {
-        # Calculate Panel's content area (inside border)
-        $contentX = $this._panel.X + 2
-        $contentY = $this._panel.Y + 1
-        $contentWidth = $this._panel.Width - 4
-        $contentHeight = $this._panel.Height - 2
-        
-        # Draw your menu/content here
-        Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $contentY -Text "Menu Item"
+    MyScreen([object]$serviceContainer) : base("MyScreen", $serviceContainer) {
+        # Get ALL services in constructor - NEVER in methods
+        $this._navService = $serviceContainer.GetService("NavigationService")
+        $this._dialogManager = $serviceContainer.GetService("DialogManager")
+        $this._dataManager = $serviceContainer.GetService("DataManager")
+        $this._focusManager = $serviceContainer.GetService("FocusManager")
     }
 }
-
-# WRONG - OnRender draws BEFORE children, Panel clears your content!
-[void] OnRender() {
-    ([Screen]$this).OnRender()
-    # Drawing here gets cleared by Panel's background
-}
 ```
-Step-by-Step Migration for ANY Screen
-Step 1: Remove ALL Manual Focus Tracking
-DELETE these lines:
+**WHY:** Services might be null if you get them in methods. Constructor runs once, reliably.
 
-hidden [string] $_activeComponent = "list"
-hidden [int] $_focusIndex = 0
-hidden [string[]] $_fieldOrder = @()
-Any _UpdateVisualFocus() method
-Any manual Tab handling
-
-Step 2: Fix Component Creation in Initialize()
+### 2. Initialize - Create Components
 ```powershell
 [void] Initialize() {
-    # Create component
-    $this._titleBox = [TextBoxComponent]::new("TitleBox")
+    # Create main panel
+    $this._panel = [Panel]::new("MainPanel")
+    $this._panel.Width = $this.Width - 4
+    $this._panel.Height = $this.Height - 4
+    $this._panel.X = 2
+    $this._panel.Y = 2
+    $this.AddChild($this._panel)
     
-    # Make it focusable
-    $this._titleBox.IsFocusable = $true
-    $this._titleBox.TabIndex = 0  # First in tab order
+    # Create list box
+    $this._listBox = [ListBox]::new("ItemList")
+    $this._listBox.IsFocusable = $true  # REQUIRED for interaction
+    $this._listBox.TabIndex = 0         # First in tab order
     
-    # Set colors with PROPERTIES
-    $this._titleBox.BackgroundColor = Get-ThemeColor "Input.Background"
-    $this._titleBox.ForegroundColor = Get-ThemeColor "Input.Foreground"
-    $this._titleBox.BorderColor = Get-ThemeColor "Input.Border"
+    # Set event handler with closure
+    $currentScreenRef = $this  # CRITICAL: Capture reference
+    $this._listBox.SelectedIndexChanged = {
+        param($sender, $index)
+        $currentScreenRef._HandleSelectionChange($index)
+    }.GetNewClosure()  # REQUIRED: Fixes context
     
-    # Add focus visual feedback
-    $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+    $this._panel.AddChild($this._listBox)
+    
+    # Create text box (needs focus handlers)
+    $this._textBox = [TextBoxComponent]::new("SearchBox")
+    $this._textBox.IsFocusable = $true
+    $this._textBox.TabIndex = 1
+    
+    # Add missing focus handlers
+    $this._textBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
         $this.BorderColor = Get-ThemeColor "primary.accent"
         $this.ShowCursor = $true
         $this.RequestRedraw()
     } -Force
     
-    $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+    $this._textBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
         $this.BorderColor = Get-ThemeColor "border"
         $this.ShowCursor = $false
         $this.RequestRedraw()
     } -Force
     
-    # Position and add to screen
-    $this._titleBox.X = 2
-    $this._titleBox.Y = 3
-    $this._titleBox.Width = 40
-    $this.AddChild($this._titleBox)
-}
-```
-Step 3: Fix OnEnter Method
-```powershell
-[void] OnEnter() {
-    # Your initialization code...
-    
-    # MUST call base to set initial focus
-    ([Screen]$this).OnEnter()
+    $this._panel.AddChild($this._textBox)
 }
 ```
 
-Step 4: Fix HandleInput Method
+### 3. HandleInput - The EXACT Pattern
 ```powershell
 [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
     if ($null -eq $keyInfo) { return $false }
     
-    # Base class handles Tab and routes to components
-    if (([Screen]$this).HandleInput($keyInfo)) {
-        return $true
+    # Step 1: Get focused component CORRECTLY
+    $focused = $this.GetFocusedChild()  # METHOD not property!
+    
+    # Step 2: Handle screen-level actions based on focused component
+    switch ($keyInfo.Key) {
+        ([ConsoleKey]::Enter) {
+            # Different behavior based on what's focused
+            if ($focused -eq $this._listBox -and $this._listBox.SelectedIndex -ge 0) {
+                $this._EditSelectedItem()  # Screen decides action
+                return $true
+            }
+            # Don't handle Enter for other components - they handle themselves
+        }
+        ([ConsoleKey]::Delete) {
+            if ($focused -eq $this._listBox -and $this._listBox.SelectedIndex -ge 0) {
+                $this._DeleteSelectedItem()
+                return $true
+            }
+        }
+        ([ConsoleKey]::Escape) {
+            # Screen-level: go back
+            if ($this._navService.CanGoBack()) {
+                $this._navService.GoBack()
+                return $true
+            }
+        }
+        ([ConsoleKey]::F5) {
+            # Screen-level: refresh
+            $this._RefreshData()
+            return $true
+        }
     }
     
-    # Only screen shortcuts
-    if ($keyInfo.Key -eq [ConsoleKey]::Escape) {
-        # Navigate back
-        return $true
+    # Step 3: Check for letter shortcuts
+    switch ($keyInfo.KeyChar) {
+        'n' { $this._ShowNewItemDialog(); return $true }
+        'N' { $this._ShowNewItemDialog(); return $true }
     }
     
-    return $false
+    # Step 4: Let base handle Tab and route to components
+    # DO NOT handle Tab yourself!
+    return ([Screen]$this).HandleInput($keyInfo)
 }
 ```
-Component-Specific Patterns
-TextBox Components
-```powershell
-$textBox = [TextBoxComponent]::new("MyTextBox")
-$textBox.IsFocusable = $true
-$textBox.TabIndex = 0
-$textBox.Placeholder = "Enter text..."
 
-# Focus feedback
-$textBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-    $this.BorderColor = Get-ThemeColor "primary.accent"
-    $this.ShowCursor = $true
-    $this.RequestRedraw()
-} -Force
+### 4. OnEnter/OnExit - Lifecycle
+```powershell
+[void] OnEnter() {
+    # Subscribe to events with captured reference
+    $currentRef = $this
+    $this.SubscribeToEvent("Data.Changed", {
+        param($sender, $data)
+        $currentRef._RefreshData()
+    }.GetNewClosure())
+    
+    # Load initial data
+    $this._RefreshData()
+    
+    # MUST call base to set initial focus
+    ([Screen]$this).OnEnter()
+}
+
+[void] OnExit() {
+    # Clear expensive resources if needed
+    $this._listBox.ClearItems()
+    
+    # Base class handles event unsubscription automatically
+    ([Screen]$this).OnExit()
+}
 ```
 
-ListBox Components
+### 5. Component Interaction Helpers
 ```powershell
-$listBox = [ListBox]::new("MyList")
-$listBox.IsFocusable = $true
-$listBox.TabIndex = 1
+hidden [void] _RefreshData() {
+    $items = $this._dataManager.GetItems()
+    $this._listBox.ClearItems()
+    foreach ($item in $items) {
+        $this._listBox.AddItem($item)
+    }
+}
 
-# NOTE: ListBox already has OnFocus/OnBlur methods - DO NOT override with Add-Member
-# They handle focus automatically
+hidden [void] _EditSelectedItem() {
+    $selectedIndex = $this._listBox.SelectedIndex
+    if ($selectedIndex -lt 0) { return }
+    
+    $item = $this._listBox.Items[$selectedIndex]
+    $dialog = [EditDialog]::new($this.ServiceContainer, $item)
+    $dialog.Initialize()
+    $this._navService.NavigateTo($dialog)
+}
 ```
 
-Button Components
-```powershell
-$button = [ButtonComponent]::new("Save")
-$button.IsFocusable = $true
-$button.TabIndex = 2
-$button.OnClick = { $this.SaveData() }
+## FOCUS MANAGEMENT - HOW IT REALLY WORKS
 
-# Focus feedback
-$button | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-    $this.BackgroundColor = Get-ThemeColor "button.focused"
-    $this.RequestRedraw()
-} -Force
+### The Truth About Focus
+1.  **Screen** tracks ONE focused child component
+2.  **Tab/Shift+Tab** cycles through focusable components automatically
+3.  **Components** handle their own visual focus feedback
+4.  **You** handle what actions do (Enter, Delete, etc.)
+
+### What You DON'T Do
+- Don't track focus manually
+- Don't handle Tab (base Screen does this)
+- Don't create focus loops
+- Don't override component focus behavior
+
+### What You DO
+```powershell
+# Check what has focus
+$focused = $this.GetFocusedChild()
+
+# Manually set focus when needed
+$this._focusManager.SetFocus($this._textBox)
+
+# Ensure components are focusable
+$component.IsFocusable = $true
+$component.TabIndex = 0  # 0, 1, 2... for tab order
 ```
 
-Non-Focusable Elements
+## COMMON PATTERNS AND SOLUTIONS
+
+### Pattern: Dialog for Input
 ```powershell
-# Labels, panels, decorative elements
-$label = [LabelComponent]::new("Title")
-$label.IsFocusable = $false  # Cannot receive focus
-$label.Text = "My Form"
+hidden [void] _ShowNewItemDialog() {
+    $dialog = [NewItemDialog]::new($this.ServiceContainer)
+    $dialog.Initialize()  # REQUIRED before navigation
+    $this._navService.NavigateTo($dialog)
+    # Dialog calls Complete($result) to return
+}
 ```
-What NOT to Do
 
-DON'T handle Tab in your screen
-DON'T manually track active component
-DON'T handle text input in the screen
-DON'T use SetBackgroundColor() methods
-DON'T set IsFocusable = false on interactive components
+### Pattern: Confirmation
+```powershell
+hidden [void] _DeleteSelectedItem() {
+    $item = $this._GetSelectedItem()
+    if ($null -eq $item) { return }
+    
+    $result = $this._dialogManager.ShowConfirmation(
+        "Delete Item",
+        "Are you sure you want to delete '$($item.Name)'?"
+    )
+    
+    if ($result) {
+        $this._dataManager.DeleteItem($item.Id)
+        $this._RefreshData()
+    }
+}
+```
 
-Testing Your Fixed Screen
+### Pattern: Status Updates
+```powershell
+hidden [void] _UpdateStatus([string]$message, [string]$level = "Info") {
+    if ($this._statusLabel) {
+        $this._statusLabel.Text = $message
+        $this._statusLabel.ForegroundColor = Get-ThemeColor $level
+        $this.RequestRedraw()
+    }
+}
+```
 
-Tab moves forward through components
-Shift+Tab moves backward
-Text boxes accept typing
-Backspace works in text fields
-Arrow keys work in lists
-Enter activates buttons
-Escape goes back
-Visual focus indicators update
+## DEBUGGING CHECKLIST
 
-Common Fixes
+### Component Not Responding
+```powershell
+# Check these IN ORDER:
+1. Is it focusable?
+   $component.IsFocusable  # Must be $true
 
-"The term 'if' is not recognized"
-Remove all inline if expressions from class methods
-Use proper variable assignments instead
-Example: Replace (if ($condition) { 2 } else { 0 }) with separate if statement
+2. Is it in the screen?
+   $this.Children  # Must contain component
 
-"Method not found: SetBackgroundColor"
-Change $component.SetBackgroundColor("#123") to $component.BackgroundColor = "#123"
+3. Does it have focus?
+   $focused = $this.GetFocusedChild()
+   $focused -eq $component  # Should be $true
 
-"Tab doesn't work"
-Ensure IsFocusable = $true on all interactive components
-Remove any manual Tab handling
-Call ([Screen]$this).HandleInput($keyInfo) first
+4. Is HandleInput returning true?
+   # Add logging to component's HandleInput
+```
 
-"Focus doesn't show"
-Add the OnFocus/OnBlur overrides with Add-Member -Force
+### Focus Not Moving
+```powershell
+1. Are ALL interactive components focusable?
+   $_.IsFocusable = $true
 
-"Text input doesn't work"
-Component must be focusable
-Component needs proper HandleInput method
-Don't handle text input in the screen
+2. Do they have TabIndex set?
+   $_.TabIndex = 0  # or 1, 2, 3...
 
-"Menu/content not showing in Panel"
-Override _RenderContent() NOT OnRender() in your screen
-Call ([UIElement]$this)._RenderContent() FIRST
-Then draw your content - it will appear on TOP of Panel
+3. Is screen calling base.OnEnter()?
+   ([Screen]$this).OnEnter()  # Sets initial focus
 
-Follow this guide exactly and your screens will work.
+4. Is screen NOT handling Tab key?
+   # Should NOT have Tab case in HandleInput
+```
+
+### Enter Key Not Working
+```powershell
+1. ListBox does NOT handle Enter - this is correct!
+2. Your screen MUST handle Enter:
+   if ($focused -eq $this._listBox) {
+       $this._DoSomething()
+       return $true
+   }
+```
+
+## THE GOLDEN RULES
+
+1.  **One Way Only**: GetFocusedChild() is a method. Period.
+2.  **Don't Override**: Never use Add-Member on existing methods.
+3.  **Components Navigate, Screens Act**: Enter key is an action.
+4.  **Capture References**: Use $currentRef = $this for closures.
+5.  **Services in Constructor**: Never get services in methods.
+6.  **No Inline If**: Always use separate statements in classes.
+7.  **Tab is Automatic**: Never handle Tab yourself.
+
+## WHY THESE RULES EXIST
+
+- **GetFocusedChild() as method**: Ensures fresh calculation every time
+- **No component overrides**: Preserves designed behavior
+- **Screen handles Enter**: Different screens need different actions
+- **Captured references**: PowerShell closures have context issues
+- **Services in constructor**: Prevents null reference errors
+- **No inline if**: PowerShell parser limitation in classes
+- **Automatic Tab**: Consistent navigation across all screens
+
+Follow this guide EXACTLY. Every deviation breaks something.
+```
