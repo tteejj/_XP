@@ -1,70 +1,361 @@
-[2025-07-14 15:04:50.150] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/../axiom-phoenix-debug.log
-[2025-07-14 15:04:50.154] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.007_EventFunctions.ps1
-[2025-07-14 15:04:50.161] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.008_ErrorHandling.ps1
-[2025-07-14 15:04:50.166] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.009_InputProcessing.ps1
-[2025-07-14 15:04:50.173] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.010_UtilityFunctions.ps1
-[2025-07-14 15:04:50.187] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:50.205] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.001_LabelComponent.ps1
-[2025-07-14 15:04:50.223] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.002_ButtonComponent.ps1
-[2025-07-14 15:04:50.251] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.003_TextBoxComponent.ps1
-[2025-07-14 15:04:50.268] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.004_CheckBoxComponent.ps1
-[2025-07-14 15:04:50.279] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.005_RadioButtonComponent.ps1
-[2025-07-14 15:04:50.295] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.006_MultilineTextBoxComponent.ps1
-[2025-07-14 15:04:50.317] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.007_NumericInputComponent.ps1
-[2025-07-14 15:04:50.333] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.008_DateInputComponent.ps1
-[2025-07-14 15:04:50.358] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.009_ComboBoxComponent.ps1
-[2025-07-14 15:04:50.384] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.010_Table.ps1
-[2025-07-14 15:04:50.451] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.011_Panel.ps1
-[2025-07-14 15:04:50.466] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.012_ScrollablePanel.ps1
-[2025-07-14 15:04:50.483] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.013_GroupPanel.ps1
-[2025-07-14 15:04:50.493] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014_ListBox.ps1
-[2025-07-14 15:04:50.518] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014a_Dialog.ps1
-[2025-07-14 15:04:50.531] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.015_TextBox.ps1
-[2025-07-14 15:04:50.542] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.016_CommandPalette.ps1
-[2025-07-14 15:04:50.598] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.018_AlertDialog.ps1
-[2025-07-14 15:04:50.618] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.020_InputDialog.ps1
-[2025-07-14 15:04:50.655] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.021_NavigationMenu.ps1
-[2025-07-14 15:04:50.680] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.022_DataGridComponent.ps1
-[2025-07-14 15:04:50.718] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.023_SidebarMenu.ps1
-[2025-07-14 15:04:50.734] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.025_SimpleTaskDialog.ps1
-[2025-07-14 15:04:50.761] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.026_ConfirmDialog.ps1
-[2025-07-14 15:04:50.782] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.100_TextEngine.ps1
-[2025-07-14 15:04:50.875] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:50.887] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen_Fixed.ps1
-[2025-07-14 15:04:50.915] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen.ps1
-[2025-07-14 15:04:50.948] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.002_TaskListScreen.ps1
-[2025-07-14 15:04:51.004] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.003_ThemeScreen.ps1
-[2025-07-14 15:04:51.073] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.004_NewTaskScreen.ps1
-[2025-07-14 15:04:51.096] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_EditTaskScreen.ps1
-[2025-07-14 15:04:51.143] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_FileCommanderScreen.ps1
-[2025-07-14 15:04:51.223] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006_TextEditorScreen.ps1
-[2025-07-14 15:04:51.307] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006a_ProjectEditDialog.ps1
-[2025-07-14 15:04:51.344] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.007_ProjectInfoScreen.ps1
-[2025-07-14 15:04:51.377] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.008_ProjectsListScreen.ps1
-[2025-07-14 15:04:51.417] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/TestScreen.ps1
-[2025-07-14 15:04:51.435] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:51.478] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.001_Logger.ps1
-[2025-07-14 15:04:51.505] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.002_EventManager.ps1
-[2025-07-14 15:04:51.570] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.003_ThemeManager.ps1
-[2025-07-14 15:04:51.596] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.004_ActionService.ps1
-[2025-07-14 15:04:51.622] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.005_DataManager.ps1
-[2025-07-14 15:04:51.659] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.007_KeybindingService.ps1
-[2025-07-14 15:04:51.684] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.008_NavigationService.ps1
-[2025-07-14 15:04:51.720] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.009_DialogManager.ps1
-[2025-07-14 15:04:51.738] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.011_ViewDefinitionService.ps1
-[2025-07-14 15:04:51.756] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.012_AsyncJobService.ps1
-[2025-07-14 15:04:51.773] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.014_FileSystemService.ps1
-[2025-07-14 15:04:51.805] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:51.817] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.001_GlobalState.ps1
-[2025-07-14 15:04:51.841] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.002_EngineManagement.ps1
-[2025-07-14 15:04:51.861] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.003_RenderingSystem.ps1
-[2025-07-14 15:04:51.878] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.004_InputProcessing.ps1
-[2025-07-14 15:04:51.908] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.005_ScreenManagement.ps1
-[2025-07-14 15:04:51.918] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.006_ErrorHandling.ps1
-[2025-07-14 15:04:51.927] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:51.932] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:51.953] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
-[2025-07-14 15:04:51.957] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:51.971] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:51.983] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 15:04:51.990] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:09.970] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\..\axiom-phoenix-debug.log
+[2025-07-14 16:09:09.971] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.007_EventFunctions.ps1
+[2025-07-14 16:09:09.994] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.008_ErrorHandling.ps1
+[2025-07-14 16:09:10.005] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.009_InputProcessing.ps1
+[2025-07-14 16:09:10.025] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.010_UtilityFunctions.ps1
+[2025-07-14 16:09:10.049] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:10.060] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.001_LabelComponent.ps1
+[2025-07-14 16:09:10.087] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.002_ButtonComponent.ps1
+[2025-07-14 16:09:10.115] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.003_TextBoxComponent.ps1
+[2025-07-14 16:09:10.142] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.004_CheckBoxComponent.ps1
+[2025-07-14 16:09:10.182] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.005_RadioButtonComponent.ps1
+[2025-07-14 16:09:10.210] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.006_MultilineTextBoxComponent.ps1
+[2025-07-14 16:09:10.239] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.007_NumericInputComponent.ps1
+[2025-07-14 16:09:10.267] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.008_DateInputComponent.ps1
+[2025-07-14 16:09:10.295] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.009_ComboBoxComponent.ps1
+[2025-07-14 16:09:10.326] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.010_Table.ps1
+[2025-07-14 16:09:10.358] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.011_Panel.ps1
+[2025-07-14 16:09:10.386] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.012_ScrollablePanel.ps1
+[2025-07-14 16:09:10.414] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.013_GroupPanel.ps1
+[2025-07-14 16:09:10.440] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.014_ListBox.ps1
+[2025-07-14 16:09:10.474] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.014a_Dialog.ps1
+[2025-07-14 16:09:10.507] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.015_TextBox.ps1
+[2025-07-14 16:09:10.529] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.016_CommandPalette.ps1
+[2025-07-14 16:09:10.558] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.018_AlertDialog.ps1
+[2025-07-14 16:09:10.574] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.020_InputDialog.ps1
+[2025-07-14 16:09:10.602] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.021_NavigationMenu.ps1
+[2025-07-14 16:09:10.630] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.022_DataGridComponent.ps1
+[2025-07-14 16:09:10.658] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.023_SidebarMenu.ps1
+[2025-07-14 16:09:10.684] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.025_SimpleTaskDialog.ps1
+[2025-07-14 16:09:10.713] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.026_ConfirmDialog.ps1
+[2025-07-14 16:09:10.741] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.100_TextEngine.ps1
+[2025-07-14 16:09:10.778] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:10.792] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.001_DashboardScreen_Fixed.ps1
+[2025-07-14 16:09:10.828] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.001_DashboardScreen.ps1
+[2025-07-14 16:09:10.857] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.002_TaskListScreen.ps1
+[2025-07-14 16:09:10.893] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.003_ThemeScreen.ps1
+[2025-07-14 16:09:10.925] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.004_NewTaskScreen.ps1
+[2025-07-14 16:09:10.954] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.005_EditTaskScreen.ps1
+[2025-07-14 16:09:10.991] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.005_FileCommanderScreen.ps1
+[2025-07-14 16:09:11.038] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.006_TextEditorScreen.ps1
+[2025-07-14 16:09:11.076] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.006a_ProjectEditDialog.ps1
+[2025-07-14 16:09:11.109] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.007_ProjectInfoScreen.ps1
+[2025-07-14 16:09:11.140] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.008_ProjectsListScreen.ps1
+[2025-07-14 16:09:11.176] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\TestScreen.ps1
+[2025-07-14 16:09:11.193] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.223] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.001_Logger.ps1
+[2025-07-14 16:09:11.252] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.002_EventManager.ps1
+[2025-07-14 16:09:11.282] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.003_ThemeManager.ps1
+[2025-07-14 16:09:11.313] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.004_ActionService.ps1
+[2025-07-14 16:09:11.342] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.005_DataManager.ps1
+[2025-07-14 16:09:11.374] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.007_KeybindingService.ps1
+[2025-07-14 16:09:11.405] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.008_NavigationService.ps1
+[2025-07-14 16:09:11.432] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.009_DialogManager.ps1
+[2025-07-14 16:09:11.460] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.011_ViewDefinitionService.ps1
+[2025-07-14 16:09:11.488] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.012_AsyncJobService.ps1
+[2025-07-14 16:09:11.507] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.014_FileSystemService.ps1
+[2025-07-14 16:09:11.543] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.557] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.001_GlobalState.ps1
+[2025-07-14 16:09:11.586] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.002_EngineManagement.ps1
+[2025-07-14 16:09:11.652] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.003_RenderingSystem.ps1
+[2025-07-14 16:09:11.679] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.004_InputProcessing.ps1
+[2025-07-14 16:09:11.707] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.005_ScreenManagement.ps1
+[2025-07-14 16:09:11.733] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.006_ErrorHandling.ps1
+[2025-07-14 16:09:11.761] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.773] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.786] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
+[2025-07-14 16:09:11.798] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.834] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.848] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
+[2025-07-14 16:09:11.886] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.902] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.914] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
+[2025-07-14 16:09:11.925] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.955] [WARNING] [Write-Warning] Error loading external themes: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:11.975] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:11.994] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.008] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.019] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
+[2025-07-14 16:09:12.031] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.046] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:12.070] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.083] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
+[2025-07-14 16:09:12.095] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.107] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:12.122] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.134] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
+[2025-07-14 16:09:12.145] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.157] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:09:12.175] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.187] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.199] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.211] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.223] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.235] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.246] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.258] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.270] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
+[2025-07-14 16:09:12.280] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.301] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.313] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
+[2025-07-14 16:09:12.324] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.337] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:09:12.349] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.361] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.373] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
+[2025-07-14 16:09:12.384] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.405] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.417] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
+[2025-07-14 16:09:12.428] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.438] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 16:09:12.451] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.464] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.476] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'FileSystemService' of type 'FileSystemService'.
+[2025-07-14 16:09:12.487] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.498] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 16:09:12.509] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:12.521] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:09:12.532] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:09:12.544] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:09:12.557] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:12.569] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:09:12.581] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 16:09:12.593] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ViewDefinitionService'.
+[2025-07-14 16:09:12.605] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 16:09:12.616] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:09:12.629] [WARNING] [Write-Warning] ThemeManager: Theme 'Synthwave' not found
+[2025-07-14 16:09:12.639] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.651] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:09:12.703] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.718] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:12.729] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:09:12.792] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:12.868] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:12.903] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:12.945] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:13.006] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:13.049] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:13.080] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:13.111] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:13.143] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:13.174] [WARNING] [Write-Warning] DataManager: Failed to create backup: A parameter cannot be found that matches parameter name 'CaseSensitive'.
+[2025-07-14 16:09:13.201] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:13.213] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:13.225] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:13.239] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:13.250] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:14.308] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:14.325] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:14.392] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:09:14.419] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:14.435] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:14.519] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:09:14.531] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:14.544] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:09:14.556] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:09:14.568] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:09:14.580] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:14.591] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 16:09:14.613] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:14.625] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 16:09:14.637] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:14.649] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:09:14.914] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:09:14.928] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:09:15.014] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:15.226] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:16.970] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:17.709] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:17.940] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:18.525] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:18.732] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:20.055] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:20.068] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:09:20.219] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:20.236] [VERBOSE] [Write-Verbose] Resize: Component 'TaskListScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:09:20.249] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:09:20.303] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:20.319] [ERROR] [Write-Error] NavigationService: Failed to navigate to screen 'TaskListScreen': The property '_filterRefreshSubscriptionId' cannot be found on this object. Verify that the property exists and can be set.
+[2025-07-14 16:09:20.330] [ERROR] [Write-Error] Failed to execute action 'navigation.tasklist': The property '_filterRefreshSubscriptionId' cannot be found on this object. Verify that the property exists and can be set.
+[2025-07-14 16:09:20.562] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:20.639] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:20.764] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:20.817] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:20.865] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:25.499] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:25.513] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:09:25.567] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:25.588] [VERBOSE] [Write-Verbose] Resize: Component 'SimpleTaskDialog' already has target dimensions (120x30). No change.
+[2025-07-14 16:09:25.635] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:25.827] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:25.857] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:25.883] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:25.930] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:25.960] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:25.982] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:28.273] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:28.300] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:28.343] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:28.370] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:31.176] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:31.203] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:31.548] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:31.576] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:31.921] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:31.949] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:32.297] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:32.325] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:32.662] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:32.693] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:32.733] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:32.761] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:34.177] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:34.208] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:34.246] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:34.277] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:36.811] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:36.845] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:37.181] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:37.212] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:37.548] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:37.578] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:37.916] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:37.947] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:38.552] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:38.583] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:38.919] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:38.950] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:39.284] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:39.315] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:39.652] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:39.683] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:40.020] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:40.051] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:41.183] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:41.236] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:41.266] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:41.597] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:41.651] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:42.574] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:44.830] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:44.884] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:45.503] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:48.541] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:48.595] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:49.488] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:49.825] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:49.853] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:09:49.895] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:09:50.078] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:51.178] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:51.194] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:09:51.223] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: SimpleTaskDialog.
+[2025-07-14 16:09:51.235] [VERBOSE] [Write-Verbose] Resize: Component 'TaskListScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:09:51.247] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:56.331] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:56.343] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:09:56.354] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:56.373] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: TaskListScreen.
+[2025-07-14 16:09:56.385] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:09:56.396] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:09:58.403] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:59.331] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:59.817] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:09:59.829] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:09:59.839] [ERROR] [Write-Error] Failed to execute action 'navigation.filebrowser': Action 'navigation.filebrowser' not found in registry
+[2025-07-14 16:10:06.438] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:06.453] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:10:06.464] [ERROR] [Write-Error] Failed to execute action 'navigation.filebrowser': Action 'navigation.filebrowser' not found in registry
+[2025-07-14 16:10:08.691] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:09.635] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:09.647] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:10:09.658] [ERROR] [Write-Error] Failed to execute action 'navigation.texteditor': Action 'navigation.texteditor' not found in registry
+[2025-07-14 16:10:12.158] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:13.107] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:13.119] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:10:13.151] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:10:13.211] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:10:13.226] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:10:13.270] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:10:13.283] [VERBOSE] [Write-Verbose] Resize: Component 'ThemeScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:10:13.334] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:10:13.474] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:10:13.545] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:13.615] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:13.664] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:16.203] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 16:10:16.271] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:21.022] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:21.034] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 16:10:21.046] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:10:21.057] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:10:21.095] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:10:21.110] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:21.124] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:21.151] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: ThemeScreen.
+[2025-07-14 16:10:21.162] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:10:21.172] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:10:23.804] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:24.001] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:24.191] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:24.987] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:24.999] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:10:25.027] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:10:25.136] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:10:25.179] [VERBOSE] [Write-Verbose] Resize: Component 'ProjectsListScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:10:25.278] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:10:25.423] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.499] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.530] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.595] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.667] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.732] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.861] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.934] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:25.965] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:26.038] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:26.102] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:26.163] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:28.130] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:28.144] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:28.163] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:10:32.902] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:32.973] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:33.051] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:33.099] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 16:10:36.120] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:36.134] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:36.171] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:10:36.184] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 16:10:42.306] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:42.318] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:42.330] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:10:42.341] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 16:10:45.045] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:45.059] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:45.075] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:10:45.087] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 16:10:50.081] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:52.035] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:53.548] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:53.560] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:53.573] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 16:10:53.584] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 16:10:54.921] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:54.934] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 16:10:54.964] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: ProjectsListScreen.
+[2025-07-14 16:10:54.975] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
+[2025-07-14 16:10:54.986] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:10:58.586] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:10:58.599] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:10:58.611] [ERROR] [Write-Error] Failed to execute action 'app.quit': Action 'app.quit' not found in registry
+[2025-07-14 16:11:02.026] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 16:11:02.038] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 16:11:02.048] [ERROR] [Write-Error] Failed to execute action 'app.quit': Action 'app.quit' not found in registry
+[2025-07-14 16:11:03.807] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 16:11:03.834] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: DashboardScreen.
+[2025-07-14 16:11:03.854] [VERBOSE] [Write-Verbose] ServiceContainer: Initiating cleanup of disposable singleton services.
+[2025-07-14 16:11:03.882] [VERBOSE] [Write-Verbose] ServiceContainer: Disposing service of type 'DataManager'.
+[2025-07-14 16:11:03.902] [VERBOSE] [Write-Verbose] ServiceContainer: Cleanup complete. All service registries cleared.
+[2025-07-14 16:11:03.978] [VERBOSE] [Write-Verbose] ServiceContainer: Initiating cleanup of disposable singleton services.
+[2025-07-14 16:11:03.997] [VERBOSE] [Write-Verbose] ServiceContainer: Cleanup complete. All service registries cleared.
