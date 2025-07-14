@@ -80,7 +80,7 @@ class ServiceContainer {
     }
     
     [object[]] GetAllRegisteredServices() {
-        $list = [System.Collections.Generic.List[object]]::new()
+        $list = [System.Collections.Generic.List[object]]::new()[object]]::new()
         
         foreach ($key in $this._services.Keys) {
             $list.Add([pscustomobject]@{
@@ -112,7 +112,7 @@ class ServiceContainer {
         }
         Write-Verbose "ServiceContainer: Initiating cleanup of disposable singleton services."
         
-        $instancesToClean = [System.Collections.Generic.List[object]]::new()
+        $instancesToClean = [System.Collections.Generic.List[object]]::new()[object]]::new()
         $this._services.Values | ForEach-Object { $instancesToClean.Add($_) }
         $this._serviceFactories.Values | Where-Object { $_.IsSingleton -and $_.Instance } | ForEach-Object { $instancesToClean.Add($_.Instance) }
 

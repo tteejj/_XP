@@ -100,7 +100,7 @@ function Render-DifferentialBuffer {
         
         # Track current run of consecutive changes
         $currentRun = $null
-        $runCells = [System.Collections.Generic.List[object]]::new()
+        $runCells = [System.Collections.Generic.List[object]]::new()[object]]::new()
         
         for ($y = 0; $y -lt $current.Height; $y++) {
             for ($x = 0; $x -lt $current.Width; $x++) {
