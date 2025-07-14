@@ -1,0 +1,11 @@
+I have a large, modular Tui PowerShell program. We are reviewing it module by module for errors. We will follow a set procedure. 
+
+1. Read the "__Guide.txt" file. It has important information about how the program works and the rules it must follow.
+
+2. Review the following file for the following rule infractions.
+
+3. Edit the file directly. Don't rewrite the whole file if possible. 
+
+3A. Ensure edits do not introduce corruption or errors into the file. 
+
+4. Fix only the items requested. 
