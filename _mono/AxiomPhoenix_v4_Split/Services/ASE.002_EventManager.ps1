@@ -94,10 +94,12 @@ class EventManager {
                 # For task/project objects, only store essential data
                 try {
                     if ($value.PSObject.Properties['Id']) {
+                        $title = $null
+                        if ($value.PSObject.Properties['Title']) { $title = $value.Title }
                         $sanitizedData[$key] = @{
                             Type = $value.GetType().Name
                             Id = $value.Id
-                            Title = if ($value.PSObject.Properties['Title']) { $value.Title } else { $null }
+                            Title = $title
                         }
                     } else {
                         $sanitizedData[$key] = "[Object: $($value.GetType().Name)]"

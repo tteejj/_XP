@@ -1,594 +1,241 @@
-[2025-07-14 05:29:58.846] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\..\axiom-phoenix-debug.log
-[2025-07-14 05:29:58.847] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.007_EventFunctions.ps1
-[2025-07-14 05:29:58.878] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.008_ErrorHandling.ps1
-[2025-07-14 05:29:58.904] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.009_InputProcessing.ps1
-[2025-07-14 05:29:58.931] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.010_UtilityFunctions.ps1
-[2025-07-14 05:29:58.977] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:29:58.987] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.001_LabelComponent.ps1
-[2025-07-14 05:29:59.014] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.002_ButtonComponent.ps1
-[2025-07-14 05:29:59.040] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.003_TextBoxComponent.ps1
-[2025-07-14 05:29:59.067] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.004_CheckBoxComponent.ps1
-[2025-07-14 05:29:59.091] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.005_RadioButtonComponent.ps1
-[2025-07-14 05:29:59.116] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.006_MultilineTextBoxComponent.ps1
-[2025-07-14 05:29:59.144] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.007_NumericInputComponent.ps1
-[2025-07-14 05:29:59.170] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.008_DateInputComponent.ps1
-[2025-07-14 05:29:59.197] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.009_ComboBoxComponent.ps1
-[2025-07-14 05:29:59.226] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.010_Table.ps1
-[2025-07-14 05:29:59.254] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.011_Panel.ps1
-[2025-07-14 05:29:59.285] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.012_ScrollablePanel.ps1
-[2025-07-14 05:29:59.312] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.013_GroupPanel.ps1
-[2025-07-14 05:29:59.337] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.014_ListBox.ps1
-[2025-07-14 05:29:59.366] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.014a_Dialog.ps1
-[2025-07-14 05:29:59.397] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.015_TextBox.ps1
-[2025-07-14 05:29:59.422] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.016_CommandPalette.ps1
-[2025-07-14 05:29:59.450] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.018_AlertDialog.ps1
-[2025-07-14 05:29:59.475] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.020_InputDialog.ps1
-[2025-07-14 05:29:59.501] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.021_NavigationMenu.ps1
-[2025-07-14 05:29:59.528] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.022_DataGridComponent.ps1
-[2025-07-14 05:29:59.556] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.023_SidebarMenu.ps1
-[2025-07-14 05:29:59.583] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.025_SimpleTaskDialog.ps1
-[2025-07-14 05:29:59.621] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.026_ConfirmDialog.ps1
-[2025-07-14 05:29:59.648] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.100_TextEngine.ps1
-[2025-07-14 05:29:59.689] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:29:59.701] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.001_DashboardScreen_Fixed.ps1
-[2025-07-14 05:29:59.732] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.001_DashboardScreen.ps1
-[2025-07-14 05:29:59.760] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.002_TaskListScreen.ps1
-[2025-07-14 05:29:59.795] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.003_ThemeScreen.ps1
-[2025-07-14 05:29:59.826] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.004_NewTaskScreen.ps1
-[2025-07-14 05:29:59.861] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.005_EditTaskScreen.ps1
-[2025-07-14 05:29:59.895] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.005_FileCommanderScreen.ps1
-[2025-07-14 05:29:59.934] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.006_TextEditorScreen.ps1
-[2025-07-14 05:29:59.970] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.006a_ProjectEditDialog.ps1
-[2025-07-14 05:30:00.015] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.007_ProjectInfoScreen.ps1
-[2025-07-14 05:30:00.064] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.008_ProjectsListScreen.ps1
-[2025-07-14 05:30:00.098] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.111] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.001_Logger.ps1
-[2025-07-14 05:30:00.152] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.002_EventManager.ps1
-[2025-07-14 05:30:00.191] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.003_ThemeManager.ps1
-[2025-07-14 05:30:00.221] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.004_ActionService.ps1
-[2025-07-14 05:30:00.249] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.005_DataManager.ps1
-[2025-07-14 05:30:00.289] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.007_KeybindingService.ps1
-[2025-07-14 05:30:00.333] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.008_NavigationService.ps1
-[2025-07-14 05:30:00.370] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.009_DialogManager.ps1
-[2025-07-14 05:30:00.396] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.011_ViewDefinitionService.ps1
-[2025-07-14 05:30:00.437] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.012_AsyncJobService.ps1
-[2025-07-14 05:30:00.474] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.014_FileSystemService.ps1
-[2025-07-14 05:30:00.514] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.527] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.001_GlobalState.ps1
-[2025-07-14 05:30:00.567] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.002_EngineManagement.ps1
-[2025-07-14 05:30:00.631] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.003_RenderingSystem.ps1
-[2025-07-14 05:30:00.657] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.004_InputProcessing.ps1
-[2025-07-14 05:30:00.684] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.005_ScreenManagement.ps1
-[2025-07-14 05:30:00.718] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.006_ErrorHandling.ps1
-[2025-07-14 05:30:00.754] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.764] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.776] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
-[2025-07-14 05:30:00.787] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.825] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.837] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
-[2025-07-14 05:30:00.877] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.888] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.898] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.911] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.922] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
-[2025-07-14 05:30:00.932] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.975] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:00.999] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.022] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.054] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.085] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.118] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.141] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.173] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.196] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.214] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.247] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.260] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.270] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
-[2025-07-14 05:30:01.280] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.292] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:01.314] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.325] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
-[2025-07-14 05:30:01.335] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.346] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:01.359] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.370] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
-[2025-07-14 05:30:01.381] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.391] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 05:30:01.410] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.421] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.432] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.443] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.454] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.465] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.475] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.487] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.498] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
-[2025-07-14 05:30:01.507] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.523] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.535] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
-[2025-07-14 05:30:01.545] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.557] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
-[2025-07-14 05:30:01.568] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.580] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.591] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
-[2025-07-14 05:30:01.604] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.625] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.636] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
-[2025-07-14 05:30:01.647] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.657] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
-[2025-07-14 05:30:01.670] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.682] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.693] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'FileSystemService' of type 'FileSystemService'.
-[2025-07-14 05:30:01.703] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.713] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
-[2025-07-14 05:30:01.724] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:01.735] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 05:30:01.745] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
-[2025-07-14 05:30:01.756] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 05:30:01.766] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
-[2025-07-14 05:30:01.777] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
-[2025-07-14 05:30:01.788] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
-[2025-07-14 05:30:01.799] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ViewDefinitionService'.
-[2025-07-14 05:30:01.809] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
-[2025-07-14 05:30:01.820] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 05:30:01.831] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.841] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.851] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.862] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 05:30:01.896] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.907] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:01.917] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
-[2025-07-14 05:30:02.298] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:02.310] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:02.321] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:02.331] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:02.341] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.366] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.376] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.431] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.441] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.454] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.471] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.481] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.501] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.510] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.521] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:03.579] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 05:30:03.597] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.607] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.624] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.634] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.651] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.665] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.676] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.690] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.783] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 05:30:03.795] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
-[2025-07-14 05:30:03.807] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
-[2025-07-14 05:30:03.818] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
-[2025-07-14 05:30:03.829] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 05:30:03.840] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:03.850] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
-[2025-07-14 05:30:03.868] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.879] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.896] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.908] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
-[2025-07-14 05:30:03.919] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.930] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.947] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.957] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.975] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:03.985] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.185] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.195] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.212] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
-[2025-07-14 05:30:04.231] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.241] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.254] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 05:30:04.271] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.281] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.304] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.314] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.342] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.352] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.371] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.381] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.399] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.409] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.431] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.441] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.461] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.472] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.490] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.500] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.522] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.532] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.552] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.562] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.580] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.590] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.608] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.622] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.640] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.650] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.668] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.678] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.698] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.708] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.727] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.737] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.754] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.764] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.795] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.805] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.816] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:04.842] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.852] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.957] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:04.968] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.008] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.018] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.047] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.057] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.089] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
-[2025-07-14 05:30:05.194] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.204] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.274] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:05.284] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.366] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.377] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.411] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.421] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.437] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
-[2025-07-14 05:30:08.461] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.471] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.481] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 05:30:08.521] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.531] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.555] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.566] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.698] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.708] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.720] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:08.736] [VERBOSE] [Write-Verbose] Resize: Component 'TaskListScreen' already has target dimensions (120x30). No change.
-[2025-07-14 05:30:08.754] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.764] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.775] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
-[2025-07-14 05:30:08.831] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:08.850] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.860] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.878] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.888] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.909] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.919] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.938] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.948] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.965] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.975] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:08.992] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.002] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.022] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.033] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.050] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.061] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.082] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.093] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.111] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.121] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.138] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.148] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.167] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.177] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.196] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.206] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.224] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.234] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.255] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.265] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.284] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.294] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.313] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.323] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.342] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.352] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.369] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.379] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.396] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.407] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.427] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.438] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.457] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.467] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.485] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.495] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.520] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.530] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.548] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.558] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.576] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.585] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.603] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.613] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.629] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.639] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.655] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.665] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.682] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.692] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.708] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.719] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.735] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.745] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.763] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.773] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.789] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.799] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.816] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.825] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.842] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.852] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.868] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.878] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.894] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.904] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.921] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.933] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.953] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.964] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.982] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:09.993] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.011] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.021] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.037] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.047] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.064] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.074] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.091] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.101] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.118] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.129] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.145] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.155] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.171] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.181] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.197] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.207] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.223] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.234] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.250] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.260] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.276] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.286] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.303] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.313] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.329] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.339] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.355] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.365] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.381] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.391] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.410] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.420] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.436] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.446] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.462] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.472] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.489] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.499] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.515] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.525] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.541] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.551] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.568] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.578] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.594] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.604] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.620] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.630] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.647] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.657] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.673] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.683] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.700] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.710] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.726] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.736] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.753] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.763] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.780] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.790] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.807] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.817] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.834] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.845] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.861] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.871] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.888] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.898] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.915] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.925] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.941] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.951] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.968] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.979] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:10.996] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.007] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.024] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.034] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.056] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.066] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.084] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.094] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.112] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.122] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.140] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.151] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.168] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.179] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.196] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.207] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.223] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.234] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.252] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.263] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.281] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.293] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.309] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.320] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.350] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.361] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.372] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 05:30:11.496] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.506] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.538] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.548] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.577] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.588] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.610] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
-[2025-07-14 05:30:11.688] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.698] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.720] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.730] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.747] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
-[2025-07-14 05:30:11.786] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.796] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.817] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.828] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.859] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.869] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.890] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.901] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.925] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.936] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.983] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:11.994] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.036] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.047] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.085] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.095] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.116] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.126] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.138] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
-[2025-07-14 05:30:12.166] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.176] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.199] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.209] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.241] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.252] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.277] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.288] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.308] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.318] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.337] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
-[2025-07-14 05:30:12.361] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.371] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.395] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.406] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.423] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.433] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.452] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.462] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.480] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.490] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.507] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.517] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.536] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.547] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.564] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.575] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.603] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.613] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.634] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.645] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.661] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
-[2025-07-14 05:30:12.704] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.714] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.732] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.743] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.761] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.772] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.790] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.800] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.817] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.828] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.847] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.857] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.876] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.887] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.905] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.916] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.934] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.945] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.962] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.973] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:12.990] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.000] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.018] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.029] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.046] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.057] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.101] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.113] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.132] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.142] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.160] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.171] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.188] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.199] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.217] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.227] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.245] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.256] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.274] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.285] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.306] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.317] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.337] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.348] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.365] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.376] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.394] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.404] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.422] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.433] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.451] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.462] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.479] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.490] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.507] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.518] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.535] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.545] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.566] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.576] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.594] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.605] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.622] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.633] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.651] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.662] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.680] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.690] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.707] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.718] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.736] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.747] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.764] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.774] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.792] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.803] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.821] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.831] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.849] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.859] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.876] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.887] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.905] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.916] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.934] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.945] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.967] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:13.978] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:14.058] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 05:30:14.069] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:56.645] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\..\axiom-phoenix-debug.log
+[2025-07-14 05:43:56.646] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.007_EventFunctions.ps1
+[2025-07-14 05:43:56.656] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.008_ErrorHandling.ps1
+[2025-07-14 05:43:56.666] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.009_InputProcessing.ps1
+[2025-07-14 05:43:56.676] [VERBOSE] [Write-Verbose]   - Dot-sourcing AFU.010_UtilityFunctions.ps1
+[2025-07-14 05:43:56.687] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:56.698] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.001_LabelComponent.ps1
+[2025-07-14 05:43:56.713] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.002_ButtonComponent.ps1
+[2025-07-14 05:43:56.728] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.003_TextBoxComponent.ps1
+[2025-07-14 05:43:56.743] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.004_CheckBoxComponent.ps1
+[2025-07-14 05:43:56.757] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.005_RadioButtonComponent.ps1
+[2025-07-14 05:43:56.787] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.006_MultilineTextBoxComponent.ps1
+[2025-07-14 05:43:56.804] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.007_NumericInputComponent.ps1
+[2025-07-14 05:43:56.820] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.008_DateInputComponent.ps1
+[2025-07-14 05:43:56.836] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.009_ComboBoxComponent.ps1
+[2025-07-14 05:43:56.854] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.010_Table.ps1
+[2025-07-14 05:43:56.871] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.011_Panel.ps1
+[2025-07-14 05:43:56.886] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.012_ScrollablePanel.ps1
+[2025-07-14 05:43:56.902] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.013_GroupPanel.ps1
+[2025-07-14 05:43:56.917] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.014_ListBox.ps1
+[2025-07-14 05:43:56.935] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.014a_Dialog.ps1
+[2025-07-14 05:43:56.950] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.015_TextBox.ps1
+[2025-07-14 05:43:56.965] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.016_CommandPalette.ps1
+[2025-07-14 05:43:56.987] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.018_AlertDialog.ps1
+[2025-07-14 05:43:57.002] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.020_InputDialog.ps1
+[2025-07-14 05:43:57.017] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.021_NavigationMenu.ps1
+[2025-07-14 05:43:57.032] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.022_DataGridComponent.ps1
+[2025-07-14 05:43:57.047] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.023_SidebarMenu.ps1
+[2025-07-14 05:43:57.062] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.025_SimpleTaskDialog.ps1
+[2025-07-14 05:43:57.078] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.026_ConfirmDialog.ps1
+[2025-07-14 05:43:57.093] [VERBOSE] [Write-Verbose]   - Dot-sourcing ACO.100_TextEngine.ps1
+[2025-07-14 05:43:57.116] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.129] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.001_DashboardScreen_Fixed.ps1
+[2025-07-14 05:43:57.152] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.001_DashboardScreen.ps1
+[2025-07-14 05:43:57.170] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.002_TaskListScreen.ps1
+[2025-07-14 05:43:57.223] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.003_ThemeScreen.ps1
+[2025-07-14 05:43:57.243] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.004_NewTaskScreen.ps1
+[2025-07-14 05:43:57.261] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.005_EditTaskScreen.ps1
+[2025-07-14 05:43:57.281] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.005_FileCommanderScreen.ps1
+[2025-07-14 05:43:57.311] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.006_TextEditorScreen.ps1
+[2025-07-14 05:43:57.334] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.006a_ProjectEditDialog.ps1
+[2025-07-14 05:43:57.353] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.007_ProjectInfoScreen.ps1
+[2025-07-14 05:43:57.371] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASC.008_ProjectsListScreen.ps1
+[2025-07-14 05:43:57.392] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.405] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.001_Logger.ps1
+[2025-07-14 05:43:57.463] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.002_EventManager.ps1
+[2025-07-14 05:43:57.503] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.003_ThemeManager.ps1
+[2025-07-14 05:43:57.520] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.004_ActionService.ps1
+[2025-07-14 05:43:57.560] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.005_DataManager.ps1
+[2025-07-14 05:43:57.577] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.007_KeybindingService.ps1
+[2025-07-14 05:43:57.616] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.008_NavigationService.ps1
+[2025-07-14 05:43:57.631] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.009_DialogManager.ps1
+[2025-07-14 05:43:57.646] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.011_ViewDefinitionService.ps1
+[2025-07-14 05:43:57.685] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.012_AsyncJobService.ps1
+[2025-07-14 05:43:57.723] [VERBOSE] [Write-Verbose]   - Dot-sourcing ASE.014_FileSystemService.ps1
+[2025-07-14 05:43:57.739] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.758] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.001_GlobalState.ps1
+[2025-07-14 05:43:57.775] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.002_EngineManagement.ps1
+[2025-07-14 05:43:57.790] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.003_RenderingSystem.ps1
+[2025-07-14 05:43:57.805] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.004_InputProcessing.ps1
+[2025-07-14 05:43:57.820] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.005_ScreenManagement.ps1
+[2025-07-14 05:43:57.834] [VERBOSE] [Write-Verbose]   - Dot-sourcing ART.006_ErrorHandling.ps1
+[2025-07-14 05:43:57.848] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.858] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.870] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
+[2025-07-14 05:43:57.881] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.915] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.927] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
+[2025-07-14 05:43:57.969] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.980] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:57.990] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.004] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.016] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
+[2025-07-14 05:43:58.031] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.058] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.072] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.085] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.099] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.114] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.128] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.141] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.155] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.169] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.187] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.206] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.219] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.230] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
+[2025-07-14 05:43:58.240] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.253] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 05:43:58.275] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.287] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
+[2025-07-14 05:43:58.297] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.308] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 05:43:58.322] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.333] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
+[2025-07-14 05:43:58.348] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.358] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 05:43:58.377] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.389] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.400] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.411] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.423] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.434] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.444] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.456] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.467] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
+[2025-07-14 05:43:58.477] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.494] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.505] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
+[2025-07-14 05:43:58.515] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.528] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 05:43:58.540] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.552] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.563] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
+[2025-07-14 05:43:58.574] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.595] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.606] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
+[2025-07-14 05:43:58.616] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.627] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 05:43:58.640] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.652] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.663] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'FileSystemService' of type 'FileSystemService'.
+[2025-07-14 05:43:58.673] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.684] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 05:43:58.695] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 05:43:58.706] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 05:43:58.718] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 05:43:58.730] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 05:43:58.757] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 05:43:58.769] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 05:43:58.781] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 05:43:58.793] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ViewDefinitionService'.
+[2025-07-14 05:43:58.804] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 05:43:58.815] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 05:43:58.826] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.837] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.847] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.858] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 05:43:58.896] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.907] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:58.918] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 05:43:59.297] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:59.308] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:59.320] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:59.330] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:43:59.340] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.365] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.375] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.434] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.444] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.459] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.478] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.488] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.509] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.520] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.531] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 05:44:00.601] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 05:44:00.620] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.631] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.650] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.661] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.680] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.690] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.700] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.715] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.801] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 05:44:00.813] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 05:44:00.825] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 05:44:00.837] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 05:44:00.849] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 05:44:00.860] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 05:44:00.872] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 05:44:00.892] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.904] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.933] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.945] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 05:44:00.958] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.970] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.988] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:00.998] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.018] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.028] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.266] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.277] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.298] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
+[2025-07-14 05:44:01.320] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.333] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.346] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 05:44:01.365] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.376] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.402] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.413] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.447] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.459] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.482] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.493] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.518] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.529] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.555] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.569] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.592] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.603] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.623] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.634] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.658] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.668] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.690] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.701] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.722] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.733] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.752] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.763] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.783] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.793] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.813] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.824] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.846] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.857] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.877] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.888] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.906] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.917] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.942] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.955] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:01.967] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 05:44:01.996] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.006] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.117] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.129] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.181] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.192] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.222] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.233] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.273] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 05:44:02.400] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.411] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.493] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:02.504] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:04.334] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 05:44:04.361] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 05:44:04.371] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]

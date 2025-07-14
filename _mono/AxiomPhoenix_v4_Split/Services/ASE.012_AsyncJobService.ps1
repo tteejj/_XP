@@ -29,7 +29,8 @@ class AsyncJobService {
     [hashtable] StartAsync([scriptblock]$work, [string]$name = "") {
         try {
             $jobId = $this.NextJobId++
-            $jobName = if ($name) { $name } else { "AsyncJob_$jobId" }
+            $jobName = "AsyncJob_$jobId"
+            if ($name) { $jobName = $name }
             
             # Use ThreadJob for lightweight async operations
             $job = Start-ThreadJob -ScriptBlock $work -Name $jobName

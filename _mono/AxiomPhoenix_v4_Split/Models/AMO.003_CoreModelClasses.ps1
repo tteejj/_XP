@@ -142,6 +142,9 @@ class PmcTask : ValidationBase {
     
     # ToLegacyFormat: Converts task to hashtable for JSON serialization
     [hashtable] ToLegacyFormat() {
+        $dueDateStr = $null
+        if ($this.DueDate) { $dueDateStr = $this.DueDate.ToString("yyyy-MM-ddTHH:mm:ss") }
+        
         return @{
             Id = $this.Id
             Title = $this.Title
@@ -152,7 +155,7 @@ class PmcTask : ValidationBase {
             Category = $this.Category
             CreatedAt = $this.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
             UpdatedAt = $this.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss")
-            DueDate = if ($this.DueDate) { $this.DueDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            DueDate = $dueDateStr
             Tags = $this.Tags
             Progress = $this.Progress
             Completed = $this.Completed
@@ -207,7 +210,8 @@ class PmcTask : ValidationBase {
             default { "-" }
         }
         
-        $overdueFlag = if ($this.IsOverdue()) { " [OVERDUE]" } else { "" }
+        $overdueFlag = ""
+        if ($this.IsOverdue()) { $overdueFlag = " [OVERDUE]" }
         
         return "$statusSymbol $prioritySymbol $($this.Title) ($($this.Progress)%)$overdueFlag"
     }
@@ -302,6 +306,12 @@ class PmcProject : ValidationBase {
     
     # ToLegacyFormat: Converts project to hashtable for JSON serialization
     [hashtable] ToLegacyFormat() {
+        $assignedDateStr = $null
+        if ($this.AssignedDate) { $assignedDateStr = $this.AssignedDate.ToString("yyyy-MM-ddTHH:mm:ss") }
+        
+        $bfDateStr = $null
+        if ($this.BFDate) { $bfDateStr = $this.BFDate.ToString("yyyy-MM-ddTHH:mm:ss") }
+        
         return @{
             Key = $this.Key
             Name = $this.Name
@@ -315,8 +325,8 @@ class PmcProject : ValidationBase {
             # NEW Properties
             ID1 = $this.ID1
             ID2 = $this.ID2
-            AssignedDate = if ($this.AssignedDate) { $this.AssignedDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
-            BFDate = if ($this.BFDate) { $this.BFDate.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+            AssignedDate = $assignedDateStr
+            BFDate = $bfDateStr
             ProjectFolderPath = $this.ProjectFolderPath
             CaaFileName = $this.CaaFileName
             RequestFileName = $this.RequestFileName
@@ -360,7 +370,8 @@ class PmcProject : ValidationBase {
 
     # ToString: Returns a string representation of the project
     [string] ToString() {
-        $status = if ($this.IsActive) { "Active" } else { "Archived" }
+        $status = "Archived"
+        if ($this.IsActive) { $status = "Active" }
         return "[$($this.Key)] $($this.Name) - $status"
     }
 }
@@ -430,7 +441,8 @@ class TimeEntry : ValidationBase {
     # ToString: Returns a string representation of the time entry
     [string] ToString() {
         $duration = $this.GetDuration()
-        $status = if ($this.IsRunning()) { "Running" } else { "Completed" }
+        $status = "Completed"
+        if ($this.IsRunning()) { $status = "Running" }
         return "$($this.ProjectKey) - $($duration.ToString('hh\:mm\:ss')) [$status]"
     }
 }

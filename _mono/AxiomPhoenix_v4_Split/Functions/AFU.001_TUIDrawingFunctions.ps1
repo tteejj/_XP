@@ -52,11 +52,20 @@ function Write-TuiBox {
     }
 
     # Extract properties from the style object with safe fallbacks.
-    $borderStyleName = if ($Style.ContainsKey('BorderStyle')) { $Style['BorderStyle'] } else { "Single" }
-    $borderColor = if ($Style.ContainsKey('BorderFG')) { $Style['BorderFG'] } else { "#808080" } # Default border color (gray hex)
-    $bgColor = if ($Style.ContainsKey('BG')) { $Style['BG'] } else { "#000000" }           # Default background color (black hex)
-    $titleColor = if ($Style.ContainsKey('TitleFG')) { $Style['TitleFG'] } else { $borderColor } # Title defaults to border color
-    $fillChar = if ($Style.ContainsKey('FillChar')) { [char]$Style['FillChar'] } else { ' ' }   # Optional fill character
+    $borderStyleName = "Single"
+    if ($Style.ContainsKey('BorderStyle')) { $borderStyleName = $Style['BorderStyle'] }
+    
+    $borderColor = "#808080"
+    if ($Style.ContainsKey('BorderFG')) { $borderColor = $Style['BorderFG'] }
+    
+    $bgColor = "#000000"
+    if ($Style.ContainsKey('BG')) { $bgColor = $Style['BG'] }
+    
+    $titleColor = $borderColor
+    if ($Style.ContainsKey('TitleFG')) { $titleColor = $Style['TitleFG'] }
+    
+    $fillChar = ' '
+    if ($Style.ContainsKey('FillChar')) { $fillChar = [char]$Style['FillChar'] }
 
     $borders = Get-TuiBorderChars -Style $borderStyleName
     

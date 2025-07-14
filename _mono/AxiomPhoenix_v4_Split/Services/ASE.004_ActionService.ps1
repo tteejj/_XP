@@ -26,12 +26,21 @@ class ActionService {
                 throw "Action scriptblock cannot be null"
             }
             
+            $category = "General"
+            if ($metadata.ContainsKey('Category')) { $category = $metadata.Category }
+            
+            $description = ""
+            if ($metadata.ContainsKey('Description')) { $description = $metadata.Description }
+            
+            $hotkey = ""
+            if ($metadata.ContainsKey('Hotkey')) { $hotkey = $metadata.Hotkey }
+            
             $actionData = @{
                 Name = $actionName
                 Action = $action
-                Category = if ($metadata.ContainsKey('Category')) { $metadata.Category } else { "General" }
-                Description = if ($metadata.ContainsKey('Description')) { $metadata.Description } else { "" }
-                Hotkey = if ($metadata.ContainsKey('Hotkey')) { $metadata.Hotkey } else { "" }
+                Category = $category
+                Description = $description
+                Hotkey = $hotkey
                 RegisteredAt = [datetime]::Now
                 ExecutionCount = 0
                 LastExecuted = $null
@@ -288,10 +297,14 @@ class ActionService {
                     }
                 }
                 $currentFocus = $navService.CurrentScreen.GetFocusedChild()
-                Write-Log -Level Debug -Message "navigation.nextComponent: Current focus: $(if ($currentFocus) { $currentFocus.Name } else { 'none' })"
+                $currentFocusName = "none"
+                if ($currentFocus) { $currentFocusName = $currentFocus.Name }
+                Write-Log -Level Debug -Message "navigation.nextComponent: Current focus: $currentFocusName"
                 $navService.CurrentScreen.FocusNextChild()
                 $newFocus = $navService.CurrentScreen.GetFocusedChild()
-                Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $(if ($newFocus) { $newFocus.Name } else { 'none' })"
+                $newFocusName = "none"
+                if ($newFocus) { $newFocusName = $newFocus.Name }
+                Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $newFocusName"
             }
         }, @{
             Category = "Navigation"
@@ -305,7 +318,9 @@ class ActionService {
                 Write-Log -Level Debug -Message "navigation.previousComponent: Calling FocusPreviousChild on $($navService.CurrentScreen.Name)"
                 $navService.CurrentScreen.FocusPreviousChild()
                 $newFocus = $navService.CurrentScreen.GetFocusedChild()
-                Write-Log -Level Debug -Message "navigation.previousComponent: New focus: $(if ($newFocus) { $newFocus.Name } else { 'none' })"
+                $newFocusName = "none"
+                if ($newFocus) { $newFocusName = $newFocus.Name }
+                Write-Log -Level Debug -Message "navigation.previousComponent: New focus: $newFocusName"
             }
         }, @{
             Category = "Navigation"

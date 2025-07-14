@@ -92,8 +92,11 @@ class Logger {
     }
     
     [void] LogException([Exception]$exception, [string]$message = "") {
+        $logMessage = "Exception occurred"
+        if ($message) { $logMessage = $message }
+        
         $exceptionDetails = @{
-            Message = if ($message) { $message } else { "Exception occurred" }
+            Message = $logMessage
             ExceptionType = $exception.GetType().FullName
             ExceptionMessage = $exception.Message
             StackTrace = $exception.StackTrace

@@ -590,7 +590,8 @@ class TaskListScreen : Screen {
         if (-not $this._sortLabel) { return }
         
         # Update sort indicator
-        $arrow = if ($this._sortDescending) { "↓" } else { "↑" }
+        $arrow = "↑"
+        if ($this._sortDescending) { $arrow = "↓" }
         $this._sortLabel.Text = "Sort: $($this._sortBy) $arrow"
     }
 

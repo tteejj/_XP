@@ -127,7 +127,8 @@ class ViewDefinitionService {
                 $progressText = "$($task.Progress)%"
                 
                 # Project key or default
-                $projectText = if ($task.ProjectKey) { $task.ProjectKey } else { "None" }
+                $projectText = "None"
+                if ($task.ProjectKey) { $projectText = $task.ProjectKey }
                 
                 return @{
                     Status   = $statusText
@@ -176,8 +177,11 @@ class ViewDefinitionService {
             Transformer = {
                 param($project)
                 
-                $statusText = if ($project.IsActive) { "Active" } else { "Inactive" }
-                $ownerText = if ($project.Owner) { $project.Owner } else { "Unassigned" }
+                $statusText = "Inactive"
+                if ($project.IsActive) { $statusText = "Active" }
+                
+                $ownerText = "Unassigned"
+                if ($project.Owner) { $ownerText = $project.Owner }
                 
                 return @{
                     Key    = $project.Key

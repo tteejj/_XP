@@ -71,7 +71,8 @@ function global:Write-Host {
         [switch]$NoNewline
     )
     
-    $message = if ($Object) { $Object.ToString() } else { "" }
+    $message = ""
+    if ($Object) { $message = $Object.ToString() }
     Write-FileLog -Message $message -Level "HOST"
 }
 
