@@ -210,12 +210,7 @@ class DashboardScreen : Screen {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
-        # ALWAYS FIRST - Let base handle Tab and component routing  
-        if (([Screen]$this).HandleInput($keyInfo)) {
-            return $true
-        }
-        
-        # Handle navigation
+        # Handle screen-level actions FIRST - GUIDE PATTERN
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
                 do {
@@ -266,7 +261,8 @@ class DashboardScreen : Screen {
             return $true
         }
         
-        return $false
+        # Let base handle Tab and route to components - GUIDE PATTERN
+        return ([Screen]$this).HandleInput($keyInfo)
     }
     
     hidden [void] ExecuteSelectedItem() {

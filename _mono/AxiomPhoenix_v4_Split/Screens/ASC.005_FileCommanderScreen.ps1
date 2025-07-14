@@ -315,10 +315,10 @@ class FileCommanderScreen : Screen {
 
             # Get directories and files
             $getChildParams = @{ 
-            Path = $this.CurrentPath
-            Force = $true
-            CaseSensitive = $true
-        }
+                Path = $path
+                Force = $true
+                CaseSensitive = $true
+            }
             
             $allItems = Get-ChildItem @getChildParams -ErrorAction SilentlyContinue
             

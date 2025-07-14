@@ -401,7 +401,8 @@ class ProjectInfoScreen : Screen {
             }
         }
         
-        return $false
+        # Let base handle Tab and route to components - GUIDE PATTERN
+        return ([Screen]$this).HandleInput($keyInfo)
     }
 }
 

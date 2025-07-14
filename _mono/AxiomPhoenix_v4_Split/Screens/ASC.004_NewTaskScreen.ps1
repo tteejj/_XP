@@ -58,18 +58,7 @@ class NewTaskScreen : Screen {
         $this._titleBox.IsFocusable = $true
         $this._titleBox.TabIndex = 0
         
-        # Add focus handlers - REQUIRED per guide
-        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
-            $this.ShowCursor = $true
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "border"
-            $this.ShowCursor = $false
-            $this.RequestRedraw()
-        } -Force
+        # TextBoxComponent already has OnFocus/OnBlur methods - don't override
         
         $this._panel.AddChild($this._titleBox)
         
@@ -91,17 +80,7 @@ class NewTaskScreen : Screen {
         $this._descriptionBox.IsFocusable = $true
         $this._descriptionBox.TabIndex = 1
         
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
-            $this.ShowCursor = $true
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "border"
-            $this.ShowCursor = $false
-            $this.RequestRedraw()
-        } -Force
+        # TextBoxComponent already has OnFocus/OnBlur methods - don't override
         
         $this._panel.AddChild($this._descriptionBox)
         
@@ -160,6 +139,14 @@ class NewTaskScreen : Screen {
         
         # MUST call base to set initial focus - GUIDE RULE
         ([Screen]$this).OnEnter()
+        
+        # Explicitly set focus to first text box to ensure it starts focused
+        $focusManager = $this.ServiceContainer.GetService("FocusManager")
+        if ($focusManager) {
+            $focusManager.SetFocus($this._titleBox)
+        }
+        
+        $this.RequestRedraw()
     }
     
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {

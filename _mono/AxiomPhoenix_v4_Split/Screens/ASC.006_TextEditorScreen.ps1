@@ -485,40 +485,20 @@ class TextEditorScreen : Screen {
         $this._searchPanel.Visible = $true
         
         # Update search panel height
-        $this._searchPanel.Height = if ($replace) { 6 } else { 4 }
+        $searchPanelHeight = 4
+        if ($replace) {
+            $searchPanelHeight = 6
+        }
+        $this._searchPanel.Height = $searchPanelHeight
         $this._replaceBox.Visible = $replace
         
-        # Make search boxes focusable and add focus handlers
+        # Make search boxes focusable - TextBoxComponent already has OnFocus/OnBlur methods
         $this._searchBox.IsFocusable = $true
         $this._searchBox.TabIndex = 0
-        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.ShowCursor = $true
-            # TextBoxComponent inherits BorderColor from UIElement, which does not have a setter. Direct assignment is fine.
-            $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
-            $this.RequestRedraw()
-        } -Force
-        $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.ShowCursor = $false
-            # Direct assignment for BorderColor is fine.
-            $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
-            $this.RequestRedraw()
-        } -Force
         
         if ($replace) {
             $this._replaceBox.IsFocusable = $true
             $this._replaceBox.TabIndex = 1
-            $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                $this.ShowCursor = $true
-                # Direct assignment for BorderColor is fine.
-                $this.BorderColor = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
-                $this.RequestRedraw()
-            } -Force
-            $this._replaceBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-                $this.ShowCursor = $false
-                # Direct assignment for BorderColor is fine.
-                $this.BorderColor = Get-ThemeColor "Input.Border" "#444444"
-                $this.RequestRedraw()
-            } -Force
         }
         
         # Invalidate focus cache and focus the search box
