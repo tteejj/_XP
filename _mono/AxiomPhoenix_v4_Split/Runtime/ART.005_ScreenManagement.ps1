@@ -34,7 +34,7 @@ function Show-TuiOverlay {
     
     # For non-dialog overlays, handle manually (deprecated path)
     if (-not $global:TuiState.OverlayStack) {
-        $global:TuiState.OverlayStack = [System.Collections.Generic.List[UIElement]]::new()
+        $null = ($global:TuiState.OverlayStack = [System.Collections.Generic.List[UIElement]]::new())
     }
     
     # Position overlay at center

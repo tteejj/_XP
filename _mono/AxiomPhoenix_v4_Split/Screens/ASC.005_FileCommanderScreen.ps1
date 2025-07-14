@@ -58,12 +58,15 @@ class FileCommanderScreen : Screen {
     hidden [bool] $_showHidden = $false
     hidden [string] $_sortBy = "Name"  # Name, Size, Date, Extension
     hidden [bool] $_sortDescending = $false
-    hidden [System.Collections.Generic.List[string]] $_clipboard = [System.Collections.Generic.List[string]]::new()
+    hidden [System.Collections.Generic.List[string]] $_clipboard
     hidden [bool] $_cutMode = $false  # false = copy, true = cut
     hidden [string] $_quickFilter = ""
     #endregion
 
     FileCommanderScreen([ServiceContainer]$container) : base("FileCommanderScreen", $container) {
+        # Initialize collections first
+        $this._clipboard = [System.Collections.Generic.List[string]]::new()
+        
         # Initialize paths safely
         try {
             $this._leftPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)

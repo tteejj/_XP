@@ -23,7 +23,7 @@ using namespace System.Threading
 # Dependencies: ServiceContainer, EventManager (optional)
 # Purpose: Screen navigation and history management
 class NavigationService {
-    [System.Collections.Generic.Stack[object]]$NavigationStack = [System.Collections.Generic.Stack[object]]::new() # FIXED: Changed from Stack[Screen] to Stack[object]
+    [System.Collections.Generic.Stack[object]]$NavigationStack # FIXED: Changed from Stack[Screen] to Stack[object]
     [object]$CurrentScreen # FIXED: Changed from [Screen] to [object]
     [hashtable]$ScreenRegistry = @{}
     [int]$MaxStackSize = 10
@@ -31,6 +31,9 @@ class NavigationService {
 
     # Updated constructor that takes ServiceContainer directly (as object to avoid type conversion issues)
     NavigationService([object]$serviceContainer) {
+        # Initialize collections first
+        $this.NavigationStack = [System.Collections.Generic.Stack[object]]::new()
+        
         if ($null -eq $serviceContainer) {
             throw [System.ArgumentNullException]::new("serviceContainer")
         }

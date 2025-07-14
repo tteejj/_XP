@@ -71,6 +71,12 @@ function global:Write-Host {
         [switch]$NoNewline
     )
     
+    # Filter out collection object outputs that corrupt TUI
+    if ($Object -and $Object.GetType().FullName -match "System\.Collections\.Generic\.(List|Dictionary|HashSet|Stack|Queue)") {
+        Write-FileLog -Message "FILTERED: Collection object output suppressed ($($Object.GetType().Name))" -Level "DEBUG"
+        return
+    }
+    
     $message = ""
     if ($Object) { $message = $Object.ToString() }
     Write-FileLog -Message $message -Level "HOST"
