@@ -1,3 +1,4 @@
+#!/usr/bin/env pwsh
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Application Startup (Generated from Split Structure)
 # This script loads the framework from its organized file structure.
@@ -53,7 +54,7 @@ try {
             Where-Object { -not $_.Name.EndsWith('.backup') -and -not $_.Name.EndsWith('.old') } |
             Sort-Object Name
         foreach ($file in $files) {
-            Write-Verbose "  - Dot-sourcing $($file.Name)"
+            Write-Verbose "  - Dot-sourcing $($file.FullName)"
             try {
                 . $file.FullName
             } catch {
@@ -73,8 +74,17 @@ try {
     Write-Host "  • Registering Logger..." -ForegroundColor Gray
     $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
     $logger.EnableFileLogging = $true
-    $logger.MinimumLevel = "Debug"  # Enable debug logging to see what's happening
-    $logger.EnableConsoleLogging = $true  # ENABLE CONSOLE LOGGING FOR DEBUGGING
+    
+    # --- PERFORMANCE CONTROL SWITCH ---
+    if ($Debug.IsPresent) {
+        $logger.MinimumLevel = "Debug"
+        Write-Host "DEBUG logging enabled. Performance will be impacted." -ForegroundColor Yellow
+    } else {
+        $logger.MinimumLevel = "Info" # Default to high-performance mode
+    }
+    # --- END OF SWITCH ---
+    
+    $logger.EnableConsoleLogging = $false  # Never enable console logging in TUI apps
     $container.Register("Logger", $logger)
     
     # Write initial log entry

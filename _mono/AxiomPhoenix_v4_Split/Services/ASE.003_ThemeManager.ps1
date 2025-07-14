@@ -86,7 +86,7 @@ class ThemeManager {
             $themesPath = Join-Path (Split-Path $scriptPath -Parent) "Themes"
             
             if (Test-Path $themesPath) {
-                $themeFiles = Get-ChildItem -Path $themesPath -Filter "*.ps1"
+                $themeFiles = Get-ChildItem -Path $themesPath -Filter "*.ps1" -CaseSensitive
                 
                 foreach ($themeFile in $themeFiles) {
                     try {

@@ -38,9 +38,9 @@ class FileSystemService {
         
         try {
             $params = @{
-                Path = $path
-                ErrorAction = 'SilentlyContinue'
-            }
+            Path = $Path
+            CaseSensitive = $true
+        }
             if ($showHidden) {
                 $params.Force = $true
             }

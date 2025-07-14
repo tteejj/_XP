@@ -236,7 +236,7 @@ class Screen : UIElement {
                 
                 # CRITICAL FIX: Use PowerShell-native object identity tracking for reliable deduplication
                 $uniqueTracker = @{}
-                $cleanList = [System.Collections.Generic.List[UIElement]]::new()[UIElement]]::new()
+                $cleanList = [System.Collections.Generic.List[UIElement]]::new()
                 foreach ($element in $this._focusableCache) {
                     $objectId = $element.GetHashCode().ToString() + "_" + $element.Name
                     if (-not $uniqueTracker.ContainsKey($objectId)) {

@@ -117,16 +117,9 @@ class TaskListScreen : Screen {
         $this._projectButton.IsFocusable = $true
         $this._projectButton.TabIndex = 2
         
-        # Add visual focus feedback
-        $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0e7490"
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._projectButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = Get-ThemeColor "button.normal.background" "#007acc"
-            $this.RequestRedraw()
-        } -Force
+        # ButtonComponent already has OnFocus/OnBlur methods
+        # Set initial background color
+        $this._projectButton.BackgroundColor = Get-ThemeColor "button.normal.background" "#007acc"
         
         # Add click handler
         $this._projectButton.OnClick = {
@@ -149,18 +142,7 @@ class TaskListScreen : Screen {
         $this._taskListBox.SelectedForegroundColor = (Get-ThemeColor "List.ItemSelected" "#ffffff")
         $this._taskListBox.ItemForegroundColor = (Get-ThemeColor "List.ItemNormal" "#d4d4d4")
         
-        # Add visual focus feedback
-        $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.SelectedBackgroundColor = Get-ThemeColor "listbox.focusedselectedbackground" "#0078d4"
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
-            $this.RequestRedraw()
-        } -Force
-        
-        $this._taskListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.SelectedBackgroundColor = Get-ThemeColor "listbox.selectedbackground" "#007acc"
-            $this.BorderColor = Get-ThemeColor "border" "#404040"
-            $this.RequestRedraw()
-        } -Force
+        # ListBox already has OnFocus/OnBlur methods that handle border color changes
         
         # Add selection change handler to update details
         $thisScreen = $this
@@ -205,24 +187,29 @@ class TaskListScreen : Screen {
         $this._filterBox.IsFocusable = $true
         $this._filterBox.TabIndex = 1
         
-        # Add visual focus feedback
-        $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "input.borderfocused" "#0078d4"
-            $this.ShowCursor = $true
-            $this.RequestRedraw()
-        } -Force
+        # TextBoxComponent already has OnFocus/OnBlur methods that handle border color and cursor
         
-        $this._filterBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "input.border" "#404040" 
-            $this.ShowCursor = $false
-            $this.RequestRedraw()
-        } -Force
-        
-        # Add text change handler to trigger filtering
+        # Add debounced text change handler to avoid filtering on every keystroke
+        $this | Add-Member -MemberType NoteProperty -Name "_lastFilterTime" -Value ([DateTime]::MinValue)
         $this._filterBox.OnChange = {
             param($sender, $newText)
             $thisScreen._filterText = $newText
-            $thisScreen._RefreshTasks()
+            $thisScreen._lastFilterTime = [DateTime]::Now
+            
+            # Simple debouncing: only refresh if user hasn't typed for 300ms
+            # This avoids expensive operations on every keystroke
+            Start-Job -ScriptBlock {
+                param($screenRef, $filterTime)
+                Start-Sleep -Milliseconds 300
+                # Only refresh if this is still the latest change
+                if ($screenRef._lastFilterTime -eq $filterTime) {
+                    # Use event system to safely trigger refresh from main thread
+                    $eventManager = $global:TuiState.Services.EventManager
+                    if ($eventManager) {
+                        $eventManager.Publish("Filter.RefreshRequested", $screenRef)
+                    }
+                }
+            } -ArgumentList $thisScreen, $thisScreen._lastFilterTime | Out-Null
         }.GetNewClosure()
         
         $this._contextPanel.AddChild($this._filterBox)
@@ -327,6 +314,17 @@ class TaskListScreen : Screen {
             
             $this._taskChangeSubscriptionId = $eventManager.Subscribe("Tasks.Changed", $handler)
             Write-Log -Level Debug -Message "TaskListScreen: Subscribed to Tasks.Changed events"
+            
+            # Subscribe to debounced filter refresh events
+            $filterHandler = {
+                param($screenRef)
+                if ($screenRef -eq $thisScreen) {
+                    $thisScreen._RefreshTasks()
+                }
+            }.GetNewClosure()
+            
+            $this._filterRefreshSubscriptionId = $eventManager.Subscribe("Filter.RefreshRequested", $filterHandler)
+            Write-Log -Level Debug -Message "TaskListScreen: Subscribed to Filter.RefreshRequested events"
         }
         
         # Call base to set initial focus
@@ -340,9 +338,15 @@ class TaskListScreen : Screen {
         
         # Unsubscribe from events
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
-        if ($eventManager -and $this._taskChangeSubscriptionId) {
-            $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
-            $this._taskChangeSubscriptionId = $null
+        if ($eventManager) {
+            if ($this._taskChangeSubscriptionId) {
+                $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
+                $this._taskChangeSubscriptionId = $null
+            }
+            if ($this._filterRefreshSubscriptionId) {
+                $eventManager.Unsubscribe("Filter.RefreshRequested", $this._filterRefreshSubscriptionId)
+                $this._filterRefreshSubscriptionId = $null
+            }
         }
     }
 

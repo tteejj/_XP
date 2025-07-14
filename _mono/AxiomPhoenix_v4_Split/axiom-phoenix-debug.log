@@ -1,22 +1,70 @@
-[2025-07-14 12:07:50.068] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\..\axiom-phoenix-debug.log
-[2025-07-14 12:07:50.086] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 12:07:50.096] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 12:07:50.108] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 12:07:50.130] [VERBOSE] [Write-Verbose]   - Dot-sourcing ABC.001_TuiAnsiHelper.ps1
-[2025-07-14 12:07:50.157] [ERROR] [Write-Error] Failed to load ABC.001_TuiAnsiHelper.ps1: At C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.001_TuiAnsiHelper.ps1:44 char:71
-+ … sequences = [System.Collections.Generic.List[string]]::new()[string]] …
-+                                                                ~
-Array index expression is missing or not valid.
-
-At C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.001_TuiAnsiHelper.ps1:44 char:71
-+ … es = [System.Collections.Generic.List[string]]::new()[string]]::new()
-+                                                         ~~~~~~~~~~~~~
-Unexpected token 'string]]::new' in expression or statement.
-
-At C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.001_TuiAnsiHelper.ps1:44 char:85
-+ … es = [System.Collections.Generic.List[string]]::new()[string]]::new()
-+                                                                       ~
-An expression was expected after '('.
-[2025-07-14 12:07:50.168] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 12:07:50.178] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 12:07:50.189] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:50.150] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/../axiom-phoenix-debug.log
+[2025-07-14 15:04:50.154] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.007_EventFunctions.ps1
+[2025-07-14 15:04:50.161] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.008_ErrorHandling.ps1
+[2025-07-14 15:04:50.166] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.009_InputProcessing.ps1
+[2025-07-14 15:04:50.173] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.010_UtilityFunctions.ps1
+[2025-07-14 15:04:50.187] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:50.205] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.001_LabelComponent.ps1
+[2025-07-14 15:04:50.223] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.002_ButtonComponent.ps1
+[2025-07-14 15:04:50.251] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.003_TextBoxComponent.ps1
+[2025-07-14 15:04:50.268] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.004_CheckBoxComponent.ps1
+[2025-07-14 15:04:50.279] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.005_RadioButtonComponent.ps1
+[2025-07-14 15:04:50.295] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.006_MultilineTextBoxComponent.ps1
+[2025-07-14 15:04:50.317] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.007_NumericInputComponent.ps1
+[2025-07-14 15:04:50.333] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.008_DateInputComponent.ps1
+[2025-07-14 15:04:50.358] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.009_ComboBoxComponent.ps1
+[2025-07-14 15:04:50.384] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.010_Table.ps1
+[2025-07-14 15:04:50.451] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.011_Panel.ps1
+[2025-07-14 15:04:50.466] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.012_ScrollablePanel.ps1
+[2025-07-14 15:04:50.483] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.013_GroupPanel.ps1
+[2025-07-14 15:04:50.493] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014_ListBox.ps1
+[2025-07-14 15:04:50.518] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014a_Dialog.ps1
+[2025-07-14 15:04:50.531] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.015_TextBox.ps1
+[2025-07-14 15:04:50.542] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.016_CommandPalette.ps1
+[2025-07-14 15:04:50.598] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.018_AlertDialog.ps1
+[2025-07-14 15:04:50.618] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.020_InputDialog.ps1
+[2025-07-14 15:04:50.655] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.021_NavigationMenu.ps1
+[2025-07-14 15:04:50.680] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.022_DataGridComponent.ps1
+[2025-07-14 15:04:50.718] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.023_SidebarMenu.ps1
+[2025-07-14 15:04:50.734] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.025_SimpleTaskDialog.ps1
+[2025-07-14 15:04:50.761] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.026_ConfirmDialog.ps1
+[2025-07-14 15:04:50.782] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.100_TextEngine.ps1
+[2025-07-14 15:04:50.875] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:50.887] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen_Fixed.ps1
+[2025-07-14 15:04:50.915] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen.ps1
+[2025-07-14 15:04:50.948] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.002_TaskListScreen.ps1
+[2025-07-14 15:04:51.004] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.003_ThemeScreen.ps1
+[2025-07-14 15:04:51.073] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.004_NewTaskScreen.ps1
+[2025-07-14 15:04:51.096] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_EditTaskScreen.ps1
+[2025-07-14 15:04:51.143] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_FileCommanderScreen.ps1
+[2025-07-14 15:04:51.223] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006_TextEditorScreen.ps1
+[2025-07-14 15:04:51.307] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006a_ProjectEditDialog.ps1
+[2025-07-14 15:04:51.344] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.007_ProjectInfoScreen.ps1
+[2025-07-14 15:04:51.377] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.008_ProjectsListScreen.ps1
+[2025-07-14 15:04:51.417] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/TestScreen.ps1
+[2025-07-14 15:04:51.435] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:51.478] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.001_Logger.ps1
+[2025-07-14 15:04:51.505] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.002_EventManager.ps1
+[2025-07-14 15:04:51.570] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.003_ThemeManager.ps1
+[2025-07-14 15:04:51.596] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.004_ActionService.ps1
+[2025-07-14 15:04:51.622] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.005_DataManager.ps1
+[2025-07-14 15:04:51.659] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.007_KeybindingService.ps1
+[2025-07-14 15:04:51.684] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.008_NavigationService.ps1
+[2025-07-14 15:04:51.720] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.009_DialogManager.ps1
+[2025-07-14 15:04:51.738] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.011_ViewDefinitionService.ps1
+[2025-07-14 15:04:51.756] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.012_AsyncJobService.ps1
+[2025-07-14 15:04:51.773] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.014_FileSystemService.ps1
+[2025-07-14 15:04:51.805] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:51.817] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.001_GlobalState.ps1
+[2025-07-14 15:04:51.841] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.002_EngineManagement.ps1
+[2025-07-14 15:04:51.861] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.003_RenderingSystem.ps1
+[2025-07-14 15:04:51.878] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.004_InputProcessing.ps1
+[2025-07-14 15:04:51.908] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.005_ScreenManagement.ps1
+[2025-07-14 15:04:51.918] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.006_ErrorHandling.ps1
+[2025-07-14 15:04:51.927] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:51.932] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:51.953] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
+[2025-07-14 15:04:51.957] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:51.971] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:51.983] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 15:04:51.990] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]

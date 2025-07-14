@@ -103,7 +103,7 @@ class ButtonComponent : UIElement {
                     if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
                         Write-Log -Level Error -Message "Button '$($this.Name)' OnClick error: $_"
                     }
-                    [System.IO.File]::AppendAllText("C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\button-error.log", "Button error at $(Get-Date): $_`n")
+                    # Silently continue if Write-Log not available - no console output in TUI
                 }
             }
             

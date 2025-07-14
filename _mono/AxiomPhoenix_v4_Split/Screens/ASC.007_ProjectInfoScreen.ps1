@@ -136,8 +136,12 @@ class ProjectInfoScreen : Screen {
         $this.AddDetailField("Owner:", ($this._project.Owner -or "Unassigned"), $y)
         $y += 2
         
-        $statusText = if ($this._project.IsActive) { "Active" } else { "Archived" }
-        $statusColor = if ($this._project.IsActive) { Get-ThemeColor "success" } else { Get-ThemeColor "subtle" }
+        $statusText = "Archived"
+        $statusColor = Get-ThemeColor "subtle"
+        if ($this._project.IsActive) { 
+            $statusText = "Active"
+            $statusColor = Get-ThemeColor "success"
+        }
         $this.AddDetailField("Status:", $statusText, $y, $statusColor)
         $y += 2
 
@@ -243,7 +247,11 @@ class ProjectInfoScreen : Screen {
                     $currentLine = $word.Substring($maxWidth)
                 }
             } else {
-                $currentLine = if ($currentLine) { "$currentLine $word" } else { $word }
+                if ($currentLine) {
+                    $currentLine = "$currentLine $word"
+                } else {
+                    $currentLine = $word
+                }
             }
         }
         
@@ -284,7 +292,7 @@ class ProjectInfoScreen : Screen {
         $filesFound = $false
 
         if ($this._project.ProjectFolderPath -and (Test-Path $this._project.ProjectFolderPath)) {
-            $files = Get-ChildItem -Path $this._project.ProjectFolderPath -File
+            $files = Get-ChildItem -Path $this._project.ProjectFolderPath -File -CaseSensitive
             if ($files.Count -gt 0) {
                 foreach ($file in $files) {
                     $fileText = "📄 $($file.Name)"

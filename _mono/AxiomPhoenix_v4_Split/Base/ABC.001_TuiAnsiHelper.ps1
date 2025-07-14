@@ -41,7 +41,7 @@ class TuiAnsiHelper {
     }
 
     static [string] GetAnsiSequence([string]$fgHex, [string]$bgHex, [hashtable]$attributes) {
-        $sequences = [System.Collections.Generic.List[string]]::new()[string]]::new()
+        $sequences = [System.Collections.Generic.List[string]]::new()
 
         # Foreground color (Truecolor - SGR 38;2)
         if (-not [string]::IsNullOrEmpty($fgHex)) {

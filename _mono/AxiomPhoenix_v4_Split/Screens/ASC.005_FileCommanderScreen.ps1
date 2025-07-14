@@ -314,10 +314,11 @@ class FileCommanderScreen : Screen {
             }
 
             # Get directories and files
-            $getChildParams = @{
-                Path = $path
-                Force = $this._showHidden
-            }
+            $getChildParams = @{ 
+            Path = $this.CurrentPath
+            Force = $true
+            CaseSensitive = $true
+        }
             
             $allItems = Get-ChildItem @getChildParams -ErrorAction SilentlyContinue
             
@@ -593,7 +594,10 @@ class FileCommanderScreen : Screen {
         }
         
         if ($item -and $item.Name -ne "..") {
-            $itemType = if ($item.PSIsContainer -or $item.Attributes -band [System.IO.FileAttributes]::Directory) { "directory" } else { "file" }
+            $itemType = "file"
+            if ($item.PSIsContainer -or $item.Attributes -band [System.IO.FileAttributes]::Directory) {
+                $itemType = "directory"
+            }
             $message = "Delete $itemType '$($item.Name)'?"
             
             # Simple confirmation - in real app would use dialog
