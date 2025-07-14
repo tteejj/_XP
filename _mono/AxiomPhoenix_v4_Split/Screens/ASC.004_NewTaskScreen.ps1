@@ -1,386 +1,272 @@
 # ==============================================================================
-# Axiom-Phoenix v4.1 - New Task Screen
-# FIXED: Proper color properties, focus management, and input handling
+# Axiom-Phoenix v4.1 - New Task Screen - PROPER IMPLEMENTATION
 # ==============================================================================
 
 class NewTaskScreen : Screen {
-    hidden [Panel] $_mainPanel
-    hidden [Panel] $_formPanel
-    hidden [TextBoxComponent] $_titleBox
-    hidden [TextBoxComponent] $_descriptionBox
-    hidden [ButtonComponent] $_saveButton
-    hidden [ButtonComponent] $_cancelButton
-    hidden [LabelComponent] $_priorityLabel
-    hidden [LabelComponent] $_projectLabel
-    hidden [LabelComponent] $_priorityValue
-    hidden [LabelComponent] $_projectValue
+    # Components
+    hidden $_panel
+    hidden $_titleBox
+    hidden $_descriptionBox
+    hidden $_saveButton
+    hidden $_cancelButton
+    hidden $_priorityLabel
+    hidden $_projectLabel
     
-    hidden [TaskPriority] $_selectedPriority = [TaskPriority]::Medium
-    hidden [string] $_selectedProject = "General"
+    # Services
+    hidden $_navService
+    hidden $_dataManager
+    hidden $_focusManager
+    
+    # State
+    hidden $_priority = [TaskPriority]::Medium
+    hidden $_project = "General"
     
     NewTaskScreen([object]$serviceContainer) : base("NewTaskScreen", $serviceContainer) {
-        $this.Title = " Create New Task "
-        Write-Log -Level Debug -Message "NewTaskScreen: Constructor called"
+        # Get ALL services in constructor
+        $this._navService = $serviceContainer.GetService("NavigationService")
+        $this._dataManager = $serviceContainer.GetService("DataManager")
+        $this._focusManager = $serviceContainer.GetService("FocusManager")
     }
     
     [void] Initialize() {
-        Write-Log -Level Debug -Message "NewTaskScreen.Initialize: Starting"
+        # Single centered panel
+        $panelWidth = 60
+        $panelHeight = 16
+        $panelX = [Math]::Floor(($this.Width - $panelWidth) / 2)
+        $panelY = [Math]::Floor(($this.Height - $panelHeight) / 2)
         
-        # Main panel (full screen with semi-transparent overlay effect)
-        $this._mainPanel = [Panel]::new("NewTaskMainPanel")
-        $this._mainPanel.X = 0
-        $this._mainPanel.Y = 0
-        $this._mainPanel.Width = $this.Width
-        $this._mainPanel.Height = $this.Height
-        $this._mainPanel.HasBorder = $false
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
-        $this.AddChild($this._mainPanel)
-        
-        # Form panel (centered dialog)
-        $formWidth = [Math]::Min(70, $this.Width - 10)
-        $formHeight = 20
-        $formX = [Math]::Floor(($this.Width - $formWidth) / 2)
-        $formY = [Math]::Floor(($this.Height - $formHeight) / 2)
-        
-        $this._formPanel = [Panel]::new("FormPanel")
-        $this._formPanel.X = $formX
-        $this._formPanel.Y = $formY
-        $this._formPanel.Width = $formWidth
-        $this._formPanel.Height = $formHeight
-        $this._formPanel.Title = " New Task "
-        $this._formPanel.BorderStyle = "Double"
-        $this._formPanel.BorderColor = Get-ThemeColor "panel.border" "#007acc"
-        $this._formPanel.BackgroundColor = Get-ThemeColor "panel.background" "#1e1e1e"
-        $this._mainPanel.AddChild($this._formPanel)
+        $this._panel = [Panel]::new("TaskPanel")
+        $this._panel.X = $panelX
+        $this._panel.Y = $panelY
+        $this._panel.Width = $panelWidth
+        $this._panel.Height = $panelHeight
+        $this._panel.Title = " New Task "
+        $this._panel.BorderStyle = "Single"
+        $this._panel.BorderColor = Get-ThemeColor "primary.accent"
+        $this._panel.BackgroundColor = Get-ThemeColor "panel.background"
+        $this.AddChild($this._panel)
         
         $y = 2
         
-        # Title section
-        $titleLabel = [LabelComponent]::new("TitleLabel")
-        $titleLabel.Text = "Task Title:"
-        $titleLabel.X = 2
-        $titleLabel.Y = $y
-        $titleLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
-        $this._formPanel.AddChild($titleLabel)
+        # Title label and textbox
+        $label = [LabelComponent]::new("TitleLabel")
+        $label.Text = "Title:"
+        $label.X = 2
+        $label.Y = $y
+        $label.ForegroundColor = Get-ThemeColor "label.foreground"
+        $this._panel.AddChild($label)
         
         $y += 1
         $this._titleBox = [TextBoxComponent]::new("TitleBox")
-        $this._titleBox.Placeholder = "Enter task title..."
         $this._titleBox.X = 2
         $this._titleBox.Y = $y
-        $this._titleBox.Width = $formWidth - 4
+        $this._titleBox.Width = $panelWidth - 4
         $this._titleBox.Height = 3
         $this._titleBox.IsFocusable = $true
         $this._titleBox.TabIndex = 0
-        $this._titleBox.BackgroundColor = Get-ThemeColor "input.background" "#2d2d30"
-        $this._titleBox.ForegroundColor = Get-ThemeColor "input.foreground" "#d4d4d4"
-        $this._titleBox.BorderColor = Get-ThemeColor "input.border" "#404040"
+        $this._titleBox.BorderColor = Get-ThemeColor "border"
         
-        # Focus visual feedback - store colors before closure
-        $inputFocusBorder = Get-ThemeColor "primary.accent" "#007acc"
-        $inputNormalBorder = Get-ThemeColor "input.border" "#404040"
-        
+        # Add focus handlers
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = $inputFocusBorder
+            $this.BorderColor = Get-ThemeColor "primary.accent"
             $this.ShowCursor = $true
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = $inputNormalBorder
+            $this.BorderColor = Get-ThemeColor "border"
             $this.ShowCursor = $false
             $this.RequestRedraw()
-        }.GetNewClosure() -Force
+        } -Force
         
-        $this._formPanel.AddChild($this._titleBox)
-        
-        $y += 4  # 3 for textbox height + 1 spacing
-        
-        # Description section
-        $descLabel = [LabelComponent]::new("DescLabel")
-        $descLabel.Text = "Description (optional):"
-        $descLabel.X = 2
-        $descLabel.Y = $y
-        $descLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
-        $this._formPanel.AddChild($descLabel)
-        
-        $y += 1
-        $this._descriptionBox = [TextBoxComponent]::new("DescBox")
-        $this._descriptionBox.Placeholder = "Enter description..."
-        $this._descriptionBox.X = 2
-        $this._descriptionBox.Y = $y
-        $this._descriptionBox.Width = $formWidth - 4
-        $this._descriptionBox.Height = 3
-        $this._descriptionBox.IsFocusable = $true
-        $this._descriptionBox.TabIndex = 1
-        $this._descriptionBox.BackgroundColor = Get-ThemeColor "input.background" "#2d2d30"
-        $this._descriptionBox.ForegroundColor = Get-ThemeColor "input.foreground" "#d4d4d4"
-        $this._descriptionBox.BorderColor = Get-ThemeColor "input.border" "#404040"
-        
-        # Focus visual feedback - reuse same colors
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = $inputFocusBorder
-            $this.ShowCursor = $true
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = $inputNormalBorder
-            $this.ShowCursor = $false
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        $this._formPanel.AddChild($this._descriptionBox)
+        $this._panel.AddChild($this._titleBox)
         
         $y += 4
         
-        # Priority and Project row
+        # Description label and textbox
+        $label2 = [LabelComponent]::new("DescLabel")
+        $label2.Text = "Description:"
+        $label2.X = 2
+        $label2.Y = $y
+        $label2.ForegroundColor = Get-ThemeColor "label.foreground"
+        $this._panel.AddChild($label2)
+        
+        $y += 1
+        $this._descriptionBox = [TextBoxComponent]::new("DescBox")
+        $this._descriptionBox.X = 2
+        $this._descriptionBox.Y = $y
+        $this._descriptionBox.Width = $panelWidth - 4
+        $this._descriptionBox.Height = 3
+        $this._descriptionBox.IsFocusable = $true
+        $this._descriptionBox.TabIndex = 1
+        $this._descriptionBox.BorderColor = Get-ThemeColor "border"
+        
+        # Add focus handlers
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "border"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._panel.AddChild($this._descriptionBox)
+        
+        $y += 4
+        
+        # Priority and Project display
         $this._priorityLabel = [LabelComponent]::new("PriorityLabel")
-        $this._priorityLabel.Text = "Priority:"
+        $this._priorityLabel.Text = "Priority: [$($this._priority)]  [P] to change"
         $this._priorityLabel.X = 2
         $this._priorityLabel.Y = $y
-        $this._priorityLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
-        $this._formPanel.AddChild($this._priorityLabel)
-        
-        $this._priorityValue = [LabelComponent]::new("PriorityValue")
-        $this._priorityValue.Text = "[$($this._selectedPriority)]"
-        $this._priorityValue.X = 12
-        $this._priorityValue.Y = $y
-        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
-        $this._formPanel.AddChild($this._priorityValue)
-        
-        $this._projectLabel = [LabelComponent]::new("ProjectLabel")
-        $this._projectLabel.Text = "Project:"
-        $this._projectLabel.X = 30
-        $this._projectLabel.Y = $y
-        $this._projectLabel.ForegroundColor = Get-ThemeColor "label.foreground" "#d4d4d4"
-        $this._formPanel.AddChild($this._projectLabel)
-        
-        $this._projectValue = [LabelComponent]::new("ProjectValue")
-        $this._projectValue.Text = "[$($this._selectedProject)]"
-        $this._projectValue.X = 39
-        $this._projectValue.Y = $y
-        $this._projectValue.ForegroundColor = Get-ThemeColor "accent.secondary" "#FFD700"
-        $this._formPanel.AddChild($this._projectValue)
-        
-        $y += 2
-        
-        # Help text
-        $helpLabel = [LabelComponent]::new("HelpLabel")
-        $helpLabel.Text = "[Tab] Next field | [P] Change priority | [Enter] Save | [Esc] Cancel"
-        $helpLabel.X = 2
-        $helpLabel.Y = $y
-        $helpLabel.ForegroundColor = Get-ThemeColor "text.muted" "#666666"
-        $this._formPanel.AddChild($helpLabel)
+        $this._priorityLabel.ForegroundColor = $this._GetPriorityColor()
+        $this._panel.AddChild($this._priorityLabel)
         
         $y += 2
         
         # Buttons
-        $buttonWidth = 12
-        $buttonSpacing = 4
-        $totalButtonWidth = ($buttonWidth * 2) + $buttonSpacing
-        $buttonStartX = [Math]::Floor(($formWidth - $totalButtonWidth) / 2)
-        
+        $buttonY = $panelHeight - 3
         $this._saveButton = [ButtonComponent]::new("SaveButton")
-        $this._saveButton.Text = " [S]ave "
-        $this._saveButton.X = $buttonStartX
-        $this._saveButton.Y = $y
-        $this._saveButton.Width = $buttonWidth
+        $this._saveButton.Text = " Save "
+        $this._saveButton.X = 15
+        $this._saveButton.Y = $buttonY
+        $this._saveButton.Width = 10
         $this._saveButton.Height = 3
         $this._saveButton.IsFocusable = $true
         $this._saveButton.TabIndex = 2
-        $this._saveButton.BackgroundColor = Get-ThemeColor "button.primary" "#0078d4"
-        $this._saveButton.ForegroundColor = Get-ThemeColor "button.foreground" "#ffffff"
+        $this._saveButton.BackgroundColor = Get-ThemeColor "primary.accent"
+        $this._saveButton.ForegroundColor = Get-ThemeColor "button.foreground"
         
-        # Focus visual feedback - store colors before closure
-        $saveButtonFocusBg = Get-ThemeColor "button.primary.hover" "#106ebe"
-        $saveButtonNormalBg = Get-ThemeColor "button.primary" "#0078d4"
+        # Button click handler with closure
+        $currentScreen = $this
+        $this._saveButton.OnClick = {
+            $currentScreen._SaveTask()
+        }.GetNewClosure()
         
-        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = $saveButtonFocusBg
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = $saveButtonNormalBg
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        $thisScreen = $this
-        $this._saveButton.OnClick = { $thisScreen.SaveTask() }.GetNewClosure()
-        $this._formPanel.AddChild($this._saveButton)
+        $this._panel.AddChild($this._saveButton)
         
         $this._cancelButton = [ButtonComponent]::new("CancelButton")
-        $this._cancelButton.Text = " [C]ancel "
-        $this._cancelButton.X = $buttonStartX + $buttonWidth + $buttonSpacing
-        $this._cancelButton.Y = $y
-        $this._cancelButton.Width = $buttonWidth
+        $this._cancelButton.Text = " Cancel "
+        $this._cancelButton.X = 35
+        $this._cancelButton.Y = $buttonY
+        $this._cancelButton.Width = 10
         $this._cancelButton.Height = 3
         $this._cancelButton.IsFocusable = $true
         $this._cancelButton.TabIndex = 3
-        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.danger" "#d13438"
-        $this._cancelButton.ForegroundColor = Get-ThemeColor "button.foreground" "#ffffff"
+        $this._cancelButton.BackgroundColor = Get-ThemeColor "button.secondary"
+        $this._cancelButton.ForegroundColor = Get-ThemeColor "button.foreground"
         
-        # Focus visual feedback - store colors before closure
-        $cancelButtonFocusBg = Get-ThemeColor "button.danger.hover" "#a4262c"
-        $cancelButtonNormalBg = Get-ThemeColor "button.danger" "#d13438"
+        $this._cancelButton.OnClick = {
+            $currentScreen._Cancel()
+        }.GetNewClosure()
         
-        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BackgroundColor = $cancelButtonFocusBg
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BackgroundColor = $cancelButtonNormalBg
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        $this._cancelButton.OnClick = { $thisScreen.Cancel() }.GetNewClosure()
-        $this._formPanel.AddChild($this._cancelButton)
-        
-        Write-Log -Level Debug -Message "NewTaskScreen.Initialize: Completed"
+        $this._panel.AddChild($this._cancelButton)
     }
     
     [void] OnEnter() {
-        Write-Log -Level Debug -Message "NewTaskScreen.OnEnter: Setting initial focus"
-        
         # Reset form
         $this._titleBox.Text = ""
         $this._descriptionBox.Text = ""
-        $this._selectedPriority = [TaskPriority]::Medium
-        $this._selectedProject = "General"
-        
-        # Update display
+        $this._priority = [TaskPriority]::Medium
         $this._UpdatePriorityDisplay()
         
-        # Let base Screen class handle focus - it will focus first focusable child
+        # Base class sets initial focus
         ([Screen]$this).OnEnter()
-        
-        $this.RequestRedraw()
     }
     
-    hidden [string] GetPriorityColor([TaskPriority]$priority) {
-        switch ($priority) {
-            ([TaskPriority]::Low) { 
-                return Get-ThemeColor "status.success" "#00d563" 
+    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        if ($null -eq $keyInfo) { return $false }
+        
+        # Get focused component CORRECTLY
+        $focused = $this.GetFocusedChild()
+        
+        # Handle screen-level actions based on focused component
+        switch ($keyInfo.Key) {
+            ([ConsoleKey]::Enter) {
+                # Different behavior based on what's focused
+                if ($focused -eq $this._titleBox -or $focused -eq $this._descriptionBox) {
+                    $this._SaveTask()
+                    return $true
+                }
+                # Don't handle Enter for buttons - they handle themselves
             }
-            ([TaskPriority]::Medium) { 
-                return Get-ThemeColor "status.warning" "#ffcc02" 
-            }
-            ([TaskPriority]::High) { 
-                return Get-ThemeColor "status.error" "#d13438" 
-            }
-            default { 
-                return Get-ThemeColor "label.foreground" "#d4d4d4" 
+            ([ConsoleKey]::Escape) {
+                # Screen-level: go back
+                $this._Cancel()
+                return $true
             }
         }
-        # Explicit fallback return to satisfy PowerShell parser
-        return Get-ThemeColor "label.foreground" "#d4d4d4"
+        
+        # Check for letter shortcuts
+        $char = $keyInfo.KeyChar
+        if ($char -eq 'p' -or $char -eq 'P') {
+            $this._CyclePriority()
+            return $true
+        }
+        
+        # Let base handle Tab and route to components
+        return ([Screen]$this).HandleInput($keyInfo)
+    }
+    
+    hidden [void] _CyclePriority() {
+        switch ($this._priority) {
+            ([TaskPriority]::Low) { $this._priority = [TaskPriority]::Medium }
+            ([TaskPriority]::Medium) { $this._priority = [TaskPriority]::High }
+            ([TaskPriority]::High) { $this._priority = [TaskPriority]::Low }
+        }
+        $this._UpdatePriorityDisplay()
+        $this.RequestRedraw()
     }
     
     hidden [void] _UpdatePriorityDisplay() {
-        $this._priorityValue.Text = "[$($this._selectedPriority)]"
-        $this._priorityValue.ForegroundColor = $this.GetPriorityColor($this._selectedPriority)
+        $this._priorityLabel.Text = "Priority: [$($this._priority)]  [P] to change"
+        $this._priorityLabel.ForegroundColor = $this._GetPriorityColor()
     }
     
-    hidden [void] CyclePriority() {
-        $priorities = @([TaskPriority]::Low, [TaskPriority]::Medium, [TaskPriority]::High)
-        $currentIndex = [Array]::IndexOf($priorities, $this._selectedPriority)
-        $this._selectedPriority = $priorities[($currentIndex + 1) % $priorities.Length]
-        
-        $this._UpdatePriorityDisplay()
-        $this.RequestRedraw()
+    hidden [string] _GetPriorityColor() {
+        switch ($this._priority) {
+            ([TaskPriority]::Low) { return Get-ThemeColor "status.success" }
+            ([TaskPriority]::Medium) { return Get-ThemeColor "status.warning" }
+            ([TaskPriority]::High) { return Get-ThemeColor "status.error" }
+        }
+        return Get-ThemeColor "label.foreground"
     }
     
-    hidden [void] SaveTask() {
+    hidden [void] _SaveTask() {
         # Validate title
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
-            # Flash the title box border to indicate error
-            $this._titleBox.BorderColor = Get-ThemeColor "status.error" "#d13438"
+            $this._titleBox.BorderColor = Get-ThemeColor "status.error"
             $this.RequestRedraw()
-            # Focus title box
             $this.SetChildFocus($this._titleBox)
             return
         }
         
-        # Create new task
+        # Create task
         $task = [PmcTask]::new($this._titleBox.Text.Trim())
-        $task.Description = $this._descriptionBox.Text.Trim()
-        $task.Priority = $this._selectedPriority
-        $task.ProjectKey = $this._selectedProject
+        if (-not [string]::IsNullOrWhiteSpace($this._descriptionBox.Text)) {
+            $task.Description = $this._descriptionBox.Text.Trim()
+        }
+        $task.Priority = $this._priority
+        $task.ProjectKey = $this._project
         
-        # Save via DataManager
-        $dataManager = $this.ServiceContainer.GetService("DataManager")
-        if ($dataManager) {
-            $dataManager.AddTask($task)
-            
-            Write-Log -Level Info -Message "NewTaskScreen: Created task '$($task.Title)'"
-            
-            # Navigate back
-            $navService = $this.ServiceContainer.GetService("NavigationService")
-            if ($navService -and $navService.CanGoBack()) {
-                $navService.GoBack()
-            }
+        # Save and go back
+        $this._dataManager.AddTask($task)
+        if ($this._navService.CanGoBack()) {
+            $this._navService.GoBack()
         }
     }
     
-    hidden [void] Cancel() {
-        Write-Log -Level Debug -Message "NewTaskScreen: Cancelled"
-        $navService = $this.ServiceContainer.GetService("NavigationService")
-        if ($navService -and $navService.CanGoBack()) {
-            $navService.GoBack()
+    hidden [void] _Cancel() {
+        if ($this._navService.CanGoBack()) {
+            $this._navService.GoBack()
         }
-    }
-    
-    # Input handling - follows v4.1 pattern
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if ($null -eq $keyInfo) {
-            return $false
-        }
-        
-        # Base class handles Tab navigation and routes to focused component
-        if (([Screen]$this).HandleInput($keyInfo)) {
-            return $true
-        }
-        
-        # Handle screen-level shortcuts (work regardless of which component has focus)
-        switch ($keyInfo.Key) {
-            ([ConsoleKey]::Escape) {
-                $this.Cancel()
-                return $true
-            }
-        }
-        
-        # Handle character shortcuts
-        switch ($keyInfo.KeyChar) {
-            { $_ -eq 'p' -or $_ -eq 'P' } {
-                $this.CyclePriority()
-                return $true
-            }
-            { $_ -eq 's' -or $_ -eq 'S' } {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -or $keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
-                    $this.SaveTask()
-                    return $true
-                }
-            }
-            { $_ -eq 'c' -or $_ -eq 'C' } {
-                if ($keyInfo.Modifiers -eq [ConsoleModifiers]::None -or $keyInfo.Modifiers -eq [ConsoleModifiers]::Shift) {
-                    $this.Cancel()
-                    return $true
-                }
-            }
-        }
-        
-        # Ctrl+S to save
-        if ($keyInfo.Modifiers -eq [ConsoleModifiers]::Control -and $keyInfo.Key -eq [ConsoleKey]::S) {
-            $this.SaveTask()
-            return $true
-        }
-        
-        return $false
     }
 }
 
 # ==============================================================================
-# End NewTaskScreen - Fixed for v4.1
+# End NewTaskScreen
 # ==============================================================================

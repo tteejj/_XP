@@ -97,7 +97,21 @@ $listBox | Add-Member -MemberType ScriptMethod -Name HandleInput -Value {
 ```
 **WHY:** Components have carefully designed behaviors. Overriding breaks their functionality.
 
-### Rule 5: Color Setting - Properties ONLY
+### Rule 5: Service Fields - NO Type Annotations
+```powershell
+# ❌ FATAL - PowerShell can't resolve custom types at parse time
+hidden [NavigationService] $_navService
+hidden [DataManager] $_dataManager
+hidden [FocusManager] $_focusManager
+
+# ✅ CORRECT - Untyped fields work fine
+hidden $_navService
+hidden $_dataManager
+hidden $_focusManager
+```
+**WHY:** PowerShell tries to resolve types during parsing, before the types are loaded. This prevents the entire script from loading.
+
+### Rule 6: Color Setting - Properties ONLY
 ```powershell
 # ❌ THESE METHODS DO NOT EXIST
 $component.SetBackgroundColor("#123456")

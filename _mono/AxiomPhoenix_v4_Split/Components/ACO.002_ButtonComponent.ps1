@@ -78,31 +78,26 @@ class ButtonComponent : UIElement {
         if (-not $this.Enabled -or -not $this.IsFocused) { return $false }
 
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-            try {
-                $this.IsPressed = $true
-                $this.RequestRedraw()
-                
-                # Use a separate thread to show the pressed state before executing the action
-                $job = Start-ThreadJob {
-                    Start-Sleep -Milliseconds 100
-                }
-                Wait-Job $job
-                Remove-Job $job
-                
-                if ($this.OnClick) {
+            $this.IsPressed = $true
+            $this.RequestRedraw()
+            
+            if ($this.OnClick) {
+                try {
                     & $this.OnClick
                 }
-                
-                $this.IsPressed = $false
-                $this.RequestRedraw()
-                
-                return $true
+                catch {
+                    # Log the actual error
+                    if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
+                        Write-Log -Level Error -Message "Button '$($this.Name)' OnClick error: $_"
+                    }
+                    [System.IO.File]::AppendAllText("C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\button-error.log", "Button error at $(Get-Date): $_`n")
+                }
             }
-            catch {
-                $this.IsPressed = $false
-                $this.RequestRedraw()
-                throw
-            }
+            
+            $this.IsPressed = $false
+            $this.RequestRedraw()
+            
+            return $true
         }
         return $false
     }
