@@ -1,18 +1,18 @@
-[2025-07-14 16:53:54.415] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\..\axiom-phoenix-debug.log
-[2025-07-14 16:53:54.432] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 16:53:54.441] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 16:53:54.451] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 16:53:54.472] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.001_TuiAnsiHelper.ps1
-[2025-07-14 16:53:54.491] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.001a_ServiceContainer.ps1
-[2025-07-14 16:53:54.508] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.002_TuiCell.ps1
-[2025-07-14 16:53:54.523] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.003_TuiBuffer.ps1
-[2025-07-14 16:53:54.541] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.004_UIElement.ps1
-[2025-07-14 16:53:54.560] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.005_Component.ps1
-[2025-07-14 16:53:54.582] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.006_Screen.ps1
-[2025-07-14 16:53:54.617] [ERROR] [Write-Error] Failed to load ABC.006_Screen.ps1: At C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.006_Screen.ps1:227 char:104
+[2025-07-14 16:56:00.128] [INFO] [AFU.006a_FileLogger.ps1] Axiom Phoenix File Logger initialized. Log file: C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\..\axiom-phoenix-debug.log
+[2025-07-14 16:56:00.146] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:56:00.155] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:56:00.165] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:56:00.188] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.001_TuiAnsiHelper.ps1
+[2025-07-14 16:56:00.207] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.001a_ServiceContainer.ps1
+[2025-07-14 16:56:00.224] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.002_TuiCell.ps1
+[2025-07-14 16:56:00.240] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.003_TuiBuffer.ps1
+[2025-07-14 16:56:00.258] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.004_UIElement.ps1
+[2025-07-14 16:56:00.283] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.005_Component.ps1
+[2025-07-14 16:56:00.298] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.006_Screen.ps1
+[2025-07-14 16:56:00.331] [ERROR] [Write-Error] Failed to load ABC.006_Screen.ps1: At C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Base\ABC.006_Screen.ps1:227 char:104
 + … essage "Screen.FocusFirstChild: Trying to focus component $i: $($focu …
 +                                                             ~~~
 Variable reference is not valid. ':' was not followed by a valid variable name character. Consider using ${} to delimit the name.
-[2025-07-14 16:53:54.629] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 16:53:54.639] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
-[2025-07-14 16:53:54.649] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:56:00.342] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:56:00.352] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
+[2025-07-14 16:56:00.363] [HOST] [Write-Host] System.Collections.Generic.List`1[System.Object]
