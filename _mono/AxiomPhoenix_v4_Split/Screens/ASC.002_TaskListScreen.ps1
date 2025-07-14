@@ -54,6 +54,7 @@ class TaskListScreen : Screen {
     hidden [string] $_sortBy = "Priority"
     hidden [bool] $_sortDescending = $true
     hidden [string] $_taskChangeSubscriptionId = $null
+    hidden [string] $_filterRefreshSubscriptionId = $null
     hidden [bool] $_isInitialized = $false
     #endregion
 

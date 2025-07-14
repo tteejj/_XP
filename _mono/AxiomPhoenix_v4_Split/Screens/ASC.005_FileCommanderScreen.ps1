@@ -317,7 +317,6 @@ class FileCommanderScreen : Screen {
             $getChildParams = @{ 
                 Path = $path
                 Force = $true
-                CaseSensitive = $true
             }
             
             $allItems = Get-ChildItem @getChildParams -ErrorAction SilentlyContinue

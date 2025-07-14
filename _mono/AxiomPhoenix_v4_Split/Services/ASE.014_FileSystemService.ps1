@@ -38,9 +38,8 @@ class FileSystemService {
         
         try {
             $params = @{
-            Path = $Path
-            CaseSensitive = $true
-        }
+                Path = $Path
+            }
             if ($showHidden) {
                 $params.Force = $true
             }
