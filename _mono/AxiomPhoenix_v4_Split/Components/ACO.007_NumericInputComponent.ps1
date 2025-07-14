@@ -32,6 +32,7 @@ class NumericInputComponent : UIElement {
     
     NumericInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Width = 15
         $this.Height = 3
         $this._textValue = $this.FormatValue($this.Value)

@@ -29,6 +29,7 @@ class NavigationMenu : UIElement {
 
     NavigationMenu([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Items = [List[NavigationItem]]::new()
         $this.Height = 1
     }

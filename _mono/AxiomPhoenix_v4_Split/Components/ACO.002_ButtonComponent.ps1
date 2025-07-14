@@ -27,6 +27,7 @@ class ButtonComponent : UIElement {
 
     ButtonComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Width = 10
         $this.Height = 3
     }
@@ -71,6 +72,18 @@ class ButtonComponent : UIElement {
         }
         
         $this._needs_redraw = $false
+    }
+
+    [void] OnFocus() {
+        $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0078d4"
+        $this.ForegroundColor = Get-ThemeColor "button.focused.foreground" "#ffffff"
+        $this.RequestRedraw()
+    }
+    
+    [void] OnBlur() {
+        $this.BackgroundColor = Get-ThemeColor "button.background" "#404040"
+        $this.ForegroundColor = Get-ThemeColor "button.foreground" "#d4d4d4"
+        $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {

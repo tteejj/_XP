@@ -30,6 +30,7 @@ class DateInputComponent : UIElement {
     
     DateInputComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Width = 25
         $this.Height = 1  # Expands to 10 when calendar shown
         $this._viewMonth = $this.Value

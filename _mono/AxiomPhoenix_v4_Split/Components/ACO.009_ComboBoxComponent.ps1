@@ -35,6 +35,7 @@ class ComboBoxComponent : UIElement {
     
     ComboBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Width = 25
         $this.Height = 3
         $this.Items = [List[object]]::new()
@@ -174,6 +175,17 @@ class ComboBoxComponent : UIElement {
                 }
             }
         }
+    }
+    
+    [void] OnFocus() {
+        $this.BorderColor = Get-ThemeColor "input.borderfocused" "#0078d4"
+        $this.RequestRedraw()
+    }
+    
+    [void] OnBlur() {
+        $this.BorderColor = Get-ThemeColor "input.border" "#404040"
+        $this.CloseDropdown()
+        $this.RequestRedraw()
     }
     
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {

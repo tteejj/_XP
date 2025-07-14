@@ -27,6 +27,7 @@ class CheckBoxComponent : UIElement {
 
     CheckBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Width = 20
         $this.Height = 1
     }

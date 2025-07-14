@@ -34,6 +34,7 @@ class Table : UIElement {
     
     Table([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Items = [List[PSObject]]::new()
         $this.Columns = [List[string]]::new()
         $this.ColumnWidths = @{}

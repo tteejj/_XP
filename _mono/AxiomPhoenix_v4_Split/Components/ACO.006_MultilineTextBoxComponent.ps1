@@ -31,6 +31,7 @@ class MultilineTextBoxComponent : UIElement {
     
     MultilineTextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Lines = [List[string]]::new()
         $this.Lines.Add("")
         $this.Width = 40

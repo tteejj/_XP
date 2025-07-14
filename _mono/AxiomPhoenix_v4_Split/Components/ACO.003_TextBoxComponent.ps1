@@ -38,6 +38,7 @@ class TextBoxComponent : UIElement {
 
     TextBoxComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Width = 20
         $this.Height = 3 # A height of 3 is standard for a bordered input box (top border, content, bottom border)
     }
@@ -115,6 +116,18 @@ class TextBoxComponent : UIElement {
         }
         
         $this._needs_redraw = $false
+    }
+
+    [void] OnFocus() {
+        $this.BorderColor = Get-ThemeColor "input.borderfocused" "#0078d4"
+        $this.ShowCursor = $true
+        $this.RequestRedraw()
+    }
+    
+    [void] OnBlur() {
+        $this.BorderColor = Get-ThemeColor "input.border" "#404040"
+        $this.ShowCursor = $false
+        $this.RequestRedraw()
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {

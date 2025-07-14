@@ -53,14 +53,16 @@ class ConfirmDialog : Screen {
         # Yes Button
         $this._yesButton = [ButtonComponent]::new("YesButton")
         $this._yesButton.Text = "Yes"; $this._yesButton.X = 10; $this._yesButton.Y = 6
-        $this._yesButton.IsFocusable = $true; $this._yesButton.TabIndex = 0
+        $this._yesButton.IsFocusable = $true
+        $this._yesButton.TabIndex = 0; $this._yesButton.TabIndex = 0
         $this._yesButton.OnClick = { $this._Confirm() }
         $this._dialogPanel.AddChild($this._yesButton)
 
         # No Button
         $this._noButton = [ButtonComponent]::new("NoButton")
         $this._noButton.Text = "No"; $this._noButton.X = 30; $this._noButton.Y = 6
-        $this._noButton.IsFocusable = $true; $this._noButton.TabIndex = 1
+        $this._noButton.IsFocusable = $true
+        $this._noButton.TabIndex = 1; $this._noButton.TabIndex = 1
         $this._noButton.OnClick = { $this._Cancel() }
         $this._dialogPanel.AddChild($this._noButton)
     }

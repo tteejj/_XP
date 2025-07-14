@@ -43,6 +43,7 @@ class ListBox : UIElement {
 
     ListBox([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Items = [List[object]]::new()
         $this.Width = 30
         $this.Height = 10

@@ -36,6 +36,7 @@ class DataGridComponent : UIElement {
     
     DataGridComponent([string]$name) : base($name) {
         $this.IsFocusable = $true
+        $this.TabIndex = 0
         $this.Width = 60
         $this.Height = 20
     }
