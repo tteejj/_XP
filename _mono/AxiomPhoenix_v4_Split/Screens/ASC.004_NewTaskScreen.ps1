@@ -141,10 +141,7 @@ class NewTaskScreen : Screen {
         ([Screen]$this).OnEnter()
         
         # Explicitly set focus to first text box to ensure it starts focused
-        $focusManager = $this.ServiceContainer.GetService("FocusManager")
-        if ($focusManager) {
-            $focusManager.SetFocus($this._titleBox)
-        }
+        $this.SetChildFocus($this._titleBox)
         
         $this.RequestRedraw()
     }
@@ -155,15 +152,8 @@ class NewTaskScreen : Screen {
         # Get focused component CORRECTLY - GUIDE RULE
         $focused = $this.GetFocusedChild()
         
-        # Handle screen-level actions
+        # Handle screen-level actions  
         switch ($keyInfo.Key) {
-            ([ConsoleKey]::Enter) {
-                if ($focused -eq $this._titleBox -or $focused -eq $this._descriptionBox) {
-                    $this._SaveTask()
-                    return $true
-                }
-                # Buttons handle their own Enter
-            }
             ([ConsoleKey]::Escape) {
                 $this._Cancel()
                 return $true

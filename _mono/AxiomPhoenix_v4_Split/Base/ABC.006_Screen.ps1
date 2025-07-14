@@ -174,13 +174,19 @@ class Screen : UIElement {
             Write-Log -Level Debug -Message "navigation.nextComponent: No current focus"
         }
         
-        $nextIndex = ($currentIndex + 1) % $focusable.Count
-        $nextComponent = $focusable[$nextIndex]
-        Write-Log -Level Debug -Message "navigation.nextComponent: Attempting to focus $($nextComponent.Name) at index $nextIndex"
-        $this.SetChildFocus($nextComponent)
-        $focusedName = "none"
-        if ($this._focusedChild) { $focusedName = $this._focusedChild.Name }
-        Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $focusedName"
+        # Try to focus next component, and if that fails, try subsequent ones
+        for ($i = 0; $i -lt $focusable.Count; $i++) {
+            $nextIndex = ($currentIndex + 1 + $i) % $focusable.Count
+            $nextComponent = $focusable[$nextIndex]
+            Write-Log -Level Debug -Message "navigation.nextComponent: Attempting to focus $($nextComponent.Name) at index $nextIndex"
+            if ($this.SetChildFocus($nextComponent)) {
+                $focusedName = "none"
+                if ($this._focusedChild) { $focusedName = $this._focusedChild.Name }
+                Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $focusedName"
+                return
+            }
+        }
+        Write-Log -Level Warning -Message "navigation.nextComponent: Failed to focus any component"
     }
     
     [void] FocusPreviousChild() {
@@ -213,7 +219,18 @@ class Screen : UIElement {
         Write-Log -Level Debug -Message "Screen.FocusFirstChild: Found $($focusable.Count) focusable children"
         if ($focusable.Count -gt 0) {
             Write-Log -Level Debug -Message "Screen.FocusFirstChild: Attempting to focus first child: $($focusable[0].Name)"
-            $this.SetChildFocus($focusable[0])
+            $success = $this.SetChildFocus($focusable[0])
+            if (-not $success) {
+                Write-Log -Level Warning -Message "Screen.FocusFirstChild: Failed to focus first child $($focusable[0].Name), trying next focusable component"
+                # Try other focusable components if first fails
+                for ($i = 1; $i -lt $focusable.Count; $i++) {
+                    Write-Log -Level Debug -Message "Screen.FocusFirstChild: Trying to focus component $i: $($focusable[$i].Name)"
+                    if ($this.SetChildFocus($focusable[$i])) {
+                        Write-Log -Level Debug -Message "Screen.FocusFirstChild: Successfully focused: $($focusable[$i].Name)"
+                        break
+                    }
+                }
+            }
         } else {
             Write-Log -Level Debug -Message "Screen.FocusFirstChild: No focusable children found"
         }

@@ -662,11 +662,6 @@ class EditTaskScreen : Screen {
                 $this._ResetForm()
                 return $true
             }
-            ([ConsoleKey]::Enter) {
-                # Enter saves from anywhere
-                $this._SaveTask()
-                return $true
-            }
         }
         
         # Handle global character shortcuts
