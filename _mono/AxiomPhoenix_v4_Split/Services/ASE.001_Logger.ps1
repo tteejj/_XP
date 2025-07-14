@@ -152,8 +152,8 @@ class Logger {
         $timestamp = $logEntry.Timestamp.ToString('HH:mm:ss')
         $prefix = "[$timestamp] [$($logEntry.Level.ToUpper())]"
         
-        Write-Host $prefix -ForegroundColor $color -NoNewline
-        Write-Host " $($logEntry.Message)" -ForegroundColor White
+        # Write-Host $prefix -ForegroundColor $color -NoNewline
+        # Write-Host " $($logEntry.Message)" -ForegroundColor White
     }
     
     [void] Cleanup() {
