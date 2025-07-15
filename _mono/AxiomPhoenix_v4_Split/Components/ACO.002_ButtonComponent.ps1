@@ -41,16 +41,16 @@ class ButtonComponent : UIElement {
         [string]$bgColor = $null
 
         if ($this.IsPressed) {
-            $fgColor = Get-ThemeColor "Button.Pressed.Foreground" "#d4d4d4"
-            $bgColor = Get-ThemeColor "Button.Pressed.Background" "#4a5568"
+            $fgColor = Get-ThemeColor "button.pressed.foreground" "#d4d4d4"
+            $bgColor = Get-ThemeColor "button.pressed.background" "#4a5568"
         }
         elseif ($this.IsFocused) {
-            $fgColor = Get-ThemeColor "Button.Focused.Foreground" "#ffffff"
-            $bgColor = Get-ThemeColor "Button.Focused.Background" "#0e7490"
+            $fgColor = Get-ThemeColor "button.focused.foreground" "#ffffff"
+            $bgColor = Get-ThemeColor "button.focused.background" "#0e7490"
         }
         elseif (-not $this.Enabled) {
-            $fgColor = Get-ThemeColor "Button.Disabled.Foreground" "#6b7280"
-            $bgColor = Get-ThemeColor "Button.Disabled.Background" "#2d2d30"
+            $fgColor = Get-ThemeColor "button.disabled.foreground" "#6b7280"
+            $bgColor = Get-ThemeColor "button.disabled.background" "#2d2d30"
         }
         else {
             # Use the effective colors from the base class for the normal state.
@@ -89,38 +89,24 @@ class ButtonComponent : UIElement {
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key) { 
-            Write-Log -Level Debug -Message "Button '$($this.Name)': Received null key"
-            return $false 
-        }
+        if ($null -eq $key) { return $false }
         
-        Write-Log -Level Debug -Message "Button '$($this.Name)': Received key $($key.Key), Enabled: $($this.Enabled), IsFocused: $($this.IsFocused)"
-        
-        if (-not $this.Enabled -or -not $this.IsFocused) { 
-            Write-Log -Level Debug -Message "Button '$($this.Name)': Not handling key - not enabled or not focused"
-            return $false 
-        }
+        if (-not $this.Enabled -or -not $this.IsFocused) { return $false }
 
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
-            Write-Log -Level Debug -Message "Button '$($this.Name)': Processing Enter/Space key"
             $this.IsPressed = $true
             $this.RequestRedraw()
             
             if ($this.OnClick) {
-                Write-Log -Level Debug -Message "Button '$($this.Name)': Executing OnClick handler"
                 try {
                     & $this.OnClick
-                    Write-Log -Level Debug -Message "Button '$($this.Name)': OnClick executed successfully"
                 }
                 catch {
-                    # Log the actual error
+                    # Log only errors, not debug info
                     if(Get-Command 'Write-Log' -ErrorAction SilentlyContinue) {
                         Write-Log -Level Error -Message "Button '$($this.Name)' OnClick error: $_"
                     }
-                    # Silently continue if Write-Log not available - no console output in TUI
                 }
-            } else {
-                Write-Log -Level Warning -Message "Button '$($this.Name)': No OnClick handler defined"
             }
             
             $this.IsPressed = $false
@@ -128,7 +114,6 @@ class ButtonComponent : UIElement {
             
             return $true
         }
-        Write-Log -Level Debug -Message "Button '$($this.Name)': Key $($key.Key) not handled"
         return $false
     }
 }

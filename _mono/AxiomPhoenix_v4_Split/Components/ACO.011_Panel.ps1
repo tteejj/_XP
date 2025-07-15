@@ -61,13 +61,13 @@ class Panel : UIElement {
                 # FIXED: Determine border color based on focus state and effective properties.
                 $borderColorValue = $this.GetEffectiveBorderColor()
                 if ($this.IsFocused) {
-                    $borderColorValue = Get-ThemeColor "Panel.Title" "#007acc"
+                    $borderColorValue = Get-ThemeColor "panel.title" "#007acc"
                 }
                 
                 # Draw the panel border and title
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = (Get-ThemeColor "Panel.Title" "#007acc") } `
+                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = (Get-ThemeColor "panel.title" "#007acc") } `
                     -Title $this.Title
             }
 

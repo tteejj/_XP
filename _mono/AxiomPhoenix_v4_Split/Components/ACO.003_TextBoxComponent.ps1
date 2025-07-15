@@ -41,10 +41,12 @@ class TextBoxComponent : UIElement {
         $this.TabIndex = 0
         $this.Width = 20
         $this.Height = 3 # A height of 3 is standard for a bordered input box (top border, content, bottom border)
+        
     }
 
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        
         
         # FIXED: Use effective colors from base class (PERFORMANCE - cache theme colors)
         $bgColor = $this.GetEffectiveBackgroundColor()
@@ -116,6 +118,7 @@ class TextBoxComponent : UIElement {
         }
         
         $this._needs_redraw = $false
+        
     }
 
     [void] OnFocus() {

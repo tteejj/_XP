@@ -108,7 +108,8 @@ class NewTaskScreen : Screen {
         
         # Capture reference with closure - GUIDE PATTERN
         $currentScreenRef = $this
-        $this._saveButton.OnClick = {
+                $this._saveButton.OnClick = {
+            Write-Host "DEBUG: SaveButton OnClick closure executed!" -ForegroundColor Red
             $currentScreenRef._SaveTask()
         }.GetNewClosure()
         
@@ -136,7 +137,11 @@ class NewTaskScreen : Screen {
         $this._panel.AddChild($this._cancelButton)
     }
     
-    [void] OnEnter() {
+        [void] OnEnter() {
+        Write-Host "DEBUG: NewTaskScreen.OnEnter() called" -ForegroundColor Red
+        Write-Host "DEBUG: Container type: $($this.ServiceContainer.GetType().Name)" -ForegroundColor Red
+        Write-Host "DEBUG: NavService: $($this._navService -ne $null)" -ForegroundColor Red  
+        Write-Host "DEBUG: DataManager: $($this._dataManager -ne $null)" -ForegroundColor Red
         # Reset form
         $this._titleBox.Text = ""
         $this._descriptionBox.Text = ""
@@ -155,7 +160,11 @@ class NewTaskScreen : Screen {
         $this.RequestRedraw()
     }
     
-    [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+        Write-Host "DEBUG: NewTaskScreen.HandleInput() called with key: $($keyInfo.Key)" -ForegroundColor Red
+        $focused = $this.GetFocusedChild()
+        $focusedName = if ($focused) { $focused.Name } else { "none" }
+        Write-Host "DEBUG: Current focus: $focusedName" -ForegroundColor Red
         if ($null -eq $keyInfo) { return $false }
         
         # Get focused component CORRECTLY - GUIDE RULE
@@ -214,7 +223,11 @@ class NewTaskScreen : Screen {
         $this._priorityLabel.ForegroundColor = $color
     }
     
-    hidden [void] _SaveTask() {
+        hidden [void] _SaveTask() {
+        Write-Host "DEBUG: _SaveTask() called!" -ForegroundColor Red
+        Write-Host "DEBUG: Title text: '$($this._titleBox.Text)'" -ForegroundColor Red
+        Write-Host "DEBUG: NavigationService available: $($this._navService -ne $null)" -ForegroundColor Red
+        Write-Host "DEBUG: DataManager available: $($this._dataManager -ne $null)" -ForegroundColor Red
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
             $this._titleBox.BorderColor = Get-ThemeColor "status.error"
             $this.RequestRedraw()

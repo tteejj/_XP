@@ -34,6 +34,12 @@ class ProjectsListScreen : Screen {
     [void] Initialize() {
         Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Starting"
         
+        # Guard against multiple initialization calls
+        if ($this._isInitialized) {
+            Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Already initialized, skipping"
+            return
+        }
+        
         # Main panel covering the whole screen
         $this._mainPanel = [Panel]::new("ProjectsMainPanel")
         $this._mainPanel.X = 0
@@ -223,6 +229,7 @@ class ProjectsListScreen : Screen {
         $exitLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#666666"
         $this._actionPanel.AddChild($exitLabel)
         
+        $this._isInitialized = $true
         Write-Log -Level Debug -Message "ProjectsListScreen.Initialize: Completed"
     }
     

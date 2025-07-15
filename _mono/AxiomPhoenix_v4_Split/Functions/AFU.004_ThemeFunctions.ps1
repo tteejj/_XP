@@ -10,29 +10,50 @@ function Get-ThemeColor {
         [switch]$NoValidation
     )
     
-    $themeManager = $global:TuiState?.Services?.ThemeManager
-    if (-not $themeManager) {
-        # Try alternate location during initialization
-        $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
+    # Try multiple paths to find ThemeManager - CRITICAL FIX for service access
+    $themeManager = $null
+    
+    # Path 1: Direct Services hashtable (Start.ps1 setup)
+    if ($global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ThemeManager) {
+        $themeManager = $global:TuiState.Services.ThemeManager
+    }
+    
+    # Path 2: ServiceContainer access (modern pattern)
+    if (-not $themeManager -and $global:TuiState -and $global:TuiState.ServiceContainer) {
+        try {
+            $themeManager = $global:TuiState.ServiceContainer.GetService("ThemeManager")
+        } catch {
+            # ServiceContainer might not be ready
+        }
+    }
+    
+    # Path 3: Legacy Services.ServiceContainer pattern (fallback)
+    if (-not $themeManager -and $global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ServiceContainer) {
+        try {
+            $themeManager = $global:TuiState.Services.ServiceContainer.GetService("ThemeManager")
+        } catch {
+            # ServiceContainer might not be ready
+        }
     }
     
     if (-not $themeManager) {
-        Write-Warning "ThemeManager not available, using fallback for '$Key'"
+        Write-Warning "ThemeManager not available (tried all paths), using fallback for '$Key'"
         return $Fallback -or "#FFFFFF"
     }
     
-    # Check if key is in registry (case-insensitive)
-    $keyLower = $Key.ToLower()
-    if (-not $NoValidation -and $themeManager._validThemeKeys.ContainsKey($keyLower)) {
-        $keyInfo = $themeManager._validThemeKeys[$keyLower]
-        $actualPath = $keyInfo.Path
-        $registryFallback = $keyInfo.Fallback
-        
-        $color = $themeManager.GetColor($actualPath)
-        if ($color) { return $color }
-        
-        # Use parameter fallback first, then registry fallback
-        return $Fallback -or $registryFallback
+    # Check if key is in registry using public method
+    if (-not $NoValidation -and $themeManager.IsValidThemeKey($Key)) {
+        $keyInfo = $themeManager.GetThemeKeyInfo($Key)
+        if ($keyInfo) {
+            $actualPath = $keyInfo.Path
+            $registryFallback = $keyInfo.Fallback
+            
+            $color = $themeManager.GetColor($actualPath)
+            if ($color) { return $color }
+            
+            # Use parameter fallback first, then registry fallback
+            return $Fallback -or $registryFallback
+        }
     }
     
     # Legacy mode - direct path lookup with warning
@@ -51,10 +72,30 @@ function Get-ThemeValue {
         [object]$DefaultValue = $null
     )
     
-    $themeManager = $global:TuiState?.Services?.ThemeManager
-    if (-not $themeManager) {
-        # Try alternate location during initialization
-        $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
+    # Try multiple paths to find ThemeManager - CRITICAL FIX for service access
+    $themeManager = $null
+    
+    # Path 1: Direct Services hashtable (Start.ps1 setup)
+    if ($global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ThemeManager) {
+        $themeManager = $global:TuiState.Services.ThemeManager
+    }
+    
+    # Path 2: ServiceContainer access (modern pattern)
+    if (-not $themeManager -and $global:TuiState -and $global:TuiState.ServiceContainer) {
+        try {
+            $themeManager = $global:TuiState.ServiceContainer.GetService("ThemeManager")
+        } catch {
+            # ServiceContainer might not be ready
+        }
+    }
+    
+    # Path 3: Legacy Services.ServiceContainer pattern (fallback)
+    if (-not $themeManager -and $global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ServiceContainer) {
+        try {
+            $themeManager = $global:TuiState.Services.ServiceContainer.GetService("ThemeManager")
+        } catch {
+            # ServiceContainer might not be ready
+        }
     }
     
     if ($themeManager) {
