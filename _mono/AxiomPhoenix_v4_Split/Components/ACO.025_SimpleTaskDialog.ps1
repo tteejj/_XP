@@ -120,9 +120,24 @@ class SimpleTaskDialog : Screen {
     }
 
     [void] OnEnter() {
+        $timestamp = Get-Date -Format "HH:mm:ss.fff"
+        "[$timestamp] SimpleTaskDialog.OnEnter() START" | Out-File "/tmp/focus-debug.log" -Append -Force
+        "[$timestamp] BEFORE base.OnEnter() - TitleBox.IsFocused: $($this._titleBox.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
+        
         # Base OnEnter will automatically focus the first component by TabIndex.
         ([Screen]$this).OnEnter()
+        
+        $timestamp = Get-Date -Format "HH:mm:ss.fff"
+        "[$timestamp] AFTER base.OnEnter() - TitleBox.IsFocused: $($this._titleBox.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
+        $focused = $this.GetFocusedChild()
+        $focusedName = if ($focused) { $focused.Name } else { "null" }
+        "[$timestamp] GetFocusedChild: $focusedName" | Out-File "/tmp/focus-debug.log" -Append -Force
+        
         $this.RequestRedraw()
+        
+        $timestamp = Get-Date -Format "HH:mm:ss.fff"
+        "[$timestamp] AFTER RequestRedraw() - TitleBox.IsFocused: $($this._titleBox.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
+        "[$timestamp] SimpleTaskDialog.OnEnter() END" | Out-File "/tmp/focus-debug.log" -Append -Force
     }
 
     hidden [void] _SaveTask() {
@@ -160,3 +175,4 @@ class SimpleTaskDialog : Screen {
         return $false
     }
 }
+

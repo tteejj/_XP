@@ -468,4 +468,174 @@ hidden [void] _UpdateStatus([string]$message, [string]$level = "Info") {
 - **Theme keys lowercase**: Registry lookup requires exact case match
 
 Follow this guide EXACTLY. Every deviation breaks something.
+
+## SCREEN INITIALIZATION - CRITICAL COMPONENT RECREATION BUG
+
+### The Problem: Component Creation Happens Twice
+**SYMPTOM**: Focus appears to be set but component doesn't respond to input
+**ROOT CAUSE**: Backup files with same class name being loaded causes duplicate class definitions
+
+### Real-World Case Study: SimpleTaskDialog Focus Issue
+In July 2025, SimpleTaskDialog had a focus issue where:
+- Initial focus was not set on TitleBox
+- Multiple Tab presses were needed to move focus  
+- Components appeared to have focus but didn't respond to input
+
+### How the Bug Was Diagnosed
+```powershell
+# 1. Added component creation logging
+if ($name -eq "TitleBox") {
+    $timestamp = Get-Date -Format "HH:mm:ss.fff"
+    "[$timestamp] TextBoxComponent CREATED: $name" | Out-File "/tmp/debug.log" -Append
+}
+
+# 2. Found the smoking gun - component created TWICE
+[11:50:14.880] TextBoxComponent CREATED: TitleBox
+[11:50:15.048] TextBoxComponent CREATED: TitleBox
+
+# 3. Discovered the root cause
+# Both files were being loaded by the framework:
+# - Components/ACO.025_SimpleTaskDialog.ps1 (main)
+# - Components/ACO.025_SimpleTaskDialog_BACKUP.ps1 (backup)
+```
+
+### Why This Breaks Focus
+When PowerShell loads two files with the same class name:
+1. **First instance** gets created and receives focus correctly
+2. **Second instance** gets created with default `IsFocused = false`
+3. **Focus system** points to first instance
+4. **UI displays** second instance (last one created)
+5. **Result**: Focus appears set but component doesn't respond
+
+### The Fix
+```powershell
+# Remove ALL backup files from active directories
+# Check for:
+rm Components/*_BACKUP.ps1
+rm Components/*.backup  
+rm Screens/*.backup
+rm **/*.old
+
+# Verify no duplicates being loaded
+Get-Content startup.log | Select-String "Dot-sourcing.*BACKUP"
+```
+
+### What NOT to Do
+```powershell
+# ❌ NEVER create backup files in active directories
+MyClass.ps1.backup     # Framework may load both
+MyClass_BACKUP.ps1     # Framework may load both
+MyClass.old.ps1        # Framework may load both
+
+# ❌ NEVER try to fix focus by adding more focus calls
+$component.IsFocused = $true  # Won't fix recreation issue
+$component.OnFocus()          # Won't fix recreation issue
+```
+
+### What TO Do
+```powershell
+# ✅ Create backups OUTSIDE the framework directories
+mkdir ../backups
+cp Components/MyClass.ps1 ../backups/MyClass_$(Get-Date -Format "yyyyMMdd").ps1
+
+# ✅ Use proper initialization guards
+[void] Initialize() {
+    # Guard against multiple initialization calls
+    if ($this._isInitialized) {
+        Write-Log -Level Debug -Message "Already initialized, skipping"
+        return
+    }
+    
+    # Create components here
+    $this._component = [ComponentType]::new("Name")
+    
+    # Set flag at END of initialization
+    $this._isInitialized = $true
+}
+```
+
+### Screen Creation Checklist
+```powershell
+class MyScreen : Screen {
+    # 1. Hidden fields for components
+    hidden [Panel] $_panel
+    hidden [TextBoxComponent] $_textBox
+    hidden [ButtonComponent] $_button
+    hidden [bool] $_isInitialized = $false  # Inherited but good practice
+    
+    # 2. Services in constructor
+    hidden $_navService
+    MyScreen([object]$serviceContainer) : base("MyScreen", $serviceContainer) {
+        $this._navService = $serviceContainer.GetService("NavigationService")
+    }
+    
+    # 3. Initialization with guard
+    [void] Initialize() {
+        if ($this._isInitialized) { return }
+        
+        # Create components
+        $this._panel = [Panel]::new("MainPanel")
+        $this._textBox = [TextBoxComponent]::new("Input")
+        $this._button = [ButtonComponent]::new("Submit")
+        
+        # Set focus properties
+        $this._textBox.IsFocusable = $true
+        $this._textBox.TabIndex = 0
+        $this._button.IsFocusable = $true
+        $this._button.TabIndex = 1
+        
+        # Add focus handlers to TextBox (required)
+        $this._textBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "input.focused.border"
+            $this.ShowCursor = $true
+        } -Force
+        
+        $this._textBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border"
+            $this.ShowCursor = $false
+        } -Force
+        
+        # Add children
+        $this._panel.AddChild($this._textBox)
+        $this._panel.AddChild($this._button)
+        $this.AddChild($this._panel)
+        
+        # Set flag at END
+        $this._isInitialized = $true
+    }
+    
+    # 4. OnEnter calls base for focus
+    [void] OnEnter() {
+        ([Screen]$this).OnEnter()  # Sets initial focus
+    }
+}
+```
+
+### Directory Structure Rules
+```
+Framework/
+├── Components/           # ACTIVE - no .backup files
+│   ├── *.ps1            # Only current versions
+│   └── NO_BACKUPS_HERE
+├── Screens/             # ACTIVE - no .backup files  
+│   ├── *.ps1            # Only current versions
+│   └── NO_BACKUPS_HERE
+└── ../backups/          # OUTSIDE framework
+    ├── Component_20250715.ps1
+    └── Screen_20250715.ps1
+```
+
+### Prevention Commands
+```powershell
+# Check for dangerous backup files
+Get-ChildItem -Recurse -Filter "*.backup" | Remove-Item
+Get-ChildItem -Recurse -Filter "*_BACKUP.ps1" | Remove-Item
+Get-ChildItem -Recurse -Filter "*.old.ps1" | Remove-Item
+
+# Verify no duplicates at startup
+Get-Content startup.log | Select-String "Dot-sourcing" | Group-Object | Where-Object Count -gt 1
+```
+
+**REMEMBER**: Component recreation is a silent killer. Always check for backup files when focus mysteriously stops working.
+
 ```
