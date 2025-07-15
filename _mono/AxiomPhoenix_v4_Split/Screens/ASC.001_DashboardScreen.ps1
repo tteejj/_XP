@@ -112,8 +112,8 @@ class DashboardScreen : Screen {
                 
                 if ($i -eq $this._selectedIndex) {
                     # Highlighted item
-                    $selFg = Get-ThemeColor "listbox.selectedforeground" "#ffffff"
-                    $selBg = Get-ThemeColor "listbox.selectedbackground" "#007acc"
+                    $selFg = Get-ThemeColor "list.selected.foreground" "#ffffff"
+                    $selBg = Get-ThemeColor "list.selected.background" "#007acc"
                     
                     # Fill selection background
                     for ($xx = $contentX; $xx -lt ($contentX + $contentWidth); $xx++) {

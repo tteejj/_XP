@@ -1,8 +1,1242 @@
-[2025-07-14 22:01:22.541] [INFO] Axiom Phoenix File Logger initialized. Log file: /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/../axiom-phoenix-debug.log
-[2025-07-14 22:01:22.649] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 22:01:22.671] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 22:01:22.736] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
-[2025-07-14 22:01:22.778] [WARNING] No current screen available for input routing
-[2025-07-14 22:01:22.781] [DEBUG] Input not handled by any component
-[2025-07-14 22:01:22.784] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 22:01:22.787] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:17.817] [INFO] Axiom Phoenix File Logger initialized. Log file: /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/../axiom-phoenix-debug.log
+[2025-07-15 08:06:17.820] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.007_EventFunctions.ps1
+[2025-07-15 08:06:17.837] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.008_ErrorHandling.ps1
+[2025-07-15 08:06:17.843] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.009_InputProcessing.ps1
+[2025-07-15 08:06:17.847] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.010_UtilityFunctions.ps1
+[2025-07-15 08:06:17.857] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:17.872] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.001_LabelComponent.ps1
+[2025-07-15 08:06:17.887] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.002_ButtonComponent.ps1
+[2025-07-15 08:06:17.902] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.003_TextBoxComponent.ps1
+[2025-07-15 08:06:17.919] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.004_CheckBoxComponent.ps1
+[2025-07-15 08:06:17.929] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.005_RadioButtonComponent.ps1
+[2025-07-15 08:06:17.943] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.006_MultilineTextBoxComponent.ps1
+[2025-07-15 08:06:17.963] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.007_NumericInputComponent.ps1
+[2025-07-15 08:06:17.979] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.008_DateInputComponent.ps1
+[2025-07-15 08:06:18.010] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.009_ComboBoxComponent.ps1
+[2025-07-15 08:06:18.033] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.010_Table.ps1
+[2025-07-15 08:06:18.058] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.011_Panel.ps1
+[2025-07-15 08:06:18.074] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.012_ScrollablePanel.ps1
+[2025-07-15 08:06:18.094] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.013_GroupPanel.ps1
+[2025-07-15 08:06:18.106] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014_ListBox.ps1
+[2025-07-15 08:06:18.132] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014a_Dialog.ps1
+[2025-07-15 08:06:18.147] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.015_TextBox.ps1
+[2025-07-15 08:06:18.177] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.016_CommandPalette.ps1
+[2025-07-15 08:06:18.199] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.018_AlertDialog.ps1
+[2025-07-15 08:06:18.218] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.020_InputDialog.ps1
+[2025-07-15 08:06:18.231] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.021_NavigationMenu.ps1
+[2025-07-15 08:06:18.301] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.022_DataGridComponent.ps1
+[2025-07-15 08:06:18.326] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.023_SidebarMenu.ps1
+[2025-07-15 08:06:18.344] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.025_SimpleTaskDialog.ps1
+[2025-07-15 08:06:18.372] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.026_ConfirmDialog.ps1
+[2025-07-15 08:06:18.396] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.100_TextEngine.ps1
+[2025-07-15 08:06:18.513] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:18.529] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen_Fixed.ps1
+[2025-07-15 08:06:18.563] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen.ps1
+[2025-07-15 08:06:18.595] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.002_TaskListScreen.ps1
+[2025-07-15 08:06:18.671] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.003_ThemeScreen.ps1
+[2025-07-15 08:06:18.712] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.004_NewTaskScreen.ps1
+[2025-07-15 08:06:18.735] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_EditTaskScreen.ps1
+[2025-07-15 08:06:18.784] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_FileCommanderScreen.ps1
+[2025-07-15 08:06:18.877] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006_TextEditorScreen.ps1
+[2025-07-15 08:06:18.940] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006a_ProjectEditDialog.ps1
+[2025-07-15 08:06:18.975] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.007_ProjectInfoScreen.ps1
+[2025-07-15 08:06:19.007] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.008_ProjectsListScreen.ps1
+[2025-07-15 08:06:19.070] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/TestScreen.ps1
+[2025-07-15 08:06:19.088] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:19.100] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.001_Logger.ps1
+[2025-07-15 08:06:19.120] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.002_EventManager.ps1
+[2025-07-15 08:06:19.139] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.003_ThemeManager.ps1
+[2025-07-15 08:06:19.175] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.004_ActionService.ps1
+[2025-07-15 08:06:19.198] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.005_DataManager.ps1
+[2025-07-15 08:06:19.286] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.007_KeybindingService.ps1
+[2025-07-15 08:06:19.314] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.008_NavigationService.ps1
+[2025-07-15 08:06:19.334] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.009_DialogManager.ps1
+[2025-07-15 08:06:19.351] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.011_ViewDefinitionService.ps1
+[2025-07-15 08:06:19.370] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.012_AsyncJobService.ps1
+[2025-07-15 08:06:19.387] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.014_FileSystemService.ps1
+[2025-07-15 08:06:19.406] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:19.416] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.001_GlobalState.ps1
+[2025-07-15 08:06:19.460] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.002_EngineManagement.ps1
+[2025-07-15 08:06:19.481] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.003_RenderingSystem.ps1
+[2025-07-15 08:06:19.495] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.004_InputProcessing.ps1
+[2025-07-15 08:06:19.509] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.005_ScreenManagement.ps1
+[2025-07-15 08:06:19.518] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.006_ErrorHandling.ps1
+[2025-07-15 08:06:19.528] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:19.532] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:19.551] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
+[2025-07-15 08:06:19.555] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:19.727] [DEBUG] Registered eager service instance: 'Logger'.
+[2025-07-15 08:06:19.749] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
+[2025-07-15 08:06:19.897] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:19.928] [DEBUG] Registered eager service instance: 'EventManager'.
+[2025-07-15 08:06:19.935] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
+[2025-07-15 08:06:19.939] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.034] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.046] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.057] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.068] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.081] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.094] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.107] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.123] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.133] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.164] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.190] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.201] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.210] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.262] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.312] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.324] [DEBUG] Registered eager service instance: 'ThemeManager'.
+[2025-07-15 08:06:20.330] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
+[2025-07-15 08:06:20.334] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.348] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:20.419] [DEBUG] Registered eager service instance: 'DataManager'.
+[2025-07-15 08:06:20.425] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
+[2025-07-15 08:06:20.429] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.432] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:20.457] [DEBUG] Registered eager service instance: 'ActionService'.
+[2025-07-15 08:06:20.463] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
+[2025-07-15 08:06:20.467] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.470] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-15 08:06:20.530] [DEBUG] KeybindingService: Bound Ctrl+Q to app.exit in context Global
+[2025-07-15 08:06:20.533] [DEBUG] KeybindingService: Bound Ctrl+C to app.exit.ctrlc in context Global
+[2025-07-15 08:06:20.537] [DEBUG] KeybindingService: Bound F1 to app.help in context Global
+[2025-07-15 08:06:20.553] [DEBUG] KeybindingService: Bound Ctrl+P to app.commandPalette in context Global
+[2025-07-15 08:06:20.557] [DEBUG] KeybindingService: Bound Tab to navigation.nextComponent in context Global
+[2025-07-15 08:06:20.561] [DEBUG] KeybindingService: Bound Shift+Tab to navigation.previousComponent in context Global
+[2025-07-15 08:06:20.564] [DEBUG] KeybindingService: Initialized default bindings
+[2025-07-15 08:06:20.576] [DEBUG] Registered eager service instance: 'KeybindingService'.
+[2025-07-15 08:06:20.582] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
+[2025-07-15 08:06:20.585] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.628] [DEBUG] Registered eager service instance: 'NavigationService'.
+[2025-07-15 08:06:20.635] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
+[2025-07-15 08:06:20.638] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.659] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-15 08:06:20.666] [DEBUG] DialogManager: Initialized with window-based model.
+[2025-07-15 08:06:20.678] [DEBUG] Registered eager service instance: 'DialogManager'.
+[2025-07-15 08:06:20.684] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
+[2025-07-15 08:06:20.688] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.747] [DEBUG] Registered eager service instance: 'ViewDefinitionService'.
+[2025-07-15 08:06:20.753] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
+[2025-07-15 08:06:20.757] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.760] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-15 08:06:20.779] [DEBUG] FileSystemService: Initialized
+[2025-07-15 08:06:20.790] [DEBUG] Registered eager service instance: 'FileSystemService'.
+[2025-07-15 08:06:20.798] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'FileSystemService' of type 'FileSystemService'.
+[2025-07-15 08:06:20.801] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.805] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-15 08:06:20.808] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:20.811] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-15 08:06:20.814] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-15 08:06:20.839] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-15 08:06:20.843] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:06:20.847] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-15 08:06:20.851] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-15 08:06:20.855] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ViewDefinitionService'.
+[2025-07-15 08:06:20.860] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-15 08:06:20.864] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-15 08:06:20.875] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.881] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.886] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:20.890] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-15 08:06:21.036] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:21.041] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:21.045] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-15 08:06:22.263] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:22.271] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:22.279] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:22.286] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:22.290] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:23.568] [DEBUG] DashboardScreen: Constructor called
+[2025-07-15 08:06:23.593] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:23.620] [DEBUG] DashboardScreen.Initialize: Starting
+[2025-07-15 08:06:23.629] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:24.149] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-15 08:06:24.156] [INFO] DashboardScreen: Updated colors for 'Synthwave'
+[2025-07-15 08:06:24.164] [DEBUG] DashboardScreen.Initialize: Completed
+[2025-07-15 08:06:24.169] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:24.210] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:24.367] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-15 08:06:24.374] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:06:24.384] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-15 08:06:24.394] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-15 08:06:24.404] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-15 08:06:24.411] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:24.417] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-15 08:06:24.532] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:24.540] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-15 08:06:24.558] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:24.568] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-15 08:06:24.572] [INFO] Start-AxiomPhoenix: Services loaded, initializing engine
+[2025-07-15 08:06:24.576] [DEBUG] Start-AxiomPhoenix: About to call Initialize-TuiEngine
+[2025-07-15 08:06:24.595] [INFO] Initializing TUI engine...
+[2025-07-15 08:06:24.599] [DEBUG] Initialize-TuiEngine: Storing original console state
+[2025-07-15 08:06:24.618] [DEBUG] Initialize-TuiEngine: Configuring console
+[2025-07-15 08:06:24.640] [DEBUG] Initialize-TuiEngine: Clearing screen and hiding cursor
+[2025-07-15 08:06:24.706] [DEBUG] Initialize-TuiEngine: Getting initial console size
+[2025-07-15 08:06:24.778] [DEBUG] Initialize-TuiEngine: Creating compositor buffers
+[2025-07-15 08:06:26.002] [DEBUG] Initialize-TuiEngine: Clearing buffers with theme background
+[2025-07-15 08:06:27.493] [INFO] TUI engine initialized. Buffer size: 195x54
+[2025-07-15 08:06:27.497] [DEBUG] Start-AxiomPhoenix: Initialize-TuiEngine completed
+[2025-07-15 08:06:27.501] [DEBUG] Start-AxiomPhoenix: Getting NavigationService
+[2025-07-15 08:06:27.513] [DEBUG] Start-AxiomPhoenix: About to call NavigateTo with screen: DashboardScreen
+[2025-07-15 08:06:27.545] [DEBUG] NavigationService.NavigateTo: Starting navigation to DashboardScreen
+[2025-07-15 08:06:27.559] [DEBUG] NavigationService.NavigateTo: Set current screen to DashboardScreen
+[2025-07-15 08:06:27.565] [DEBUG] NavigationService.NavigateTo: Screen DashboardScreen already initialized
+[2025-07-15 08:06:27.575] [DEBUG] NavigationService.NavigateTo: Resizing screen DashboardScreen to 195x54
+[2025-07-15 08:06:27.608] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (195x54). No change.
+[2025-07-15 08:06:27.612] [DEBUG] NavigationService.NavigateTo: Calling OnEnter for screen DashboardScreen
+[2025-07-15 08:06:27.623] [DEBUG] DashboardScreen.OnEnter: Screen activated
+[2025-07-15 08:06:27.639] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-15 08:06:27.643] [INFO] DashboardScreen: Updated colors for 'Synthwave'
+[2025-07-15 08:06:27.671] [DEBUG] Screen.OnEnter: Setting initial focus for DashboardScreen
+[2025-07-15 08:06:27.740] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: DashboardScreen
+[2025-07-15 08:06:27.759] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: DashboardScreen - IsFocusable: False, Visible: True, Enabled: True, IsScreen: True
+[2025-07-15 08:06:27.769] [DEBUG] Screen._CollectFocusableRecursive: Checking 1 children of DashboardScreen
+[2025-07-15 08:06:27.796] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: MainPanel
+[2025-07-15 08:06:27.813] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: MainPanel (TabIndex: 0)
+[2025-07-15 08:06:27.824] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of MainPanel
+[2025-07-15 08:06:27.847] [DEBUG] Screen._GetFocusableChildren: Final focus list for DashboardScreen has 1 unique components
+[2025-07-15 08:06:27.861] [DEBUG]   - Focusable: MainPanel (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:27.867] [DEBUG] Screen.OnEnter: Found 1 focusable components
+[2025-07-15 08:06:27.872] [DEBUG] Screen.OnEnter: - MainPanel (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:27.898] [DEBUG] Screen.FocusFirstChild: Found 1 focusable children
+[2025-07-15 08:06:27.906] [DEBUG] Screen.FocusFirstChild: Attempting to focus first child: MainPanel
+[2025-07-15 08:06:27.930] [DEBUG] Screen.SetChildFocus: Attempting to focus MainPanel on screen DashboardScreen
+[2025-07-15 08:06:27.944] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:06:27.948] [DEBUG] Screen.SetChildFocus: Setting focus on MainPanel
+[2025-07-15 08:06:27.978] [DEBUG] Screen.OnEnter: Initial focus set to: MainPanel
+[2025-07-15 08:06:27.984] [DEBUG] NavigationService.NavigateTo: OnEnter completed for screen DashboardScreen
+[2025-07-15 08:06:27.992] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:28.019] [DEBUG] Start-AxiomPhoenix: NavigateTo completed successfully
+[2025-07-15 08:06:28.023] [DEBUG] Start-AxiomPhoenix: About to call Start-TuiEngine
+[2025-07-15 08:06:28.056] [INFO] Starting TUI Engine with target FPS: 30
+[2025-07-15 08:06:28.059] [DEBUG] Start-TuiEngine: Setting up frame timing
+[2025-07-15 08:06:28.081] [DEBUG] Start-TuiEngine: Initializing engine state
+[2025-07-15 08:06:28.095] [DEBUG] Start-TuiEngine: Entering main render loop
+[2025-07-15 08:06:29.580] [DEBUG] UIElement 'DashboardScreen': Buffer resized to 195x54
+[2025-07-15 08:06:30.334] [DEBUG] UIElement 'DashboardScreen': Rendered own content
+[2025-07-15 08:06:30.424] [DEBUG] UIElement 'MainPanel': Buffer resized to 60x16
+[2025-07-15 08:06:30.630] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:06:31.252] [DEBUG] UIElement 'MainPanel': Rendered own content
+[2025-07-15 08:06:31.688] [DEBUG] UIElement 'DashboardScreen': Blended child 'MainPanel' at (67, 19)
+[2025-07-15 08:06:46.634] [DEBUG] Process-TuiInput: Key=DownArrow, Char=' ', Modifiers=None
+[2025-07-15 08:06:46.653] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:06:46.660] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:06:46.666] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:06:46.738] [DEBUG] Process-TuiInput: GetAction result: '' for key DownArrow
+[2025-07-15 08:06:46.743] [DEBUG] Routing input to current screen: DashboardScreen
+[2025-07-15 08:06:47.540] [DEBUG] UIElement 'DashboardScreen': Rendered own content
+[2025-07-15 08:06:47.709] [DEBUG] UIElement 'DashboardScreen': Blended child 'MainPanel' at (67, 19)
+[2025-07-15 08:06:51.660] [DEBUG] Process-TuiInput: Key=Enter, Char='', Modifiers=None
+[2025-07-15 08:06:51.665] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:06:51.667] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:06:51.669] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:06:51.671] [DEBUG] Process-TuiInput: GetAction result: '' for key Enter
+[2025-07-15 08:06:51.673] [DEBUG] Routing input to current screen: DashboardScreen
+[2025-07-15 08:06:51.684] [DEBUG] DashboardScreen: Executing menu item 1
+[2025-07-15 08:06:51.686] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-15 08:06:51.780] [DEBUG] TaskListScreen: Constructor called
+[2025-07-15 08:06:51.798] [DEBUG] TaskListScreen.Initialize: Starting
+[2025-07-15 08:06:52.526] [DEBUG] TaskListScreen.Initialize: Completed
+[2025-07-15 08:06:52.536] [DEBUG] NavigationService.NavigateTo: Starting navigation to TaskListScreen
+[2025-07-15 08:06:52.543] [DEBUG] NavigationService.NavigateTo: Exiting current screen DashboardScreen
+[2025-07-15 08:06:52.548] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:52.570] [DEBUG] NavigationService.NavigateTo: Set current screen to TaskListScreen
+[2025-07-15 08:06:52.574] [DEBUG] NavigationService.NavigateTo: Screen TaskListScreen already initialized
+[2025-07-15 08:06:52.576] [DEBUG] NavigationService.NavigateTo: Resizing screen TaskListScreen to 195x54
+[2025-07-15 08:06:52.585] [VERBOSE] [Write-Verbose] Resize: Component 'TaskListScreen' already has target dimensions (195x54). No change.
+[2025-07-15 08:06:52.587] [DEBUG] NavigationService.NavigateTo: Calling OnEnter for screen TaskListScreen
+[2025-07-15 08:06:52.593] [DEBUG] TaskListScreen.OnEnter: Starting
+[2025-07-15 08:06:52.603] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-15 08:06:52.854] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:52.870] [DEBUG] TaskListScreen: Subscribed to Tasks.Changed events
+[2025-07-15 08:06:52.875] [DEBUG] TaskListScreen: Subscribed to Filter.RefreshRequested events
+[2025-07-15 08:06:52.884] [DEBUG] Screen.OnEnter: Setting initial focus for TaskListScreen
+[2025-07-15 08:06:52.910] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TaskListScreen
+[2025-07-15 08:06:52.922] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: TaskListScreen - IsFocusable: False, Visible: True, Enabled: True, IsScreen: True
+[2025-07-15 08:06:52.926] [DEBUG] Screen._CollectFocusableRecursive: Checking 1 children of TaskListScreen
+[2025-07-15 08:06:52.931] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TaskListMain
+[2025-07-15 08:06:52.937] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: TaskListMain - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:52.939] [DEBUG] Screen._CollectFocusableRecursive: Checking 4 children of TaskListMain
+[2025-07-15 08:06:52.941] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TaskList
+[2025-07-15 08:06:52.943] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: TaskList - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:52.945] [DEBUG] Screen._CollectFocusableRecursive: Checking 2 children of TaskList
+[2025-07-15 08:06:52.961] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: ProjectSelector
+[2025-07-15 08:06:52.974] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: ProjectSelector (TabIndex: 2)
+[2025-07-15 08:06:52.980] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of ProjectSelector
+[2025-07-15 08:06:52.997] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TaskList
+[2025-07-15 08:06:53.009] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: TaskList (TabIndex: 0)
+[2025-07-15 08:06:53.016] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of TaskList
+[2025-07-15 08:06:53.018] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Context
+[2025-07-15 08:06:53.020] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Context - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.022] [DEBUG] Screen._CollectFocusableRecursive: Checking 4 children of Context
+[2025-07-15 08:06:53.039] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: FilterIcon
+[2025-07-15 08:06:53.051] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: FilterIcon - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.055] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of FilterIcon
+[2025-07-15 08:06:53.072] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: FilterBox
+[2025-07-15 08:06:53.084] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: FilterBox (TabIndex: 1)
+[2025-07-15 08:06:53.091] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of FilterBox
+[2025-07-15 08:06:53.093] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: SortLabel
+[2025-07-15 08:06:53.095] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: SortLabel - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.096] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of SortLabel
+[2025-07-15 08:06:53.104] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: HelpLabel
+[2025-07-15 08:06:53.106] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: HelpLabel - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.108] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of HelpLabel
+[2025-07-15 08:06:53.110] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TaskDetails
+[2025-07-15 08:06:53.112] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: TaskDetails - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.114] [DEBUG] Screen._CollectFocusableRecursive: Checking 4 children of TaskDetails
+[2025-07-15 08:06:53.116] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TaskTitle
+[2025-07-15 08:06:53.118] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: TaskTitle - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.120] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of TaskTitle
+[2025-07-15 08:06:53.122] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Status
+[2025-07-15 08:06:53.123] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Status - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.125] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Status
+[2025-07-15 08:06:53.127] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Priority
+[2025-07-15 08:06:53.129] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Priority - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.131] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Priority
+[2025-07-15 08:06:53.133] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Progress
+[2025-07-15 08:06:53.135] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Progress - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.137] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Progress
+[2025-07-15 08:06:53.139] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: StatusBar
+[2025-07-15 08:06:53.140] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: StatusBar - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.142] [DEBUG] Screen._CollectFocusableRecursive: Checking 9 children of StatusBar
+[2025-07-15 08:06:53.157] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: StatusSep
+[2025-07-15 08:06:53.159] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: StatusSep - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.161] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of StatusSep
+[2025-07-15 08:06:53.166] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[N]ew
+[2025-07-15 08:06:53.168] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[N]ew - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.169] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[N]ew
+[2025-07-15 08:06:53.175] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[E]dit
+[2025-07-15 08:06:53.176] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[E]dit - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.178] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[E]dit
+[2025-07-15 08:06:53.183] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[D]elete
+[2025-07-15 08:06:53.185] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[D]elete - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.187] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[D]elete
+[2025-07-15 08:06:53.192] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[C]omplete
+[2025-07-15 08:06:53.194] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[C]omplete - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.195] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[C]omplete
+[2025-07-15 08:06:53.200] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[T]ags
+[2025-07-15 08:06:53.202] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[T]ags - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.204] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[T]ags
+[2025-07-15 08:06:53.208] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[S]ort
+[2025-07-15 08:06:53.210] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[S]ort - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.212] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[S]ort
+[2025-07-15 08:06:53.217] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[/] Filter
+[2025-07-15 08:06:53.219] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[/] Filter - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.220] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[/] Filter
+[2025-07-15 08:06:53.225] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: Action_[Esc] Back
+[2025-07-15 08:06:53.227] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: Action_[Esc] Back - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:06:53.229] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of Action_[Esc] Back
+[2025-07-15 08:06:53.257] [DEBUG] Screen._GetFocusableChildren: Final focus list for TaskListScreen has 3 unique components
+[2025-07-15 08:06:53.269] [DEBUG]   - Focusable: TaskList (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:53.278] [DEBUG]   - Focusable: FilterBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:53.288] [DEBUG]   - Focusable: ProjectSelector (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:53.290] [DEBUG] Screen.OnEnter: Found 3 focusable components
+[2025-07-15 08:06:53.292] [DEBUG] Screen.OnEnter: - TaskList (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:53.296] [DEBUG] Screen.OnEnter: - FilterBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:53.298] [DEBUG] Screen.OnEnter: - ProjectSelector (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:06:53.303] [DEBUG] Screen.FocusFirstChild: Found 3 focusable children
+[2025-07-15 08:06:53.304] [DEBUG] Screen.FocusFirstChild: Attempting to focus first child: TaskList
+[2025-07-15 08:06:53.315] [DEBUG] Screen.SetChildFocus: Attempting to focus TaskList on screen TaskListScreen
+[2025-07-15 08:06:53.325] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:06:53.329] [DEBUG] Screen.SetChildFocus: Setting focus on TaskList
+[2025-07-15 08:06:53.359] [DEBUG] Screen.OnEnter: Initial focus set to: TaskList
+[2025-07-15 08:06:53.361] [DEBUG] NavigationService.NavigateTo: OnEnter completed for screen TaskListScreen
+[2025-07-15 08:06:53.366] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:06:55.810] [DEBUG] UIElement 'TaskListScreen': Buffer resized to 195x54
+[2025-07-15 08:06:56.225] [DEBUG] UIElement 'TaskListScreen': Rendered own content
+[2025-07-15 08:06:56.546] [DEBUG] UIElement 'TaskListMain': Buffer resized to 195x54
+[2025-07-15 08:06:56.964] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:06:58.503] [DEBUG] UIElement 'TaskListMain': Rendered own content
+[2025-07-15 08:06:58.610] [DEBUG] UIElement 'TaskList': Buffer resized to 68x49
+[2025-07-15 08:06:58.750] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:06:59.279] [DEBUG] UIElement 'TaskList': Rendered own content
+[2025-07-15 08:06:59.302] [DEBUG] UIElement 'ProjectSelector': Buffer resized to 64x1
+[2025-07-15 08:06:59.383] [DEBUG] UIElement 'ProjectSelector': Rendered own content
+[2025-07-15 08:06:59.412] [DEBUG] UIElement 'TaskList': Blended child 'ProjectSelector' at (2, 1)
+[2025-07-15 08:06:59.511] [DEBUG] UIElement 'TaskList': Buffer resized to 66x44
+[2025-07-15 08:06:59.795] [DEBUG] UIElement 'TaskList': Rendered own content
+[2025-07-15 08:07:00.335] [DEBUG] UIElement 'TaskList': Blended child 'TaskList' at (1, 3)
+[2025-07-15 08:07:00.912] [DEBUG] UIElement 'TaskListMain': Blended child 'TaskList' at (1, 1)
+[2025-07-15 08:07:00.939] [DEBUG] UIElement 'Context': Buffer resized to 124x6
+[2025-07-15 08:07:00.971] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:01.114] [DEBUG] UIElement 'Context': Rendered own content
+[2025-07-15 08:07:01.139] [DEBUG] UIElement 'FilterIcon': Buffer resized to 30x1
+[2025-07-15 08:07:01.222] [DEBUG] UIElement 'FilterIcon': Rendered own content
+[2025-07-15 08:07:01.253] [DEBUG] UIElement 'Context': Blended child 'FilterIcon' at (2, 1)
+[2025-07-15 08:07:01.271] [DEBUG] UIElement 'FilterBox': Buffer resized to 62x3
+[2025-07-15 08:07:01.319] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:01.373] [DEBUG] UIElement 'FilterBox': Rendered own content
+[2025-07-15 08:07:01.435] [DEBUG] UIElement 'Context': Blended child 'FilterBox' at (5, 1)
+[2025-07-15 08:07:01.441] [DEBUG] UIElement 'SortLabel': Buffer resized to 30x1
+[2025-07-15 08:07:01.453] [DEBUG] UIElement 'SortLabel': Rendered own content
+[2025-07-15 08:07:01.464] [DEBUG] UIElement 'Context': Blended child 'SortLabel' at (70, 1)
+[2025-07-15 08:07:01.470] [DEBUG] UIElement 'HelpLabel': Buffer resized to 30x1
+[2025-07-15 08:07:01.486] [DEBUG] UIElement 'HelpLabel': Rendered own content
+[2025-07-15 08:07:01.495] [DEBUG] UIElement 'Context': Blended child 'HelpLabel' at (2, 4)
+[2025-07-15 08:07:01.633] [DEBUG] UIElement 'TaskListMain': Blended child 'Context' at (70, 1)
+[2025-07-15 08:07:01.791] [DEBUG] UIElement 'TaskDetails': Buffer resized to 124x42
+[2025-07-15 08:07:01.993] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:02.752] [DEBUG] UIElement 'TaskDetails': Rendered own content
+[2025-07-15 08:07:02.756] [DEBUG] UIElement 'TaskTitle': Buffer resized to 30x1
+[2025-07-15 08:07:02.774] [DEBUG] UIElement 'TaskTitle': Rendered own content
+[2025-07-15 08:07:02.783] [DEBUG] UIElement 'TaskDetails': Blended child 'TaskTitle' at (2, 2)
+[2025-07-15 08:07:02.789] [DEBUG] UIElement 'Status': Buffer resized to 30x1
+[2025-07-15 08:07:02.803] [DEBUG] UIElement 'Status': Rendered own content
+[2025-07-15 08:07:02.812] [DEBUG] UIElement 'TaskDetails': Blended child 'Status' at (2, 4)
+[2025-07-15 08:07:02.818] [DEBUG] UIElement 'Priority': Buffer resized to 30x1
+[2025-07-15 08:07:02.832] [DEBUG] UIElement 'Priority': Rendered own content
+[2025-07-15 08:07:02.841] [DEBUG] UIElement 'TaskDetails': Blended child 'Priority' at (25, 4)
+[2025-07-15 08:07:02.847] [DEBUG] UIElement 'Progress': Buffer resized to 30x1
+[2025-07-15 08:07:02.863] [DEBUG] UIElement 'Progress': Rendered own content
+[2025-07-15 08:07:02.872] [DEBUG] UIElement 'TaskDetails': Blended child 'Progress' at (2, 6)
+[2025-07-15 08:07:03.772] [DEBUG] UIElement 'TaskListMain': Blended child 'TaskDetails' at (70, 8)
+[2025-07-15 08:07:03.787] [DEBUG] UIElement 'StatusBar': Buffer resized to 193x2
+[2025-07-15 08:07:03.807] [DEBUG] UIElement 'StatusBar': Rendered own content
+[2025-07-15 08:07:03.814] [DEBUG] UIElement 'StatusSep': Buffer resized to 30x1
+[2025-07-15 08:07:03.831] [DEBUG] UIElement 'StatusSep': Rendered own content
+[2025-07-15 08:07:03.842] [DEBUG] UIElement 'StatusBar': Blended child 'StatusSep' at (0, 0)
+[2025-07-15 08:07:03.849] [DEBUG] UIElement 'Action_[N]ew': Buffer resized to 30x1
+[2025-07-15 08:07:03.863] [DEBUG] UIElement 'Action_[N]ew': Rendered own content
+[2025-07-15 08:07:03.869] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[N]ew' at (2, 1)
+[2025-07-15 08:07:03.875] [DEBUG] UIElement 'Action_[E]dit': Buffer resized to 30x1
+[2025-07-15 08:07:03.887] [DEBUG] UIElement 'Action_[E]dit': Rendered own content
+[2025-07-15 08:07:03.895] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[E]dit' at (10, 1)
+[2025-07-15 08:07:03.902] [DEBUG] UIElement 'Action_[D]elete': Buffer resized to 30x1
+[2025-07-15 08:07:03.913] [DEBUG] UIElement 'Action_[D]elete': Rendered own content
+[2025-07-15 08:07:03.924] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[D]elete' at (19, 1)
+[2025-07-15 08:07:03.930] [DEBUG] UIElement 'Action_[C]omplete': Buffer resized to 30x1
+[2025-07-15 08:07:03.942] [DEBUG] UIElement 'Action_[C]omplete': Rendered own content
+[2025-07-15 08:07:03.954] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[C]omplete' at (30, 1)
+[2025-07-15 08:07:03.958] [DEBUG] UIElement 'Action_[T]ags': Buffer resized to 30x1
+[2025-07-15 08:07:03.971] [DEBUG] UIElement 'Action_[T]ags': Rendered own content
+[2025-07-15 08:07:03.982] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[T]ags' at (43, 1)
+[2025-07-15 08:07:03.986] [DEBUG] UIElement 'Action_[S]ort': Buffer resized to 30x1
+[2025-07-15 08:07:03.999] [DEBUG] UIElement 'Action_[S]ort': Rendered own content
+[2025-07-15 08:07:04.008] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[S]ort' at (52, 1)
+[2025-07-15 08:07:04.014] [DEBUG] UIElement 'Action_[/] Filter': Buffer resized to 30x1
+[2025-07-15 08:07:04.027] [DEBUG] UIElement 'Action_[/] Filter': Rendered own content
+[2025-07-15 08:07:04.036] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[/] Filter' at (61, 1)
+[2025-07-15 08:07:04.042] [DEBUG] UIElement 'Action_[Esc] Back': Buffer resized to 30x1
+[2025-07-15 08:07:04.054] [DEBUG] UIElement 'Action_[Esc] Back': Rendered own content
+[2025-07-15 08:07:04.064] [DEBUG] UIElement 'StatusBar': Blended child 'Action_[Esc] Back' at (74, 1)
+[2025-07-15 08:07:04.119] [DEBUG] UIElement 'TaskListMain': Blended child 'StatusBar' at (1, 51)
+[2025-07-15 08:07:05.912] [DEBUG] UIElement 'TaskListScreen': Blended child 'TaskListMain' at (0, 0)
+[2025-07-15 08:07:21.736] [DEBUG] Process-TuiInput: Key=N, Char='n', Modifiers=None
+[2025-07-15 08:07:21.738] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:07:21.742] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:07:21.744] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:07:21.768] [DEBUG] Process-TuiInput: GetAction result: '' for key N
+[2025-07-15 08:07:21.777] [DEBUG] Routing input to current screen: TaskListScreen
+[2025-07-15 08:07:21.818] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:07:21.830] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-15 08:07:22.124] [DEBUG] NavigationService.NavigateTo: Starting navigation to SimpleTaskDialog
+[2025-07-15 08:07:22.129] [DEBUG] NavigationService.NavigateTo: Exiting current screen TaskListScreen
+[2025-07-15 08:07:22.134] [DEBUG] TaskListScreen.OnExit: Cleaning up
+[2025-07-15 08:07:22.136] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:07:22.154] [DEBUG] NavigationService.NavigateTo: Set current screen to SimpleTaskDialog
+[2025-07-15 08:07:22.159] [DEBUG] NavigationService.NavigateTo: Initializing screen SimpleTaskDialog
+[2025-07-15 08:07:22.219] [DEBUG] NavigationService.NavigateTo: Resizing screen SimpleTaskDialog to 195x54
+[2025-07-15 08:07:22.223] [VERBOSE] [Write-Verbose] Resize: Component 'SimpleTaskDialog' already has target dimensions (195x54). No change.
+[2025-07-15 08:07:22.225] [DEBUG] NavigationService.NavigateTo: Calling OnEnter for screen SimpleTaskDialog
+[2025-07-15 08:07:22.237] [DEBUG] Screen.OnEnter: Setting initial focus for SimpleTaskDialog
+[2025-07-15 08:07:22.263] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: SimpleTaskDialog
+[2025-07-15 08:07:22.275] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: SimpleTaskDialog - IsFocusable: False, Visible: True, Enabled: True, IsScreen: True
+[2025-07-15 08:07:22.279] [DEBUG] Screen._CollectFocusableRecursive: Checking 2 children of SimpleTaskDialog
+[2025-07-15 08:07:22.284] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: DialogMain
+[2025-07-15 08:07:22.291] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: DialogMain - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:07:22.295] [DEBUG] Screen._CollectFocusableRecursive: Checking 4 children of DialogMain
+[2025-07-15 08:07:22.305] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TitleBox
+[2025-07-15 08:07:22.309] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: TitleBox (TabIndex: 0)
+[2025-07-15 08:07:22.311] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of TitleBox
+[2025-07-15 08:07:22.313] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: DescBox
+[2025-07-15 08:07:22.314] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: DescBox (TabIndex: 1)
+[2025-07-15 08:07:22.316] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of DescBox
+[2025-07-15 08:07:22.320] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: SaveBtn
+[2025-07-15 08:07:22.324] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: SaveBtn (TabIndex: 2)
+[2025-07-15 08:07:22.326] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of SaveBtn
+[2025-07-15 08:07:22.328] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: CancelBtn
+[2025-07-15 08:07:22.329] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: CancelBtn (TabIndex: 3)
+[2025-07-15 08:07:22.331] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of CancelBtn
+[2025-07-15 08:07:22.333] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: DialogMain
+[2025-07-15 08:07:22.342] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: DialogMain - IsFocusable: False, Visible: True, Enabled: True, IsScreen: False
+[2025-07-15 08:07:22.343] [DEBUG] Screen._CollectFocusableRecursive: Checking 4 children of DialogMain
+[2025-07-15 08:07:22.345] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: TitleBox
+[2025-07-15 08:07:22.347] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: TitleBox (TabIndex: 0)
+[2025-07-15 08:07:22.349] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of TitleBox
+[2025-07-15 08:07:22.350] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: DescBox
+[2025-07-15 08:07:22.352] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: DescBox (TabIndex: 1)
+[2025-07-15 08:07:22.354] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of DescBox
+[2025-07-15 08:07:22.355] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: SaveBtn
+[2025-07-15 08:07:22.357] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: SaveBtn (TabIndex: 2)
+[2025-07-15 08:07:22.359] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of SaveBtn
+[2025-07-15 08:07:22.361] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: CancelBtn
+[2025-07-15 08:07:22.362] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: CancelBtn (TabIndex: 3)
+[2025-07-15 08:07:22.364] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of CancelBtn
+[2025-07-15 08:07:22.366] [DEBUG] Screen._GetFocusableChildren: Final focus list for SimpleTaskDialog has 8 unique components
+[2025-07-15 08:07:22.368] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.370] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.371] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.373] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.374] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.376] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.378] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.379] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.381] [DEBUG] Screen.OnEnter: Found 8 focusable components
+[2025-07-15 08:07:22.383] [DEBUG] Screen.OnEnter: - TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.384] [DEBUG] Screen.OnEnter: - TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.390] [DEBUG] Screen.OnEnter: - DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.392] [DEBUG] Screen.OnEnter: - DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.394] [DEBUG] Screen.OnEnter: - SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.395] [DEBUG] Screen.OnEnter: - SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.397] [DEBUG] Screen.OnEnter: - CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.399] [DEBUG] Screen.OnEnter: - CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:22.403] [DEBUG] Screen.FocusFirstChild: Found 8 focusable children
+[2025-07-15 08:07:22.405] [DEBUG] Screen.FocusFirstChild: Attempting to focus first child: TitleBox
+[2025-07-15 08:07:22.412] [DEBUG] Screen.SetChildFocus: Attempting to focus TitleBox on screen SimpleTaskDialog
+[2025-07-15 08:07:22.421] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:07:22.423] [DEBUG] Screen.SetChildFocus: Setting focus on TitleBox
+[2025-07-15 08:07:22.451] [DEBUG] Screen.OnEnter: Initial focus set to: TitleBox
+[2025-07-15 08:07:22.455] [DEBUG] NavigationService.NavigateTo: OnEnter completed for screen SimpleTaskDialog
+[2025-07-15 08:07:22.468] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-15 08:07:26.526] [DEBUG] UIElement 'SimpleTaskDialog': Buffer resized to 195x54
+[2025-07-15 08:07:26.938] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:07:26.975] [DEBUG] UIElement 'DialogMain': Buffer resized to 60x15
+[2025-07-15 08:07:27.016] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:07:27.172] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:07:27.183] [DEBUG] UIElement 'TitleBox': Buffer resized to 56x3
+[2025-07-15 08:07:27.198] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:27.273] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:07:27.307] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:07:27.316] [DEBUG] UIElement 'DescBox': Buffer resized to 56x3
+[2025-07-15 08:07:27.332] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:27.381] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:07:27.415] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:07:27.419] [DEBUG] UIElement 'SaveBtn': Buffer resized to 10x3
+[2025-07-15 08:07:27.429] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:07:27.438] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:07:27.441] [DEBUG] UIElement 'CancelBtn': Buffer resized to 10x3
+[2025-07-15 08:07:27.458] [DEBUG] UIElement 'CancelBtn': Rendered own content
+[2025-07-15 08:07:27.466] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:07:27.625] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:07:27.656] [DEBUG] UIElement 'DialogMain': Buffer resized to 60x15
+[2025-07-15 08:07:27.697] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:07:27.856] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:07:27.867] [DEBUG] UIElement 'TitleBox': Buffer resized to 56x3
+[2025-07-15 08:07:27.880] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:27.927] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:07:27.961] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:07:27.972] [DEBUG] UIElement 'DescBox': Buffer resized to 56x3
+[2025-07-15 08:07:27.985] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:28.032] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:07:28.066] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:07:28.072] [DEBUG] UIElement 'SaveBtn': Buffer resized to 10x3
+[2025-07-15 08:07:28.083] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:07:28.093] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:07:28.096] [DEBUG] UIElement 'CancelBtn': Buffer resized to 10x3
+[2025-07-15 08:07:28.109] [DEBUG] UIElement 'CancelBtn': Rendered own content
+[2025-07-15 08:07:28.117] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:07:28.274] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:07:39.763] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:07:39.765] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:07:39.769] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:07:39.771] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:07:39.773] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:07:39.775] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:07:39.779] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:07:39.791] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:07:39.812] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:07:39.821] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:07:39.834] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.836] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.837] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.839] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.852] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.854] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.855] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.857] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:39.861] [DEBUG] navigation.nextComponent: Current focus: TitleBox
+[2025-07-15 08:07:39.871] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:07:39.883] [DEBUG] navigation.nextComponent: Current focus: TitleBox at index 0
+[2025-07-15 08:07:39.889] [DEBUG] navigation.nextComponent: Attempting to focus TitleBox at index 1
+[2025-07-15 08:07:39.891] [DEBUG] Screen.SetChildFocus: Attempting to focus TitleBox on screen SimpleTaskDialog
+[2025-07-15 08:07:39.895] [DEBUG] Screen.SetChildFocus: Blurring current focus: TitleBox
+[2025-07-15 08:07:39.904] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:07:39.906] [DEBUG] Screen.SetChildFocus: Setting focus on TitleBox
+[2025-07-15 08:07:39.908] [DEBUG] navigation.nextComponent: Successfully focused TitleBox
+[2025-07-15 08:07:39.910] [DEBUG] navigation.nextComponent: New focus: TitleBox
+[2025-07-15 08:07:39.912] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:07:43.996] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:07:44.039] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:07:44.195] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:07:44.209] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:44.258] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:07:44.292] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:07:44.325] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:07:44.334] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:07:44.344] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:07:44.498] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:07:44.540] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:07:44.695] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:07:44.710] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:44.759] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:07:44.793] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:07:44.827] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:07:44.835] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:07:44.846] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:07:45.000] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:07:48.830] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:07:48.832] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:07:48.834] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:07:48.838] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:07:48.840] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:07:48.841] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:07:48.843] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:07:48.844] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:07:48.849] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:07:48.851] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:07:48.853] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.857] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.858] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.860] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.864] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.866] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.867] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.871] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:48.873] [DEBUG] navigation.nextComponent: Current focus: TitleBox
+[2025-07-15 08:07:48.877] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:07:48.879] [DEBUG] navigation.nextComponent: Current focus: TitleBox at index 1
+[2025-07-15 08:07:48.880] [DEBUG] navigation.nextComponent: Attempting to focus DescBox at index 2
+[2025-07-15 08:07:48.882] [DEBUG] Screen.SetChildFocus: Attempting to focus DescBox on screen SimpleTaskDialog
+[2025-07-15 08:07:48.884] [DEBUG] Screen.SetChildFocus: Blurring current focus: TitleBox
+[2025-07-15 08:07:48.887] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:07:48.889] [DEBUG] Screen.SetChildFocus: Setting focus on DescBox
+[2025-07-15 08:07:48.895] [DEBUG] navigation.nextComponent: Successfully focused DescBox
+[2025-07-15 08:07:48.897] [DEBUG] navigation.nextComponent: New focus: DescBox
+[2025-07-15 08:07:48.899] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:07:52.976] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:07:53.018] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:07:53.179] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:07:53.214] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:07:53.228] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:53.276] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:07:53.310] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:07:53.320] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:07:53.329] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:07:53.485] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:07:53.526] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:07:53.686] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:07:53.698] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:07:53.748] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:07:53.782] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:07:53.820] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:07:53.833] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:07:53.842] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:07:54.040] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:07:57.861] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:07:57.864] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:07:57.866] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:07:57.868] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:07:57.870] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:07:57.871] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:07:57.875] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:07:57.876] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:07:57.878] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:07:57.880] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:07:57.884] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.885] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.887] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.890] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.892] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.894] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.897] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.899] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:07:57.900] [DEBUG] navigation.nextComponent: Current focus: DescBox
+[2025-07-15 08:07:57.904] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:07:57.906] [DEBUG] navigation.nextComponent: Current focus: DescBox at index 2
+[2025-07-15 08:07:57.907] [DEBUG] navigation.nextComponent: Attempting to focus DescBox at index 3
+[2025-07-15 08:07:57.911] [DEBUG] Screen.SetChildFocus: Attempting to focus DescBox on screen SimpleTaskDialog
+[2025-07-15 08:07:57.913] [DEBUG] Screen.SetChildFocus: Blurring current focus: DescBox
+[2025-07-15 08:07:57.919] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:07:57.921] [DEBUG] Screen.SetChildFocus: Setting focus on DescBox
+[2025-07-15 08:07:57.923] [DEBUG] navigation.nextComponent: Successfully focused DescBox
+[2025-07-15 08:07:57.927] [DEBUG] navigation.nextComponent: New focus: DescBox
+[2025-07-15 08:07:57.929] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:08:01.988] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:08:02.030] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:02.185] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:02.219] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:02.233] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:08:02.280] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:08:02.314] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:02.324] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:02.332] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:02.488] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:02.528] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:02.685] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:02.719] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:02.731] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:08:02.780] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:08:02.814] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:02.822] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:02.830] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:02.986] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:06.801] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:08:06.803] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:08:06.807] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:08:06.808] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:08:06.810] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:08:06.814] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:08:06.816] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:08:06.817] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:08:06.821] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:08:06.823] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:08:06.825] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.826] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.828] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.831] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.833] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.835] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.838] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.840] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:06.841] [DEBUG] navigation.nextComponent: Current focus: DescBox
+[2025-07-15 08:08:06.845] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:08:06.847] [DEBUG] navigation.nextComponent: Current focus: DescBox at index 3
+[2025-07-15 08:08:06.848] [DEBUG] navigation.nextComponent: Attempting to focus SaveBtn at index 4
+[2025-07-15 08:08:06.857] [DEBUG] Screen.SetChildFocus: Attempting to focus SaveBtn on screen SimpleTaskDialog
+[2025-07-15 08:08:06.861] [DEBUG] Screen.SetChildFocus: Blurring current focus: DescBox
+[2025-07-15 08:08:06.870] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:08:06.872] [DEBUG] Screen.SetChildFocus: Setting focus on SaveBtn
+[2025-07-15 08:08:06.884] [DEBUG] navigation.nextComponent: Successfully focused SaveBtn
+[2025-07-15 08:08:06.895] [DEBUG] navigation.nextComponent: New focus: SaveBtn
+[2025-07-15 08:08:06.897] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:08:10.951] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:08:10.996] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:11.152] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:11.186] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:11.220] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:11.230] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:08:11.241] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:11.249] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:11.406] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:11.448] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:11.604] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:11.639] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:11.653] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:08:11.703] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:08:11.737] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:11.748] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:11.756] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:11.912] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:15.706] [DEBUG] Process-TuiInput: Key=N, Char='n', Modifiers=None
+[2025-07-15 08:08:15.708] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:08:15.712] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:08:15.713] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:08:15.715] [DEBUG] Process-TuiInput: GetAction result: '' for key N
+[2025-07-15 08:08:15.721] [DEBUG] Routing input to current screen: SimpleTaskDialog
+[2025-07-15 08:08:15.750] [DEBUG] Button 'SaveBtn': Received key N, Enabled: True, IsFocused: True
+[2025-07-15 08:08:15.755] [DEBUG] Button 'SaveBtn': Key N not handled
+[2025-07-15 08:08:15.759] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:08:15.763] [DEBUG] Input not handled by any component
+[2025-07-15 08:08:23.221] [DEBUG] Process-TuiInput: Key=E, Char='e', Modifiers=None
+[2025-07-15 08:08:23.223] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:08:23.224] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:08:23.226] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:08:23.228] [DEBUG] Process-TuiInput: GetAction result: '' for key E
+[2025-07-15 08:08:23.229] [DEBUG] Routing input to current screen: SimpleTaskDialog
+[2025-07-15 08:08:23.233] [DEBUG] Button 'SaveBtn': Received key E, Enabled: True, IsFocused: True
+[2025-07-15 08:08:23.235] [DEBUG] Button 'SaveBtn': Key E not handled
+[2025-07-15 08:08:23.236] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:08:23.241] [DEBUG] Input not handled by any component
+[2025-07-15 08:08:30.693] [DEBUG] Process-TuiInput: Key=W, Char='w', Modifiers=None
+[2025-07-15 08:08:30.695] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:08:30.699] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:08:30.700] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:08:30.702] [DEBUG] Process-TuiInput: GetAction result: '' for key W
+[2025-07-15 08:08:30.704] [DEBUG] Routing input to current screen: SimpleTaskDialog
+[2025-07-15 08:08:30.706] [DEBUG] Button 'SaveBtn': Received key W, Enabled: True, IsFocused: True
+[2025-07-15 08:08:30.709] [DEBUG] Button 'SaveBtn': Key W not handled
+[2025-07-15 08:08:30.711] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:08:30.713] [DEBUG] Input not handled by any component
+[2025-07-15 08:08:38.202] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:08:38.206] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:08:38.207] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:08:38.209] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:08:38.211] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:08:38.215] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:08:38.217] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:08:38.218] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:08:38.222] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:08:38.224] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:08:38.225] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.227] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.231] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.232] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.234] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.235] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.237] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.240] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:38.242] [DEBUG] navigation.nextComponent: Current focus: SaveBtn
+[2025-07-15 08:08:38.244] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:08:38.250] [DEBUG] navigation.nextComponent: Current focus: SaveBtn at index 4
+[2025-07-15 08:08:38.252] [DEBUG] navigation.nextComponent: Attempting to focus SaveBtn at index 5
+[2025-07-15 08:08:38.253] [DEBUG] Screen.SetChildFocus: Attempting to focus SaveBtn on screen SimpleTaskDialog
+[2025-07-15 08:08:38.259] [DEBUG] Screen.SetChildFocus: Blurring current focus: SaveBtn
+[2025-07-15 08:08:38.267] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:08:38.269] [DEBUG] Screen.SetChildFocus: Setting focus on SaveBtn
+[2025-07-15 08:08:38.274] [DEBUG] navigation.nextComponent: Successfully focused SaveBtn
+[2025-07-15 08:08:38.275] [DEBUG] navigation.nextComponent: New focus: SaveBtn
+[2025-07-15 08:08:38.277] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:08:42.357] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:08:42.399] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:42.555] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:42.589] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:42.622] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:42.633] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:08:42.642] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:42.650] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:42.807] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:42.847] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:43.004] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:43.039] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:43.072] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:43.081] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:08:43.092] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:43.100] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:43.257] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:47.072] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:08:47.077] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:08:47.079] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:08:47.081] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:08:47.082] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:08:47.084] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:08:47.089] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:08:47.095] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:08:47.101] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:08:47.107] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:08:47.109] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.114] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.116] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.117] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.119] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.120] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.122] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.123] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:08:47.125] [DEBUG] navigation.nextComponent: Current focus: SaveBtn
+[2025-07-15 08:08:47.126] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:08:47.128] [DEBUG] navigation.nextComponent: Current focus: SaveBtn at index 5
+[2025-07-15 08:08:47.130] [DEBUG] navigation.nextComponent: Attempting to focus CancelBtn at index 6
+[2025-07-15 08:08:47.131] [DEBUG] Screen.SetChildFocus: Attempting to focus CancelBtn on screen SimpleTaskDialog
+[2025-07-15 08:08:47.133] [DEBUG] Screen.SetChildFocus: Blurring current focus: SaveBtn
+[2025-07-15 08:08:47.136] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:08:47.139] [DEBUG] Screen.SetChildFocus: Setting focus on CancelBtn
+[2025-07-15 08:08:47.143] [DEBUG] navigation.nextComponent: Successfully focused CancelBtn
+[2025-07-15 08:08:47.146] [DEBUG] navigation.nextComponent: New focus: CancelBtn
+[2025-07-15 08:08:47.148] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:08:51.217] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:08:51.258] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:51.413] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:51.447] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:51.481] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:51.489] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:51.501] [DEBUG] UIElement 'CancelBtn': Rendered own content
+[2025-07-15 08:08:51.509] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:51.664] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:51.706] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:08:51.861] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:08:51.896] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:08:51.929] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:08:51.939] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:08:51.949] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:08:51.957] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:08:52.113] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:08:55.985] [DEBUG] Process-TuiInput: Key=R, Char='r', Modifiers=None
+[2025-07-15 08:08:55.987] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:08:55.991] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:08:55.992] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:08:55.994] [DEBUG] Process-TuiInput: GetAction result: '' for key R
+[2025-07-15 08:08:55.996] [DEBUG] Routing input to current screen: SimpleTaskDialog
+[2025-07-15 08:08:56.000] [DEBUG] Button 'CancelBtn': Received key R, Enabled: True, IsFocused: True
+[2025-07-15 08:08:56.002] [DEBUG] Button 'CancelBtn': Key R not handled
+[2025-07-15 08:08:56.004] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:08:56.006] [DEBUG] Input not handled by any component
+[2025-07-15 08:09:03.470] [DEBUG] Process-TuiInput: Key=R, Char='r', Modifiers=None
+[2025-07-15 08:09:03.472] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:09:03.473] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:09:03.477] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:09:03.479] [DEBUG] Process-TuiInput: GetAction result: '' for key R
+[2025-07-15 08:09:03.481] [DEBUG] Routing input to current screen: SimpleTaskDialog
+[2025-07-15 08:09:03.483] [DEBUG] Button 'CancelBtn': Received key R, Enabled: True, IsFocused: True
+[2025-07-15 08:09:03.484] [DEBUG] Button 'CancelBtn': Key R not handled
+[2025-07-15 08:09:03.488] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:09:03.490] [DEBUG] Input not handled by any component
+[2025-07-15 08:09:10.923] [DEBUG] Process-TuiInput: Key=E, Char='e', Modifiers=None
+[2025-07-15 08:09:10.925] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:09:10.927] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:09:10.930] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:09:10.932] [DEBUG] Process-TuiInput: GetAction result: '' for key E
+[2025-07-15 08:09:10.934] [DEBUG] Routing input to current screen: SimpleTaskDialog
+[2025-07-15 08:09:10.936] [DEBUG] Button 'CancelBtn': Received key E, Enabled: True, IsFocused: True
+[2025-07-15 08:09:10.940] [DEBUG] Button 'CancelBtn': Key E not handled
+[2025-07-15 08:09:10.941] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:09:10.943] [DEBUG] Input not handled by any component
+[2025-07-15 08:09:18.437] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:09:18.439] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:09:18.441] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:09:18.442] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:09:18.446] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:09:18.448] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:09:18.449] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:09:18.453] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:09:18.455] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:09:18.456] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:18.460] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.462] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.463] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.465] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.468] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.470] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.471] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.475] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:18.477] [DEBUG] navigation.nextComponent: Current focus: CancelBtn
+[2025-07-15 08:09:18.478] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:18.482] [DEBUG] navigation.nextComponent: Current focus: CancelBtn at index 6
+[2025-07-15 08:09:18.484] [DEBUG] navigation.nextComponent: Attempting to focus CancelBtn at index 7
+[2025-07-15 08:09:18.485] [DEBUG] Screen.SetChildFocus: Attempting to focus CancelBtn on screen SimpleTaskDialog
+[2025-07-15 08:09:18.489] [DEBUG] Screen.SetChildFocus: Blurring current focus: CancelBtn
+[2025-07-15 08:09:18.492] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:09:18.497] [DEBUG] Screen.SetChildFocus: Setting focus on CancelBtn
+[2025-07-15 08:09:18.499] [DEBUG] navigation.nextComponent: Successfully focused CancelBtn
+[2025-07-15 08:09:18.501] [DEBUG] navigation.nextComponent: New focus: CancelBtn
+[2025-07-15 08:09:18.503] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:09:22.563] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:09:22.603] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:22.758] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:22.793] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:22.826] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:22.834] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:22.847] [DEBUG] UIElement 'CancelBtn': Rendered own content
+[2025-07-15 08:09:22.855] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:23.011] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:23.061] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:23.208] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:23.243] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:23.277] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:23.286] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:23.297] [DEBUG] UIElement 'CancelBtn': Rendered own content
+[2025-07-15 08:09:23.305] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:23.462] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:27.265] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:09:27.267] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:09:27.270] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:09:27.272] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:09:27.274] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:09:27.276] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:09:27.277] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:09:27.278] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:09:27.282] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:09:27.284] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:27.286] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.290] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.291] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.293] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.294] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.296] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.297] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.301] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:27.302] [DEBUG] navigation.nextComponent: Current focus: CancelBtn
+[2025-07-15 08:09:27.304] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:27.308] [DEBUG] navigation.nextComponent: Current focus: CancelBtn at index 7
+[2025-07-15 08:09:27.310] [DEBUG] navigation.nextComponent: Attempting to focus TitleBox at index 0
+[2025-07-15 08:09:27.311] [DEBUG] Screen.SetChildFocus: Attempting to focus TitleBox on screen SimpleTaskDialog
+[2025-07-15 08:09:27.317] [DEBUG] Screen.SetChildFocus: Blurring current focus: CancelBtn
+[2025-07-15 08:09:27.320] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:09:27.322] [DEBUG] Screen.SetChildFocus: Setting focus on TitleBox
+[2025-07-15 08:09:27.324] [DEBUG] navigation.nextComponent: Successfully focused TitleBox
+[2025-07-15 08:09:27.326] [DEBUG] navigation.nextComponent: New focus: TitleBox
+[2025-07-15 08:09:27.330] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:09:31.410] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:09:31.452] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:31.610] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:31.627] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:09:31.674] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:09:31.707] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:31.741] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:31.749] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:31.759] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:31.912] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:31.956] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:32.112] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:32.146] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:32.179] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:32.187] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:32.199] [DEBUG] UIElement 'CancelBtn': Rendered own content
+[2025-07-15 08:09:32.207] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:32.363] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:36.169] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:09:36.171] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:09:36.173] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:09:36.174] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:09:36.176] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:09:36.180] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:09:36.181] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:09:36.183] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:09:36.187] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:09:36.189] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:36.190] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.194] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.196] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.197] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.201] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.202] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.204] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.208] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:36.209] [DEBUG] navigation.nextComponent: Current focus: TitleBox
+[2025-07-15 08:09:36.211] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:36.215] [DEBUG] navigation.nextComponent: Current focus: TitleBox at index 0
+[2025-07-15 08:09:36.216] [DEBUG] navigation.nextComponent: Attempting to focus TitleBox at index 1
+[2025-07-15 08:09:36.218] [DEBUG] Screen.SetChildFocus: Attempting to focus TitleBox on screen SimpleTaskDialog
+[2025-07-15 08:09:36.222] [DEBUG] Screen.SetChildFocus: Blurring current focus: TitleBox
+[2025-07-15 08:09:36.224] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:09:36.226] [DEBUG] Screen.SetChildFocus: Setting focus on TitleBox
+[2025-07-15 08:09:36.230] [DEBUG] navigation.nextComponent: Successfully focused TitleBox
+[2025-07-15 08:09:36.232] [DEBUG] navigation.nextComponent: New focus: TitleBox
+[2025-07-15 08:09:36.236] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:09:40.291] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:09:40.335] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:40.489] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:40.503] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:09:40.549] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:09:40.583] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:40.616] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:40.625] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:40.635] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:40.788] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:40.829] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:40.985] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:40.999] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:09:41.045] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:09:41.079] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:41.112] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:41.120] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:41.131] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:41.286] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:45.068] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:09:45.069] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:09:45.071] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:09:45.075] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:09:45.077] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:09:45.078] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:09:45.080] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:09:45.081] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:09:45.083] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:09:45.087] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:45.089] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.090] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.094] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.096] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.097] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.101] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.103] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.104] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:45.108] [DEBUG] navigation.nextComponent: Current focus: TitleBox
+[2025-07-15 08:09:45.110] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:45.111] [DEBUG] navigation.nextComponent: Current focus: TitleBox at index 1
+[2025-07-15 08:09:45.115] [DEBUG] navigation.nextComponent: Attempting to focus DescBox at index 2
+[2025-07-15 08:09:45.117] [DEBUG] Screen.SetChildFocus: Attempting to focus DescBox on screen SimpleTaskDialog
+[2025-07-15 08:09:45.118] [DEBUG] Screen.SetChildFocus: Blurring current focus: TitleBox
+[2025-07-15 08:09:45.123] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:09:45.124] [DEBUG] Screen.SetChildFocus: Setting focus on DescBox
+[2025-07-15 08:09:45.129] [DEBUG] navigation.nextComponent: Successfully focused DescBox
+[2025-07-15 08:09:45.131] [DEBUG] navigation.nextComponent: New focus: DescBox
+[2025-07-15 08:09:45.133] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:09:49.186] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:09:49.227] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:49.382] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:49.418] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:49.430] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:09:49.478] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:09:49.512] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:49.521] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:49.531] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:49.683] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:49.725] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:49.881] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:49.896] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:09:49.939] [DEBUG] UIElement 'TitleBox': Rendered own content
+[2025-07-15 08:09:49.973] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:50.007] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:50.015] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:50.025] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:50.178] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:53.951] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:09:53.955] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:09:53.957] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:09:53.958] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:09:53.960] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:09:53.962] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:09:53.965] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:09:53.967] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:09:53.968] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:09:53.972] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:53.974] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.976] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.979] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.981] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.982] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.985] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.987] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.989] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:09:53.992] [DEBUG] navigation.nextComponent: Current focus: DescBox
+[2025-07-15 08:09:53.994] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:09:53.995] [DEBUG] navigation.nextComponent: Current focus: DescBox at index 2
+[2025-07-15 08:09:53.999] [DEBUG] navigation.nextComponent: Attempting to focus DescBox at index 3
+[2025-07-15 08:09:54.001] [DEBUG] Screen.SetChildFocus: Attempting to focus DescBox on screen SimpleTaskDialog
+[2025-07-15 08:09:54.002] [DEBUG] Screen.SetChildFocus: Blurring current focus: DescBox
+[2025-07-15 08:09:54.007] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:09:54.008] [DEBUG] Screen.SetChildFocus: Setting focus on DescBox
+[2025-07-15 08:09:54.011] [DEBUG] navigation.nextComponent: Successfully focused DescBox
+[2025-07-15 08:09:54.015] [DEBUG] navigation.nextComponent: New focus: DescBox
+[2025-07-15 08:09:54.016] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:09:58.055] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:09:58.097] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:58.251] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:58.285] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:58.296] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:09:58.345] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:09:58.378] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:58.387] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:58.397] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:58.548] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:09:58.590] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:09:58.744] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:09:58.778] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:09:58.791] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:09:58.837] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:09:58.870] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:09:58.879] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:09:58.889] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:09:59.041] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:10:02.813] [DEBUG] Process-TuiInput: Key=Enter, Char='', Modifiers=None
+[2025-07-15 08:10:02.815] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:10:02.817] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:10:02.821] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:10:02.822] [DEBUG] Process-TuiInput: GetAction result: '' for key Enter
+[2025-07-15 08:10:02.824] [DEBUG] Routing input to current screen: SimpleTaskDialog
+[2025-07-15 08:10:02.849] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-15 08:10:02.851] [DEBUG] Input not handled by any component
+[2025-07-15 08:10:10.263] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:10:10.265] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:10:10.268] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:10:10.270] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:10:10.273] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:10:10.275] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:10:10.276] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:10:10.280] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:10:10.282] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:10:10.283] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:10:10.288] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.289] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.291] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.294] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.296] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.297] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.301] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.303] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:10.304] [DEBUG] navigation.nextComponent: Current focus: DescBox
+[2025-07-15 08:10:10.308] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:10:10.310] [DEBUG] navigation.nextComponent: Current focus: DescBox at index 3
+[2025-07-15 08:10:10.311] [DEBUG] navigation.nextComponent: Attempting to focus SaveBtn at index 4
+[2025-07-15 08:10:10.315] [DEBUG] Screen.SetChildFocus: Attempting to focus SaveBtn on screen SimpleTaskDialog
+[2025-07-15 08:10:10.317] [DEBUG] Screen.SetChildFocus: Blurring current focus: DescBox
+[2025-07-15 08:10:10.319] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:10:10.323] [DEBUG] Screen.SetChildFocus: Setting focus on SaveBtn
+[2025-07-15 08:10:10.326] [DEBUG] navigation.nextComponent: Successfully focused SaveBtn
+[2025-07-15 08:10:10.329] [DEBUG] navigation.nextComponent: New focus: SaveBtn
+[2025-07-15 08:10:10.331] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:10:14.374] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:10:14.416] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:10:14.573] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:10:14.607] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:10:14.640] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:10:14.651] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:10:14.660] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:10:14.668] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:10:14.823] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:10:14.864] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:10:15.021] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:10:15.055] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:10:15.068] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-15 08:10:15.114] [DEBUG] UIElement 'DescBox': Rendered own content
+[2025-07-15 08:10:15.148] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:10:15.156] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:10:15.166] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:10:15.319] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:10:19.121] [DEBUG] Process-TuiInput: Key=Tab, Char='	', Modifiers=None
+[2025-07-15 08:10:19.123] [DEBUG] Process-TuiInput: Checking global hotkeys - TuiState.Services exists: True
+[2025-07-15 08:10:19.127] [DEBUG] Process-TuiInput: Services count: 9, Keys: DialogManager, Logger, DataManager, ActionService, ThemeManager, KeybindingService, ServiceContainer, EventManager, NavigationService
+[2025-07-15 08:10:19.128] [DEBUG] Process-TuiInput: KeybindingService exists: True
+[2025-07-15 08:10:19.130] [DEBUG] KeybindingService: Found global action: navigation.nextComponent
+[2025-07-15 08:10:19.132] [DEBUG] Process-TuiInput: GetAction result: 'navigation.nextComponent' for key Tab
+[2025-07-15 08:10:19.133] [DEBUG] Global hotkey detected: navigation.nextComponent
+[2025-07-15 08:10:19.135] [DEBUG] Process-TuiInput: Executing action 'navigation.nextComponent'
+[2025-07-15 08:10:19.137] [DEBUG] navigation.nextComponent: Calling FocusNextChild on SimpleTaskDialog
+[2025-07-15 08:10:19.141] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:10:19.142] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.144] [DEBUG]   - Focusable: TitleBox (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.148] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.150] [DEBUG]   - Focusable: DescBox (TabIndex: 1, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.151] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.155] [DEBUG]   - Focusable: SaveBtn (TabIndex: 2, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.156] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.158] [DEBUG]   - Focusable: CancelBtn (TabIndex: 3, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-15 08:10:19.162] [DEBUG] navigation.nextComponent: Current focus: SaveBtn
+[2025-07-15 08:10:19.164] [DEBUG] navigation.nextComponent: Found 8 focusable components
+[2025-07-15 08:10:19.165] [DEBUG] navigation.nextComponent: Current focus: SaveBtn at index 4
+[2025-07-15 08:10:19.169] [DEBUG] navigation.nextComponent: Attempting to focus SaveBtn at index 5
+[2025-07-15 08:10:19.171] [DEBUG] Screen.SetChildFocus: Attempting to focus SaveBtn on screen SimpleTaskDialog
+[2025-07-15 08:10:19.172] [DEBUG] Screen.SetChildFocus: Blurring current focus: SaveBtn
+[2025-07-15 08:10:19.177] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-15 08:10:19.179] [DEBUG] Screen.SetChildFocus: Setting focus on SaveBtn
+[2025-07-15 08:10:19.183] [DEBUG] navigation.nextComponent: Successfully focused SaveBtn
+[2025-07-15 08:10:19.185] [DEBUG] navigation.nextComponent: New focus: SaveBtn
+[2025-07-15 08:10:19.187] [DEBUG] Process-TuiInput: Action 'navigation.nextComponent' executed successfully
+[2025-07-15 08:10:23.281] [DEBUG] UIElement 'SimpleTaskDialog': Rendered own content
+[2025-07-15 08:10:23.322] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:10:23.479] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:10:23.507] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:10:23.543] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:10:23.553] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:10:23.563] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:10:23.571] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:10:23.727] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:10:23.767] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-15 08:10:23.922] [DEBUG] UIElement 'DialogMain': Rendered own content
+[2025-07-15 08:10:23.956] [DEBUG] UIElement 'DialogMain': Blended child 'TitleBox' at (2, 2)
+[2025-07-15 08:10:23.989] [DEBUG] UIElement 'DialogMain': Blended child 'DescBox' at (2, 6)
+[2025-07-15 08:10:23.998] [DEBUG] UIElement 'SaveBtn': Rendered own content
+[2025-07-15 08:10:24.008] [DEBUG] UIElement 'DialogMain': Blended child 'SaveBtn' at (15, 10)
+[2025-07-15 08:10:24.016] [DEBUG] UIElement 'DialogMain': Blended child 'CancelBtn' at (35, 10)
+[2025-07-15 08:10:24.171] [DEBUG] UIElement 'SimpleTaskDialog': Blended child 'DialogMain' at (67, 19)
+[2025-07-15 08:10:27.960] [DEBUG] Process-TuiInput: Key=C, Char='', Modifiers=Control
+[2025-07-15 08:10:27.962] [INFO] Ctrl+C detected - EXITING APPLICATION
+[2025-07-15 08:10:35.457] [DEBUG] Screen.SetChildFocus: Attempting to focus null on screen TaskListScreen
+[2025-07-15 08:10:35.465] [DEBUG] Screen.SetChildFocus: Blurring current focus: TaskList
+[2025-07-15 08:10:35.563] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: TaskListScreen.
+[2025-07-15 08:10:35.572] [DEBUG] Screen.SetChildFocus: Attempting to focus null on screen DashboardScreen
+[2025-07-15 08:10:35.576] [DEBUG] Screen.SetChildFocus: Blurring current focus: MainPanel
+[2025-07-15 08:10:35.602] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: DashboardScreen.
+[2025-07-15 08:10:35.614] [DEBUG] Screen.SetChildFocus: Attempting to focus null on screen SimpleTaskDialog
+[2025-07-15 08:10:35.618] [DEBUG] Screen.SetChildFocus: Blurring current focus: SaveBtn
+[2025-07-15 08:10:35.642] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: SimpleTaskDialog.
+[2025-07-15 08:10:35.658] [INFO] ServiceContainer cleanup initiated.
+[2025-07-15 08:10:35.660] [VERBOSE] [Write-Verbose] ServiceContainer: Initiating cleanup of disposable singleton services.
+[2025-07-15 08:10:35.711] [VERBOSE] [Write-Verbose] ServiceContainer: Disposing service of type 'DataManager'.
+[2025-07-15 08:10:35.731] [INFO] ServiceContainer cleanup complete.
+[2025-07-15 08:10:35.733] [VERBOSE] [Write-Verbose] ServiceContainer: Cleanup complete. All service registries cleared.
+[2025-07-15 08:10:35.737] [DEBUG] Start-AxiomPhoenix: Start-TuiEngine completed
+[2025-07-15 08:10:35.743] [INFO] ServiceContainer cleanup initiated.
+[2025-07-15 08:10:35.746] [VERBOSE] [Write-Verbose] ServiceContainer: Initiating cleanup of disposable singleton services.
+[2025-07-15 08:10:35.750] [INFO] ServiceContainer cleanup complete.
+[2025-07-15 08:10:35.752] [VERBOSE] [Write-Verbose] ServiceContainer: Cleanup complete. All service registries cleared.

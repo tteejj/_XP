@@ -67,6 +67,8 @@ class NavigationService {
     [void] NavigateTo([object]$screen) {
         if ($null -eq $screen) { throw [System.ArgumentNullException]::new("screen", "Cannot navigate to a null screen.") }
         
+        Write-Log -Level Debug -Message "NavigationService.NavigateTo: Starting navigation to $($screen.Name)"
+        
         # Verify it's actually a Screen at runtime
         if (-not ($screen.PSObject.Properties['ServiceContainer'] -and 
                   $screen.PSObject.Methods['Initialize'] -and
@@ -77,25 +79,33 @@ class NavigationService {
         try {
             # Exit current screen if one exists and push it to the stack
             if ($this.CurrentScreen) {
+                Write-Log -Level Debug -Message "NavigationService.NavigateTo: Exiting current screen $($this.CurrentScreen.Name)"
                 $this.CurrentScreen.OnExit()
                 $this.NavigationStack.Push($this.CurrentScreen)
             }
             
             # Set the new screen as current
             $this.CurrentScreen = $screen
+            Write-Log -Level Debug -Message "NavigationService.NavigateTo: Set current screen to $($screen.Name)"
             
             # Initialize if not already
             if (-not $screen._isInitialized) {
+                Write-Log -Level Debug -Message "NavigationService.NavigateTo: Initializing screen $($screen.Name)"
                 $screen.Initialize()
                 $screen._isInitialized = $true
+            } else {
+                Write-Log -Level Debug -Message "NavigationService.NavigateTo: Screen $($screen.Name) already initialized"
             }
             
             # Resize screen to match current console dimensions
             $width = $global:TuiState.BufferWidth
             $height = $global:TuiState.BufferHeight
+            Write-Log -Level Debug -Message "NavigationService.NavigateTo: Resizing screen $($screen.Name) to ${width}x${height}"
             $screen.Resize($width, $height)
             
+            Write-Log -Level Debug -Message "NavigationService.NavigateTo: Calling OnEnter for screen $($screen.Name)"
             $screen.OnEnter() # Call lifecycle method
+            Write-Log -Level Debug -Message "NavigationService.NavigateTo: OnEnter completed for screen $($screen.Name)"
             
             # Publish navigation event
             $eventManager = $this.ServiceContainer.GetService("EventManager")

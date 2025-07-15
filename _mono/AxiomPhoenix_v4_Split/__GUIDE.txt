@@ -123,6 +123,20 @@ $component.ForegroundColor = Get-ThemeColor "foreground"
 ```
 **WHY:** The framework uses properties for all visual attributes. There are no setter methods.
 
+### Rule 7: Theme Key Format - ALL LOWERCASE WITH DOTS
+```powershell
+# ❌ WRONG - Mixed case theme keys fail lookup
+Get-ThemeColor "Panel.Background"
+Get-ThemeColor "Button.Focused.Border"
+Get-ThemeColor "primary.accent"
+
+# ✅ CORRECT - All lowercase with dots
+Get-ThemeColor "panel.background"
+Get-ThemeColor "button.focused.border"
+Get-ThemeColor "palette.primary"
+```
+**WHY:** Theme registry uses standardized lowercase keys. Mixed case keys fail lookup and fall back to hardcoded colors, breaking theme switching.
+
 ## COMPONENT REFERENCE - WHAT EACH COMPONENT HANDLES
 
 ### ListBox
@@ -440,6 +454,7 @@ hidden [void] _UpdateStatus([string]$message, [string]$level = "Info") {
 5.  **Services in Constructor**: Never get services in methods.
 6.  **No Inline If**: Always use separate statements in classes.
 7.  **Tab is Automatic**: Never handle Tab yourself.
+8.  **Theme Keys Lowercase**: All theme keys use lowercase.dots format.
 
 ## WHY THESE RULES EXIST
 
@@ -450,6 +465,7 @@ hidden [void] _UpdateStatus([string]$message, [string]$level = "Info") {
 - **Services in constructor**: Prevents null reference errors
 - **No inline if**: PowerShell parser limitation in classes
 - **Automatic Tab**: Consistent navigation across all screens
+- **Theme keys lowercase**: Registry lookup requires exact case match
 
 Follow this guide EXACTLY. Every deviation breaks something.
 ```

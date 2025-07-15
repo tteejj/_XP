@@ -273,7 +273,7 @@ class UIElement {
         if ($this.ForegroundColor) {
             return $this.ForegroundColor
         }
-        return $this.GetThemeColor("Label.Foreground", "#d4d4d4")
+        return $this.GetThemeColor("label.foreground", "#d4d4d4")
     }
     
     # Get effective background color (theme-aware)
@@ -281,7 +281,7 @@ class UIElement {
         if ($this.BackgroundColor) {
             return $this.BackgroundColor
         }
-        return $this.GetThemeColor("Panel.Background", "#1e1e1e")
+        return $this.GetThemeColor("panel.background", "#1e1e1e")
     }
     
     # Get effective border color (theme-aware)
@@ -289,7 +289,7 @@ class UIElement {
         if ($this.BorderColor) {
             return $this.BorderColor
         }
-        return $this.GetThemeColor("Panel.Border", "#404040")
+        return $this.GetThemeColor("panel.border", "#404040")
     }
 
     [void] OnFocus() 

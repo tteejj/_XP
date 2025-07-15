@@ -27,7 +27,7 @@
     
     Components = @{
         Screen = @{ Background = '$Palette.Background'; Foreground = '$Palette.TextPrimary' }
-        Panel = @{ Background = '$Palette.Surface'; Border = '$Palette.Border'; Title = '$Palette.Secondary' }
+        Panel = @{ Background = '$Palette.Surface'; Border = '$Palette.Border'; Title = '$Palette.Secondary'; Foreground = '$Palette.TextPrimary' }
         Label = @{ Foreground = '$Palette.TextPrimary'; Disabled = '$Palette.TextDisabled' }
         Button = @{
             Normal = @{ Foreground = '$Palette.ButtonFocusedFg'; Background = '$Palette.Primary' }

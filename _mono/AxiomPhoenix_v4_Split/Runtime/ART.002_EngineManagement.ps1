@@ -20,12 +20,14 @@ function Initialize-TuiEngine {
     try {
         Write-Log -Level Info -Message "Initializing TUI engine..."
         
+        Write-Log -Level Debug -Message "Initialize-TuiEngine: Storing original console state"
         # Store original console state
         $global:TuiState.OriginalWindowTitle = $Host.UI.RawUI.WindowTitle
         # Get original cursor state (Linux-compatible)
         $global:TuiState.OriginalCursorVisible = $true
         try { $global:TuiState.OriginalCursorVisible = [Console]::CursorVisible } catch {}
         
+        Write-Log -Level Debug -Message "Initialize-TuiEngine: Configuring console"
         # Configure console
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         [Console]::InputEncoding = [System.Text.Encoding]::UTF8
@@ -33,19 +35,23 @@ function Initialize-TuiEngine {
         [Console]::TreatControlCAsInput = $true
         $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
         
+        Write-Log -Level Debug -Message "Initialize-TuiEngine: Clearing screen and hiding cursor"
         # Clear screen and hide cursor
         Clear-Host
         [Console]::SetCursorPosition(0, 0)
         
+        Write-Log -Level Debug -Message "Initialize-TuiEngine: Getting initial console size"
         # Get initial size
         Update-TuiEngineSize
         
+        Write-Log -Level Debug -Message "Initialize-TuiEngine: Creating compositor buffers"
         # Create compositor buffers
         $width = $global:TuiState.BufferWidth
         $height = $global:TuiState.BufferHeight
         $global:TuiState.CompositorBuffer = [TuiBuffer]::new($width, $height, "Compositor")
         $global:TuiState.PreviousCompositorBuffer = [TuiBuffer]::new($width, $height, "PreviousCompositor")
         
+        Write-Log -Level Debug -Message "Initialize-TuiEngine: Clearing buffers with theme background"
         # Clear with theme background
         $bgColor = Get-ThemeColor "Screen.Background" "#000000"
         $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
@@ -70,13 +76,16 @@ function Start-TuiEngine {
     try {
         Write-Log -Level Info -Message "Starting TUI Engine with target FPS: $TargetFPS"
         
+        Write-Log -Level Debug -Message "Start-TuiEngine: Setting up frame timing"
         $targetFrameTime = [timespan]::FromSeconds(1.0 / $TargetFPS)
         $frameStopwatch = [System.Diagnostics.Stopwatch]::new()
         
+        Write-Log -Level Debug -Message "Start-TuiEngine: Initializing engine state"
         $global:TuiState.Running = $true
         $global:TuiState.FrameCount = 0
         $global:TuiState.DeferredActions = New-Object 'System.Collections.Concurrent.ConcurrentQueue[hashtable]'
         
+        Write-Log -Level Debug -Message "Start-TuiEngine: Entering main render loop"
         while ($global:TuiState.Running) {
             $frameStopwatch.Restart()
             
@@ -262,16 +271,23 @@ function Start-AxiomPhoenix {
         # Now that Logger is loaded, write a startup log
         Write-Log -Level Info -Message "Start-AxiomPhoenix: Services loaded, initializing engine"
         
+        Write-Log -Level Debug -Message "Start-AxiomPhoenix: About to call Initialize-TuiEngine"
         Initialize-TuiEngine
+        Write-Log -Level Debug -Message "Start-AxiomPhoenix: Initialize-TuiEngine completed"
         
+        Write-Log -Level Debug -Message "Start-AxiomPhoenix: Getting NavigationService"
         $navService = $global:TuiState.Services.NavigationService
         if ($InitialScreen) {
+            Write-Log -Level Debug -Message "Start-AxiomPhoenix: About to call NavigateTo with screen: $($InitialScreen.Name)"
             $navService.NavigateTo($InitialScreen)
+            Write-Log -Level Debug -Message "Start-AxiomPhoenix: NavigateTo completed successfully"
         } else {
             Write-Log -Level Warning -Message "No initial screen provided."
         }
         
+        Write-Log -Level Debug -Message "Start-AxiomPhoenix: About to call Start-TuiEngine"
         Start-TuiEngine
+        Write-Log -Level Debug -Message "Start-AxiomPhoenix: Start-TuiEngine completed"
     }
     catch {
         Invoke-PanicHandler $_

@@ -348,7 +348,19 @@ class Screen : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
-        # Route input to focused child first
+        # Handle Tab navigation at screen level FIRST (per guide - automatic Tab handling)
+        if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
+            if (($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) -eq [ConsoleModifiers]::Shift) {
+                Write-Log -Level Debug -Message "Screen.HandleInput: Shift+Tab pressed, focusing previous child"
+                $this.FocusPreviousChild()
+            } else {
+                Write-Log -Level Debug -Message "Screen.HandleInput: Tab pressed, focusing next child"
+                $this.FocusNextChild()
+            }
+            return $true
+        }
+        
+        # Route input to focused child
         if ($null -ne $this._focusedChild) {
             if ($this._focusedChild.HandleInput($keyInfo)) {
                 return $true

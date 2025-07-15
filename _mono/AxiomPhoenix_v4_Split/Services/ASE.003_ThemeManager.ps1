@@ -41,6 +41,7 @@ class ThemeManager {
         "panel.border" = @{ Path = "Components.Panel.Border"; Fallback = "#007ACC" }
         "panel.title" = @{ Path = "Components.Panel.Title"; Fallback = "#00D4FF" }
         "panel.header" = @{ Path = "Components.Panel.Header"; Fallback = "#1A1A1A" }
+        "panel.foreground" = @{ Path = "Components.Panel.Foreground"; Fallback = "#FFFFFF" }
         
         # Button Components
         "button.normal.background" = @{ Path = "Components.Button.Normal.Background"; Fallback = "#374151" }
@@ -89,6 +90,9 @@ class ThemeManager {
         "status.info" = @{ Path = "Components.Status.Info"; Fallback = "#3B82F6" }
         
         # Legacy/Common Mappings for backwards compatibility
+        "foreground" = @{ Path = "Palette.TextPrimary"; Fallback = "#FFFFFF" }
+        "background" = @{ Path = "Palette.Background"; Fallback = "#0A0A0A" }
+        "border" = @{ Path = "Palette.Border"; Fallback = "#374151" }
         "component.border" = @{ Path = "Components.Panel.Border"; Fallback = "#374151" }
         "component.text" = @{ Path = "Components.Label.Foreground"; Fallback = "#FFFFFF" }
         "text.muted" = @{ Path = "Components.Label.Disabled"; Fallback = "#6B7280" }
@@ -133,7 +137,7 @@ class ThemeManager {
                 
                 Components = @{
                     Screen = @{ Background = '$Palette.Background'; Foreground = '$Palette.TextPrimary' }
-                    Panel = @{ Background = '$Palette.Background'; Border = '$Palette.Border'; Title = '$Palette.Primary'; Header = '$Palette.Surface' }
+                    Panel = @{ Background = '$Palette.Background'; Border = '$Palette.Border'; Title = '$Palette.Primary'; Header = '$Palette.Surface'; Foreground = '$Palette.TextPrimary' }
                     Label = @{ Foreground = '$Palette.TextPrimary'; Disabled = '$Palette.TextDisabled' }
                     Button = @{
                         Normal = @{ Foreground = '$Palette.Black'; Background = '$Palette.Primary' }
@@ -380,7 +384,21 @@ class ThemeManager {
     }
     
     [string] GetThemeValue([string]$path, [string]$defaultValue) {
-        # Split the path (e.g., "List.ItemSelected" -> ["List", "ItemSelected"])
+        # Handle direct palette access (e.g., "Palette.TextPrimary")
+        if ($path.StartsWith("Palette.")) {
+            $paletteKey = $path.Substring(8) # Remove "Palette." prefix
+            if ($this.CurrentTheme.Palette.ContainsKey($paletteKey)) {
+                return $this.CurrentTheme.Palette[$paletteKey]
+            }
+            return $defaultValue
+        }
+        
+        # Handle Components.X.Y paths by removing the Components prefix
+        if ($path.StartsWith("Components.")) {
+            $path = $path.Substring(11) # Remove "Components." prefix
+        }
+        
+        # Split the path (e.g., "Panel.Background" -> ["Panel", "Background"])
         $parts = $path -split '\.'
         
         # Navigate through the theme structure
@@ -412,6 +430,14 @@ class ThemeManager {
     }
     
     [string] GetColor([string]$colorPath, [string]$defaultColor) {
+        # First check if it's a registered theme key (like "foreground" -> "Palette.TextPrimary")
+        $keyInfo = $this.GetThemeKeyInfo($colorPath)
+        if ($keyInfo) {
+            $actualPath = $keyInfo.Path
+            $color = $this.GetThemeValue($actualPath, $defaultColor)
+            return $color
+        }
+        
         # Check if it's a component path (e.g., "Panel.Border")
         if ($colorPath -match '\.') {
             return $this.GetThemeValue($colorPath, $defaultColor)
@@ -451,6 +477,21 @@ class ThemeManager {
     # NEW: Refresh all colors (for compatibility)
     [void] RefreshAllColors() {
         $this.RefreshAllComponents()
+    }
+    
+    # PUBLIC: Check if theme key is valid and get its mapping info
+    [hashtable] GetThemeKeyInfo([string]$key) {
+        $keyLower = $key.ToLower()
+        if ($this._validThemeKeys.ContainsKey($keyLower)) {
+            return $this._validThemeKeys[$keyLower]
+        }
+        return $null
+    }
+    
+    # PUBLIC: Check if theme key exists in registry
+    [bool] IsValidThemeKey([string]$key) {
+        $keyLower = $key.ToLower()
+        return $this._validThemeKeys.ContainsKey($keyLower)
     }
 }
 
