@@ -1,213 +1,1152 @@
-[2025-07-14 21:33:07.167] [INFO] Axiom Phoenix File Logger initialized. Log file: /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/../axiom-phoenix-debug.log
-[2025-07-14 21:33:07.170] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.007_EventFunctions.ps1
-[2025-07-14 21:33:07.188] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.008_ErrorHandling.ps1
-[2025-07-14 21:33:07.193] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.009_InputProcessing.ps1
-[2025-07-14 21:33:07.197] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.010_UtilityFunctions.ps1
-[2025-07-14 21:33:07.209] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:07.224] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.001_LabelComponent.ps1
-[2025-07-14 21:33:07.239] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.002_ButtonComponent.ps1
-[2025-07-14 21:33:07.252] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.003_TextBoxComponent.ps1
-[2025-07-14 21:33:07.271] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.004_CheckBoxComponent.ps1
-[2025-07-14 21:33:07.283] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.005_RadioButtonComponent.ps1
-[2025-07-14 21:33:07.297] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.006_MultilineTextBoxComponent.ps1
-[2025-07-14 21:33:07.318] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.007_NumericInputComponent.ps1
-[2025-07-14 21:33:07.334] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.008_DateInputComponent.ps1
-[2025-07-14 21:33:07.365] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.009_ComboBoxComponent.ps1
-[2025-07-14 21:33:07.386] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.010_Table.ps1
-[2025-07-14 21:33:07.413] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.011_Panel.ps1
-[2025-07-14 21:33:07.428] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.012_ScrollablePanel.ps1
-[2025-07-14 21:33:07.453] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.013_GroupPanel.ps1
-[2025-07-14 21:33:07.466] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014_ListBox.ps1
-[2025-07-14 21:33:07.494] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014a_Dialog.ps1
-[2025-07-14 21:33:07.509] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.015_TextBox.ps1
-[2025-07-14 21:33:07.584] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.016_CommandPalette.ps1
-[2025-07-14 21:33:07.615] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.018_AlertDialog.ps1
-[2025-07-14 21:33:07.630] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.020_InputDialog.ps1
-[2025-07-14 21:33:07.654] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.021_NavigationMenu.ps1
-[2025-07-14 21:33:07.675] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.022_DataGridComponent.ps1
-[2025-07-14 21:33:07.706] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.023_SidebarMenu.ps1
-[2025-07-14 21:33:07.723] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.025_SimpleTaskDialog.ps1
-[2025-07-14 21:33:07.746] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.026_ConfirmDialog.ps1
-[2025-07-14 21:33:07.766] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.100_TextEngine.ps1
-[2025-07-14 21:33:07.869] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:07.885] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen_Fixed.ps1
-[2025-07-14 21:33:07.916] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen.ps1
-[2025-07-14 21:33:07.952] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.002_TaskListScreen.ps1
-[2025-07-14 21:33:08.037] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.003_ThemeScreen.ps1
-[2025-07-14 21:33:08.079] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.004_NewTaskScreen.ps1
-[2025-07-14 21:33:08.110] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_EditTaskScreen.ps1
-[2025-07-14 21:33:08.152] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_FileCommanderScreen.ps1
-[2025-07-14 21:33:08.241] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006_TextEditorScreen.ps1
-[2025-07-14 21:33:08.298] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006a_ProjectEditDialog.ps1
-[2025-07-14 21:33:08.332] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.007_ProjectInfoScreen.ps1
-[2025-07-14 21:33:08.364] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.008_ProjectsListScreen.ps1
-[2025-07-14 21:33:08.429] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/TestScreen.ps1
-[2025-07-14 21:33:08.448] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:08.460] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.001_Logger.ps1
-[2025-07-14 21:33:08.478] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.002_EventManager.ps1
-[2025-07-14 21:33:08.498] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.003_ThemeManager.ps1
-[2025-07-14 21:33:08.527] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.004_ActionService.ps1
-[2025-07-14 21:33:08.549] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.005_DataManager.ps1
-[2025-07-14 21:33:08.637] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.007_KeybindingService.ps1
-[2025-07-14 21:33:08.659] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.008_NavigationService.ps1
-[2025-07-14 21:33:08.676] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.009_DialogManager.ps1
-[2025-07-14 21:33:08.694] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.011_ViewDefinitionService.ps1
-[2025-07-14 21:33:08.713] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.012_AsyncJobService.ps1
-[2025-07-14 21:33:08.728] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.014_FileSystemService.ps1
-[2025-07-14 21:33:08.746] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:08.755] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.001_GlobalState.ps1
-[2025-07-14 21:33:08.780] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.002_EngineManagement.ps1
-[2025-07-14 21:33:08.815] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.003_RenderingSystem.ps1
-[2025-07-14 21:33:08.831] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.004_InputProcessing.ps1
-[2025-07-14 21:33:08.843] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.005_ScreenManagement.ps1
-[2025-07-14 21:33:08.851] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.006_ErrorHandling.ps1
-[2025-07-14 21:33:08.860] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:08.863] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:08.883] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
-[2025-07-14 21:33:08.887] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.068] [DEBUG] Registered eager service instance: 'Logger'.
-[2025-07-14 21:33:09.088] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
-[2025-07-14 21:33:09.239] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.270] [DEBUG] Registered eager service instance: 'EventManager'.
-[2025-07-14 21:33:09.276] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
-[2025-07-14 21:33:09.280] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.371] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.383] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.395] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.404] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.416] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.429] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.441] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.456] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.466] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.479] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.490] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.527] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.536] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.592] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.647] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.659] [DEBUG] Registered eager service instance: 'ThemeManager'.
-[2025-07-14 21:33:09.665] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
-[2025-07-14 21:33:09.669] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.681] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 21:33:09.754] [DEBUG] Registered eager service instance: 'DataManager'.
-[2025-07-14 21:33:09.760] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
-[2025-07-14 21:33:09.764] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.767] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 21:33:09.791] [DEBUG] Registered eager service instance: 'ActionService'.
-[2025-07-14 21:33:09.797] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
-[2025-07-14 21:33:09.801] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.804] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 21:33:09.862] [DEBUG] KeybindingService: Bound Ctrl+Q to app.exit in context Global
-[2025-07-14 21:33:09.866] [DEBUG] KeybindingService: Bound Ctrl+C to app.exit.ctrlc in context Global
-[2025-07-14 21:33:09.870] [DEBUG] KeybindingService: Bound F1 to app.help in context Global
-[2025-07-14 21:33:09.873] [DEBUG] KeybindingService: Bound Ctrl+P to app.commandPalette in context Global
-[2025-07-14 21:33:09.914] [DEBUG] KeybindingService: Bound Tab to navigation.nextComponent in context Global
-[2025-07-14 21:33:09.917] [DEBUG] KeybindingService: Bound Shift+Tab to navigation.previousComponent in context Global
-[2025-07-14 21:33:09.920] [DEBUG] KeybindingService: Initialized default bindings
-[2025-07-14 21:33:09.931] [DEBUG] Registered eager service instance: 'KeybindingService'.
-[2025-07-14 21:33:09.937] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
-[2025-07-14 21:33:09.941] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:09.984] [DEBUG] Registered eager service instance: 'NavigationService'.
-[2025-07-14 21:33:09.990] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
-[2025-07-14 21:33:09.995] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.018] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
-[2025-07-14 21:33:10.026] [DEBUG] DialogManager: Initialized with window-based model.
-[2025-07-14 21:33:10.038] [DEBUG] Registered eager service instance: 'DialogManager'.
-[2025-07-14 21:33:10.048] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
-[2025-07-14 21:33:10.053] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.108] [DEBUG] Registered eager service instance: 'ViewDefinitionService'.
-[2025-07-14 21:33:10.115] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
-[2025-07-14 21:33:10.120] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.124] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
-[2025-07-14 21:33:10.145] [DEBUG] FileSystemService: Initialized
-[2025-07-14 21:33:10.162] [DEBUG] Registered eager service instance: 'FileSystemService'.
-[2025-07-14 21:33:10.169] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'FileSystemService' of type 'FileSystemService'.
-[2025-07-14 21:33:10.174] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.178] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
-[2025-07-14 21:33:10.182] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 21:33:10.186] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 21:33:10.190] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
-[2025-07-14 21:33:10.201] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 21:33:10.205] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
-[2025-07-14 21:33:10.208] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
-[2025-07-14 21:33:10.212] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
-[2025-07-14 21:33:10.215] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ViewDefinitionService'.
-[2025-07-14 21:33:10.219] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
-[2025-07-14 21:33:10.222] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 21:33:10.235] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.240] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.246] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.250] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 21:33:10.393] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.397] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:10.400] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
-[2025-07-14 21:33:11.543] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:11.547] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:11.550] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:11.553] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:11.557] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:12.854] [DEBUG] DashboardScreen: Constructor called
-[2025-07-14 21:33:12.876] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:12.902] [DEBUG] DashboardScreen.Initialize: Starting
-[2025-07-14 21:33:12.912] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 21:33:13.174] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
-[2025-07-14 21:33:13.182] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
-[2025-07-14 21:33:13.188] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
-[2025-07-14 21:33:13.311] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
-[2025-07-14 21:33:13.363] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
-[2025-07-14 21:33:13.367] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
-[2025-07-14 21:33:13.371] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
-[2025-07-14 21:33:13.375] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
-[2025-07-14 21:33:13.382] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
-[2025-07-14 21:33:13.394] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
-[2025-07-14 21:33:13.400] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 21:33:13.406] [INFO] DashboardScreen: Updated colors for 'Synthwave'
-[2025-07-14 21:33:13.412] [DEBUG] DashboardScreen.Initialize: Completed
-[2025-07-14 21:33:13.416] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:13.457] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:13.593] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 21:33:13.605] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
-[2025-07-14 21:33:13.615] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
-[2025-07-14 21:33:13.624] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
-[2025-07-14 21:33:13.633] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 21:33:13.644] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 21:33:13.650] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
-[2025-07-14 21:33:13.750] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:13.757] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
-[2025-07-14 21:33:13.778] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:13.790] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 21:33:13.794] [INFO] Start-AxiomPhoenix: Services loaded, initializing engine
-[2025-07-14 21:33:13.811] [INFO] Initializing TUI engine...
-[2025-07-14 21:33:14.199] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
-[2025-07-14 21:33:14.589] [INFO] TUI engine initialized. Buffer size: 80x24
-[2025-07-14 21:33:14.661] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (80x24). No change.
-[2025-07-14 21:33:14.678] [DEBUG] DashboardScreen.OnEnter: Screen activated
-[2025-07-14 21:33:14.682] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
-[2025-07-14 21:33:14.685] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
-[2025-07-14 21:33:14.689] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
-[2025-07-14 21:33:14.693] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
-[2025-07-14 21:33:14.697] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
-[2025-07-14 21:33:14.704] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
-[2025-07-14 21:33:14.708] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
-[2025-07-14 21:33:14.712] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
-[2025-07-14 21:33:14.715] [INFO] DashboardScreen: Updated colors for 'Synthwave'
-[2025-07-14 21:33:14.744] [DEBUG] Screen.OnEnter: Setting initial focus for DashboardScreen
-[2025-07-14 21:33:14.834] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: DashboardScreen (35067277_DashboardScreen)
-[2025-07-14 21:33:14.852] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: DashboardScreen - IsFocusable: False, Visible: True, Enabled: True, IsScreen: True
-[2025-07-14 21:33:14.863] [DEBUG] Screen._CollectFocusableRecursive: Checking 1 children of DashboardScreen
-[2025-07-14 21:33:14.891] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: MainPanel (21226421_MainPanel)
-[2025-07-14 21:33:14.918] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: MainPanel (TabIndex: 0)
-[2025-07-14 21:33:14.929] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of MainPanel
-[2025-07-14 21:33:14.963] [DEBUG] Screen._GetFocusableChildren: Added unique element: MainPanel (ID: 21226421_MainPanel)
-[2025-07-14 21:33:14.982] [DEBUG] Screen._GetFocusableChildren: Final focus list for DashboardScreen has 1 unique components
-[2025-07-14 21:33:14.991] [DEBUG]   - Focusable: MainPanel (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
-[2025-07-14 21:33:14.996] [DEBUG] Screen.OnEnter: Found 1 focusable components
-[2025-07-14 21:33:15.011] [DEBUG] Screen.FocusFirstChild: Found 1 focusable children
-[2025-07-14 21:33:15.019] [DEBUG] Screen.FocusFirstChild: Attempting to focus first child: MainPanel
-[2025-07-14 21:33:15.044] [DEBUG] Screen.SetChildFocus: Attempting to focus MainPanel on screen DashboardScreen
-[2025-07-14 21:33:15.057] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
-[2025-07-14 21:33:15.061] [DEBUG] Screen.SetChildFocus: Setting focus on MainPanel
-[2025-07-14 21:33:15.094] [DEBUG] Screen.OnEnter: Initial focus set to: MainPanel
-[2025-07-14 21:33:15.105] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 21:33:15.161] [INFO] Starting TUI Engine with target FPS: 30
+[2025-07-14 22:24:39.240] [INFO] Axiom Phoenix File Logger initialized. Log file: C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\..\axiom-phoenix-debug.log
+[2025-07-14 22:24:39.241] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.007_EventFunctions.ps1
+[2025-07-14 22:24:39.251] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.008_ErrorHandling.ps1
+[2025-07-14 22:24:39.261] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.009_InputProcessing.ps1
+[2025-07-14 22:24:39.271] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Functions\AFU.010_UtilityFunctions.ps1
+[2025-07-14 22:24:39.283] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:39.295] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.001_LabelComponent.ps1
+[2025-07-14 22:24:39.308] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.002_ButtonComponent.ps1
+[2025-07-14 22:24:39.341] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.003_TextBoxComponent.ps1
+[2025-07-14 22:24:39.371] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.004_CheckBoxComponent.ps1
+[2025-07-14 22:24:39.387] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.005_RadioButtonComponent.ps1
+[2025-07-14 22:24:39.402] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.006_MultilineTextBoxComponent.ps1
+[2025-07-14 22:24:39.421] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.007_NumericInputComponent.ps1
+[2025-07-14 22:24:39.454] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.008_DateInputComponent.ps1
+[2025-07-14 22:24:39.470] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.009_ComboBoxComponent.ps1
+[2025-07-14 22:24:39.488] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.010_Table.ps1
+[2025-07-14 22:24:39.502] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.011_Panel.ps1
+[2025-07-14 22:24:39.527] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.012_ScrollablePanel.ps1
+[2025-07-14 22:24:39.544] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.013_GroupPanel.ps1
+[2025-07-14 22:24:39.560] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.014_ListBox.ps1
+[2025-07-14 22:24:39.575] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.014a_Dialog.ps1
+[2025-07-14 22:24:39.593] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.015_TextBox.ps1
+[2025-07-14 22:24:39.608] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.016_CommandPalette.ps1
+[2025-07-14 22:24:39.626] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.018_AlertDialog.ps1
+[2025-07-14 22:24:39.641] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.020_InputDialog.ps1
+[2025-07-14 22:24:39.660] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.021_NavigationMenu.ps1
+[2025-07-14 22:24:39.674] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.022_DataGridComponent.ps1
+[2025-07-14 22:24:39.691] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.023_SidebarMenu.ps1
+[2025-07-14 22:24:39.707] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.025_SimpleTaskDialog.ps1
+[2025-07-14 22:24:39.724] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.026_ConfirmDialog.ps1
+[2025-07-14 22:24:39.740] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Components\ACO.100_TextEngine.ps1
+[2025-07-14 22:24:39.765] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:39.779] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.001_DashboardScreen_Fixed.ps1
+[2025-07-14 22:24:39.797] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.001_DashboardScreen.ps1
+[2025-07-14 22:24:39.829] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.002_TaskListScreen.ps1
+[2025-07-14 22:24:39.856] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.003_ThemeScreen.ps1
+[2025-07-14 22:24:39.866] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.004_NewTaskScreen.ps1
+[2025-07-14 22:24:39.884] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.005_EditTaskScreen.ps1
+[2025-07-14 22:24:39.921] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.005_FileCommanderScreen.ps1
+[2025-07-14 22:24:39.948] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.006_TextEditorScreen.ps1
+[2025-07-14 22:24:39.969] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.006a_ProjectEditDialog.ps1
+[2025-07-14 22:24:39.989] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.007_ProjectInfoScreen.ps1
+[2025-07-14 22:24:40.008] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\ASC.008_ProjectsListScreen.ps1
+[2025-07-14 22:24:40.032] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Screens\TestScreen.ps1
+[2025-07-14 22:24:40.044] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.060] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.001_Logger.ps1
+[2025-07-14 22:24:40.077] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.002_EventManager.ps1
+[2025-07-14 22:24:40.094] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.003_ThemeManager.ps1
+[2025-07-14 22:24:40.147] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.004_ActionService.ps1
+[2025-07-14 22:24:40.154] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.005_DataManager.ps1
+[2025-07-14 22:24:40.173] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.007_KeybindingService.ps1
+[2025-07-14 22:24:40.203] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.008_NavigationService.ps1
+[2025-07-14 22:24:40.218] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.009_DialogManager.ps1
+[2025-07-14 22:24:40.234] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.011_ViewDefinitionService.ps1
+[2025-07-14 22:24:40.247] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.012_AsyncJobService.ps1
+[2025-07-14 22:24:40.264] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Services\ASE.014_FileSystemService.ps1
+[2025-07-14 22:24:40.282] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.296] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.001_GlobalState.ps1
+[2025-07-14 22:24:40.315] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.002_EngineManagement.ps1
+[2025-07-14 22:24:40.325] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.003_RenderingSystem.ps1
+[2025-07-14 22:24:40.342] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.004_InputProcessing.ps1
+[2025-07-14 22:24:40.377] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.005_ScreenManagement.ps1
+[2025-07-14 22:24:40.393] [VERBOSE] [Write-Verbose]   - Dot-sourcing C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\Runtime\ART.006_ErrorHandling.ps1
+[2025-07-14 22:24:40.409] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.420] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.433] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
+[2025-07-14 22:24:40.445] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.481] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.491] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
+[2025-07-14 22:24:40.531] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.547] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.559] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
+[2025-07-14 22:24:40.569] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.598] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.613] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.629] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.644] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.664] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.680] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.696] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.712] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.726] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.741] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.756] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.768] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.784] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.803] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.823] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.835] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.847] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
+[2025-07-14 22:24:40.858] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.876] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:40.900] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.912] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
+[2025-07-14 22:24:40.923] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.933] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:40.948] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.962] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
+[2025-07-14 22:24:40.973] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:40.984] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 22:24:41.004] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.016] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.028] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.057] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.072] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.083] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.095] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.107] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.119] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
+[2025-07-14 22:24:41.131] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.148] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.160] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
+[2025-07-14 22:24:41.170] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.183] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 22:24:41.193] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.207] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.219] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
+[2025-07-14 22:24:41.230] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.252] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.264] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
+[2025-07-14 22:24:41.275] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.287] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 22:24:41.302] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.316] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.327] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'FileSystemService' of type 'FileSystemService'.
+[2025-07-14 22:24:41.338] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.349] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 22:24:41.361] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:41.374] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 22:24:41.387] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 22:24:41.399] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 22:24:41.410] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 22:24:41.422] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 22:24:41.433] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 22:24:41.445] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ViewDefinitionService'.
+[2025-07-14 22:24:41.457] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 22:24:41.471] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 22:24:41.485] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.497] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.508] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.521] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 22:24:41.565] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.566] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.580] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 22:24:41.965] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.966] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.978] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:41.989] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:42.000] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:43.074] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:43.081] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:43.135] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
+[2025-07-14 22:24:43.149] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 22:24:43.162] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
+[2025-07-14 22:24:43.195] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
+[2025-07-14 22:24:43.206] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 22:24:43.218] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
+[2025-07-14 22:24:43.229] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 22:24:43.241] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 22:24:43.258] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:43.271] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:43.284] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 22:24:43.305] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:43.321] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:43.407] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 22:24:43.420] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 22:24:43.432] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 22:24:43.445] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 22:24:43.458] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 22:24:43.470] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:43.481] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 22:24:43.507] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:43.520] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 22:24:43.534] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:43.547] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 22:24:43.731] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:43.834] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
+[2025-07-14 22:24:43.837] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
+[2025-07-14 22:24:43.849] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 22:24:43.860] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
+[2025-07-14 22:24:43.870] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 22:24:43.881] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 22:24:43.893] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:43.903] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:43.913] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 22:24:43.998] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:44.064] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:44.209] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:44.210] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:44.238] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:44.430] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:44.431] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:44.450] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.462] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:44.473] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.485] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:44.496] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.506] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:44.519] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.532] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:44.546] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.558] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:44.570] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.581] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:44.592] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.602] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:44.614] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:44.627] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:44.638] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.465] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:45.492] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:45.504] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:45.518] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.530] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.542] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.553] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.566] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.578] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.591] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.602] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.614] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.625] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.636] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.650] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.665] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.676] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:45.687] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:45.701] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:45.712] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.070] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:46.098] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:46.110] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:46.123] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.133] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.145] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.156] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.168] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.180] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.191] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.202] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.213] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.223] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.235] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.245] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.256] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.268] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:46.279] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.291] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.301] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.614] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:46.636] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:46.648] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:46.661] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.672] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.684] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.695] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.705] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.717] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.730] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.741] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.752] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.764] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.777] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.789] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.801] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.812] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:46.823] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:46.834] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:46.845] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.067] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:47.083] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:47.095] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:47.108] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.118] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.128] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.139] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.151] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.163] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.174] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.184] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.195] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.205] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.216] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.226] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.237] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.249] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:47.260] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.270] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.280] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.500] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:47.516] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:47.527] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:47.539] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.550] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.561] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.571] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.581] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.595] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.608] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.620] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.631] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.641] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.652] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.663] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.675] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.686] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:47.698] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.709] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.720] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.928] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:47.944] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:47.955] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:47.969] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:47.981] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:47.992] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.004] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.015] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.029] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.041] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.052] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.064] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.074] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.086] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.098] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.110] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.122] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:48.134] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.146] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.157] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.326] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:48.338] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:48.349] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:48.360] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.371] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.381] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.391] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.401] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.412] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.422] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.434] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.446] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.456] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.466] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.476] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.487] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.498] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:48.510] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.523] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.535] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.690] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:48.701] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:48.713] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:48.725] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.736] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.748] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.759] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.769] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.779] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.791] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.802] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.813] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.823] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.834] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.844] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.855] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.871] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:48.886] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:48.898] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:48.908] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.097] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:49.109] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:49.121] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:49.132] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.143] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.155] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.166] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.177] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.188] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.200] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.211] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.222] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.232] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.243] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.253] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.264] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.274] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:49.287] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.298] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.309] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.457] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:49.469] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:49.480] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:49.491] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.502] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.512] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.522] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.532] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.543] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.555] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.567] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.579] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.589] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.600] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.611] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.621] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.632] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:49.642] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.655] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:49.666] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:49.852] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 22:24:49.889] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:49.901] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:49.921] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:49.945] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'button.normal.background'
+[2025-07-14 22:24:49.962] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'list.selected.background'
+[2025-07-14 22:24:49.975] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'list.selected.foreground'
+[2025-07-14 22:24:49.986] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'list.foreground'
+[2025-07-14 22:24:50.007] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:50.020] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:50.040] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:50.066] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:50.081] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:50.102] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:50.116] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:50.136] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:50.152] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:50.182] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:50.200] [VERBOSE] [Write-Verbose] Resize: Component 'TaskListScreen' already has target dimensions (120x30). No change.
+[2025-07-14 22:24:50.210] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 22:24:50.255] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:50.269] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:50.282] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:50.302] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:50.356] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'input.focused.border'
+[2025-07-14 22:24:50.369] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:50.385] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:50.414] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.426] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.438] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:50.449] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:50.461] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.471] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.483] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.500] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.516] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.528] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.539] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.550] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.560] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.573] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.586] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.597] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:50.609] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.620] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:50.631] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:50.760] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:50.761] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:24:50.834] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:50.852] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:50.865] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:50.905] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:50.939] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.014] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:51.026] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:51.056] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.085] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.098] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:51.111] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:51.128] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:51.153] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.168] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.202] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:51.209] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:51.246] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.260] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.273] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.286] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.328] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.342] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.358] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.374] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.387] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.402] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.416] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.431] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:51.444] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:52.835] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:52.847] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:52.858] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:52.869] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:52.879] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:52.893] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:52.904] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:52.915] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:52.926] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:52.938] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:52.950] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:52.962] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:52.973] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:52.985] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:52.996] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.008] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.019] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:53.032] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.045] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.056] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.278] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:53.290] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.302] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.313] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:53.323] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:53.335] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.345] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.356] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.367] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.380] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.392] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.402] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.413] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.425] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.436] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.447] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.458] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:53.470] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.482] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.493] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.715] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 22:24:53.718] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 22:24:53.779] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:53.807] [VERBOSE] [Write-Verbose] Resize: Component 'SimpleTaskDialog' already has target dimensions (120x30). No change.
+[2025-07-14 22:24:53.836] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 22:24:53.852] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:24:53.865] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:53.892] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.902] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.915] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:53.926] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:53.939] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.950] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.962] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.974] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:53.985] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:53.998] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:54.011] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:54.023] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:54.036] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:54.049] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:54.061] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:54.073] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:54.085] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:54.097] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:54.108] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:54.286] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.290] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:54.304] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:54.315] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:24:54.343] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.355] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.368] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'input.focused.border'
+[2025-07-14 22:24:54.382] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:54.410] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.423] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.435] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:54.448] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:54.471] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.478] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.493] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.505] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.538] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.553] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:54.565] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:54.578] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:24:54.606] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.618] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.629] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:54.641] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:54.662] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.675] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.686] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:54.697] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:54.716] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.728] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:54.742] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:54.755] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:55.320] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:55.331] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.343] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.355] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:55.366] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:55.381] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.393] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.406] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.418] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.429] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.440] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.451] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.462] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.473] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.484] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.495] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.508] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:55.520] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.532] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.542] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.825] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:55.837] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.850] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.861] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:55.872] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:55.884] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.895] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.907] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.920] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.937] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.952] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.964] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.975] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:55.986] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:55.997] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.009] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.022] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:56.033] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.045] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.056] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.325] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:56.337] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.349] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.360] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:56.372] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:56.384] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.395] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.407] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.419] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.432] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.444] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.456] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.468] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.479] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.490] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.503] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.514] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:56.528] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.541] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.553] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.840] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:56.851] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.864] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.875] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:56.886] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:56.898] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.909] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.920] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.932] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.945] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.956] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.968] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:56.979] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:56.990] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.001] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.012] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.024] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:57.036] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.048] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.059] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.333] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:57.344] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.356] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.369] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:57.381] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:57.393] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.404] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.416] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.428] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.441] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.453] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.464] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.475] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.486] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.497] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.509] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.521] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:57.534] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.546] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.557] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.873] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.border'
+[2025-07-14 22:24:57.875] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 22:24:57.887] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:57.911] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.923] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.935] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:57.946] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:57.958] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.971] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:57.983] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:57.994] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.005] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.016] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.027] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.039] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.052] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.067] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.086] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.100] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:58.111] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.123] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.134] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.287] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:58.292] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:58.304] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:58.315] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:24:58.342] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:58.354] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:58.366] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:58.409] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:58.426] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:24:58.438] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:24:58.449] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:24:58.475] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:24:58.476] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:24:58.489] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'input.focused.border'
+[2025-07-14 22:24:58.502] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:24:58.698] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:58.710] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.723] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.735] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:58.749] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:58.762] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.775] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.787] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.800] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.813] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.824] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.836] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.847] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.859] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.870] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.883] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.895] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:58.907] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:58.919] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:58.930] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.211] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:59.223] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.235] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.247] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:59.259] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:59.272] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.283] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.296] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.309] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.323] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.335] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.346] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.357] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.369] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.380] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.392] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.405] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:59.418] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.430] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.441] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.714] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:24:59.726] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.738] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.750] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:24:59.761] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:24:59.773] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.784] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.795] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.807] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.819] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.831] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.843] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.855] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.866] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.878] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.889] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.908] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:24:59.925] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:24:59.937] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:24:59.948] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.230] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.border'
+[2025-07-14 22:25:00.231] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 22:25:00.245] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:00.268] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.281] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.292] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:00.303] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:00.316] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.328] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.342] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.354] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.366] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.378] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.389] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.401] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.412] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.425] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.438] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.450] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:00.462] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.474] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:00.485] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:00.637] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:00.640] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:25:00.653] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:25:00.664] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:25:00.693] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:00.706] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:25:00.717] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'input.focused.border'
+[2025-07-14 22:25:00.730] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:25:00.768] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:00.783] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:25:00.795] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:25:00.806] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:25:00.836] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:00.851] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:25:00.865] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:25:01.059] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:01.071] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.083] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.095] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:01.106] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:01.118] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.129] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.140] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.152] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.165] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.178] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.190] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.201] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.212] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.224] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.235] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.251] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:01.264] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.276] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.288] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.573] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.border'
+[2025-07-14 22:25:01.574] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 22:25:01.587] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:01.611] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.624] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.635] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:01.647] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:01.659] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.678] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.695] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.706] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.718] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.729] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.740] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.752] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.766] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.778] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.791] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.802] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:01.813] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.824] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:01.836] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:01.983] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:01.988] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:25:02.000] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:25:02.011] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:25:02.042] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:02.055] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:25:02.070] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:25:02.110] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:02.125] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:25:02.137] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:25:02.149] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:25:02.179] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:02.180] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:25:02.193] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'input.focused.border'
+[2025-07-14 22:25:02.208] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:25:02.402] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:02.414] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.427] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.439] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:02.451] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:02.463] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.476] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.488] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.501] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.514] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.526] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.538] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.549] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.561] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.572] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.585] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.598] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:02.610] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.622] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.633] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.917] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:02.928] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.941] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:02.953] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:02.966] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:02.980] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:02.993] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.007] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.022] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.035] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.048] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.061] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.074] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.085] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.099] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.112] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.124] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:03.136] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.148] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.159] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.439] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:03.452] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.465] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.477] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:03.489] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:03.502] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.515] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.527] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.540] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.553] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.565] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.579] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.590] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.602] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.613] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.626] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.639] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:03.651] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.663] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:03.675] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:03.961] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.border'
+[2025-07-14 22:25:03.973] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'button.focused.background'
+[2025-07-14 22:25:03.987] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:04.012] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.025] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.037] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:04.049] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:04.063] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.076] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.088] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.099] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.111] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.123] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.136] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.149] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.163] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.175] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.187] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.199] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:04.210] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.223] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.236] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.416] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:04.420] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:25:04.433] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:25:04.445] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:25:04.479] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Button.Focused.Foreground'
+[2025-07-14 22:25:04.492] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Button.Focused.Background'
+[2025-07-14 22:25:04.524] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:04.541] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:25:04.553] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Title'
+[2025-07-14 22:25:04.566] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Double.
+[2025-07-14 22:25:04.596] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Background'
+[2025-07-14 22:25:04.600] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Label.Foreground'
+[2025-07-14 22:25:04.614] [VERBOSE] [Write-Verbose] Get-TuiBorderChars: Retrieved TUI border characters for style: Single.
+[2025-07-14 22:25:04.798] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:04.810] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.823] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.835] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:04.847] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:04.860] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.872] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.885] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.902] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.918] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.931] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.945] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.958] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.971] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:04.983] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:04.998] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.011] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:05.023] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.035] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.047] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.358] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 22:25:05.361] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 22:25:05.389] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'button.normal.background'
+[2025-07-14 22:25:05.412] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: SimpleTaskDialog.
+[2025-07-14 22:25:05.426] [VERBOSE] [Write-Verbose] Resize: Component 'TaskListScreen' already has target dimensions (120x30). No change.
+[2025-07-14 22:25:05.441] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:25:05.454] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:05.483] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.497] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.510] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:05.524] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:05.537] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.554] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.568] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.581] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.593] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.606] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.619] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.632] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.645] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.658] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.670] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.682] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:05.694] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:05.707] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:05.721] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:06.907] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:06.918] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:06.932] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:06.947] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:06.960] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:06.973] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:06.986] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:06.999] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.013] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.027] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.039] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.052] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.065] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.078] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.091] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.106] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.118] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:07.130] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.142] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.154] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.381] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:07.393] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.407] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.419] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:07.431] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:07.444] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.456] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.470] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.483] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.497] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.509] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.522] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.534] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.547] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.560] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.574] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.587] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:07.600] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.612] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.623] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:07.853] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 22:25:07.854] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 22:25:07.869] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:25:07.885] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'border'
+[2025-07-14 22:25:07.899] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Panel.Border'
+[2025-07-14 22:25:07.918] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: TaskListScreen.
+[2025-07-14 22:25:07.932] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (120x30). No change.
+[2025-07-14 22:25:07.946] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:25:07.960] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:07.986] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:07.999] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.012] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:08.024] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:08.038] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.052] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.065] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.078] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.090] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.102] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.115] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.128] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.142] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.155] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.167] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.180] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:08.193] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.205] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.218] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.952] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:08.965] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:08.979] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:08.992] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:09.005] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:09.019] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.032] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.046] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.063] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.082] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.097] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.110] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.122] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.135] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.149] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.162] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.175] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:09.187] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.200] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.212] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.369] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:09.380] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.393] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.406] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:09.418] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:09.432] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.446] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.461] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.477] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.492] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.506] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.520] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.535] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.548] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.561] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.576] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.589] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:09.601] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.614] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.626] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.776] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 22:25:09.787] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 22:25:09.811] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.824] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.837] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedforeground'
+[2025-07-14 22:25:09.849] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'listbox.selectedbackground'
+[2025-07-14 22:25:09.862] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.876] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.890] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.903] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.916] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.929] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.944] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.959] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:09.972] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:09.987] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:10.002] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:10.016] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'text.muted'
+[2025-07-14 22:25:10.029] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:10.042] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 22:25:10.057] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 22:25:10.228] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 22:25:10.245] [VERBOSE] [Write-Verbose] Cleaned up resources for screen: DashboardScreen.
+[2025-07-14 22:25:10.267] [VERBOSE] [Write-Verbose] ServiceContainer: Initiating cleanup of disposable singleton services.
+[2025-07-14 22:25:10.288] [VERBOSE] [Write-Verbose] ServiceContainer: Disposing service of type 'DataManager'.
+[2025-07-14 22:25:10.311] [VERBOSE] [Write-Verbose] ServiceContainer: Cleanup complete. All service registries cleared.
+[2025-07-14 22:25:10.388] [VERBOSE] [Write-Verbose] ServiceContainer: Initiating cleanup of disposable singleton services.
+[2025-07-14 22:25:10.410] [VERBOSE] [Write-Verbose] ServiceContainer: Cleanup complete. All service registries cleared.
