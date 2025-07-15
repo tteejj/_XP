@@ -46,10 +46,10 @@ class TextBoxComponent : UIElement {
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
-        # FIXED: Use effective colors from base class
-        $bgColor = $this.GetEffectiveBackgroundColor()
-        $fgColor = $this.GetEffectiveForegroundColor()
-        $borderColorValue = $this.GetEffectiveBorderColor()
+        # Get theme colors dynamically - don't cache them
+        $bgColor = Get-ThemeColor "input.background" ($this.GetEffectiveBackgroundColor())
+        $fgColor = Get-ThemeColor "input.foreground" ($this.GetEffectiveForegroundColor())
+        $borderColorValue = Get-ThemeColor "input.border" ($this.GetEffectiveBorderColor())
         if ($this.IsFocused) { $borderColorValue = Get-ThemeColor "input.focused.border" "#007acc" }
         
         # Clear buffer with the correct background color
@@ -119,13 +119,13 @@ class TextBoxComponent : UIElement {
     }
 
     [void] OnFocus() {
-        $this.BorderColor = Get-ThemeColor "input.focused.border" "#0078d4"
+        # Don't cache theme colors - get them fresh each time
         $this.ShowCursor = $true
         $this.RequestRedraw()
     }
     
     [void] OnBlur() {
-        $this.BorderColor = Get-ThemeColor "input.border" "#404040"
+        # Don't cache theme colors - get them fresh each time
         $this.ShowCursor = $false
         $this.RequestRedraw()
     }
