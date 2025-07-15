@@ -358,8 +358,8 @@ class EditTaskScreen : Screen {
         $this._saveButton.Y = $y
         $this._saveButton.IsFocusable = $true
         $this._saveButton.TabIndex = 6
-        $this._saveButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
-        $this._saveButton.ForegroundColor = "#FFFFFF"
+        $this._saveButton.BackgroundColor = Get-ThemeColor "button.normal.background" "#0D47A1"
+        $this._saveButton.ForegroundColor = Get-ThemeColor "button.normal.foreground" "#FFFFFF"
         
         # Add focus visual feedback and click handler - FIXED SYNTAX
         $this._saveButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
@@ -388,7 +388,7 @@ class EditTaskScreen : Screen {
         $this._cancelButton.IsFocusable = $true
         $this._cancelButton.TabIndex = 7
         $this._cancelButton.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#B71C1C"
-        $this._cancelButton.ForegroundColor = "#FFFFFF"
+        $this._cancelButton.ForegroundColor = Get-ThemeColor "button.normal.foreground" "#FFFFFF"
         
         # Add focus visual feedback and click handler - FIXED SYNTAX
         $this._cancelButton | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
@@ -504,7 +504,7 @@ class EditTaskScreen : Screen {
         # Validate input
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
             $this._statusLabel.Text = "Error: Title is required"
-            $this._statusLabel.ForegroundColor = "#FF4444"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "status.error" "#FF4444"
             $this.RequestRedraw()
             return
         }
@@ -513,7 +513,7 @@ class EditTaskScreen : Screen {
         $progress = 0
         if (-not [int]::TryParse($this._progressBox.Text, [ref]$progress) -or $progress -lt 0 -or $progress -gt 100) {
             $this._statusLabel.Text = "Error: Progress must be 0-100"
-            $this._statusLabel.ForegroundColor = "#FF4444"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "status.error" "#FF4444"
             $this.RequestRedraw()
             return
         }
@@ -546,7 +546,7 @@ class EditTaskScreen : Screen {
                 $dataManager.UpdateTask($this._task)
                 
                 $this._statusLabel.Text = "Task updated successfully!"
-                $this._statusLabel.ForegroundColor = "#00FF88"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "status.success" "#00FF88"
                 $this.RequestRedraw()
                 
                 # Publish event
@@ -562,7 +562,7 @@ class EditTaskScreen : Screen {
         }
         catch {
             $this._statusLabel.Text = "Error: $($_.Exception.Message)"
-            $this._statusLabel.ForegroundColor = "#FF4444"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "status.error" "#FF4444"
             $this.RequestRedraw()
         }
     }
@@ -609,7 +609,7 @@ class EditTaskScreen : Screen {
         $this._LoadProjects()
         
         $this._statusLabel.Text = "Form reset to original values"
-        $this._statusLabel.ForegroundColor = "#00D4FF"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "status.info" "#00D4FF"
         $this.RequestRedraw()
     }
     
@@ -632,7 +632,7 @@ class EditTaskScreen : Screen {
         $currentIndex = $this._priorityList.SelectedIndex
         $this._priorityList.SelectedIndex = ($currentIndex + 1) % 3
         $this._statusLabel.Text = "Priority changed to $([TaskPriority]$this._priorityList.SelectedIndex)"
-        $this._statusLabel.ForegroundColor = "#00D4FF"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "status.info" "#00D4FF"
         $this.RequestRedraw()
     }
     
@@ -640,7 +640,7 @@ class EditTaskScreen : Screen {
         $currentIndex = $this._statusList.SelectedIndex
         $this._statusList.SelectedIndex = ($currentIndex + 1) % 4
         $this._statusLabel.Text = "Status changed to $([TaskStatus]$this._statusList.SelectedIndex)"
-        $this._statusLabel.ForegroundColor = "#00D4FF"
+        $this._statusLabel.ForegroundColor = Get-ThemeColor "status.info" "#00D4FF"
         $this.RequestRedraw()
     }
     
