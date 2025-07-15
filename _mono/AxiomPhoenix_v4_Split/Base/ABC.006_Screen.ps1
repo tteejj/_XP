@@ -99,6 +99,9 @@ class Screen : UIElement {
         $this.InvalidateFocusCache()
         $focusable = $this.GetFocusableChildren()
         Write-Log -Level Debug -Message "Screen.OnEnter: Found $($focusable.Count) focusable components"
+        foreach ($comp in $focusable) {
+            Write-Log -Level Debug -Message "Screen.OnEnter: - $($comp.Name) (TabIndex: $($comp.TabIndex), IsFocusable: $($comp.IsFocusable), Visible: $($comp.Visible), Enabled: $($comp.Enabled))"
+        }
         $this.FocusFirstChild()
         $focused = $this.GetFocusedChild()
         $focusedName = "none"
@@ -272,24 +275,11 @@ class Screen : UIElement {
                 $visitedElements = [System.Collections.Generic.HashSet[UIElement]]::new()
                 $this._CollectFocusableRecursive($this, $this._focusableCache, $visitedElements)
                 
-                # CRITICAL FIX: Use PowerShell-native object identity tracking for reliable deduplication
-                $uniqueTracker = @{}
-                $cleanList = [System.Collections.Generic.List[UIElement]]::new()
-                foreach ($element in $this._focusableCache) {
-                    $objectId = $element.GetHashCode().ToString() + "_" + $element.Name
-                    if (-not $uniqueTracker.ContainsKey($objectId)) {
-                        $uniqueTracker[$objectId] = $true
-                        $cleanList.Add($element)
-                        Write-Log -Level Debug -Message "Screen._GetFocusableChildren: Added unique element: $($element.Name) (ID: $objectId)"
-                    } else {
-                        Write-Log -Level Debug -Message "Screen._GetFocusableChildren: Skipping duplicate element: $($element.Name) (ID: $objectId)"
-                    }
-                }
-                
+                # FIXED: Single deduplication using HashSet in recursive function is sufficient
                 # Sort by TabIndex for predictable tab order
-                $sorted = $cleanList | Sort-Object TabIndex
+                $sortedArray = $this._focusableCache.ToArray() | Sort-Object TabIndex
                 $this._focusableCache.Clear()
-                foreach ($item in $sorted) {
+                foreach ($item in $sortedArray) {
                     $this._focusableCache.Add($item)
                 }
                 
@@ -307,25 +297,16 @@ class Screen : UIElement {
         return $this._focusableCache
     }
     
-    # PERFORMANCE FIX: Add circular reference protection to prevent infinite loops
+    # FIXED: Proper circular reference protection using HashSet correctly
     hidden [void] _CollectFocusableRecursive([UIElement]$element, [System.Collections.Generic.List[UIElement]]$result, [System.Collections.Generic.HashSet[UIElement]]$visited) {
-        # Create a simple tracking key using object hash and name to identify unique visits
-        $visitKey = "$($element.GetHashCode())_$($element.Name)"
-        
-        # Check if we've already processed this exact element instance
-        $alreadyVisited = $false
-        foreach ($visitedElement in $visited) {
-            $existingKey = "$($visitedElement.GetHashCode())_$($visitedElement.Name)"
-            if ($visitKey -eq $existingKey) {
-                $alreadyVisited = $true
-                Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Already visited $visitKey, skipping"
-                break
-            }
+        # Use HashSet properly - native Contains() method
+        if ($visited.Contains($element)) {
+            Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Already visited $($element.Name), skipping"
+            return
         }
-        if ($alreadyVisited) { return }
         
         $visited.Add($element) | Out-Null
-        Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Visiting element: $($element.Name) ($visitKey)"
+        Write-Log -Level Debug -Message "Screen._CollectFocusableRecursive: Visiting element: $($element.Name)"
         
         # If the current element is focusable, add it.
         # We must exclude the screen itself from being a focusable child.

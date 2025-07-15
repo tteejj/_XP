@@ -234,23 +234,112 @@ class ThemeManager {
         
         Write-Host "ThemeManager: Refreshing all UI components..." -ForegroundColor Cyan
         
-        # Since components now get colors dynamically, just request redraw on all components
-        $this.RequestRedrawRecursive($global:TuiState.CurrentScreen)
+        # PERFORMANCE FIX: Update cached colors AND trigger redraws
+        $this.UpdateComponentThemeRecursive($global:TuiState.CurrentScreen)
         
         # Also update any overlays or dialogs
         if ($global:TuiState.PSObject.Properties['OverlayStack']) {
             foreach ($overlay in $global:TuiState.OverlayStack) {
-                $this.RequestRedrawRecursive($overlay)
+                $this.UpdateComponentThemeRecursive($overlay)
             }
         }
+        
+        # Finally trigger a global redraw
+        $this.RequestRedrawRecursive($global:TuiState.CurrentScreen)
     }
     
-    # NEW: Recursively request redraw on all components (for dynamic theme updates)
+    # PERFORMANCE FIX: Recursively update component colors (updates cached values)
+    hidden [void] UpdateComponentThemeRecursive([object]$component) {
+        if (-not $component) { return }
+        
+        try {
+            $componentType = $component.GetType().Name
+            
+            # Update component based on its type - this updates CACHED colors
+            switch -Regex ($componentType) {
+                "Screen" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Screen.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Screen.Foreground")
+                    }
+                }
+                "Panel" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Panel.Background")
+                    }
+                    if ($component.PSObject.Properties['BorderColor']) {
+                        $component.BorderColor = $this.GetColor("Panel.Border")
+                    }
+                    if ($component.PSObject.Properties['TitleColor']) {
+                        $component.TitleColor = $this.GetColor("Panel.Title")
+                    }
+                }
+                ".*Label.*|LabelComponent" {
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Label.Foreground")
+                    }
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $bgColor = $this.GetColor("Panel.Background")
+                        if ($bgColor) {
+                            $component.BackgroundColor = $bgColor
+                        }
+                    }
+                }
+                ".*Button.*|ButtonComponent" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Button.Normal.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Button.Normal.Foreground")
+                    }
+                    if ($component.PSObject.Properties['BorderColor']) {
+                        $component.BorderColor = $this.GetColor("Button.Border")
+                    }
+                }
+                ".*List.*|ListBox" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("List.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("List.ItemNormal")
+                    }
+                    if ($component.PSObject.Properties['BorderColor']) {
+                        $component.BorderColor = $this.GetColor("Input.Border")
+                    }
+                }
+                ".*TextBox.*|.*Input.*" {
+                    if ($component.PSObject.Properties['BackgroundColor']) {
+                        $component.BackgroundColor = $this.GetColor("Input.Background")
+                    }
+                    if ($component.PSObject.Properties['ForegroundColor']) {
+                        $component.ForegroundColor = $this.GetColor("Input.Foreground")
+                    }
+                    if ($component.PSObject.Properties['BorderColor']) {
+                        $component.BorderColor = $this.GetColor("Input.Border")
+                    }
+                }
+            }
+            
+            # Recursively update all children
+            if ($component.PSObject.Properties['Children']) {
+                foreach ($child in $component.Children) {
+                    $this.UpdateComponentThemeRecursive($child)
+                }
+            }
+        }
+        catch {
+            # Silently ignore errors for components that don't support theme updates
+        }
+    }
+
+    # NEW: Recursively request redraw on all components (for theme updates)
     hidden [void] RequestRedrawRecursive([object]$component) {
         if (-not $component) { return }
         
         try {
-            # Force the component to redraw with fresh theme colors
+            # Force the component to redraw with updated theme colors
             if ($component.PSObject.Methods['RequestRedraw']) {
                 $component.RequestRedraw()
             }

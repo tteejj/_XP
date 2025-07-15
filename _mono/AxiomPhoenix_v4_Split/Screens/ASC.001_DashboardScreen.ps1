@@ -68,7 +68,7 @@ class DashboardScreen : Screen {
         $this._panel.BorderColor = Get-ThemeColor "panel.border" "#007acc"
         $this._panel.ForegroundColor = Get-ThemeColor "panel.foreground" "#d4d4d4"
         
-        # Add focus behavior with Add-Member (following guide)
+        # Add focus behavior with Add-Member (following guide) - WITH theme caching
         $this._panel | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
             $this.BorderColor = Get-ThemeColor "palette.primary" "#0078d4"
             $this.RequestRedraw()

@@ -41,20 +41,22 @@ class ButtonComponent : UIElement {
         [string]$bgColor = $null
 
         if ($this.IsPressed) {
-            $fgColor = Get-ThemeColor "button.pressed.foreground" "#d4d4d4"
-            $bgColor = Get-ThemeColor "button.pressed.background" "#4a5568"
+            $fgColor = Get-ThemeColor "Button.Pressed.Foreground" "#d4d4d4"
+            $bgColor = Get-ThemeColor "Button.Pressed.Background" "#4a5568"
         }
         elseif ($this.IsFocused) {
-            $fgColor = Get-ThemeColor "button.focused.foreground" "#ffffff"
-            $bgColor = Get-ThemeColor "button.focused.background" "#0e7490"
+            $fgColor = Get-ThemeColor "Button.Focused.Foreground" "#ffffff"
+            $bgColor = Get-ThemeColor "Button.Focused.Background" "#0e7490"
         }
         elseif (-not $this.Enabled) {
-            $fgColor = Get-ThemeColor "button.disabled.foreground" "#6b7280"
-            $bgColor = Get-ThemeColor "button.disabled.background" "#2d2d30"
+            $fgColor = Get-ThemeColor "Button.Disabled.Foreground" "#6b7280"
+            $bgColor = Get-ThemeColor "Button.Disabled.Background" "#2d2d30"
         }
         else {
-            $fgColor = Get-ThemeColor "button.normal.foreground" ($this.GetEffectiveForegroundColor())
-            $bgColor = Get-ThemeColor "button.normal.background" ($this.GetEffectiveBackgroundColor())
+            # Use the effective colors from the base class for the normal state.
+            # This allows instance-specific colors to override the theme.
+            $fgColor = $this.GetEffectiveForegroundColor()
+            $bgColor = $this.GetEffectiveBackgroundColor()
         }
         
         # Draw button background
@@ -73,12 +75,16 @@ class ButtonComponent : UIElement {
     }
 
     [void] OnFocus() {
-        # Don't cache theme colors - get them fresh during render
+        $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0078d4"
+        $this.ForegroundColor = Get-ThemeColor "button.focused.foreground" "#ffffff"
+        $this.BorderColor = Get-ThemeColor "button.focused.border" "#00ff88"
         $this.RequestRedraw()
     }
     
     [void] OnBlur() {
-        # Don't cache theme colors - get them fresh during render
+        $this.BackgroundColor = Get-ThemeColor "button.normal.background" "#404040"
+        $this.ForegroundColor = Get-ThemeColor "button.normal.foreground" "#d4d4d4"
+        $this.BorderColor = Get-ThemeColor "button.border" "#666666"
         $this.RequestRedraw()
     }
 
