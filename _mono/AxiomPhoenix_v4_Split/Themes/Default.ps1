@@ -31,7 +31,8 @@
         Label = @{ Foreground = '$Palette.TextPrimary'; Disabled = '$Palette.TextDisabled' }
         Button = @{
             Normal = @{ Foreground = '$Palette.Black'; Background = '$Palette.Primary' }
-            Focused = @{ Foreground = '$Palette.ButtonFocusedFg'; Background = '$Palette.ButtonFocusedBg' }
+            Focused = @{ Foreground = '$Palette.ButtonFocusedFg'; Background = '$Palette.ButtonFocusedBg'; Border = '$Palette.Success' }
+            Border = '$Palette.Border'
         }
         Input = @{ 
             Background = '$Palette.Background'

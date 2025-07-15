@@ -47,6 +47,8 @@ class ThemeManager {
         "button.normal.foreground" = @{ Path = "Components.Button.Normal.Foreground"; Fallback = "#FFFFFF" }
         "button.focused.background" = @{ Path = "Components.Button.Focused.Background"; Fallback = "#00D4FF" }
         "button.focused.foreground" = @{ Path = "Components.Button.Focused.Foreground"; Fallback = "#000000" }
+        "button.focused.border" = @{ Path = "Components.Button.Focused.Border"; Fallback = "#00FF88" }
+        "button.border" = @{ Path = "Components.Button.Border"; Fallback = "#666666" }
         "button.pressed.background" = @{ Path = "Components.Button.Pressed.Background"; Fallback = "#FF6B35" }
         "button.pressed.foreground" = @{ Path = "Components.Button.Pressed.Foreground"; Fallback = "#000000" }
         "button.disabled.background" = @{ Path = "Components.Button.Disabled.Background"; Fallback = "#1A1A1A" }
