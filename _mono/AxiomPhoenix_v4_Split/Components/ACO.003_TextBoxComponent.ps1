@@ -42,6 +42,12 @@ class TextBoxComponent : UIElement {
         $this.Width = 20
         $this.Height = 3 # A height of 3 is standard for a bordered input box (top border, content, bottom border)
         
+        # Debug component creation
+        if ($name -eq "TitleBox") {
+            $timestamp = Get-Date -Format "HH:mm:ss.fff"
+            "[$timestamp] TextBoxComponent CREATED: $name" | Out-File "/tmp/focus-debug.log" -Append -Force
+        }
+        
     }
 
     [void] OnRender() {

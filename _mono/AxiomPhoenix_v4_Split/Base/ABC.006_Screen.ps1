@@ -95,18 +95,19 @@ class Screen : UIElement {
     }
     [void] OnEnter() { 
         # Focus first focusable component when entering screen
-        Write-Log -Level Debug -Message "Screen.OnEnter: Setting initial focus for $($this.Name)"
+        $timestamp = Get-Date -Format "HH:mm:ss.fff"
+        "[$timestamp] Screen.OnEnter: Setting initial focus for $($this.Name)" | Out-File "/tmp/focus-debug.log" -Append -Force
         $this.InvalidateFocusCache()
         $focusable = $this.GetFocusableChildren()
-        Write-Log -Level Debug -Message "Screen.OnEnter: Found $($focusable.Count) focusable components"
+        "[$timestamp] Screen.OnEnter: Found $($focusable.Count) focusable components" | Out-File "/tmp/focus-debug.log" -Append -Force
         foreach ($comp in $focusable) {
-            Write-Log -Level Debug -Message "Screen.OnEnter: - $($comp.Name) (TabIndex: $($comp.TabIndex), IsFocusable: $($comp.IsFocusable), Visible: $($comp.Visible), Enabled: $($comp.Enabled))"
+            "[$timestamp] Screen.OnEnter: - $($comp.Name) (TabIndex: $($comp.TabIndex), IsFocusable: $($comp.IsFocusable), Visible: $($comp.Visible), Enabled: $($comp.Enabled))" | Out-File "/tmp/focus-debug.log" -Append -Force
         }
         $this.FocusFirstChild()
         $focused = $this.GetFocusedChild()
         $focusedName = "none"
         if ($focused) { $focusedName = $focused.Name }
-        Write-Log -Level Debug -Message "Screen.OnEnter: Initial focus set to: $focusedName"
+        "[$timestamp] Screen.OnEnter: Initial focus set to: $focusedName" | Out-File "/tmp/focus-debug.log" -Append -Force
     }
     [void] OnExit() { 
         # Write-Verbose "OnExit called for Screen '$($this.Name)': Default (no-op)." 
@@ -123,17 +124,18 @@ class Screen : UIElement {
     [bool] SetChildFocus([UIElement]$component) {
         $componentName = "null"
         if ($component) { $componentName = $component.Name }
-        Write-Log -Level Debug -Message "Screen.SetChildFocus: Attempting to focus $componentName on screen $($this.Name)"
+        $timestamp = Get-Date -Format "HH:mm:ss.fff"
+        "[$timestamp] Screen.SetChildFocus: Attempting to focus $componentName on screen $($this.Name)" | Out-File "/tmp/focus-debug.log" -Append -Force
         
         
         if ($this._focusedChild -eq $component) { 
-            Write-Log -Level Debug -Message "Screen.SetChildFocus: Component already has focus"
+            "[$timestamp] Screen.SetChildFocus: Component already has focus" | Out-File "/tmp/focus-debug.log" -Append -Force
             return $true 
         }
         
         # Blur current component
         if ($null -ne $this._focusedChild) {
-            Write-Log -Level Debug -Message "Screen.SetChildFocus: Blurring current focus: $($this._focusedChild.Name)"
+            "[$timestamp] Screen.SetChildFocus: Blurring current focus: $($this._focusedChild.Name)" | Out-File "/tmp/focus-debug.log" -Append -Force
             $this._focusedChild.IsFocused = $false
             $this._focusedChild.OnBlur()
             $this._focusedChild.RequestRedraw()
@@ -142,18 +144,33 @@ class Screen : UIElement {
         # Focus new component
         $this._focusedChild = $component
         if ($null -ne $component) {
-            Write-Log -Level Debug -Message "Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: $($component.IsFocusable), Enabled: $($component.Enabled), Visible: $($component.Visible)"
+            "[$timestamp] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: $($component.IsFocusable), Enabled: $($component.Enabled), Visible: $($component.Visible)" | Out-File "/tmp/focus-debug.log" -Append -Force
             if ($component.IsFocusable -and $component.Enabled -and $component.Visible) {
-                Write-Log -Level Debug -Message "Screen.SetChildFocus: Setting focus on $($component.Name)"
+                "[$timestamp] Screen.SetChildFocus: Setting focus on $($component.Name)" | Out-File "/tmp/focus-debug.log" -Append -Force
+                
+                # DEBUG: Log before setting focus
+                "[$timestamp] SetChildFocus: BEFORE setting IsFocused - $($component.Name).IsFocused: $($component.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
+                
                 $component.IsFocused = $true
+                
+                # DEBUG: Log after setting focus
+                "[$timestamp] SetChildFocus: AFTER setting IsFocused - $($component.Name).IsFocused: $($component.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
+                
                 $component.OnFocus()
+                
+                # DEBUG: Log after OnFocus
+                "[$timestamp] SetChildFocus: AFTER OnFocus - $($component.Name).IsFocused: $($component.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
+                
                 $component.RequestRedraw()
+                
+                # DEBUG: Log after RequestRedraw
+                "[$timestamp] SetChildFocus: AFTER RequestRedraw - $($component.Name).IsFocused: $($component.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
                 
                 # SET GLOBAL STATE
                 $global:TuiState.FocusedComponent = $component
                 return $true
             } else {
-                Write-Log -Level Debug -Message "Screen.SetChildFocus: Component $($component.Name) cannot receive focus"
+                "[$timestamp] Screen.SetChildFocus: Component $($component.Name) cannot receive focus" | Out-File "/tmp/focus-debug.log" -Append -Force
                 $this._focusedChild = $null
                 return $false
             }
