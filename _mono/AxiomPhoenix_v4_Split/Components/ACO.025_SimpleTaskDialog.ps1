@@ -3,12 +3,7 @@
 #   Axiom-Phoenix v4.1 - Simple Task Dialog (Component)
 #
 #   File: Components\ACO.025_SimpleTaskDialog.ps1
-#   Status: NEW & VERIFIED
-#
-#   DESCRIPTION:
-#   This is a standalone dialog for creating or editing a basic task. It has been
-#   refactored to inherit from Screen, making it a proper window in the new
-#   Hybrid Window Manager model. It fully complies with all framework rules.
+#   Status: VERIFIED & CLEANED
 #
 # ==============================================================================
 
@@ -61,18 +56,6 @@ class SimpleTaskDialog : Screen {
         $this._titleBox.Text = $this._task.Title
         $this._titleBox.IsFocusable = $true; $this._titleBox.TabIndex = 0
         $this._titleBox.Placeholder = "Enter task title..."
-        
-        # Add missing focus handlers (as per guide)
-        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "palette.primary" "#0078d4"
-            $this.ShowCursor = $true
-        } -Force
-        
-        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "palette.border" "#404040"
-            $this.ShowCursor = $false
-        } -Force
-        
         $this._dialogPanel.AddChild($this._titleBox)
 
         # Description Field
@@ -82,18 +65,6 @@ class SimpleTaskDialog : Screen {
         $this._descriptionBox.Text = $this._task.Description
         $this._descriptionBox.IsFocusable = $true; $this._descriptionBox.TabIndex = 1
         $this._descriptionBox.Placeholder = "Enter task description..."
-        
-        # Add missing focus handlers (as per guide)
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "palette.primary" "#0078d4"
-            $this.ShowCursor = $true
-        } -Force
-        
-        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "palette.border" "#404040"
-            $this.ShowCursor = $false
-        } -Force
-        
         $this._dialogPanel.AddChild($this._descriptionBox)
 
         # Save Button
@@ -102,9 +73,6 @@ class SimpleTaskDialog : Screen {
         $this._saveButton.IsFocusable = $true; $this._saveButton.TabIndex = 2
         $screenRef = $this
         $this._saveButton.OnClick = { $screenRef._SaveTask() }.GetNewClosure()
-        
-        # ButtonComponent already has OnFocus/OnBlur - no need to override
-        
         $this._dialogPanel.AddChild($this._saveButton)
 
         # Cancel Button
@@ -113,31 +81,13 @@ class SimpleTaskDialog : Screen {
         $this._cancelButton.IsFocusable = $true; $this._cancelButton.TabIndex = 3
         $screenRef = $this
         $this._cancelButton.OnClick = { $screenRef._Cancel() }.GetNewClosure()
-        
-        # ButtonComponent already has OnFocus/OnBlur - no need to override
-        
         $this._dialogPanel.AddChild($this._cancelButton)
     }
 
     [void] OnEnter() {
-        $timestamp = Get-Date -Format "HH:mm:ss.fff"
-        "[$timestamp] SimpleTaskDialog.OnEnter() START" | Out-File "/tmp/focus-debug.log" -Append -Force
-        "[$timestamp] BEFORE base.OnEnter() - TitleBox.IsFocused: $($this._titleBox.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
-        
         # Base OnEnter will automatically focus the first component by TabIndex.
         ([Screen]$this).OnEnter()
-        
-        $timestamp = Get-Date -Format "HH:mm:ss.fff"
-        "[$timestamp] AFTER base.OnEnter() - TitleBox.IsFocused: $($this._titleBox.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
-        $focused = $this.GetFocusedChild()
-        $focusedName = if ($focused) { $focused.Name } else { "null" }
-        "[$timestamp] GetFocusedChild: $focusedName" | Out-File "/tmp/focus-debug.log" -Append -Force
-        
         $this.RequestRedraw()
-        
-        $timestamp = Get-Date -Format "HH:mm:ss.fff"
-        "[$timestamp] AFTER RequestRedraw() - TitleBox.IsFocused: $($this._titleBox.IsFocused)" | Out-File "/tmp/focus-debug.log" -Append -Force
-        "[$timestamp] SimpleTaskDialog.OnEnter() END" | Out-File "/tmp/focus-debug.log" -Append -Force
     }
 
     hidden [void] _SaveTask() {
@@ -175,4 +125,3 @@ class SimpleTaskDialog : Screen {
         return $false
     }
 }
-

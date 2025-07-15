@@ -57,9 +57,6 @@ class NewTaskScreen : Screen {
         $this._titleBox.Height = 3
         $this._titleBox.IsFocusable = $true
         $this._titleBox.TabIndex = 0
-        
-        # TextBoxComponent already has OnFocus/OnBlur methods - don't override
-        
         $this._panel.AddChild($this._titleBox)
         
         $y += 4
@@ -79,9 +76,6 @@ class NewTaskScreen : Screen {
         $this._descriptionBox.Height = 3
         $this._descriptionBox.IsFocusable = $true
         $this._descriptionBox.TabIndex = 1
-        
-        # TextBoxComponent already has OnFocus/OnBlur methods - don't override
-        
         $this._panel.AddChild($this._descriptionBox)
         
         $y += 4
@@ -106,15 +100,12 @@ class NewTaskScreen : Screen {
         $this._saveButton.IsFocusable = $true
         $this._saveButton.TabIndex = 2
         
-        # Capture reference with closure - GUIDE PATTERN
         $currentScreenRef = $this
         $this._saveButton.OnClick = {
             $currentScreenRef._SaveTask()
         }.GetNewClosure()
         
-        # Ensure button is properly enabled
         $this._saveButton.Enabled = $true
-        
         $this._panel.AddChild($this._saveButton)
         
         $this._cancelButton = [ButtonComponent]::new("CancelButton")
@@ -130,9 +121,7 @@ class NewTaskScreen : Screen {
             $currentScreenRef._Cancel()
         }.GetNewClosure()
         
-        # Ensure button is properly enabled
         $this._cancelButton.Enabled = $true
-        
         $this._panel.AddChild($this._cancelButton)
     }
     
@@ -143,28 +132,18 @@ class NewTaskScreen : Screen {
         $this._priority = [TaskPriority]::Medium
         $this._UpdatePriorityDisplay()
         
-        # Invalidate focus cache to ensure clean state
         $this.InvalidateFocusCache()
-        
-        # MUST call base to set initial focus - GUIDE RULE
         ([Screen]$this).OnEnter()
-        
-        # The base OnEnter should set focus to first focusable component (title box)
-        # No need to explicitly set focus again unless there's an issue
-        
         $this.RequestRedraw()
     }
     
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
-        # Get focused component CORRECTLY - GUIDE RULE
         $focused = $this.GetFocusedChild()
         
-        # Handle screen-level actions based on focused component
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Enter) {
-                # Handle Enter based on focused component
                 if ($focused -eq $this._saveButton) {
                     $this._SaveTask()
                     return $true
@@ -173,7 +152,6 @@ class NewTaskScreen : Screen {
                     $this._Cancel()
                     return $true
                 }
-                # For text boxes, let them handle Enter naturally
             }
             ([ConsoleKey]::Escape) {
                 $this._Cancel()
@@ -181,7 +159,6 @@ class NewTaskScreen : Screen {
             }
         }
         
-        # Check for letter shortcuts
         switch ($keyInfo.KeyChar) {
             { $_ -eq 'p' -or $_ -eq 'P' } {
                 $this._CyclePriority()
@@ -189,7 +166,6 @@ class NewTaskScreen : Screen {
             }
         }
         
-        # Let base handle Tab and route to components - DO NOT HANDLE TAB
         return ([Screen]$this).HandleInput($keyInfo)
     }
     
@@ -240,7 +216,6 @@ class NewTaskScreen : Screen {
         }
     }
 }
-
 # ==============================================================================
 # End NewTaskScreen
 # ==============================================================================

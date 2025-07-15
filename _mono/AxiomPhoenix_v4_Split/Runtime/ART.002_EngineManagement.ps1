@@ -32,7 +32,17 @@ function Initialize-TuiEngine {
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         [Console]::InputEncoding = [System.Text.Encoding]::UTF8
         [Console]::CursorVisible = $false
-        [Console]::TreatControlCAsInput = $true
+        
+        # This property is read-only in some Windows consoles (e.g., conhost.exe)
+        # and will throw a terminating error. Wrapping it prevents the crash.
+        try {
+            [Console]::TreatControlCAsInput = $true
+            Write-Log -Level Debug -Message "Successfully set TreatControlCAsInput to true."
+        }
+        catch {
+            Write-Log -Level Warning -Message "Could not set 'TreatControlCAsInput'. Ctrl+C will terminate the app. Error: $($_.Exception.Message)"
+        }
+
         $Host.UI.RawUI.WindowTitle = "Axiom-Phoenix v4.0 TUI Framework"
         
         Write-Log -Level Debug -Message "Initialize-TuiEngine: Clearing screen and hiding cursor"
@@ -64,7 +74,6 @@ function Initialize-TuiEngine {
             -AdditionalData @{ Phase = "EngineInit" }
     }
 }
-
 function Start-TuiEngine {
     [CmdletBinding()]
     param(
