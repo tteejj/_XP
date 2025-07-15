@@ -367,16 +367,6 @@ class Screen : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
-        # Handle Tab navigation within this screen
-        if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
-            if ($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) {
-                $this.FocusPreviousChild()
-            } else {
-                $this.FocusNextChild()
-            }
-            return $true
-        }
-        
         # Route input to focused child first
         if ($null -ne $this._focusedChild) {
             if ($this._focusedChild.HandleInput($keyInfo)) {

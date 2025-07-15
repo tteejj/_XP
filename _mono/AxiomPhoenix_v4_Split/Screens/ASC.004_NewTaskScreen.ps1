@@ -140,11 +140,15 @@ class NewTaskScreen : Screen {
         # MUST call base to set initial focus - GUIDE RULE
         ([Screen]$this).OnEnter()
         
-        # Additional safety: if no component got focus, try to set it explicitly
-        if (-not $this.GetFocusedChild()) {
-            Write-Log -Level Debug -Message "NewTaskScreen.OnEnter: No component focused, setting explicit focus"
-            $this.SetChildFocus($this._titleBox)
-        }
+        # Force focus on title box explicitly - ensures it's focused
+        Write-Log -Level Debug -Message "NewTaskScreen.OnEnter: Setting explicit focus on title box"
+        $this.SetChildFocus($this._titleBox)
+        
+        # Verify focus was set
+        $focused = $this.GetFocusedChild()
+        $focusedName = "none"
+        if ($focused) { $focusedName = $focused.Name }
+        Write-Log -Level Debug -Message "NewTaskScreen.OnEnter: Focus verification - focused component: $focusedName"
         
         $this.RequestRedraw()
     }

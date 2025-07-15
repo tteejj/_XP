@@ -1,120 +1,213 @@
-[2025-07-14 19:43:52.732] [INFO] Axiom Phoenix File Logger initialized. Log file: /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/../axiom-phoenix-debug.log
-[2025-07-14 19:43:52.735] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.007_EventFunctions.ps1
-[2025-07-14 19:43:52.740] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.008_ErrorHandling.ps1
-[2025-07-14 19:43:52.745] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.009_InputProcessing.ps1
-[2025-07-14 19:43:52.751] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.010_UtilityFunctions.ps1
-[2025-07-14 19:43:52.764] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:52.781] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.001_LabelComponent.ps1
-[2025-07-14 19:43:52.797] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.002_ButtonComponent.ps1
-[2025-07-14 19:43:52.814] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.003_TextBoxComponent.ps1
-[2025-07-14 19:43:52.833] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.004_CheckBoxComponent.ps1
-[2025-07-14 19:43:52.844] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.005_RadioButtonComponent.ps1
-[2025-07-14 19:43:52.860] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.006_MultilineTextBoxComponent.ps1
-[2025-07-14 19:43:52.893] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.007_NumericInputComponent.ps1
-[2025-07-14 19:43:52.908] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.008_DateInputComponent.ps1
-[2025-07-14 19:43:52.925] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.009_ComboBoxComponent.ps1
-[2025-07-14 19:43:52.947] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.010_Table.ps1
-[2025-07-14 19:43:52.969] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.011_Panel.ps1
-[2025-07-14 19:43:52.983] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.012_ScrollablePanel.ps1
-[2025-07-14 19:43:53.000] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.013_GroupPanel.ps1
-[2025-07-14 19:43:53.029] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014_ListBox.ps1
-[2025-07-14 19:43:53.052] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014a_Dialog.ps1
-[2025-07-14 19:43:53.065] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.015_TextBox.ps1
-[2025-07-14 19:43:53.075] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.016_CommandPalette.ps1
-[2025-07-14 19:43:53.094] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.018_AlertDialog.ps1
-[2025-07-14 19:43:53.105] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.020_InputDialog.ps1
-[2025-07-14 19:43:53.116] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.021_NavigationMenu.ps1
-[2025-07-14 19:43:53.171] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.022_DataGridComponent.ps1
-[2025-07-14 19:43:53.195] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.023_SidebarMenu.ps1
-[2025-07-14 19:43:53.214] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.025_SimpleTaskDialog.ps1
-[2025-07-14 19:43:53.259] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.026_ConfirmDialog.ps1
-[2025-07-14 19:43:53.282] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.100_TextEngine.ps1
-[2025-07-14 19:43:53.371] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:53.389] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen_Fixed.ps1
-[2025-07-14 19:43:53.426] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen.ps1
-[2025-07-14 19:43:53.461] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.002_TaskListScreen.ps1
-[2025-07-14 19:43:53.534] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.003_ThemeScreen.ps1
-[2025-07-14 19:43:53.577] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.004_NewTaskScreen.ps1
-[2025-07-14 19:43:53.603] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_EditTaskScreen.ps1
-[2025-07-14 19:43:53.700] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_FileCommanderScreen.ps1
-[2025-07-14 19:43:53.783] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006_TextEditorScreen.ps1
-[2025-07-14 19:43:53.861] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006a_ProjectEditDialog.ps1
-[2025-07-14 19:43:53.924] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.007_ProjectInfoScreen.ps1
-[2025-07-14 19:43:53.978] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.008_ProjectsListScreen.ps1
-[2025-07-14 19:43:54.017] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/TestScreen.ps1
-[2025-07-14 19:43:54.033] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.043] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.001_Logger.ps1
-[2025-07-14 19:43:54.060] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.002_EventManager.ps1
-[2025-07-14 19:43:54.078] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.003_ThemeManager.ps1
-[2025-07-14 19:43:54.122] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.004_ActionService.ps1
-[2025-07-14 19:43:54.141] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.005_DataManager.ps1
-[2025-07-14 19:43:54.174] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.007_KeybindingService.ps1
-[2025-07-14 19:43:54.199] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.008_NavigationService.ps1
-[2025-07-14 19:43:54.214] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.009_DialogManager.ps1
-[2025-07-14 19:43:54.233] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.011_ViewDefinitionService.ps1
-[2025-07-14 19:43:54.252] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.012_AsyncJobService.ps1
-[2025-07-14 19:43:54.269] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.014_FileSystemService.ps1
-[2025-07-14 19:43:54.301] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.311] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.001_GlobalState.ps1
-[2025-07-14 19:43:54.342] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.002_EngineManagement.ps1
-[2025-07-14 19:43:54.365] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.003_RenderingSystem.ps1
-[2025-07-14 19:43:54.377] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.004_InputProcessing.ps1
-[2025-07-14 19:43:54.389] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.005_ScreenManagement.ps1
-[2025-07-14 19:43:54.397] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.006_ErrorHandling.ps1
-[2025-07-14 19:43:54.406] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.409] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.429] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
-[2025-07-14 19:43:54.432] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.613] [DEBUG] Registered eager service instance: 'Logger'.
-[2025-07-14 19:43:54.682] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
-[2025-07-14 19:43:54.830] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.862] [DEBUG] Registered eager service instance: 'EventManager'.
-[2025-07-14 19:43:54.868] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
-[2025-07-14 19:43:54.871] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.963] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.972] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.981] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:54.992] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.003] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.017] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.025] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.050] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.059] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.116] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.169] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.182] [DEBUG] Registered eager service instance: 'ThemeManager'.
-[2025-07-14 19:43:55.188] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
-[2025-07-14 19:43:55.191] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.204] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 19:43:55.277] [DEBUG] Registered eager service instance: 'DataManager'.
-[2025-07-14 19:43:55.284] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
-[2025-07-14 19:43:55.288] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.292] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
-[2025-07-14 19:43:55.318] [DEBUG] Registered eager service instance: 'ActionService'.
-[2025-07-14 19:43:55.326] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
-[2025-07-14 19:43:55.334] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.341] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
-[2025-07-14 19:43:55.412] [DEBUG] KeybindingService: Bound Ctrl+Q to app.exit in context Global
-[2025-07-14 19:43:55.416] [DEBUG] KeybindingService: Bound Ctrl+C to app.exit.ctrlc in context Global
-[2025-07-14 19:43:55.420] [DEBUG] KeybindingService: Bound F1 to app.help in context Global
-[2025-07-14 19:43:55.423] [DEBUG] KeybindingService: Bound Ctrl+P to app.commandPalette in context Global
-[2025-07-14 19:43:55.427] [DEBUG] KeybindingService: Bound Tab to navigation.nextComponent in context Global
-[2025-07-14 19:43:55.431] [DEBUG] KeybindingService: Bound Shift+Tab to navigation.previousComponent in context Global
-[2025-07-14 19:43:55.446] [DEBUG] KeybindingService: Initialized default bindings
-[2025-07-14 19:43:55.457] [DEBUG] Registered eager service instance: 'KeybindingService'.
-[2025-07-14 19:43:55.463] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
-[2025-07-14 19:43:55.467] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.507] [DEBUG] Registered eager service instance: 'NavigationService'.
-[2025-07-14 19:43:55.514] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
-[2025-07-14 19:43:55.517] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.534] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
-[2025-07-14 19:43:55.543] [DEBUG] DialogManager: Initialized with window-based model.
-[2025-07-14 19:43:55.561] [DEBUG] Registered eager service instance: 'DialogManager'.
-[2025-07-14 19:43:55.572] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
-[2025-07-14 19:43:55.576] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.637] [DEBUG] Registered eager service instance: 'ViewDefinitionService'.
-[2025-07-14 19:43:55.643] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
-[2025-07-14 19:43:55.647] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
-[2025-07-14 19:43:55.650] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
-[2025-07-14 19:43:55.673] [DEBUG] FileSystemService: Initialized
-[2025-07-14 19:43:55.696] [DEBUG] Registered eager service instance: 'FileSystemService'.
+[2025-07-14 21:33:07.167] [INFO] Axiom Phoenix File Logger initialized. Log file: /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/../axiom-phoenix-debug.log
+[2025-07-14 21:33:07.170] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.007_EventFunctions.ps1
+[2025-07-14 21:33:07.188] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.008_ErrorHandling.ps1
+[2025-07-14 21:33:07.193] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.009_InputProcessing.ps1
+[2025-07-14 21:33:07.197] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Functions/AFU.010_UtilityFunctions.ps1
+[2025-07-14 21:33:07.209] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:07.224] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.001_LabelComponent.ps1
+[2025-07-14 21:33:07.239] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.002_ButtonComponent.ps1
+[2025-07-14 21:33:07.252] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.003_TextBoxComponent.ps1
+[2025-07-14 21:33:07.271] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.004_CheckBoxComponent.ps1
+[2025-07-14 21:33:07.283] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.005_RadioButtonComponent.ps1
+[2025-07-14 21:33:07.297] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.006_MultilineTextBoxComponent.ps1
+[2025-07-14 21:33:07.318] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.007_NumericInputComponent.ps1
+[2025-07-14 21:33:07.334] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.008_DateInputComponent.ps1
+[2025-07-14 21:33:07.365] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.009_ComboBoxComponent.ps1
+[2025-07-14 21:33:07.386] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.010_Table.ps1
+[2025-07-14 21:33:07.413] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.011_Panel.ps1
+[2025-07-14 21:33:07.428] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.012_ScrollablePanel.ps1
+[2025-07-14 21:33:07.453] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.013_GroupPanel.ps1
+[2025-07-14 21:33:07.466] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014_ListBox.ps1
+[2025-07-14 21:33:07.494] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.014a_Dialog.ps1
+[2025-07-14 21:33:07.509] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.015_TextBox.ps1
+[2025-07-14 21:33:07.584] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.016_CommandPalette.ps1
+[2025-07-14 21:33:07.615] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.018_AlertDialog.ps1
+[2025-07-14 21:33:07.630] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.020_InputDialog.ps1
+[2025-07-14 21:33:07.654] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.021_NavigationMenu.ps1
+[2025-07-14 21:33:07.675] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.022_DataGridComponent.ps1
+[2025-07-14 21:33:07.706] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.023_SidebarMenu.ps1
+[2025-07-14 21:33:07.723] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.025_SimpleTaskDialog.ps1
+[2025-07-14 21:33:07.746] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.026_ConfirmDialog.ps1
+[2025-07-14 21:33:07.766] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Components/ACO.100_TextEngine.ps1
+[2025-07-14 21:33:07.869] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:07.885] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen_Fixed.ps1
+[2025-07-14 21:33:07.916] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.001_DashboardScreen.ps1
+[2025-07-14 21:33:07.952] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.002_TaskListScreen.ps1
+[2025-07-14 21:33:08.037] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.003_ThemeScreen.ps1
+[2025-07-14 21:33:08.079] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.004_NewTaskScreen.ps1
+[2025-07-14 21:33:08.110] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_EditTaskScreen.ps1
+[2025-07-14 21:33:08.152] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.005_FileCommanderScreen.ps1
+[2025-07-14 21:33:08.241] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006_TextEditorScreen.ps1
+[2025-07-14 21:33:08.298] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.006a_ProjectEditDialog.ps1
+[2025-07-14 21:33:08.332] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.007_ProjectInfoScreen.ps1
+[2025-07-14 21:33:08.364] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/ASC.008_ProjectsListScreen.ps1
+[2025-07-14 21:33:08.429] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Screens/TestScreen.ps1
+[2025-07-14 21:33:08.448] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:08.460] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.001_Logger.ps1
+[2025-07-14 21:33:08.478] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.002_EventManager.ps1
+[2025-07-14 21:33:08.498] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.003_ThemeManager.ps1
+[2025-07-14 21:33:08.527] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.004_ActionService.ps1
+[2025-07-14 21:33:08.549] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.005_DataManager.ps1
+[2025-07-14 21:33:08.637] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.007_KeybindingService.ps1
+[2025-07-14 21:33:08.659] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.008_NavigationService.ps1
+[2025-07-14 21:33:08.676] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.009_DialogManager.ps1
+[2025-07-14 21:33:08.694] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.011_ViewDefinitionService.ps1
+[2025-07-14 21:33:08.713] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.012_AsyncJobService.ps1
+[2025-07-14 21:33:08.728] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Services/ASE.014_FileSystemService.ps1
+[2025-07-14 21:33:08.746] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:08.755] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.001_GlobalState.ps1
+[2025-07-14 21:33:08.780] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.002_EngineManagement.ps1
+[2025-07-14 21:33:08.815] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.003_RenderingSystem.ps1
+[2025-07-14 21:33:08.831] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.004_InputProcessing.ps1
+[2025-07-14 21:33:08.843] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.005_ScreenManagement.ps1
+[2025-07-14 21:33:08.851] [VERBOSE] [Write-Verbose]   - Dot-sourcing /home/teej/projects/github/_XP/_mono/AxiomPhoenix_v4_Split/Runtime/ART.006_ErrorHandling.ps1
+[2025-07-14 21:33:08.860] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:08.863] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:08.883] [VERBOSE] [Write-Verbose] ServiceContainer: Instance constructed.
+[2025-07-14 21:33:08.887] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.068] [DEBUG] Registered eager service instance: 'Logger'.
+[2025-07-14 21:33:09.088] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'Logger' of type 'Logger'.
+[2025-07-14 21:33:09.239] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.270] [DEBUG] Registered eager service instance: 'EventManager'.
+[2025-07-14 21:33:09.276] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'EventManager' of type 'EventManager'.
+[2025-07-14 21:33:09.280] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.371] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.383] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.395] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.404] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.416] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.429] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.441] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.456] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.466] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.479] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.490] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.527] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.536] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.592] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.647] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.659] [DEBUG] Registered eager service instance: 'ThemeManager'.
+[2025-07-14 21:33:09.665] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ThemeManager' of type 'ThemeManager'.
+[2025-07-14 21:33:09.669] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.681] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 21:33:09.754] [DEBUG] Registered eager service instance: 'DataManager'.
+[2025-07-14 21:33:09.760] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DataManager' of type 'DataManager'.
+[2025-07-14 21:33:09.764] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.767] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 21:33:09.791] [DEBUG] Registered eager service instance: 'ActionService'.
+[2025-07-14 21:33:09.797] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ActionService' of type 'ActionService'.
+[2025-07-14 21:33:09.801] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.804] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 21:33:09.862] [DEBUG] KeybindingService: Bound Ctrl+Q to app.exit in context Global
+[2025-07-14 21:33:09.866] [DEBUG] KeybindingService: Bound Ctrl+C to app.exit.ctrlc in context Global
+[2025-07-14 21:33:09.870] [DEBUG] KeybindingService: Bound F1 to app.help in context Global
+[2025-07-14 21:33:09.873] [DEBUG] KeybindingService: Bound Ctrl+P to app.commandPalette in context Global
+[2025-07-14 21:33:09.914] [DEBUG] KeybindingService: Bound Tab to navigation.nextComponent in context Global
+[2025-07-14 21:33:09.917] [DEBUG] KeybindingService: Bound Shift+Tab to navigation.previousComponent in context Global
+[2025-07-14 21:33:09.920] [DEBUG] KeybindingService: Initialized default bindings
+[2025-07-14 21:33:09.931] [DEBUG] Registered eager service instance: 'KeybindingService'.
+[2025-07-14 21:33:09.937] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'KeybindingService' of type 'KeybindingService'.
+[2025-07-14 21:33:09.941] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:09.984] [DEBUG] Registered eager service instance: 'NavigationService'.
+[2025-07-14 21:33:09.990] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'NavigationService' of type 'NavigationService'.
+[2025-07-14 21:33:09.995] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.018] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 21:33:10.026] [DEBUG] DialogManager: Initialized with window-based model.
+[2025-07-14 21:33:10.038] [DEBUG] Registered eager service instance: 'DialogManager'.
+[2025-07-14 21:33:10.048] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'DialogManager' of type 'DialogManager'.
+[2025-07-14 21:33:10.053] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.108] [DEBUG] Registered eager service instance: 'ViewDefinitionService'.
+[2025-07-14 21:33:10.115] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'ViewDefinitionService' of type 'ViewDefinitionService'.
+[2025-07-14 21:33:10.120] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.124] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 21:33:10.145] [DEBUG] FileSystemService: Initialized
+[2025-07-14 21:33:10.162] [DEBUG] Registered eager service instance: 'FileSystemService'.
+[2025-07-14 21:33:10.169] [VERBOSE] [Write-Verbose] ServiceContainer: Registered eager instance for 'FileSystemService' of type 'FileSystemService'.
+[2025-07-14 21:33:10.174] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.178] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 21:33:10.182] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 21:33:10.186] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 21:33:10.190] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 21:33:10.201] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 21:33:10.205] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 21:33:10.208] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 21:33:10.212] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 21:33:10.215] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ViewDefinitionService'.
+[2025-07-14 21:33:10.219] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'FileSystemService'.
+[2025-07-14 21:33:10.222] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 21:33:10.235] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.240] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.246] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.250] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 21:33:10.393] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.397] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:10.400] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 21:33:11.543] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:11.547] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:11.550] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:11.553] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:11.557] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:12.854] [DEBUG] DashboardScreen: Constructor called
+[2025-07-14 21:33:12.876] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:12.902] [DEBUG] DashboardScreen.Initialize: Starting
+[2025-07-14 21:33:12.912] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 21:33:13.174] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
+[2025-07-14 21:33:13.182] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 21:33:13.188] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
+[2025-07-14 21:33:13.311] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
+[2025-07-14 21:33:13.363] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 21:33:13.367] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
+[2025-07-14 21:33:13.371] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 21:33:13.375] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 21:33:13.382] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 21:33:13.394] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 21:33:13.400] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 21:33:13.406] [INFO] DashboardScreen: Updated colors for 'Synthwave'
+[2025-07-14 21:33:13.412] [DEBUG] DashboardScreen.Initialize: Completed
+[2025-07-14 21:33:13.416] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:13.457] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:13.593] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ActionService'.
+[2025-07-14 21:33:13.605] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'KeybindingService'.
+[2025-07-14 21:33:13.615] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'NavigationService'.
+[2025-07-14 21:33:13.624] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DataManager'.
+[2025-07-14 21:33:13.633] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 21:33:13.644] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 21:33:13.650] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'Logger'.
+[2025-07-14 21:33:13.750] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:13.757] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'DialogManager'.
+[2025-07-14 21:33:13.778] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:13.790] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed (List`1)
+[2025-07-14 21:33:13.794] [INFO] Start-AxiomPhoenix: Services loaded, initializing engine
+[2025-07-14 21:33:13.811] [INFO] Initializing TUI engine...
+[2025-07-14 21:33:14.199] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'Screen.Background'
+[2025-07-14 21:33:14.589] [INFO] TUI engine initialized. Buffer size: 80x24
+[2025-07-14 21:33:14.661] [VERBOSE] [Write-Verbose] Resize: Component 'DashboardScreen' already has target dimensions (80x24). No change.
+[2025-07-14 21:33:14.678] [DEBUG] DashboardScreen.OnEnter: Screen activated
+[2025-07-14 21:33:14.682] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.background'
+[2025-07-14 21:33:14.685] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 21:33:14.689] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.foreground'
+[2025-07-14 21:33:14.693] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.primary'
+[2025-07-14 21:33:14.697] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'panel.border'
+[2025-07-14 21:33:14.704] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'palette.background'
+[2025-07-14 21:33:14.708] [WARNING] [Write-Warning] ThemeManager not available, using fallback for 'foreground'
+[2025-07-14 21:33:14.712] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'ThemeManager'.
+[2025-07-14 21:33:14.715] [INFO] DashboardScreen: Updated colors for 'Synthwave'
+[2025-07-14 21:33:14.744] [DEBUG] Screen.OnEnter: Setting initial focus for DashboardScreen
+[2025-07-14 21:33:14.834] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: DashboardScreen (35067277_DashboardScreen)
+[2025-07-14 21:33:14.852] [DEBUG] Screen._CollectFocusableRecursive: Skipping element: DashboardScreen - IsFocusable: False, Visible: True, Enabled: True, IsScreen: True
+[2025-07-14 21:33:14.863] [DEBUG] Screen._CollectFocusableRecursive: Checking 1 children of DashboardScreen
+[2025-07-14 21:33:14.891] [DEBUG] Screen._CollectFocusableRecursive: Visiting element: MainPanel (21226421_MainPanel)
+[2025-07-14 21:33:14.918] [DEBUG] Screen._CollectFocusableRecursive: Found focusable element: MainPanel (TabIndex: 0)
+[2025-07-14 21:33:14.929] [DEBUG] Screen._CollectFocusableRecursive: Checking 0 children of MainPanel
+[2025-07-14 21:33:14.963] [DEBUG] Screen._GetFocusableChildren: Added unique element: MainPanel (ID: 21226421_MainPanel)
+[2025-07-14 21:33:14.982] [DEBUG] Screen._GetFocusableChildren: Final focus list for DashboardScreen has 1 unique components
+[2025-07-14 21:33:14.991] [DEBUG]   - Focusable: MainPanel (TabIndex: 0, IsFocusable: True, Visible: True, Enabled: True)
+[2025-07-14 21:33:14.996] [DEBUG] Screen.OnEnter: Found 1 focusable components
+[2025-07-14 21:33:15.011] [DEBUG] Screen.FocusFirstChild: Found 1 focusable children
+[2025-07-14 21:33:15.019] [DEBUG] Screen.FocusFirstChild: Attempting to focus first child: MainPanel
+[2025-07-14 21:33:15.044] [DEBUG] Screen.SetChildFocus: Attempting to focus MainPanel on screen DashboardScreen
+[2025-07-14 21:33:15.057] [DEBUG] Screen.SetChildFocus: Checking if component can receive focus - IsFocusable: True, Enabled: True, Visible: True
+[2025-07-14 21:33:15.061] [DEBUG] Screen.SetChildFocus: Setting focus on MainPanel
+[2025-07-14 21:33:15.094] [DEBUG] Screen.OnEnter: Initial focus set to: MainPanel
+[2025-07-14 21:33:15.105] [VERBOSE] [Write-Verbose] ServiceContainer: Returning eager-loaded instance of 'EventManager'.
+[2025-07-14 21:33:15.161] [INFO] Starting TUI Engine with target FPS: 30
