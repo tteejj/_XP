@@ -64,13 +64,13 @@ class SimpleTaskDialog : Screen {
         
         # Add focus visual feedback
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
+            $this.BorderColor = Get-ThemeColor "palette.primary" "#0078d4"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "border" "#404040"
+            $this.BorderColor = Get-ThemeColor "palette.border" "#404040"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -87,13 +87,13 @@ class SimpleTaskDialog : Screen {
         
         # Add focus visual feedback
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
+            $this.BorderColor = Get-ThemeColor "palette.primary" "#0078d4"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
         
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "border" "#404040"
+            $this.BorderColor = Get-ThemeColor "palette.border" "#404040"
             $this.ShowCursor = $false
             $this.RequestRedraw()
         } -Force
@@ -149,7 +149,7 @@ class SimpleTaskDialog : Screen {
 
     hidden [void] _SaveTask() {
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
-            $this._titleBox.BorderColor = (Get-ThemeColor "Error")
+            $this._titleBox.BorderColor = (Get-ThemeColor "palette.error")
             $this.RequestRedraw()
             return
         }

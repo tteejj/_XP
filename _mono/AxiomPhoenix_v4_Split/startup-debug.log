@@ -1,0 +1,157 @@
+
+Key               : PROJ-001
+Name              : Phoenix CRM System
+Description       : Complete CRM system rewrite using modern architecture patterns. This project involves migrating legacy systems to a cloud-native solution with microservices.
+CreatedAt         : 7/14/2025 5:50:07 PM
+UpdatedAt         : 7/14/2025 5:50:07 PM
+Owner             : Sarah Chen
+Tags              : {}
+Metadata          : {[Phase, Development], [Budget, ,000], [ClientID, BN-789456]}
+IsActive          : True
+ID1               : CRM-2024-A
+ID2               : MAIN-CRM-001
+AssignedDate      : 5/30/2025 5:50:07 PM
+BFDate            : 8/13/2025 5:50:07 PM
+ProjectFolderPath : /home/teej/AxiomPhoenix_Projects/PROJ-001_Phoenix_CRM_System
+CaaFileName       : CRM_Requirements_v2.docx
+RequestFileName   : Architecture_Diagram.pdf
+T2020FileName     : Development_Timeline.xlsx
+
+Key               : PROJ-002
+Name              : Mobile App Redesign
+Description       : Complete UI/UX overhaul of the mobile application to improve user engagement and modernize the interface.
+CreatedAt         : 7/14/2025 5:50:08 PM
+UpdatedAt         : 7/14/2025 5:50:08 PM
+Owner             : Michael Torres
+Tags              : {}
+Metadata          : {[ClientID, BN-456123], [Platform, iOS/Android]}
+IsActive          : True
+ID1               : MOB-2024-B
+ID2               : MAIN-MOB-002
+AssignedDate      : 6/24/2025 5:50:08 PM
+BFDate            : 7/9/2025 5:50:08 PM
+ProjectFolderPath : /home/teej/AxiomPhoenix_Projects/PROJ-002_Mobile_App_Redesign
+CaaFileName       : UI_Mockups.pdf
+RequestFileName   : User_Research.docx
+T2020FileName     : 
+
+Key               : PROJ-003
+Name              : Data Analytics Platform
+Description       : Build a comprehensive data analytics platform with real-time dashboards and predictive analytics capabilities.
+CreatedAt         : 7/14/2025 5:50:08 PM
+UpdatedAt         : 7/14/2025 5:50:08 PM
+Owner             : Dr. Emily Watson
+Tags              : {}
+Metadata          : {[ClientID, BN-321789], [Technology, PowerBI, Azure ML]}
+IsActive          : False
+ID1               : DATA-2024-C
+ID2               : MAIN-DATA-003
+AssignedDate      : 4/15/2025 5:50:08 PM
+BFDate            : 9/12/2025 5:50:08 PM
+ProjectFolderPath : /home/teej/AxiomPhoenix_Projects/PROJ-003_Data_Analytics_Platform
+CaaFileName       : 
+RequestFileName   : 
+T2020FileName     : 
+
+Key               : PROJ-004
+Name              : Security Audit 2024
+Description       : Annual security audit and penetration testing for all client-facing applications and infrastructure.
+CreatedAt         : 7/14/2025 5:50:08 PM
+UpdatedAt         : 7/14/2025 5:50:08 PM
+Owner             : James Mitchell
+Tags              : {}
+Metadata          : {[ClientID, BN-654987], [Compliance, SOC2, ISO27001]}
+IsActive          : True
+ID1               : SEC-2024-D
+ID2               : MAIN-SEC-004
+AssignedDate      : 7/4/2025 5:50:08 PM
+BFDate            : 7/21/2025 5:50:08 PM
+ProjectFolderPath : /home/teej/AxiomPhoenix_Projects/PROJ-004_Security_Audit_2024
+CaaFileName       : 
+RequestFileName   : 
+T2020FileName     : 
+
+Id          : 7c5f1bbe-de54-4595-b958-b7c5e44611a3
+Title       : Review project requirements
+Description : 
+Status      : Pending
+Priority    : High
+ProjectKey  : PROJ-001
+Category    : 
+CreatedAt   : 7/14/2025 5:50:08 PM
+UpdatedAt   : 7/14/2025 5:50:08 PM
+DueDate     : 
+Tags        : {}
+Progress    : 0
+Completed   : False
+
+Id          : d45268f6-9dbf-4317-8d91-fb8bce68a81e
+Title       : Design system architecture
+Description : 
+Status      : InProgress
+Priority    : High
+ProjectKey  : PROJ-001
+Category    : 
+CreatedAt   : 7/14/2025 5:50:08 PM
+UpdatedAt   : 7/14/2025 5:50:08 PM
+DueDate     : 7/28/2025 5:50:08 PM
+Tags        : {}
+Progress    : 30
+Completed   : False
+
+Id          : f5756944-0358-44b2-a159-7eec75d65799
+Title       : Implement core features
+Description : 
+Status      : InProgress
+Priority    : Medium
+ProjectKey  : PROJ-001
+Category    : 
+CreatedAt   : 7/14/2025 5:50:08 PM
+UpdatedAt   : 7/14/2025 5:50:08 PM
+DueDate     : 
+Tags        : {}
+Progress    : 60
+Completed   : False
+
+Id          : e94184e8-e18b-455e-b4ef-6fc79bd6db32
+Title       : Fix responsive design issues
+Description : 
+Status      : Completed
+Priority    : High
+ProjectKey  : PROJ-002
+Category    : 
+CreatedAt   : 7/14/2025 5:50:08 PM
+UpdatedAt   : 7/14/2025 5:50:08 PM
+DueDate     : 
+Tags        : {}
+Progress    : 100
+Completed   : True
+
+Id          : dd4d4e67-4230-4862-acb9-1d02339b8a93
+Title       : Conduct penetration testing
+Description : 
+Status      : Pending
+Priority    : High
+ProjectKey  : PROJ-004
+Category    : 
+CreatedAt   : 7/14/2025 5:50:08 PM
+UpdatedAt   : 7/14/2025 5:50:08 PM
+DueDate     : 7/19/2025 5:50:08 PM
+Tags        : {}
+Progress    : 0
+Completed   : False
+
+Id          : b030da9b-ff1c-464b-a835-22ed72b49e41
+Title       : Update mobile UI components
+Description : 
+Status      : InProgress
+Priority    : Medium
+ProjectKey  : PROJ-002
+Category    : 
+CreatedAt   : 7/14/2025 5:50:08 PM
+UpdatedAt   : 7/14/2025 5:50:08 PM
+DueDate     : 
+Tags        : {}
+Progress    : 25
+Completed   : False
+

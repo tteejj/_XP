@@ -220,19 +220,19 @@ class ListBox : UIElement {
             if ($this.SelectedForegroundColor) {
                 $fgColor = $this.SelectedForegroundColor
             } else {
-                $fgColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
+                $fgColor = Get-ThemeColor "list.selected.foreground" "#ffffff"
             }
             
             if ($this.SelectedBackgroundColor) {
                 $itemBgColor = $this.SelectedBackgroundColor
             } else {
-                $itemBgColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+                $itemBgColor = Get-ThemeColor "list.selected.background" "#007acc"
             }
         } else {
             if ($this.ItemForegroundColor) {
                 $fgColor = $this.ItemForegroundColor
             } else {
-                $fgColor = Get-ThemeColor "List.ItemNormal" "#d4d4d4"
+                $fgColor = Get-ThemeColor "list.foreground" "#d4d4d4"
             }
             $itemBgColor = $bgColor
         }
@@ -278,7 +278,7 @@ class ListBox : UIElement {
     # FIXED: Add OnFocus and OnBlur for visual feedback
     [void] OnFocus() {
         ([UIElement]$this).OnFocus()
-        $this.BorderColor = (Get-ThemeColor "Input.FocusedBorder" "#00d4ff")
+        $this.BorderColor = (Get-ThemeColor "input.focused.border" "#00d4ff")
         $this.RequestRedraw()
     }
 

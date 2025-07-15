@@ -70,7 +70,7 @@ class DashboardScreen : Screen {
         
         # Add focus behavior with Add-Member (following guide)
         $this._panel | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent" "#0078d4"
+            $this.BorderColor = Get-ThemeColor "palette.primary" "#0078d4"
             $this.RequestRedraw()
         } -Force
         
@@ -128,7 +128,7 @@ class DashboardScreen : Screen {
                     # Normal item
                     $itemFg = Get-ThemeColor "foreground" "#d4d4d4"
                     if ($item -eq "────────────────") { $itemFg = Get-ThemeColor "text.muted" "#666666" }
-                    $itemBg = Get-ThemeColor "background" "#1e1e1e"
+                    $itemBg = Get-ThemeColor "palette.background" "#1e1e1e"
                     Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $itemFg; BG = $itemBg }
                 }
             }
@@ -180,7 +180,7 @@ class DashboardScreen : Screen {
                 $this._panel.ForegroundColor = Get-ThemeColor "panel.foreground" "#d4d4d4"
                 
                 # Update focus colors in the closures
-                $focusBorder = Get-ThemeColor "primary.accent" "#0078d4"
+                $focusBorder = Get-ThemeColor "palette.primary" "#0078d4"
                 $normalBorder = Get-ThemeColor "panel.border" "#007acc"
                 
                 $this._panel | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
@@ -195,7 +195,7 @@ class DashboardScreen : Screen {
             }
             
             # Update screen background
-            $this.BackgroundColor = Get-ThemeColor "background" "#1e1e1e"
+            $this.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
             $this.ForegroundColor = Get-ThemeColor "foreground" "#d4d4d4"
             
             $themeManager = $this.ServiceContainer?.GetService("ThemeManager")
@@ -236,7 +236,7 @@ class DashboardScreen : Screen {
                 # Back/Exit
                 $actionService = $this.ServiceContainer?.GetService("ActionService")
                 if ($actionService) {
-                    $actionService.ExecuteAction("app.quit", @{})
+                    $actionService.ExecuteAction("app.exit", @{})
                 }
                 return $true
             }
@@ -256,7 +256,7 @@ class DashboardScreen : Screen {
         if ($keyInfo.KeyChar -eq 'q' -or $keyInfo.KeyChar -eq 'Q') {
             $actionService = $this.ServiceContainer?.GetService("ActionService")
             if ($actionService) {
-                $actionService.ExecuteAction("app.quit", @{})
+                $actionService.ExecuteAction("app.exit", @{})
             }
             return $true
         }
@@ -273,13 +273,13 @@ class DashboardScreen : Screen {
         
         switch ($this._selectedIndex) {
             0 { } # Already on dashboard
-            1 { $actionService.ExecuteAction("navigation.tasklist", @{}) }
+            1 { $actionService.ExecuteAction("navigation.taskList", @{}) }
             2 { $actionService.ExecuteAction("navigation.projects", @{}) }
-            3 { $actionService.ExecuteAction("navigation.filebrowser", @{}) }
-            4 { $actionService.ExecuteAction("navigation.texteditor", @{}) }
-            5 { $actionService.ExecuteAction("navigation.themepicker", @{}) }
-            6 { $actionService.ExecuteAction("app.commandpalette", @{}) }
-            8 { $actionService.ExecuteAction("app.quit", @{}) } # Quit option
+            3 { $actionService.ExecuteAction("tools.fileCommander", @{}) }
+            4 { $actionService.ExecuteAction("tools.textEditor", @{}) }
+            5 { $actionService.ExecuteAction("navigation.themePicker", @{}) }
+            6 { $actionService.ExecuteAction("app.commandPalette", @{}) }
+            8 { $actionService.ExecuteAction("app.exit", @{}) } # Quit option
         }
     }
 }

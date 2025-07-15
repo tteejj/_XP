@@ -73,13 +73,19 @@ function global:Write-Host {
     
     # Filter out collection object outputs that corrupt TUI
     if ($Object -and $Object.GetType().FullName -match "System\.Collections\.Generic\.(List|Dictionary|HashSet|Stack|Queue)") {
-        Write-FileLog -Message "FILTERED: Collection object output suppressed ($($Object.GetType().Name))" -Level "DEBUG"
+        try {
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+            Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [DEBUG] [Write-Host] FILTERED: Collection object output suppressed ($($Object.GetType().Name))" -Encoding UTF8 -ErrorAction SilentlyContinue
+        } catch { }
         return
     }
     
     $message = ""
     if ($Object) { $message = $Object.ToString() }
-    Write-FileLog -Message $message -Level "HOST"
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [HOST] [Write-Host] $message" -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
 }
 
 # Redirect Write-Warning
@@ -89,7 +95,10 @@ function global:Write-Warning {
         [string]$Message
     )
     
-    Write-FileLog -Message $Message -Level "WARNING"
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [WARNING] [Write-Warning] $Message" -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
 }
 
 # Redirect Write-Error
@@ -110,15 +119,20 @@ function global:Write-Error {
         [string]$CategoryTargetType
     )
     
-    if ($ErrorRecord) {
-        Write-FileLog -Message "Error occurred" -Level "ERROR" -ErrorRecord $ErrorRecord
-    } elseif ($Exception) {
-        Write-FileLog -Message $Exception.Message -Level "ERROR"
-    } elseif ($Message) {
-        Write-FileLog -Message $Message -Level "ERROR"
-    } elseif ($InputObject) {
-        Write-FileLog -Message $InputObject.ToString() -Level "ERROR"
-    }
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        $errorMsg = ""
+        if ($ErrorRecord) {
+            $errorMsg = "Error occurred: $($ErrorRecord.Exception.Message)"
+        } elseif ($Exception) {
+            $errorMsg = $Exception.Message
+        } elseif ($Message) {
+            $errorMsg = $Message
+        } elseif ($InputObject) {
+            $errorMsg = $InputObject.ToString()
+        }
+        Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [ERROR] [Write-Error] $errorMsg" -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
 }
 
 # Redirect Write-Verbose
@@ -128,7 +142,10 @@ function global:Write-Verbose {
         [string]$Message
     )
     
-    Write-FileLog -Message $Message -Level "VERBOSE"
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [VERBOSE] [Write-Verbose] $Message" -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
 }
 
 # Redirect Write-Debug
@@ -138,7 +155,10 @@ function global:Write-Debug {
         [string]$Message
     )
     
-    Write-FileLog -Message $Message -Level "DEBUG"
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [DEBUG] [Write-Debug] $Message" -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
 }
 
 # Enhanced Write-Log function that uses file logging
@@ -164,7 +184,13 @@ function global:Write-Log {
         "Verbose" = "VERBOSE"
     }
     
-    Write-FileLog -Message $Message -Level $levelMap[$Level] -Component $Component
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        $logEntry = "[$timestamp] [$($levelMap[$Level])]"
+        if ($Component) { $logEntry += " [$Component]" }
+        $logEntry += " $Message"
+        Add-Content -Path $global:AxiomPhoenixLogFile -Value $logEntry -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
 }
 
 # Function to get current log file path
@@ -181,7 +207,10 @@ function Get-AxiomPhoenixLog {
     if (Test-Path $global:AxiomPhoenixLogFile) {
         Get-Content -Path $global:AxiomPhoenixLogFile -Tail $Last
     } else {
-        Write-FileLog -Message "Log file not found at: $global:AxiomPhoenixLogFile" -Level "WARNING"
+        try {
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+            Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [WARNING] Log file not found at: $global:AxiomPhoenixLogFile" -Encoding UTF8 -ErrorAction SilentlyContinue
+        } catch { }
     }
 }
 
@@ -189,9 +218,15 @@ function Get-AxiomPhoenixLog {
 function Clear-AxiomPhoenixLog {
     if (Test-Path $global:AxiomPhoenixLogFile) {
         Clear-Content -Path $global:AxiomPhoenixLogFile -Force
-        Write-FileLog -Message "Log file cleared" -Level "INFO"
+        try {
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+            Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [INFO] Log file cleared" -Encoding UTF8 -ErrorAction SilentlyContinue
+        } catch { }
     }
 }
 
 # Log that file logger is initialized
-Write-FileLog -Message "Axiom Phoenix File Logger initialized. Log file: $global:AxiomPhoenixLogFile" -Level "INFO"
+try {
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+    Add-Content -Path $global:AxiomPhoenixLogFile -Value "[$timestamp] [INFO] Axiom Phoenix File Logger initialized. Log file: $global:AxiomPhoenixLogFile" -Encoding UTF8 -ErrorAction SilentlyContinue
+} catch { }

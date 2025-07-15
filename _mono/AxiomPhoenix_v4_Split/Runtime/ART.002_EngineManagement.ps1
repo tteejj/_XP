@@ -22,7 +22,9 @@ function Initialize-TuiEngine {
         
         # Store original console state
         $global:TuiState.OriginalWindowTitle = $Host.UI.RawUI.WindowTitle
-        $global:TuiState.OriginalCursorVisible = [Console]::CursorVisible
+        # Get original cursor state (Linux-compatible)
+        $global:TuiState.OriginalCursorVisible = $true
+        try { $global:TuiState.OriginalCursorVisible = [Console]::CursorVisible } catch {}
         
         # Configure console
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -87,7 +89,16 @@ function Start-TuiEngine {
                 
                 # Phase 2: Process input
                 Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
-                    if ([Console]::KeyAvailable) {
+                    # Linux-compatible key input detection
+                    $keyAvailable = $false
+                    try {
+                        $keyAvailable = [Console]::KeyAvailable
+                    } catch {
+                        # Use Console.In.Peek for Linux compatibility
+                        try { $keyAvailable = [Console]::In.Peek() -ne -1 } catch {}
+                    }
+                    
+                    if ($keyAvailable) {
                         $keyInfo = [Console]::ReadKey($true)
                         if ($keyInfo) { Process-TuiInput -KeyInfo $keyInfo }
                     }

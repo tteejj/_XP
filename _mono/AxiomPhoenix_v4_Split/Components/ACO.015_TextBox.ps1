@@ -41,7 +41,7 @@ class TextBox : UIElement {
         
         # FIXED: Override focus methods with Add-Member as per guide
         $this | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.BorderColor = Get-ThemeColor "palette.primary"
             $this.ShowCursor = $true
             if ($this._textBox) {
                 $this._textBox.IsFocused = $true
@@ -51,7 +51,7 @@ class TextBox : UIElement {
         } -Force
         
         $this | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "border"
+            $this.BorderColor = Get-ThemeColor "palette.border"
             $this.ShowCursor = $false
             if ($this._textBox) {
                 $this._textBox.IsFocused = $false

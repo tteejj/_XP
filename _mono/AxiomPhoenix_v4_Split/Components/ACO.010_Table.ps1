@@ -79,12 +79,12 @@ class Table : UIElement {
             $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
             $fgColor = Get-ThemeColor "Label.Foreground" "#e0e0e0"
             if ($this.IsFocused) { 
-                $borderColor = Get-ThemeColor "Primary" "#007acc" 
+                $borderColor = Get-ThemeColor "palette.primary" "#007acc" 
             } else { 
                 $borderColor = Get-ThemeColor "Panel.Border" "#404040" 
             }
             $headerBg = Get-ThemeColor "List.HeaderBackground" "#2d2d2d"
-            $selectedBg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+            $selectedBg = Get-ThemeColor "list.selected.background" "#007acc"
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
@@ -147,7 +147,7 @@ class Table : UIElement {
                 
                 if ($this.AllowSelection -and $itemIndex -eq $this.SelectedIndex) {
                     $rowBg = $selectedBg
-                    $rowFg = Get-ThemeColor "List.ItemSelected" "#ffffff"
+                    $rowFg = Get-ThemeColor "list.selected.foreground" "#ffffff"
                 }
                 
                 $this.DrawRow($item, $contentX, $currentY, $contentWidth, $rowFg, $rowBg)

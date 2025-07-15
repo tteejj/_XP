@@ -41,7 +41,8 @@ class TestScreen : Screen {
         
         $currentScreen = $this
         $this._button.OnClick = {
-            [System.IO.File]::AppendAllText("C:\Users\jhnhe\Documents\GitHub\_XP\_mono\AxiomPhoenix_v4_Split\test-click.log", "Button clicked at $(Get-Date)`n")
+            $logPath = Join-Path (Get-Location) "test-click.log"
+            [System.IO.File]::AppendAllText($logPath, "Button clicked at $(Get-Date)`n")
             if ($currentScreen._navService.CanGoBack()) {
                 $currentScreen._navService.GoBack()
             }

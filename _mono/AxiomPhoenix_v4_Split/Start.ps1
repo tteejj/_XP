@@ -72,7 +72,22 @@ try {
     
     # Register core services
     Write-Host "  • Registering Logger..." -ForegroundColor Gray
-    $logger = [Logger]::new((Join-Path $env:TEMP "axiom-phoenix.log"))
+    # Cross-platform log path
+    $isWindowsOS = [System.Environment]::OSVersion.Platform -eq 'Win32NT'
+    if ($isWindowsOS) {
+        $logPath = Join-Path $env:TEMP "axiom-phoenix.log"
+    } else {
+        $userHome = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::UserProfile)
+        if ([string]::IsNullOrEmpty($userHome)) {
+            $userHome = $env:HOME
+        }
+        $logDir = Join-Path $userHome ".local/share/AxiomPhoenix"
+        if (-not (Test-Path $logDir)) {
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        }
+        $logPath = Join-Path $logDir "axiom-phoenix.log"
+    }
+    $logger = [Logger]::new($logPath)
     $logger.EnableFileLogging = $true
     
     # --- PERFORMANCE CONTROL SWITCH ---
@@ -97,7 +112,13 @@ try {
     $container.Register("ThemeManager", [ThemeManager]::new())
     
     Write-Host "  • Registering DataManager..." -ForegroundColor Gray
-    $container.Register("DataManager", [DataManager]::new((Join-Path $env:TEMP "axiom-data.json"), $container.GetService("EventManager")))
+    # Cross-platform data path
+    if ($isWindowsOS) {
+        $dataPath = Join-Path $env:TEMP "axiom-data.json"
+    } else {
+        $dataPath = Join-Path $logDir "axiom-data.json"
+    }
+    $container.Register("DataManager", [DataManager]::new($dataPath, $container.GetService("EventManager")))
     
     Write-Host "  • Registering ActionService..." -ForegroundColor Gray
     $container.Register("ActionService", [ActionService]::new($container.GetService("EventManager")))
@@ -165,8 +186,12 @@ try {
     $project1.SetMetadata("Budget", "$450,000")
     $project1.SetMetadata("Phase", "Development")
     
-    # Create project folder
-    $projectsBasePath = Join-Path $env:TEMP "AxiomPhoenix_Projects"
+    # Create project folder (cross-platform)
+    if ($isWindowsOS) {
+        $projectsBasePath = Join-Path $env:TEMP "AxiomPhoenix_Projects"
+    } else {
+        $projectsBasePath = Join-Path $userHome "AxiomPhoenix_Projects"
+    }
     $project1FolderPath = Join-Path $projectsBasePath "PROJ-001_Phoenix_CRM_System"
     if (-not (Test-Path $project1FolderPath)) {
         New-Item -ItemType Directory -Path $project1FolderPath -Force | Out-Null
@@ -294,7 +319,7 @@ try {
     Write-Host "`nStarting Axiom-Phoenix v4.0..." -ForegroundColor Cyan
     Write-Host "Press Ctrl+P to open command palette, Ctrl+Q to quit" -ForegroundColor Yellow
     Write-Host "Press 3 from Dashboard to view Projects (full CRUD support)" -ForegroundColor Yellow
-    Write-Host "Log file: $(Join-Path $env:TEMP "axiom-phoenix.log")" -ForegroundColor Gray
+    Write-Host "Log file: $logPath" -ForegroundColor Gray
     Start-Sleep -Seconds 1
     
     # Write log before creating dashboard

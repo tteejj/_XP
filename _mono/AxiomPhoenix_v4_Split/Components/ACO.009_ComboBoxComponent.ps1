@@ -51,7 +51,7 @@ class ComboBoxComponent : UIElement {
             
             # Draw main box
             if ($this.IsFocused) { 
-                $borderColor = Get-ThemeColor "Primary" "#007acc" 
+                $borderColor = Get-ThemeColor "palette.primary" "#007acc" 
             } else { 
                 $borderColor = Get-ThemeColor "Panel.Border" "#404040" 
             }
@@ -89,7 +89,7 @@ class ComboBoxComponent : UIElement {
                 $arrowChar = '▼' 
             }
             if ($this.IsFocused) { 
-                $arrowColor = Get-ThemeColor "Accent" "#00d4ff" 
+                $arrowColor = Get-ThemeColor "palette.accent" "#00d4ff" 
             } else { 
                 $arrowColor = Get-ThemeColor "Label.Foreground" "#666666" 
             }
@@ -137,15 +137,15 @@ class ComboBoxComponent : UIElement {
             $item = $this.Items[$itemIndex]
             $itemText = $this.GetDisplayText($item)
             
-            $itemFg = Get-ThemeColor "List.ItemNormal" "#d4d4d4"
+            $itemFg = Get-ThemeColor "list.foreground" "#d4d4d4"
             $itemBg = Get-ThemeColor "Input.Background" "#1e1e1e"
             
             if ($i -eq $this._highlightedIndex) {
-                $itemFg = Get-ThemeColor "List.ItemSelected" "#ffffff"
-                $itemBg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+                $itemFg = Get-ThemeColor "list.selected.foreground" "#ffffff"
+                $itemBg = Get-ThemeColor "list.selected.background" "#007acc"
             }
             elseif ($itemIndex -eq $this.SelectedIndex) {
-                $itemFg = Get-ThemeColor "Accent" "#00d4ff"
+                $itemFg = Get-ThemeColor "palette.accent" "#00d4ff"
             }
             
             # Clear line and draw item
@@ -178,7 +178,7 @@ class ComboBoxComponent : UIElement {
     }
     
     [void] OnFocus() {
-        $this.BorderColor = Get-ThemeColor "input.borderfocused" "#0078d4"
+        $this.BorderColor = Get-ThemeColor "input.focused.border" "#0078d4"
         $this.RequestRedraw()
     }
     

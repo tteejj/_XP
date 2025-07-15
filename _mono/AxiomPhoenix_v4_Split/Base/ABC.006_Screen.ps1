@@ -166,27 +166,48 @@ class Screen : UIElement {
             return 
         }
         
+        # Get current index - ensure we have a valid starting point
         $currentIndex = -1
         if ($null -ne $this._focusedChild) {
             $currentIndex = $focusable.IndexOf($this._focusedChild)
-            Write-Log -Level Debug -Message "navigation.nextComponent: Current focus: $($this._focusedChild.Name)"
+            Write-Log -Level Debug -Message "navigation.nextComponent: Current focus: $($this._focusedChild.Name) at index $currentIndex"
+            
+            # If current focused component is not in the focusable list, invalidate cache and retry
+            if ($currentIndex -eq -1) {
+                Write-Log -Level Warning -Message "navigation.nextComponent: Current focused component not in focusable list, refreshing cache"
+                $this.InvalidateFocusCache()
+                $focusable = $this._GetFocusableChildren()
+                $currentIndex = $focusable.IndexOf($this._focusedChild)
+            }
         } else {
             Write-Log -Level Debug -Message "navigation.nextComponent: No current focus"
         }
         
-        # Try to focus next component, and if that fails, try subsequent ones
-        for ($i = 0; $i -lt $focusable.Count; $i++) {
-            $nextIndex = ($currentIndex + 1 + $i) % $focusable.Count
-            $nextComponent = $focusable[$nextIndex]
-            Write-Log -Level Debug -Message "navigation.nextComponent: Attempting to focus $($nextComponent.Name) at index $nextIndex"
-            if ($this.SetChildFocus($nextComponent)) {
-                $focusedName = "none"
-                if ($this._focusedChild) { $focusedName = $this._focusedChild.Name }
-                Write-Log -Level Debug -Message "navigation.nextComponent: New focus: $focusedName"
+        # Calculate next index
+        $nextIndex = ($currentIndex + 1) % $focusable.Count
+        $nextComponent = $focusable[$nextIndex]
+        
+        Write-Log -Level Debug -Message "navigation.nextComponent: Attempting to focus $($nextComponent.Name) at index $nextIndex"
+        
+        # Try to focus the next component
+        if ($this.SetChildFocus($nextComponent)) {
+            Write-Log -Level Debug -Message "navigation.nextComponent: Successfully focused $($nextComponent.Name)"
+            return
+        }
+        
+        # If that failed, try all other components in order
+        Write-Log -Level Warning -Message "navigation.nextComponent: Failed to focus next component, trying alternatives"
+        for ($i = 1; $i -lt $focusable.Count; $i++) {
+            $tryIndex = ($currentIndex + 1 + $i) % $focusable.Count
+            $tryComponent = $focusable[$tryIndex]
+            Write-Log -Level Debug -Message "navigation.nextComponent: Trying alternative $($tryComponent.Name) at index $tryIndex"
+            if ($this.SetChildFocus($tryComponent)) {
+                Write-Log -Level Debug -Message "navigation.nextComponent: Successfully focused alternative $($tryComponent.Name)"
                 return
             }
         }
-        Write-Log -Level Warning -Message "navigation.nextComponent: Failed to focus any component"
+        
+        Write-Log -Level Error -Message "navigation.nextComponent: Failed to focus any component"
     }
     
     [void] FocusPreviousChild() {

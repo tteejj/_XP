@@ -2,11 +2,12 @@
 # Axiom-Phoenix v4.0 - Theme Functions (Enhanced for Palette-Based System)
 # ==============================================================================
 
-# Get theme color with fallback (uses new theme paths)
+# Get theme color with standardized key validation
 function Get-ThemeColor {
     param(
-        [string]$ThemePath,
-        [string]$DefaultColor = "#ffffff"
+        [string]$Key,
+        [string]$Fallback = $null,
+        [switch]$NoValidation
     )
     
     $themeManager = $global:TuiState?.Services?.ThemeManager
@@ -15,10 +16,32 @@ function Get-ThemeColor {
         $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
     }
     
-    if ($themeManager) {
-        return $themeManager.GetColor($ThemePath, $DefaultColor)
+    if (-not $themeManager) {
+        Write-Warning "ThemeManager not available, using fallback for '$Key'"
+        return $Fallback -or "#FFFFFF"
     }
-    return $DefaultColor
+    
+    # Check if key is in registry (case-insensitive)
+    $keyLower = $Key.ToLower()
+    if (-not $NoValidation -and $themeManager._validThemeKeys.ContainsKey($keyLower)) {
+        $keyInfo = $themeManager._validThemeKeys[$keyLower]
+        $actualPath = $keyInfo.Path
+        $registryFallback = $keyInfo.Fallback
+        
+        $color = $themeManager.GetColor($actualPath)
+        if ($color) { return $color }
+        
+        # Use parameter fallback first, then registry fallback
+        return $Fallback -or $registryFallback
+    }
+    
+    # Legacy mode - direct path lookup with warning
+    if (-not $NoValidation) {
+        Write-Warning "Theme key '$Key' not in registry. Add to _validThemeKeys or use -NoValidation. Using direct lookup."
+    }
+    
+    $color = $themeManager.GetColor($Key)
+    return $color -or $Fallback -or "#FFFFFF"
 }
 
 # Get any theme value (colors, borders, etc.) with fallback

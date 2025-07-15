@@ -77,10 +77,10 @@ class DashboardScreen : Screen {
             
             # Get theme colors
             $normalFg = Get-ThemeColor "foreground"
-            $normalBg = Get-ThemeColor "background"
+            $normalBg = Get-ThemeColor "palette.background"
             $selectedFg = Get-ThemeColor "listbox.selectedforeground"
             $selectedBg = Get-ThemeColor "listbox.selectedbackground"
-            $separatorFg = Get-ThemeColor "muted"
+            $separatorFg = Get-ThemeColor "palette.muted"
             
             # Draw menu items
             for ($i = 0; $i -lt $this._menuItems.Count -and $i -lt $contentHeight; $i++) {
@@ -154,24 +154,24 @@ class DashboardScreen : Screen {
         try {
             # Update panel colors using Get-ThemeColor
             if ($this._panel) {
-                $this._panel.BackgroundColor = Get-ThemeColor "background"
-                $this._panel.BorderColor = Get-ThemeColor "border"
+                $this._panel.BackgroundColor = Get-ThemeColor "palette.background"
+                $this._panel.BorderColor = Get-ThemeColor "palette.border"
                 $this._panel.ForegroundColor = Get-ThemeColor "foreground"
                 
                 # Update focus colors
                 $this._panel | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                    $this.BorderColor = Get-ThemeColor "primary.accent"
+                    $this.BorderColor = Get-ThemeColor "palette.primary"
                     $this.RequestRedraw()
                 } -Force
                 
                 $this._panel | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-                    $this.BorderColor = Get-ThemeColor "border"
+                    $this.BorderColor = Get-ThemeColor "palette.border"
                     $this.RequestRedraw()
                 } -Force
             }
             
             # Update screen colors
-            $this.BackgroundColor = Get-ThemeColor "background"
+            $this.BackgroundColor = Get-ThemeColor "palette.background"
             $this.ForegroundColor = Get-ThemeColor "foreground"
             
             Write-Log -Level Info -Message "DashboardScreen: Updated theme colors"

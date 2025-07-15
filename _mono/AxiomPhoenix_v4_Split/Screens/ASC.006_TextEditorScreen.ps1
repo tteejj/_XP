@@ -280,8 +280,8 @@ class TextEditorScreen : Screen {
                 # Highlight selection if active
                 $absolutePos = $this._buffer.GetLineStart($lineIndex) + $this._viewportLeft + $i
                 if ($this._selection.IsActive -and $this._selection.ContainsPosition($absolutePos)) {
-                    $fg = Get-ThemeColor "List.ItemSelected" "#ffffff"
-                    $bg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+                    $fg = Get-ThemeColor "list.selected.foreground" "#ffffff"
+                    $bg = Get-ThemeColor "list.selected.background" "#007acc"
                     $cell = [TuiCell]::new($char, $fg, $bg)
                 } else {
                     $cell = [TuiCell]::new($char, $fg, $null)
@@ -552,7 +552,7 @@ class TextEditorScreen : Screen {
             }
         } else {
             $this._searchStatusLabel.Text = "No matches found"
-            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Warning"
+            $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "palette.warning"
         }
         
         $this._fullRedrawNeeded = $true
@@ -806,7 +806,7 @@ Try typing, navigating, and searching to see the smooth performance!
                     # Replace current
                     if ($this._searchEngine.ReplaceCurrent($this._replaceBox.Text)) {
                         $this._searchStatusLabel.Text = "Replaced 1 occurrence"
-                        $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+                        $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "palette.success"
                         $this._fullRedrawNeeded = $true
                         $this.RequestRedraw()
                     }
@@ -818,7 +818,7 @@ Try typing, navigating, and searching to see the smooth performance!
                     # Replace all
                     $count = $this._searchEngine.ReplaceAll($this._replaceBox.Text)
                     $this._searchStatusLabel.Text = "Replaced $count occurrences"
-                    $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "Success"
+                    $this._searchStatusLabel.ForegroundColor = Get-ThemeColor "palette.success"
                     $this._fullRedrawNeeded = $true
                     $this.RequestRedraw()
                     return $true

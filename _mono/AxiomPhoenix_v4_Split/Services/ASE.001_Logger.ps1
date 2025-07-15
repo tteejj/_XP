@@ -34,7 +34,21 @@ class Logger {
     }
     
     Logger() {
-        $this.LogPath = Join-Path $env:APPDATA "AxiomPhoenix\app.log"
+        # Cross-platform log path
+        $isWindowsOS = [System.Environment]::OSVersion.Platform -eq 'Win32NT'
+        if ($isWindowsOS) {
+            $this.LogPath = Join-Path $env:APPDATA "AxiomPhoenix\app.log"
+        } else {
+            $userHome = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::UserProfile)
+            if ([string]::IsNullOrEmpty($userHome)) {
+                $userHome = $env:HOME
+            }
+            $logDir = Join-Path $userHome ".local/share/AxiomPhoenix"
+            if (-not (Test-Path $logDir)) {
+                New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+            }
+            $this.LogPath = Join-Path $logDir "app.log"
+        }
         $this._Initialize()
     }
     

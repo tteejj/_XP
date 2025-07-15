@@ -50,7 +50,7 @@ class TextBoxComponent : UIElement {
         $bgColor = $this.GetEffectiveBackgroundColor()
         $fgColor = $this.GetEffectiveForegroundColor()
         $borderColorValue = $this.GetEffectiveBorderColor()
-        if ($this.IsFocused) { $borderColorValue = Get-ThemeColor "Input.FocusedBorder" "#007acc" }
+        if ($this.IsFocused) { $borderColorValue = Get-ThemeColor "input.focused.border" "#007acc" }
         
         # Clear buffer with the correct background color
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
@@ -119,7 +119,7 @@ class TextBoxComponent : UIElement {
     }
 
     [void] OnFocus() {
-        $this.BorderColor = Get-ThemeColor "input.borderfocused" "#0078d4"
+        $this.BorderColor = Get-ThemeColor "input.focused.border" "#0078d4"
         $this.ShowCursor = $true
         $this.RequestRedraw()
     }

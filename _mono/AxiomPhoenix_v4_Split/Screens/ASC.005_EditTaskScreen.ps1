@@ -92,7 +92,7 @@ class EditTaskScreen : Screen {
         $fieldWidth = [Math]::Floor($contentWidth / 2) - 2
         
         # Store common theme colors for all inputs
-        $inputFocusBorder = Get-ThemeColor "Input.FocusedBorder" "#00D4FF"
+        $inputFocusBorder = Get-ThemeColor "input.focused.border" "#00D4FF"
         $inputNormalBorder = Get-ThemeColor "Input.Border" "#444444"
         $buttonFocusBg = Get-ThemeColor "Button.Focused.Background" "#1976D2"
         $buttonNormalBg = Get-ThemeColor "Button.Normal.Background" "#0D47A1"
@@ -460,6 +460,12 @@ class EditTaskScreen : Screen {
         # Call base to set initial focus automatically
         ([Screen]$this).OnEnter()
         
+        # Additional safety: if no component got focus, try to set it explicitly
+        if (-not $this.GetFocusedChild()) {
+            Write-Log -Level Debug -Message "EditTaskScreen.OnEnter: No component focused, setting explicit focus"
+            $this.SetChildFocus($this._titleBox)
+        }
+        
         $this.RequestRedraw()
     }
     
@@ -489,6 +495,7 @@ class EditTaskScreen : Screen {
         }
         $this._projectList.SelectedIndex = $selectedIndex
     }
+    
     
     # === SAVE/CANCEL OPERATIONS ===
     hidden [void] _SaveTask() {

@@ -193,7 +193,7 @@ class DataManager : System.IDisposable {
                 
                 # Manage backup rotation
                 if ($this.BackupCount -gt 0) {
-                    $backups = Get-ChildItem -Path $this._backupPath -Filter "data-backup-*.json" -CaseSensitive | 
+                    $backups = Get-ChildItem -Path $this._backupPath -Filter "data-backup-*.json" | 
                                Sort-Object LastWriteTime -Descending
                     
                     if ($backups.Count -gt $this.BackupCount) {

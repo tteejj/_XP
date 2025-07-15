@@ -63,7 +63,7 @@ class CommandPalette : Dialog {
         
         # Add focus visual feedback
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.BorderColor = Get-ThemeColor "palette.primary"
             $this.ShowCursor = $true
             $this.RequestRedraw()
         } -Force
@@ -98,7 +98,7 @@ class CommandPalette : Dialog {
         
         # Add focus visual feedback
         $this._listBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "primary.accent"
+            $this.BorderColor = Get-ThemeColor "palette.primary"
             $this.RequestRedraw()
         } -Force
 

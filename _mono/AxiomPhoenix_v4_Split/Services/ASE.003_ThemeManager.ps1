@@ -14,6 +14,91 @@ class ThemeManager {
     [string]$ThemeName = ""
     [hashtable]$Themes = @{}
     
+    # Theme Schema Registry - standardized key mappings
+    hidden [hashtable]$_validThemeKeys = @{
+        # Core Palette (lowercase with dots)
+        "palette.primary" = @{ Path = "Palette.Primary"; Fallback = "#00D4FF" }
+        "palette.secondary" = @{ Path = "Palette.Secondary"; Fallback = "#FF6B35" }
+        "palette.accent" = @{ Path = "Palette.Accent"; Fallback = "#7C3AED" }
+        "palette.background" = @{ Path = "Palette.Background"; Fallback = "#0A0A0A" }
+        "palette.surface" = @{ Path = "Palette.Surface"; Fallback = "#1A1A1A" }
+        "palette.text" = @{ Path = "Palette.TextPrimary"; Fallback = "#FFFFFF" }
+        "palette.text.secondary" = @{ Path = "Palette.TextSecondary"; Fallback = "#B3B3B3" }
+        "palette.text.disabled" = @{ Path = "Palette.TextDisabled"; Fallback = "#666666" }
+        "palette.muted" = @{ Path = "Palette.TextSecondary"; Fallback = "#6B7280" }
+        "palette.success" = @{ Path = "Palette.Success"; Fallback = "#10B981" }
+        "palette.warning" = @{ Path = "Palette.Warning"; Fallback = "#F59E0B" }
+        "palette.error" = @{ Path = "Palette.Error"; Fallback = "#EF4444" }
+        "palette.info" = @{ Path = "Palette.Info"; Fallback = "#3B82F6" }
+        "palette.border" = @{ Path = "Palette.Border"; Fallback = "#374151" }
+        
+        # Screen Components
+        "screen.background" = @{ Path = "Components.Screen.Background"; Fallback = "#0A0A0A" }
+        "screen.foreground" = @{ Path = "Components.Screen.Foreground"; Fallback = "#FFFFFF" }
+        
+        # Panel Components  
+        "panel.background" = @{ Path = "Components.Panel.Background"; Fallback = "#1A1A1A" }
+        "panel.border" = @{ Path = "Components.Panel.Border"; Fallback = "#007ACC" }
+        "panel.title" = @{ Path = "Components.Panel.Title"; Fallback = "#00D4FF" }
+        "panel.header" = @{ Path = "Components.Panel.Header"; Fallback = "#1A1A1A" }
+        
+        # Button Components
+        "button.normal.background" = @{ Path = "Components.Button.Normal.Background"; Fallback = "#374151" }
+        "button.normal.foreground" = @{ Path = "Components.Button.Normal.Foreground"; Fallback = "#FFFFFF" }
+        "button.focused.background" = @{ Path = "Components.Button.Focused.Background"; Fallback = "#00D4FF" }
+        "button.focused.foreground" = @{ Path = "Components.Button.Focused.Foreground"; Fallback = "#000000" }
+        "button.pressed.background" = @{ Path = "Components.Button.Pressed.Background"; Fallback = "#FF6B35" }
+        "button.pressed.foreground" = @{ Path = "Components.Button.Pressed.Foreground"; Fallback = "#000000" }
+        "button.disabled.background" = @{ Path = "Components.Button.Disabled.Background"; Fallback = "#1A1A1A" }
+        "button.disabled.foreground" = @{ Path = "Components.Button.Disabled.Foreground"; Fallback = "#666666" }
+        
+        # Input Components
+        "input.background" = @{ Path = "Components.Input.Background"; Fallback = "#1F2937" }
+        "input.foreground" = @{ Path = "Components.Input.Foreground"; Fallback = "#FFFFFF" }
+        "input.border" = @{ Path = "Components.Input.Border"; Fallback = "#374151" }
+        "input.focused.border" = @{ Path = "Components.Input.FocusedBorder"; Fallback = "#00D4FF" }
+        "input.placeholder" = @{ Path = "Components.Input.Placeholder"; Fallback = "#6B7280" }
+        
+        # List Components
+        "list.background" = @{ Path = "Components.List.Background"; Fallback = "#1F2937" }
+        "list.foreground" = @{ Path = "Components.List.ItemNormal"; Fallback = "#FFFFFF" }
+        "list.selected.background" = @{ Path = "Components.List.ItemSelectedBackground"; Fallback = "#00D4FF" }
+        "list.selected.foreground" = @{ Path = "Components.List.ItemSelected"; Fallback = "#000000" }
+        "list.focused.background" = @{ Path = "Components.List.ItemFocusedBackground"; Fallback = "#7C3AED" }
+        "list.focused.foreground" = @{ Path = "Components.List.ItemFocused"; Fallback = "#000000" }
+        "list.header.background" = @{ Path = "Components.List.HeaderBackground"; Fallback = "#1A1A1A" }
+        "list.header.foreground" = @{ Path = "Components.List.HeaderForeground"; Fallback = "#00D4FF" }
+        "list.scrollbar" = @{ Path = "Components.List.Scrollbar"; Fallback = "#FF6B35" }
+        
+        # Label Components
+        "label.foreground" = @{ Path = "Components.Label.Foreground"; Fallback = "#FFFFFF" }
+        "label.disabled" = @{ Path = "Components.Label.Disabled"; Fallback = "#666666" }
+        "label.muted" = @{ Path = "Components.Label.Disabled"; Fallback = "#6B7280" }
+        
+        # Dialog Components
+        "dialog.background" = @{ Path = "Components.Overlay.DialogBackground"; Fallback = "#1A1A1A" }
+        "dialog.border" = @{ Path = "Components.Panel.Border"; Fallback = "#7C3AED" }
+        "overlay.background" = @{ Path = "Components.Overlay.Background"; Fallback = "#000000" }
+        
+        # Status Components
+        "status.success" = @{ Path = "Components.Status.Success"; Fallback = "#10B981" }
+        "status.warning" = @{ Path = "Components.Status.Warning"; Fallback = "#F59E0B" }
+        "status.error" = @{ Path = "Components.Status.Error"; Fallback = "#EF4444" }
+        "status.info" = @{ Path = "Components.Status.Info"; Fallback = "#3B82F6" }
+        
+        # Legacy/Common Mappings for backwards compatibility
+        "component.border" = @{ Path = "Components.Panel.Border"; Fallback = "#374151" }
+        "component.text" = @{ Path = "Components.Label.Foreground"; Fallback = "#FFFFFF" }
+        "text.muted" = @{ Path = "Components.Label.Disabled"; Fallback = "#6B7280" }
+        "primary.accent" = @{ Path = "Palette.Primary"; Fallback = "#00D4FF" }
+        "accent.secondary" = @{ Path = "Palette.Secondary"; Fallback = "#FF6B35" }
+        
+        # ListBox aliases (for backwards compatibility)
+        "listbox.selectedbackground" = @{ Path = "Components.List.ItemSelectedBackground"; Fallback = "#00D4FF" }
+        "listbox.selectedforeground" = @{ Path = "Components.List.ItemSelected"; Fallback = "#000000" }
+        "listbox.focusedselectedbackground" = @{ Path = "Components.List.ItemFocusedBackground"; Fallback = "#7C3AED" }
+    }
+    
     ThemeManager() {
         $this.InitializeThemes()
         $this.LoadDefaultTheme()
@@ -86,7 +171,7 @@ class ThemeManager {
             $themesPath = Join-Path (Split-Path $scriptPath -Parent) "Themes"
             
             if (Test-Path $themesPath) {
-                $themeFiles = Get-ChildItem -Path $themesPath -Filter "*.ps1" -CaseSensitive
+                $themeFiles = Get-ChildItem -Path $themesPath -Filter "*.ps1"
                 
                 foreach ($themeFile in $themeFiles) {
                     try {

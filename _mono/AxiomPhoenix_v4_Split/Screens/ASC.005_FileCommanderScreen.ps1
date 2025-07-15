@@ -72,8 +72,15 @@ class FileCommanderScreen : Screen {
             $this._leftPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
             $this._rightPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
         } catch {
-            $this._leftPath = "C:\"
-            $this._rightPath = "C:\"
+            # Cross-platform fallback paths
+            $isWindowsOS = [System.Environment]::OSVersion.Platform -eq 'Win32NT'
+            $userHome = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::UserProfile)
+            if ([string]::IsNullOrEmpty($userHome)) {
+                $userHome = if ($isWindowsOS) { $env:USERPROFILE } else { $env:HOME }
+            }
+            
+            $this._leftPath = if ($isWindowsOS) { "C:\" } else { "/" }
+            $this._rightPath = if ($isWindowsOS) { "C:\" } else { $userHome }
         }
     }
 
@@ -128,8 +135,8 @@ class FileCommanderScreen : Screen {
         $this._leftFileList.IsFocusable = $true  # Enable focus for hybrid model
         $this._leftFileList.TabIndex = 0         # First in tab order
         # Use property assignment
-        $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#1E3A8A"
-        $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#FFFFFF"
+        $this._leftFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#1E3A8A"
+        $this._leftFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#FFFFFF"
         $this._leftFileList.ItemForegroundColor = Get-ThemeColor "Label.Foreground" "#E0E0E0"
         
         # Store theme colors before creating closure
@@ -186,8 +193,8 @@ class FileCommanderScreen : Screen {
         $this._rightFileList.IsFocusable = $true  # Enable focus for hybrid model
         $this._rightFileList.TabIndex = 1         # Second in tab order
         # Use property assignment
-        $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#1E3A8A"
-        $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#FFFFFF"
+        $this._rightFileList.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#1E3A8A"
+        $this._rightFileList.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#FFFFFF"
         $this._rightFileList.ItemForegroundColor = Get-ThemeColor "Label.Foreground" "#E0E0E0"
         
         # Add focus visual feedback with stored colors

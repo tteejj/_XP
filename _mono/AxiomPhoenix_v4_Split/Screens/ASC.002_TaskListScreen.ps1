@@ -139,9 +139,9 @@ class TaskListScreen : Screen {
         $this._taskListBox.HasBorder = $false
         $this._taskListBox.IsFocusable = $true
         $this._taskListBox.TabIndex = 0
-        $this._taskListBox.SelectedBackgroundColor = (Get-ThemeColor "List.ItemSelectedBackground" "#007acc")
-        $this._taskListBox.SelectedForegroundColor = (Get-ThemeColor "List.ItemSelected" "#ffffff")
-        $this._taskListBox.ItemForegroundColor = (Get-ThemeColor "List.ItemNormal" "#d4d4d4")
+        $this._taskListBox.SelectedBackgroundColor = (Get-ThemeColor "list.selected.background" "#007acc")
+        $this._taskListBox.SelectedForegroundColor = (Get-ThemeColor "list.selected.foreground" "#ffffff")
+        $this._taskListBox.ItemForegroundColor = (Get-ThemeColor "list.foreground" "#d4d4d4")
         
         # ListBox already has OnFocus/OnBlur methods that handle border color changes
         

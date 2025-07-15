@@ -77,12 +77,14 @@ class ButtonComponent : UIElement {
     [void] OnFocus() {
         $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0078d4"
         $this.ForegroundColor = Get-ThemeColor "button.focused.foreground" "#ffffff"
+        $this.BorderColor = Get-ThemeColor "button.focused.border" "#00ff88"
         $this.RequestRedraw()
     }
     
     [void] OnBlur() {
-        $this.BackgroundColor = Get-ThemeColor "button.background" "#404040"
-        $this.ForegroundColor = Get-ThemeColor "button.foreground" "#d4d4d4"
+        $this.BackgroundColor = Get-ThemeColor "button.normal.background" "#404040"
+        $this.ForegroundColor = Get-ThemeColor "button.normal.foreground" "#d4d4d4"
+        $this.BorderColor = Get-ThemeColor "button.border" "#666666"
         $this.RequestRedraw()
     }
 

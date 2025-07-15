@@ -73,7 +73,7 @@ class ProjectsListScreen : Screen {
         $this._searchBox.BorderColor = Get-ThemeColor "Input.Border" "#404040"
         
         # Add visual focus feedback for search box - store colors before closure
-        $searchFocusBorder = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+        $searchFocusBorder = Get-ThemeColor "input.focused.border" "#00d4ff"
         $searchNormalBorder = Get-ThemeColor "Input.Border" "#666666"
         
         $this._searchBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
@@ -107,11 +107,11 @@ class ProjectsListScreen : Screen {
         $this._projectListBox.HasBorder = $false
         $this._projectListBox.IsFocusable = $true
         $this._projectListBox.TabIndex = 1
-        $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
-        $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
+        $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#007acc"
+        $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#ffffff"
         
         # Add visual focus feedback for list box - store colors before closure
-        $listFocusBorder = Get-ThemeColor "Input.FocusedBorder" "#00d4ff"
+        $listFocusBorder = Get-ThemeColor "input.focused.border" "#00d4ff"
         $listNormalBorder = Get-ThemeColor "Panel.Border" "#666666"
         
         $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {

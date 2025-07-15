@@ -168,7 +168,7 @@ class ScrollablePanel : Panel {
 
         if ($this._contentHeight -le $scrollbarTrackHeight) { 
             # If content fits, clear any previous scrollbar
-            $bgColor = Get-ThemeColor "Background"
+            $bgColor = Get-ThemeColor "palette.background"
             for ($i = 0; $i -lt $scrollbarTrackHeight; $i++) {
                 $this._private_buffer.SetCell($scrollbarX, $scrollbarY + $i, [TuiCell]::new(' ', $bgColor, $bgColor))
             }
@@ -176,7 +176,7 @@ class ScrollablePanel : Panel {
         } 
 
         $scrollFg = Get-ThemeColor "list.scrollbar"
-        $scrollBg = Get-ThemeColor "Background"
+        $scrollBg = Get-ThemeColor "palette.background"
 
         # Calculate thumb size and position
         $thumbSize = [Math]::Max(1, [int]($scrollbarTrackHeight * $scrollbarTrackHeight / $this._contentHeight))

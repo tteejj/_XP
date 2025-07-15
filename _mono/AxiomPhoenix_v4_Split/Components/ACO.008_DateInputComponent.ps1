@@ -43,7 +43,7 @@ class DateInputComponent : UIElement {
             $bgColor = $this.GetEffectiveBackgroundColor()
             $fgColor = $this.GetEffectiveForegroundColor()
             if ($this.IsFocused) { 
-                $borderColorValue = Get-ThemeColor "Primary" "#00FFFF" 
+                $borderColorValue = Get-ThemeColor "palette.primary" "#00FFFF" 
             } else { 
                 $borderColorValue = $this.GetEffectiveBorderColor()
             }

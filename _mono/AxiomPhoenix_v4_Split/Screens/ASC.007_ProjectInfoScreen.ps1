@@ -137,10 +137,10 @@ class ProjectInfoScreen : Screen {
         $y += 2
         
         $statusText = "Archived"
-        $statusColor = Get-ThemeColor "subtle"
+        $statusColor = Get-ThemeColor "label.muted"
         if ($this._project.IsActive) { 
             $statusText = "Active"
-            $statusColor = Get-ThemeColor "success"
+            $statusColor = Get-ThemeColor "palette.success"
         }
         $this.AddDetailField("Status:", $statusText, $y, $statusColor)
         $y += 2
@@ -161,8 +161,8 @@ class ProjectInfoScreen : Screen {
         $this._taskListbox.Height = $this._tasksPanel.Height - 2
         $this._taskListbox.HasBorder = $false
         $this._taskListbox.IsFocusable = $false  # We handle input directly
-        $this._taskListbox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
-        $this._taskListbox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
+        $this._taskListbox.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#007acc"
+        $this._taskListbox.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#ffffff"
         $this._tasksPanel.AddChild($this._taskListbox)
 
         # Populate Files Listbox
@@ -173,8 +173,8 @@ class ProjectInfoScreen : Screen {
         $this._fileListbox.Height = $this._filesPanel.Height - 2
         $this._fileListbox.HasBorder = $false
         $this._fileListbox.IsFocusable = $false  # We handle input directly
-        $this._fileListbox.SelectedBackgroundColor = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
-        $this._fileListbox.SelectedForegroundColor = Get-ThemeColor "List.ItemSelected" "#ffffff"
+        $this._fileListbox.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#007acc"
+        $this._fileListbox.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#ffffff"
         $this._filesPanel.AddChild($this._fileListbox)
 
         # Instructions
@@ -292,7 +292,7 @@ class ProjectInfoScreen : Screen {
         $filesFound = $false
 
         if ($this._project.ProjectFolderPath -and (Test-Path $this._project.ProjectFolderPath)) {
-            $files = Get-ChildItem -Path $this._project.ProjectFolderPath -File -CaseSensitive
+            $files = Get-ChildItem -Path $this._project.ProjectFolderPath -File
             if ($files.Count -gt 0) {
                 foreach ($file in $files) {
                     $fileText = "📄 $($file.Name)"

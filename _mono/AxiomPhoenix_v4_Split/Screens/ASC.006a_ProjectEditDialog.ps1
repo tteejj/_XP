@@ -304,7 +304,7 @@ class ProjectEditDialog : Dialog {
     hidden [void] _AddFieldVisualFeedback([Component]$field) {
         if ($field -is [TextBoxComponent] -or $field -is [MultilineTextBoxComponent]) {
             $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                $this.BorderColor = Get-ThemeColor "primary.accent"
+                $this.BorderColor = Get-ThemeColor "palette.primary"
                 $this.ShowCursor = $true
                 $this.RequestRedraw()
             } -Force
@@ -317,7 +317,7 @@ class ProjectEditDialog : Dialog {
         }
         elseif ($field -is [ButtonComponent]) {
             $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                $this.BorderColor = Get-ThemeColor "primary.accent"
+                $this.BorderColor = Get-ThemeColor "palette.primary"
                 $this.RequestRedraw()
             } -Force
             
@@ -328,7 +328,7 @@ class ProjectEditDialog : Dialog {
         }
         elseif ($field -is [CheckBoxComponent]) {
             $field | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                $this.ForegroundColor = Get-ThemeColor "primary.accent"
+                $this.ForegroundColor = Get-ThemeColor "palette.primary"
                 $this.RequestRedraw()
             } -Force
             
