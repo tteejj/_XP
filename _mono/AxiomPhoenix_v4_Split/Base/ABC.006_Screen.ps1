@@ -125,6 +125,7 @@ class Screen : UIElement {
         if ($component) { $componentName = $component.Name }
         Write-Log -Level Debug -Message "Screen.SetChildFocus: Attempting to focus $componentName on screen $($this.Name)"
         
+        
         if ($this._focusedChild -eq $component) { 
             Write-Log -Level Debug -Message "Screen.SetChildFocus: Component already has focus"
             return $true 
@@ -147,6 +148,9 @@ class Screen : UIElement {
                 $component.IsFocused = $true
                 $component.OnFocus()
                 $component.RequestRedraw()
+                
+                # SET GLOBAL STATE
+                $global:TuiState.FocusedComponent = $component
                 return $true
             } else {
                 Write-Log -Level Debug -Message "Screen.SetChildFocus: Component $($component.Name) cannot receive focus"

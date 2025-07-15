@@ -120,7 +120,8 @@ class NavigationService {
             # FIXED: Update global TUI state
             $global:TuiState.CurrentScreen = $screen
             $global:TuiState.IsDirty = $true
-            $global:TuiState.FocusedComponent = $null
+            # REMOVED: Don't clear focus after OnEnter() has set it properly
+            # $global:TuiState.FocusedComponent = $null
 
         }
         catch {
@@ -177,7 +178,8 @@ class NavigationService {
             # FIXED: Update global TUI state
             $global:TuiState.CurrentScreen = $previousScreen
             $global:TuiState.IsDirty = $true
-            $global:TuiState.FocusedComponent = $null
+            # REMOVED: Don't clear focus after OnEnter() has set it properly
+            # $global:TuiState.FocusedComponent = $null
 
         }
         catch {

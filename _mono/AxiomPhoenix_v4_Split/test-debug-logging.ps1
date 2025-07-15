@@ -1,17 +1,43 @@
 #!/usr/bin/env pwsh
 
-# Quick test to verify debug logging works
-Write-Host "Testing debug logging..." -ForegroundColor Yellow
+# Test if debug logging is working
+$ErrorActionPreference = "Stop"
 
-# Load just the logger to test
-. ./Functions/AFU.006a_FileLogger.ps1
+Write-Host "=== TESTING DEBUG LOGGING ===`n" -ForegroundColor Green
 
-# Initialize basic logger
-Initialize-FileLogger -LogPath "./test-debug.log"
+# Test basic file write
+try {
+    "Test message $(Get-Date)" | Out-File "/tmp/debug-test.log" -Append -Force
+    Write-Host "✓ Basic file write successful" -ForegroundColor Green
+    
+    # Check if file was created
+    if (Test-Path "/tmp/debug-test.log") {
+        Write-Host "✓ File exists at /tmp/debug-test.log" -ForegroundColor Green
+        $content = Get-Content "/tmp/debug-test.log"
+        Write-Host "✓ File content: $content" -ForegroundColor Green
+    } else {
+        Write-Host "✗ File does not exist" -ForegroundColor Red
+    }
+} catch {
+    Write-Host "✗ File write failed: $($_.Exception.Message)" -ForegroundColor Red
+}
 
-Write-Log -Level Debug -Message "TEST: This is a debug message"
-Write-Log -Level Info -Message "TEST: This is an info message"
+# Test the exact debug code from SimpleTaskDialog
+try {
+    Write-Host "`nTesting exact debug code from SimpleTaskDialog..." -ForegroundColor Yellow
+    "=== REAL APP DEBUG START $(Get-Date) ===" | Out-File "/tmp/simpleTaskDialog-debug.log" -Append -Force
+    "Test from debug script" | Out-File "/tmp/simpleTaskDialog-debug.log" -Append -Force
+    
+    if (Test-Path "/tmp/simpleTaskDialog-debug.log") {
+        Write-Host "✓ SimpleTaskDialog debug log created" -ForegroundColor Green
+        $content = Get-Content "/tmp/simpleTaskDialog-debug.log"
+        Write-Host "✓ Debug log content:" -ForegroundColor Green
+        $content | ForEach-Object { Write-Host "  $_" -ForegroundColor White }
+    } else {
+        Write-Host "✗ SimpleTaskDialog debug log not created" -ForegroundColor Red
+    }
+} catch {
+    Write-Host "✗ SimpleTaskDialog debug test failed: $($_.Exception.Message)" -ForegroundColor Red
+}
 
-Start-Sleep -Seconds 1
-
-Write-Host "Check test-debug.log for debug messages" -ForegroundColor Green
+Write-Host "`nDebug logging test complete.`n" -ForegroundColor Green
