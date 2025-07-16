@@ -117,7 +117,22 @@ class TuiCell {
         $attributes = @{ 
             Bold=$this.Bold; Italic=$this.Italic; Underline=$this.Underline; Strikethrough=$this.Strikethrough 
         }
-        $sequence = [TuiAnsiHelper]::GetAnsiSequence($this.ForegroundColor, $this.BackgroundColor, $attributes)
+        
+        # Validate colors before passing to TuiAnsiHelper
+        $fgColor = $this.ForegroundColor
+        $bgColor = $this.BackgroundColor
+        
+        if ($fgColor -is [bool] -or $fgColor -eq $true -or $fgColor -eq $false) {
+            Write-Log -Level Error -Message "TuiCell.ToAnsiString: Invalid foreground color '$fgColor' - using default"
+            $fgColor = "#FFFFFF"
+        }
+        
+        if ($bgColor -is [bool] -or $bgColor -eq $true -or $bgColor -eq $false) {
+            Write-Log -Level Error -Message "TuiCell.ToAnsiString: Invalid background color '$bgColor' - using default"
+            $bgColor = "#000000"
+        }
+        
+        $sequence = [TuiAnsiHelper]::GetAnsiSequence($fgColor, $bgColor, $attributes)
         return "$sequence$($this.Char)" # Append character directly
     }
 

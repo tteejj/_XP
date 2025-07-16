@@ -261,7 +261,8 @@ class Screen : UIElement {
                     }
                 } else {
                     # Use standard sort for small collections
-                    $sortedArray = $this._focusableCache.ToArray() | Sort-Object TabIndex
+                    $items = $this._focusableCache.ToArray()
+                    $sortedArray = $items | Sort-Object TabIndex
                     $this._focusableCache.Clear()
                     foreach ($item in $sortedArray) {
                         $this._focusableCache.Add($item)

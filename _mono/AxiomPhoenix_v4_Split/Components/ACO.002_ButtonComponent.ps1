@@ -41,16 +41,16 @@ class ButtonComponent : UIElement {
         [string]$bgColor = $null
 
         if ($this.IsPressed) {
-            $fgColor = Get-ThemeColor "button.pressed.foreground" "#d4d4d4"
-            $bgColor = Get-ThemeColor "button.pressed.background" "#4a5568"
+            $fgColor = Get-ThemeColor "Button.Pressed.Foreground" "#d4d4d4"
+            $bgColor = Get-ThemeColor "Button.Pressed.Background" "#4a5568"
         }
         elseif ($this.IsFocused) {
-            $fgColor = Get-ThemeColor "button.focused.foreground" "#ffffff"
-            $bgColor = Get-ThemeColor "button.focused.background" "#0e7490"
+            $fgColor = Get-ThemeColor "Button.Focused.Foreground" "#ffffff"
+            $bgColor = Get-ThemeColor "Button.Focused.Background" "#0e7490"
         }
         elseif (-not $this.Enabled) {
-            $fgColor = Get-ThemeColor "button.disabled.foreground" "#6b7280"
-            $bgColor = Get-ThemeColor "button.disabled.background" "#2d2d30"
+            $fgColor = Get-ThemeColor "Button.Disabled.Foreground" "#6b7280"
+            $bgColor = Get-ThemeColor "Button.Disabled.Background" "#2d2d30"
         }
         else {
             # Use the effective colors from the base class for the normal state.
@@ -62,6 +62,12 @@ class ButtonComponent : UIElement {
         # Draw button background
         $style = @{ FG = $fgColor; BG = $bgColor }
         $this._private_buffer.FillRect(0, 0, $this.Width, $this.Height, ' ', $style)
+        
+        # Draw button border (always visible)
+        $borderColor = $this.GetEffectiveBorderColor()
+        if (-not [string]::IsNullOrEmpty($borderColor)) {
+            Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style @{ BorderFG = $borderColor; BG = $bgColor; BorderStyle = "Single" }
+        }
         
         # Draw button text centered
         if (-not [string]::IsNullOrEmpty($this.Text)) {
@@ -75,16 +81,16 @@ class ButtonComponent : UIElement {
     }
 
     [void] OnFocus() {
-        $this.BackgroundColor = Get-ThemeColor "button.focused.background" "#0078d4"
-        $this.ForegroundColor = Get-ThemeColor "button.focused.foreground" "#ffffff"
-        $this.BorderColor = Get-ThemeColor "button.focused.border" "#00ff88"
+        $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#0078d4"
+        $this.ForegroundColor = Get-ThemeColor "Button.Focused.Foreground" "#ffffff"
+        $this.BorderColor = Get-ThemeColor "Button.Focused.Border" "#00ff88"
         $this.RequestRedraw()
     }
     
     [void] OnBlur() {
-        $this.BackgroundColor = Get-ThemeColor "button.normal.background" "#404040"
-        $this.ForegroundColor = Get-ThemeColor "button.normal.foreground" "#d4d4d4"
-        $this.BorderColor = Get-ThemeColor "button.border" "#666666"
+        $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#404040"
+        $this.ForegroundColor = Get-ThemeColor "Button.Normal.Foreground" "#d4d4d4"
+        $this.BorderColor = Get-ThemeColor "Button.Normal.Border" "#666666"
         $this.RequestRedraw()
     }
 

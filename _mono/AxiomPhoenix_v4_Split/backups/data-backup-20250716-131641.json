@@ -1,0 +1,24 @@
+{
+  "Projects": [],
+  "Version": "4.0",
+  "Tasks": [
+    {
+      "ProjectKey": "PROJ1",
+      "Status": "Pending",
+      "Category": null,
+      "UpdatedAt": "2025-07-16T13:16:41",
+      "Tags": [],
+      "Priority": "Medium",
+      "Progress": 0,
+      "Description": "Testing screen event handling",
+      "Id": "3352991a-3895-4453-82cb-31bf8990a7e0",
+      "Title": "Screen Refresh Test",
+      "DueDate": null,
+      "Completed": false,
+      "CreatedAt": "2025-07-16T13:16:41"
+    }
+  ],
+  "Metadata": {},
+  "SavedAt": "2025-07-16T13:16:41.1862484-06:00",
+  "TimeEntries": []
+}

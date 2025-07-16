@@ -1,0 +1,32 @@
+{
+  "Projects": [
+    {
+      "T2020FileName": null,
+      "ID1": null,
+      "ContactPhone": null,
+      "RequestFileName": null,
+      "Name": "Test Project 2",
+      "Contact": null,
+      "Description": "Testing project screen event handling",
+      "CaaFileName": null,
+      "AssignedDate": null,
+      "Tags": [],
+      "Metadata": {},
+      "Key": "TESTPROJ2",
+      "CompletedDate": null,
+      "ProjectFolderPath": null,
+      "BFDate": null,
+      "UpdatedAt": "2025-07-16T13:16:43",
+      "IsActive": true,
+      "ID2": null,
+      "Owner": null,
+      "CreatedAt": "2025-07-16T13:16:43",
+      "Category": null
+    }
+  ],
+  "Version": "4.0",
+  "Tasks": [],
+  "Metadata": {},
+  "SavedAt": "2025-07-16T13:16:43.1241693-06:00",
+  "TimeEntries": []
+}

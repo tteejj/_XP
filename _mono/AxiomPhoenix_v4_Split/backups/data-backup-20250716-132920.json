@@ -1,0 +1,24 @@
+{
+  "Metadata": {},
+  "SavedAt": "2025-07-16T13:29:20.4978936-06:00",
+  "Version": "4.0",
+  "Projects": [],
+  "Tasks": [
+    {
+      "Tags": [],
+      "ProjectKey": "General",
+      "Description": null,
+      "Status": "Completed",
+      "Completed": false,
+      "UpdatedAt": "2025-07-16T13:29:17",
+      "Category": null,
+      "Progress": 100,
+      "Id": "cef22a99-3235-4e0c-93b2-cc2495e312c1",
+      "CreatedAt": "2025-07-16T13:29:17",
+      "Title": "Low Priority Completed Task",
+      "DueDate": "2025-07-06T13:29:17",
+      "Priority": "Low"
+    }
+  ],
+  "TimeEntries": []
+}

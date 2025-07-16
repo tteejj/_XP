@@ -23,6 +23,10 @@ class ProjectDashboardScreen : Screen {
     # State
     hidden [array]$_activeProjects = @()
     
+    # Event subscriptions
+    hidden [string]$_projectChangeSubscriptionId = $null
+    hidden [string]$_taskChangeSubscriptionId = $null
+    
     ProjectDashboardScreen([object]$serviceContainer) : base("ProjectDashboardScreen", $serviceContainer) {
         $this._navService = $serviceContainer.GetService("NavigationService")
         $this._dataManager = $serviceContainer.GetService("DataManager")
@@ -239,7 +243,7 @@ class ProjectDashboardScreen : Screen {
             }
             
             # Update table
-            $this._projectsTable.Data = $tableData
+            $this._projectsTable.SetItems($tableData)
             
             $this.RequestRedraw()
         }
@@ -388,6 +392,19 @@ class ProjectDashboardScreen : Screen {
     }
     
     [void] OnExit() {
+        # Unsubscribe from events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            if ($this._projectChangeSubscriptionId) {
+                $eventManager.Unsubscribe("Projects.Changed", $this._projectChangeSubscriptionId)
+                $this._projectChangeSubscriptionId = $null
+            }
+            if ($this._taskChangeSubscriptionId) {
+                $eventManager.Unsubscribe("Tasks.Changed", $this._taskChangeSubscriptionId)
+                $this._taskChangeSubscriptionId = $null
+            }
+        }
+        
         # Base class handles event unsubscription
         ([Screen]$this).OnExit()
     }

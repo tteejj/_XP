@@ -223,8 +223,16 @@ function Update-TuiEngineSize {
             if ($global:TuiState.CompositorBuffer) { $global:TuiState.CompositorBuffer.Resize($newWidth, $newHeight) }
             if ($global:TuiState.PreviousCompositorBuffer) { $global:TuiState.PreviousCompositorBuffer.Resize($newWidth, $newHeight) }
             
-            $navService = $global:TuiState.Services.NavigationService
-            if ($navService -and $navService.CurrentScreen) { $navService.CurrentScreen.Resize($newWidth, $newHeight) }
+            if ($global:TuiState.Services) {
+                $navService = $global:TuiState.Services.NavigationService
+                if ($navService -and $navService.CurrentScreen) { 
+                    try {
+                        $navService.CurrentScreen.Resize($newWidth, $newHeight)
+                    } catch {
+                        Write-Log -Level Warning -Message "Error resizing current screen: $($_.Exception.Message)"
+                    }
+                }
+            }
             
             $global:TuiState.IsDirty = $true
             if ($global:TuiState.CompositorBuffer) { [Console]::Clear() }

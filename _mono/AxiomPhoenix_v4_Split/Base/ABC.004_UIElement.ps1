@@ -72,6 +72,10 @@ class UIElement {
     hidden [object] $_private_buffer = $null
     hidden [bool] $_needs_redraw = $true
     
+    # Theme color caching properties
+    hidden [hashtable] $_themeColorCache = @{}
+    hidden [string] $_lastThemeName = ""
+    
     [hashtable] $Metadata = @{} 
 
     UIElement() {
@@ -248,24 +252,47 @@ class UIElement {
         # Write-Verbose "OnMove called for '$($this.Name)': No custom move logic."
     }
 
-    # Get theme-aware color with fallback
+    # Get theme-aware color with fallback and caching
     [string] GetThemeColor([string]$themePath, [string]$fallback = "#ffffff") {
+        # Get current theme name for cache validation
+        $currentTheme = $global:TuiState?.Services?.ThemeManager?.ThemeName
+        if (-not $currentTheme) {
+            $currentTheme = "default"
+        }
+        
+        # Invalidate cache if theme changed
+        if ($this._lastThemeName -ne $currentTheme) {
+            $this._themeColorCache = @{}
+            $this._lastThemeName = $currentTheme
+        }
+        
+        # Check cache first
+        if ($this._themeColorCache.ContainsKey($themePath)) {
+            return $this._themeColorCache[$themePath]
+        }
+        
+        # Resolve color and cache it
+        $resolvedColor = $fallback
+        
         # First try using the global Get-ThemeColor function if available
         if (Get-Command 'Get-ThemeColor' -ErrorAction SilentlyContinue) {
-            return Get-ThemeColor $themePath $fallback
+            $resolvedColor = Get-ThemeColor $themePath $fallback
+        }
+        else {
+            # Fallback to direct theme manager access
+            $themeManager = $global:TuiState?.Services?.ThemeManager
+            if (-not $themeManager) {
+                $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
+            }
+            
+            if ($themeManager) {
+                $resolvedColor = $themeManager.GetColor($themePath, $fallback)
+            }
         }
         
-        # Fallback to direct theme manager access
-        $themeManager = $global:TuiState?.Services?.ThemeManager
-        if (-not $themeManager) {
-            $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
-        }
-        
-        if ($themeManager) {
-            return $themeManager.GetColor($themePath, $fallback)
-        }
-        
-        return $fallback
+        # Cache the resolved color
+        $this._themeColorCache[$themePath] = $resolvedColor
+        return $resolvedColor
     }
     
     # Get effective foreground color (theme-aware)
@@ -273,7 +300,7 @@ class UIElement {
         if ($this.ForegroundColor) {
             return $this.ForegroundColor
         }
-        return $this.GetThemeColor("label.foreground", "#d4d4d4")
+        return $this.GetThemeColor("Label.Foreground", "#d4d4d4")
     }
     
     # Get effective background color (theme-aware)
@@ -281,7 +308,7 @@ class UIElement {
         if ($this.BackgroundColor) {
             return $this.BackgroundColor
         }
-        return $this.GetThemeColor("panel.background", "#1e1e1e")
+        return $this.GetThemeColor("Panel.Background", "#1e1e1e")
     }
     
     # Get effective border color (theme-aware)
@@ -289,7 +316,7 @@ class UIElement {
         if ($this.BorderColor) {
             return $this.BorderColor
         }
-        return $this.GetThemeColor("panel.border", "#404040")
+        return $this.GetThemeColor("Panel.Border", "#404040")
     }
 
     [void] OnFocus() 

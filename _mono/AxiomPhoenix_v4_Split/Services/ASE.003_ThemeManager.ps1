@@ -103,6 +103,63 @@ class ThemeManager {
         "listbox.selectedbackground" = @{ Path = "Components.List.ItemSelectedBackground"; Fallback = "#00D4FF" }
         "listbox.selectedforeground" = @{ Path = "Components.List.ItemSelected"; Fallback = "#000000" }
         "listbox.focusedselectedbackground" = @{ Path = "Components.List.ItemFocusedBackground"; Fallback = "#7C3AED" }
+        
+        # ===== SEMANTIC STYLE KEYS (Dynamic Styling) =====
+        # Task-related semantic styles
+        "task.status.pending.foreground" = @{ Path = "Semantic.Task.Status.Pending.Foreground"; Fallback = "#F59E0B" }
+        "task.status.pending.background" = @{ Path = "Semantic.Task.Status.Pending.Background"; Fallback = "#1A1A1A" }
+        "task.status.inprogress.foreground" = @{ Path = "Semantic.Task.Status.InProgress.Foreground"; Fallback = "#3B82F6" }
+        "task.status.inprogress.background" = @{ Path = "Semantic.Task.Status.InProgress.Background"; Fallback = "#1A1A1A" }
+        "task.status.completed.foreground" = @{ Path = "Semantic.Task.Status.Completed.Foreground"; Fallback = "#10B981" }
+        "task.status.completed.background" = @{ Path = "Semantic.Task.Status.Completed.Background"; Fallback = "#1A1A1A" }
+        "task.status.cancelled.foreground" = @{ Path = "Semantic.Task.Status.Cancelled.Foreground"; Fallback = "#EF4444" }
+        "task.status.cancelled.background" = @{ Path = "Semantic.Task.Status.Cancelled.Background"; Fallback = "#1A1A1A" }
+        
+        # Task priority semantic styles
+        "task.priority.high.foreground" = @{ Path = "Semantic.Task.Priority.High.Foreground"; Fallback = "#EF4444" }
+        "task.priority.high.background" = @{ Path = "Semantic.Task.Priority.High.Background"; Fallback = "#1A1A1A" }
+        "task.priority.medium.foreground" = @{ Path = "Semantic.Task.Priority.Medium.Foreground"; Fallback = "#F59E0B" }
+        "task.priority.medium.background" = @{ Path = "Semantic.Task.Priority.Medium.Background"; Fallback = "#1A1A1A" }
+        "task.priority.low.foreground" = @{ Path = "Semantic.Task.Priority.Low.Foreground"; Fallback = "#6B7280" }
+        "task.priority.low.background" = @{ Path = "Semantic.Task.Priority.Low.Background"; Fallback = "#1A1A1A" }
+        
+        # Task title semantic styles
+        "task.title.normal.foreground" = @{ Path = "Semantic.Task.Title.Normal.Foreground"; Fallback = "#FFFFFF" }
+        "task.title.normal.background" = @{ Path = "Semantic.Task.Title.Normal.Background"; Fallback = "#1A1A1A" }
+        "task.title.overdue.foreground" = @{ Path = "Semantic.Task.Title.Overdue.Foreground"; Fallback = "#EF4444" }
+        "task.title.overdue.background" = @{ Path = "Semantic.Task.Title.Overdue.Background"; Fallback = "#1A1A1A" }
+        
+        # Task progress semantic styles
+        "task.progress.complete.foreground" = @{ Path = "Semantic.Task.Progress.Complete.Foreground"; Fallback = "#10B981" }
+        "task.progress.complete.background" = @{ Path = "Semantic.Task.Progress.Complete.Background"; Fallback = "#1A1A1A" }
+        "task.progress.high.foreground" = @{ Path = "Semantic.Task.Progress.High.Foreground"; Fallback = "#3B82F6" }
+        "task.progress.high.background" = @{ Path = "Semantic.Task.Progress.High.Background"; Fallback = "#1A1A1A" }
+        "task.progress.medium.foreground" = @{ Path = "Semantic.Task.Progress.Medium.Foreground"; Fallback = "#F59E0B" }
+        "task.progress.medium.background" = @{ Path = "Semantic.Task.Progress.Medium.Background"; Fallback = "#1A1A1A" }
+        "task.progress.low.foreground" = @{ Path = "Semantic.Task.Progress.Low.Foreground"; Fallback = "#EF4444" }
+        "task.progress.low.background" = @{ Path = "Semantic.Task.Progress.Low.Background"; Fallback = "#1A1A1A" }
+        
+        # Project-related semantic styles
+        "project.key.normal.foreground" = @{ Path = "Semantic.Project.Key.Normal.Foreground"; Fallback = "#00D4FF" }
+        "project.key.normal.background" = @{ Path = "Semantic.Project.Key.Normal.Background"; Fallback = "#1A1A1A" }
+        "project.name.normal.foreground" = @{ Path = "Semantic.Project.Name.Normal.Foreground"; Fallback = "#FFFFFF" }
+        "project.name.normal.background" = @{ Path = "Semantic.Project.Name.Normal.Background"; Fallback = "#1A1A1A" }
+        "project.name.overdue.foreground" = @{ Path = "Semantic.Project.Name.Overdue.Foreground"; Fallback = "#EF4444" }
+        "project.name.overdue.background" = @{ Path = "Semantic.Project.Name.Overdue.Background"; Fallback = "#1A1A1A" }
+        "project.name.inactive.foreground" = @{ Path = "Semantic.Project.Name.Inactive.Foreground"; Fallback = "#6B7280" }
+        "project.name.inactive.background" = @{ Path = "Semantic.Project.Name.Inactive.Background"; Fallback = "#1A1A1A" }
+        "project.status.active.foreground" = @{ Path = "Semantic.Project.Status.Active.Foreground"; Fallback = "#10B981" }
+        "project.status.active.background" = @{ Path = "Semantic.Project.Status.Active.Background"; Fallback = "#1A1A1A" }
+        "project.status.inactive.foreground" = @{ Path = "Semantic.Project.Status.Inactive.Foreground"; Fallback = "#6B7280" }
+        "project.status.inactive.background" = @{ Path = "Semantic.Project.Status.Inactive.Background"; Fallback = "#1A1A1A" }
+        "project.owner.assigned.foreground" = @{ Path = "Semantic.Project.Owner.Assigned.Foreground"; Fallback = "#FFFFFF" }
+        "project.owner.assigned.background" = @{ Path = "Semantic.Project.Owner.Assigned.Background"; Fallback = "#1A1A1A" }
+        "project.owner.unassigned.foreground" = @{ Path = "Semantic.Project.Owner.Unassigned.Foreground"; Fallback = "#6B7280" }
+        "project.owner.unassigned.background" = @{ Path = "Semantic.Project.Owner.Unassigned.Background"; Fallback = "#1A1A1A" }
+        
+        # DataGrid semantic styles
+        "datagrid.cell.normal.foreground" = @{ Path = "Semantic.DataGrid.Cell.Normal.Foreground"; Fallback = "#FFFFFF" }
+        "datagrid.cell.normal.background" = @{ Path = "Semantic.DataGrid.Cell.Normal.Background"; Fallback = "#1A1A1A" }
     }
     
     ThemeManager() {

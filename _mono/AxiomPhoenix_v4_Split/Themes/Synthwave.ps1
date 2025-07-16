@@ -46,4 +46,54 @@
             ItemSelectedBackground = '$Palette.ListSelectedBg'
         }
     }
+    
+    # Semantic styling for dynamic data-driven themes
+    Semantic = @{
+        Task = @{
+            Status = @{
+                Pending = @{ Foreground = '$Palette.Warning'; Background = '$Palette.Surface' }
+                InProgress = @{ Foreground = '$Palette.Info'; Background = '$Palette.Surface' }
+                Completed = @{ Foreground = '$Palette.Success'; Background = '$Palette.Surface' }
+                Cancelled = @{ Foreground = '$Palette.Error'; Background = '$Palette.Surface' }
+            }
+            Priority = @{
+                High = @{ Foreground = '$Palette.Error'; Background = '$Palette.Surface' }
+                Medium = @{ Foreground = '$Palette.Warning'; Background = '$Palette.Surface' }
+                Low = @{ Foreground = '$Palette.TextDisabled'; Background = '$Palette.Surface' }
+            }
+            Title = @{
+                Normal = @{ Foreground = '$Palette.TextPrimary'; Background = '$Palette.Surface' }
+                Overdue = @{ Foreground = '$Palette.Error'; Background = '$Palette.Surface' }
+            }
+            Progress = @{
+                Complete = @{ Foreground = '$Palette.Success'; Background = '$Palette.Surface' }
+                High = @{ Foreground = '$Palette.Info'; Background = '$Palette.Surface' }
+                Medium = @{ Foreground = '$Palette.Warning'; Background = '$Palette.Surface' }
+                Low = @{ Foreground = '$Palette.Error'; Background = '$Palette.Surface' }
+            }
+        }
+        Project = @{
+            Key = @{
+                Normal = @{ Foreground = '$Palette.Secondary'; Background = '$Palette.Surface' }
+            }
+            Name = @{
+                Normal = @{ Foreground = '$Palette.TextPrimary'; Background = '$Palette.Surface' }
+                Overdue = @{ Foreground = '$Palette.Error'; Background = '$Palette.Surface' }
+                Inactive = @{ Foreground = '$Palette.TextDisabled'; Background = '$Palette.Surface' }
+            }
+            Status = @{
+                Active = @{ Foreground = '$Palette.Success'; Background = '$Palette.Surface' }
+                Inactive = @{ Foreground = '$Palette.TextDisabled'; Background = '$Palette.Surface' }
+            }
+            Owner = @{
+                Assigned = @{ Foreground = '$Palette.TextPrimary'; Background = '$Palette.Surface' }
+                Unassigned = @{ Foreground = '$Palette.TextDisabled'; Background = '$Palette.Surface' }
+            }
+        }
+        DataGrid = @{
+            Cell = @{
+                Normal = @{ Foreground = '$Palette.TextPrimary'; Background = '$Palette.Surface' }
+            }
+        }
+    }
 }

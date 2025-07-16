@@ -35,6 +35,15 @@ class Panel : UIElement {
     [int]$ContentY = 0
     [int]$ContentWidth = 0
     [int]$ContentHeight = 0
+    
+    # Layout caching properties (optimized)
+    hidden [bool]$_layoutCacheValid = $false
+    hidden [object[]]$_cachedChildren = @()
+    hidden [hashtable]$_layoutPositions = @{}
+    hidden [int]$_lastLayoutChildCount = 0
+    hidden [string]$_lastLayoutType = ""
+    hidden [int]$_lastContentWidth = 0
+    hidden [int]$_lastContentHeight = 0
 
     Panel([string]$name) : base($name) {
         $this.IsFocusable = $false
@@ -42,6 +51,35 @@ class Panel : UIElement {
         if ($this.Width -eq 0) { $this.Width = 30 }
         if ($this.Height -eq 0) { $this.Height = 10 }
         # Calculate initial content dimensions based on default size
+        $this.UpdateContentDimensions()
+    }
+    
+    hidden [void] InvalidateLayoutCache() {
+        $this._layoutCacheValid = $false
+        $this._cachedChildren = @()
+        $this._layoutPositions = @{}
+    }
+    
+    [void] AddChild([UIElement]$child) {
+        # Call parent implementation
+        ([UIElement]$this).AddChild($child)
+        # Invalidate layout cache when children change
+        $this.InvalidateLayoutCache()
+    }
+    
+    [void] RemoveChild([UIElement]$child) {
+        # Call parent implementation
+        ([UIElement]$this).RemoveChild($child)
+        # Invalidate layout cache when children change
+        $this.InvalidateLayoutCache()
+    }
+    
+    [void] Resize([int]$width, [int]$height) {
+        # Call parent implementation
+        ([UIElement]$this).Resize($width, $height)
+        # Invalidate layout cache when size changes
+        $this.InvalidateLayoutCache()
+        # Update content dimensions
         $this.UpdateContentDimensions()
     }
 
@@ -61,13 +99,13 @@ class Panel : UIElement {
                 # FIXED: Determine border color based on focus state and effective properties.
                 $borderColorValue = $this.GetEffectiveBorderColor()
                 if ($this.IsFocused) {
-                    $borderColorValue = Get-ThemeColor "panel.title" "#007acc"
+                    $borderColorValue = Get-ThemeColor "Panel.Title" "#007acc"
                 }
                 
                 # Draw the panel border and title
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = (Get-ThemeColor "panel.title" "#007acc") } `
+                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = (Get-ThemeColor "Panel.Title" "#007acc") } `
                     -Title $this.Title
             }
 
@@ -84,33 +122,111 @@ class Panel : UIElement {
 
     [void] ApplyLayout() {
         if ($this.LayoutType -eq "Manual") { return }
-
-        # The content area properties already account for border and padding
+        
+        # Get visible children
+        $visibleChildren = @($this.Children.Where({ $_.Visible }))
+        if ($visibleChildren.Count -eq 0) { return }
+        
+        # Check if we can use cached layout (optimized cache validation)
+        if ($this._layoutCacheValid -and 
+            $this._lastLayoutChildCount -eq $visibleChildren.Count -and
+            $this._lastLayoutType -eq $this.LayoutType -and
+            $this._lastContentWidth -eq $this.ContentWidth -and
+            $this._lastContentHeight -eq $this.ContentHeight -and
+            $this._cachedChildren.Count -eq $visibleChildren.Count) {
+            
+            # Quick validation - check if children are the same (by reference)
+            $cacheValid = $true
+            for ($i = 0; $i -lt $visibleChildren.Count; $i++) {
+                if ($this._cachedChildren[$i] -ne $visibleChildren[$i]) {
+                    $cacheValid = $false
+                    break
+                }
+            }
+            
+            if ($cacheValid) {
+                # Apply cached layout positions directly (no method calls)
+                for ($i = 0; $i -lt $visibleChildren.Count; $i++) {
+                    $child = $visibleChildren[$i]
+                    $pos = $this._layoutPositions[$i]
+                    if ($pos) {
+                        $child.X = $pos.X
+                        $child.Y = $pos.Y
+                        $child.Width = $pos.Width
+                        $child.Height = $pos.Height
+                    }
+                }
+                return
+            }
+        }
+        
+        # Calculate new layout
         $layoutX = $this.ContentX
         $layoutY = $this.ContentY
         $layoutWidth = $this.ContentWidth
         $layoutHeight = $this.ContentHeight
-
-        $visibleChildren = @($this.Children | Where-Object { $_.Visible })
-        if ($visibleChildren.Count -eq 0) { return }
+        
+        # Clear cache and prepare for new calculations
+        $this._layoutPositions = @{}
+        $this._cachedChildren = @()
 
         switch ($this.LayoutType) {
             "Vertical" {
                 $currentY = $layoutY
-                foreach ($child in $visibleChildren) {
-                    # Use Move and Resize methods to trigger child's lifecycle hooks
-                    $child.Move($layoutX, $currentY)
-                    $child.Resize([Math]::Min($child.Width, $layoutWidth), $child.Height) # Cap child width to layout area
-                    $currentY += $child.Height + $this.Spacing
+                for ($i = 0; $i -lt $visibleChildren.Count; $i++) {
+                    $child = $visibleChildren[$i]
+                    
+                    # Calculate position and size
+                    $childX = $layoutX
+                    $childY = $currentY
+                    $childWidth = [Math]::Min($child.Width, $layoutWidth)
+                    $childHeight = $child.Height
+                    
+                    # Apply layout directly (avoid method call overhead)
+                    $child.X = $childX
+                    $child.Y = $childY
+                    $child.Width = $childWidth
+                    $child.Height = $childHeight
+                    
+                    # Cache the layout position by index (faster than hashtable lookup)
+                    $this._layoutPositions[$i] = @{
+                        X = $childX
+                        Y = $childY
+                        Width = $childWidth
+                        Height = $childHeight
+                    }
+                    $this._cachedChildren += $child
+                    
+                    $currentY += $childHeight + $this.Spacing
                 }
             }
             "Horizontal" {
                 $currentX = $layoutX
-                foreach ($child in $visibleChildren) {
-                    # Use Move and Resize methods to trigger child's lifecycle hooks
-                    $child.Move($currentX, $layoutY)
-                    $child.Resize($child.Width, [Math]::Min($child.Height, $layoutHeight)) # Cap child height to layout area
-                    $currentX += $child.Width + $this.Spacing
+                for ($i = 0; $i -lt $visibleChildren.Count; $i++) {
+                    $child = $visibleChildren[$i]
+                    
+                    # Calculate position and size
+                    $childX = $currentX
+                    $childY = $layoutY
+                    $childWidth = $child.Width
+                    $childHeight = [Math]::Min($child.Height, $layoutHeight)
+                    
+                    # Apply layout directly (avoid method call overhead)
+                    $child.X = $childX
+                    $child.Y = $childY
+                    $child.Width = $childWidth
+                    $child.Height = $childHeight
+                    
+                    # Cache the layout position by index (faster than hashtable lookup)
+                    $this._layoutPositions[$i] = @{
+                        X = $childX
+                        Y = $childY
+                        Width = $childWidth
+                        Height = $childHeight
+                    }
+                    $this._cachedChildren += $child
+                    
+                    $currentX += $childWidth + $this.Spacing
                 }
             }
             "Grid" {
@@ -121,10 +237,29 @@ class Panel : UIElement {
                 $cellWidth = [Math]::Max(1, [Math]::Floor($layoutWidth / $cols))
                 $cellHeight = 3  # Default height for grid cells
                 
-                foreach ($child in $visibleChildren) {
-                    # Use Move and Resize methods to trigger child's lifecycle hooks
-                    $child.Move($layoutX + ($col * $cellWidth), $layoutY + ($row * ($cellHeight + $this.Spacing)))
-                    $child.Resize([Math]::Max(1, $cellWidth - $this.Spacing), $cellHeight)
+                for ($i = 0; $i -lt $visibleChildren.Count; $i++) {
+                    $child = $visibleChildren[$i]
+                    
+                    # Calculate position and size
+                    $childX = $layoutX + ($col * $cellWidth)
+                    $childY = $layoutY + ($row * ($cellHeight + $this.Spacing))
+                    $childWidth = [Math]::Max(1, $cellWidth - $this.Spacing)
+                    $childHeight = $cellHeight
+                    
+                    # Apply layout directly (avoid method call overhead)
+                    $child.X = $childX
+                    $child.Y = $childY
+                    $child.Width = $childWidth
+                    $child.Height = $childHeight
+                    
+                    # Cache the layout position by index
+                    $this._layoutPositions[$i] = @{
+                        X = $childX
+                        Y = $childY
+                        Width = $childWidth
+                        Height = $childHeight
+                    }
+                    $this._cachedChildren += $child
                     
                     $col++
                     if ($col -ge $cols) {
@@ -134,6 +269,13 @@ class Panel : UIElement {
                 }
             }
         }
+        
+        # Mark cache as valid and store current state
+        $this._layoutCacheValid = $true
+        $this._lastLayoutChildCount = $visibleChildren.Count
+        $this._lastLayoutType = $this.LayoutType
+        $this._lastContentWidth = $this.ContentWidth
+        $this._lastContentHeight = $this.ContentHeight
     }
 
     [hashtable] GetContentArea() {
@@ -151,6 +293,10 @@ class Panel : UIElement {
         $borderSize = 0
         if ($this.HasBorder) { $borderSize = 1 }
         
+        # Store old dimensions for comparison
+        $oldContentWidth = $this.ContentWidth
+        $oldContentHeight = $this.ContentHeight
+        
         # Content area starts after border and padding
         $this.ContentX = $borderSize + $this.Padding
         $this.ContentY = $borderSize + $this.Padding
@@ -162,6 +308,11 @@ class Panel : UIElement {
         # Content width/height is total width/height minus space used by borders and padding
         $this.ContentWidth = [Math]::Max(0, $this.Width - $horizontalUsed)
         $this.ContentHeight = [Math]::Max(0, $this.Height - $verticalUsed)
+        
+        # Invalidate layout cache if content dimensions changed
+        if ($oldContentWidth -ne $this.ContentWidth -or $oldContentHeight -ne $this.ContentHeight) {
+            $this.InvalidateLayoutCache()
+        }
     }
     
     # Override Resize to update content dimensions after base class handles size change

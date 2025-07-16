@@ -24,6 +24,13 @@ class TuiAnsiHelper {
     # No caches needed, sequences are generated dynamically now.
 
     static [hashtable] HexToRgb([string]$hexColor) {
+        # Handle non-string values
+        if ($hexColor -is [bool] -or $hexColor -eq $true -or $hexColor -eq $false) {
+            $caller = (Get-PSCallStack)[1..3] | ForEach-Object { "$($_.FunctionName):$($_.ScriptLineNumber)" } | Join-String -Separator " -> "
+            Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor' (boolean value passed where color expected) - Called from: $caller"
+            return $null
+        }
+        
         if ([string]::IsNullOrEmpty($hexColor) -or -not $hexColor.StartsWith("#") -or $hexColor.Length -ne 7) {
             Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor'"
             return $null

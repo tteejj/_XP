@@ -132,7 +132,7 @@ class ActionService {
     }
     
     [hashtable[]] GetActionsByCategory([string]$category) {
-        return @($this.ActionRegistry.Values | Where-Object { $_.Category -eq $category })
+        return @($this.ActionRegistry.Values.Where({$_.Category -eq $category}))
     }
     
     [void] RegisterDefaultActions() {

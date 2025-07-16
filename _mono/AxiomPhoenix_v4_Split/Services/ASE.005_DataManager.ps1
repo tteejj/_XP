@@ -300,7 +300,7 @@ class DataManager : System.IDisposable {
     }
     
     [PmcTask[]] GetTasksByProject([string]$projectKey) {
-        return @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        return @($this._taskIndex.Values.Where({$_.ProjectKey -eq $projectKey}))
     }
     
     [PmcTask] AddTask([PmcTask]$task) {
@@ -450,13 +450,13 @@ class DataManager : System.IDisposable {
         }
         
         # Delete all tasks associated with this project
-        $tasksToDelete = @($this._taskIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        $tasksToDelete = @($this._taskIndex.Values.Where({$_.ProjectKey -eq $projectKey}))
         foreach ($task in $tasksToDelete) {
             $this.DeleteTask($task.Id) | Out-Null
         }
         
         # Delete all time entries associated with this project
-        $timeEntriesToDelete = @($this._timeEntryIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        $timeEntriesToDelete = @($this._timeEntryIndex.Values.Where({$_.ProjectKey -eq $projectKey}))
         foreach ($entry in $timeEntriesToDelete) {
             $this.DeleteTimeEntry($entry.Id) | Out-Null
         }
@@ -494,21 +494,21 @@ class DataManager : System.IDisposable {
     }
     
     [TimeEntry[]] GetTimeEntriesByProject([string]$projectKey) {
-        return @($this._timeEntryIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        return @($this._timeEntryIndex.Values.Where({$_.ProjectKey -eq $projectKey}))
     }
     
     [TimeEntry[]] GetTimeEntriesByTask([string]$taskId) {
-        return @($this._timeEntryIndex.Values | Where-Object { $_.TaskId -eq $taskId })
+        return @($this._timeEntryIndex.Values.Where({$_.TaskId -eq $taskId}))
     }
     
     [TimeEntry[]] GetTimeEntriesByDateRange([DateTime]$startDate, [DateTime]$endDate) {
-        return @($this._timeEntryIndex.Values | Where-Object { 
+        return @($this._timeEntryIndex.Values.Where({ 
             $_.StartTime -ge $startDate -and $_.StartTime -le $endDate 
-        })
+        }))
     }
     
     [TimeEntry[]] GetTimeEntriesByID1([string]$id1) {
-        return @($this._timeEntryIndex.Values | Where-Object { $_.ID1 -eq $id1 })
+        return @($this._timeEntryIndex.Values.Where({$_.ID1 -eq $id1}))
     }
     
     [TimeEntry] AddTimeEntry([TimeEntry]$entry) {

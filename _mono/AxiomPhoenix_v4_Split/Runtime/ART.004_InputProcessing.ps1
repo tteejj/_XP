@@ -143,7 +143,7 @@ function Move-FocusToNext {
     }
     
     # Sort by TabIndex
-    $sortedComponents = $FocusableComponents | Where-Object { $_.IsFocusable -and $_.Visible } | Sort-Object TabIndex
+    $sortedComponents = $FocusableComponents.Where({ $_.IsFocusable -and $_.Visible }).OrderBy({$_.TabIndex})
     
     if ($sortedComponents.Count -eq 0) {
         return

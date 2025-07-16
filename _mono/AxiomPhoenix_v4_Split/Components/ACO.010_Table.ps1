@@ -32,6 +32,11 @@ class Table : UIElement {
     hidden [int]$_scrollOffset = 0
     hidden [int]$_horizontalScroll = 0
     
+    # String formatting cache for performance
+    hidden [string[]]$_displayStringCache = @()
+    hidden [bool]$_cacheValid = $false
+    hidden [int]$_lastItemsCount = 0
+    
     Table([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.TabIndex = 0
@@ -50,6 +55,29 @@ class Table : UIElement {
                 $this.ColumnWidths[$col] = 15  # Default width
             }
         }
+        $this._InvalidateCache()
+    }
+    
+    [void] SetItems([object[]]$items) {
+        $this.Items.Clear()
+        foreach ($item in $items) {
+            $this.Items.Add($item)
+        }
+        $this._InvalidateCache()
+        $this.RequestRedraw()
+    }
+    
+    [void] AddItem([object]$item) {
+        $this.Items.Add($item)
+        $this._InvalidateCache()
+        $this.RequestRedraw()
+    }
+    
+    [void] ClearItems() {
+        $this.Items.Clear()
+        $this._InvalidateCache()
+        $this.SelectedIndex = -1
+        $this.RequestRedraw()
     }
     
     [void] AutoSizeColumns() {
@@ -70,6 +98,46 @@ class Table : UIElement {
             
             $this.ColumnWidths[$col] = [Math]::Min($maxWidth + 2, 30)  # Cap at 30
         }
+        $this._InvalidateCache()
+    }
+    
+    hidden [void] _InvalidateCache() {
+        $this._cacheValid = $false
+        $this._displayStringCache = @()
+    }
+    
+    hidden [void] _EnsureDisplayCache() {
+        if ($this._cacheValid -and $this._lastItemsCount -eq $this.Items.Count) {
+            return  # Cache is valid
+        }
+        
+        # Rebuild cache
+        $this._displayStringCache = @()
+        
+        foreach ($item in $this.Items) {
+            $formattedRow = ""
+            $x = 0
+            foreach ($col in $this.Columns) {
+                $val = ""
+                if ($item.PSObject.Properties[$col]) {
+                    $val = $item.$col
+                    if ($null -eq $val) { $val = "" }
+                    else { $val = $val.ToString() }
+                }
+                
+                $width = $this.ColumnWidths[$col]
+                if ($val.Length -gt $width) {
+                    $val = $val.Substring(0, [Math]::Max(1, $width - 3)) + "..."
+                }
+                
+                $formattedRow += $val.PadRight($width) + " "
+            }
+            
+            $this._displayStringCache += $formattedRow
+        }
+        
+        $this._cacheValid = $true
+        $this._lastItemsCount = $this.Items.Count
     }
     
     [void] OnRender() {
@@ -84,7 +152,7 @@ class Table : UIElement {
                 $borderColor = Get-ThemeColor "Panel.Border" "#404040" 
             }
             $headerBg = Get-ThemeColor "List.HeaderBackground" "#2d2d2d"
-            $selectedBg = Get-ThemeColor "list.selected.background" "#007acc"
+            $selectedBg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
@@ -147,7 +215,7 @@ class Table : UIElement {
                 
                 if ($this.AllowSelection -and $itemIndex -eq $this.SelectedIndex) {
                     $rowBg = $selectedBg
-                    $rowFg = Get-ThemeColor "list.selected.foreground" "#ffffff"
+                    $rowFg = Get-ThemeColor "List.ItemSelectedForeground" "#ffffff"
                 }
                 
                 $this.DrawRow($item, $contentX, $currentY, $contentWidth, $rowFg, $rowBg)

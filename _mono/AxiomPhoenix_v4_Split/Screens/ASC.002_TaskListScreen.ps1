@@ -37,7 +37,7 @@ class TaskListScreen : Screen {
     hidden [Panel] $_contextPanel       # Top-right panel for filters
     hidden [Panel] $_detailPanel        # Main-right panel for details
     hidden [Panel] $_statusBar          # Bottom status bar
-    hidden [ListBox] $_taskListBox      # Task list
+    hidden [DataGridComponent] $_taskGrid    # Task grid with ViewDefinition
     hidden [TextBoxComponent] $_filterBox
     hidden [LabelComponent] $_sortLabel
     hidden [LabelComponent] $_helpLabel
@@ -87,8 +87,8 @@ class TaskListScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " ╔═ Task Management System ═╗ "
         $this._mainPanel.BorderStyle = "Double"
-        $this._mainPanel.BorderColor = (Get-ThemeColor "palette.border" "#007acc")
-        $this._mainPanel.BackgroundColor = (Get-ThemeColor "palette.background" "#1e1e1e")
+        $this._mainPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#007acc")
+        $this._mainPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#1e1e1e")
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -104,23 +104,33 @@ class TaskListScreen : Screen {
         $this._listPanel.Height = $this.Height - 4  # Account for status bar
         $this._listPanel.Title = " 📋 Tasks "
         $this._listPanel.HasBorder = $true
-        $this._listPanel.BorderColor = (Get-ThemeColor "palette.border" "#444444")
-        $this._listPanel.BackgroundColor = (Get-ThemeColor "palette.background" "#2a2a2a")
+        $this._listPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
+        $this._listPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#2a2a2a")
         $this._mainPanel.AddChild($this._listPanel)
 
-        # === TASK LISTBOX ===
-        $this._taskListBox = [ListBox]::new("TaskList")
-        $this._taskListBox.X = 1
-        $this._taskListBox.Y = 1
-        $this._taskListBox.Width = $this._listPanel.Width - 2
-        $this._taskListBox.Height = $this._listPanel.Height - 2
-        $this._taskListBox.TabIndex = 0
-        $this._taskListBox.IsFocusable = $true
-        $this._taskListBox.BackgroundColor = (Get-ThemeColor "listbox.background" "#1a1a1a")
-        $this._taskListBox.ForegroundColor = (Get-ThemeColor "listbox.foreground" "#ffffff")
-        $this._taskListBox.SelectedBackgroundColor = (Get-ThemeColor "listbox.selectedbackground" "#0078d4")
-        $this._taskListBox.SelectedForegroundColor = (Get-ThemeColor "listbox.selectedforeground" "#ffffff")
-        $this._listPanel.AddChild($this._taskListBox)
+        # === TASK GRID WITH VIEW DEFINITION ===
+        $this._taskGrid = [DataGridComponent]::new("TaskGrid")
+        $this._taskGrid.X = 1
+        $this._taskGrid.Y = 1
+        $this._taskGrid.Width = $this._listPanel.Width - 2
+        $this._taskGrid.Height = $this._listPanel.Height - 2
+        $this._taskGrid.TabIndex = 0
+        $this._taskGrid.IsFocusable = $true
+        $this._taskGrid.ShowHeaders = $true
+        $this._taskGrid.NormalBackgroundColor = (Get-ThemeColor "List.Background" "#1a1a1a")
+        $this._taskGrid.NormalForegroundColor = (Get-ThemeColor "List.ItemNormal" "#ffffff")
+        $this._taskGrid.SelectedBackgroundColor = (Get-ThemeColor "List.ItemSelectedBackground" "#0078d4")
+        $this._taskGrid.SelectedForegroundColor = (Get-ThemeColor "List.ItemSelected" "#ffffff")
+        
+        # Get ViewDefinition from service
+        $viewService = $this.ServiceContainer.GetService("ViewDefinitionService")
+        $taskViewDef = $viewService.GetViewDefinition('task.summary')
+        $this._taskGrid.SetViewDefinition($taskViewDef)
+        
+        $this._taskGrid.OnSelectionChanged = {
+            $this.OnTaskSelectionChanged($args[0], $args[1])
+        }.GetNewClosure()
+        $this._listPanel.AddChild($this._taskGrid)
 
         # === TOP-RIGHT PANEL: Context/Filters ===
         $this._contextPanel = [Panel]::new("ContextPanel")
@@ -130,8 +140,8 @@ class TaskListScreen : Screen {
         $this._contextPanel.Height = $contextHeight
         $this._contextPanel.Title = " 🔍 Filters & Options "
         $this._contextPanel.HasBorder = $true
-        $this._contextPanel.BorderColor = (Get-ThemeColor "palette.border" "#444444")
-        $this._contextPanel.BackgroundColor = (Get-ThemeColor "palette.background" "#2a2a2a")
+        $this._contextPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
+        $this._contextPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#2a2a2a")
         $this._mainPanel.AddChild($this._contextPanel)
 
         # === PROJECT SELECTOR BUTTON ===
@@ -143,8 +153,8 @@ class TaskListScreen : Screen {
         $this._projectButton.Height = 1
         $this._projectButton.TabIndex = 1
         $this._projectButton.IsFocusable = $true
-        $this._projectButton.BackgroundColor = (Get-ThemeColor "button.background" "#0078d4")
-        $this._projectButton.ForegroundColor = (Get-ThemeColor "button.foreground" "#ffffff")
+        $this._projectButton.BackgroundColor = (Get-ThemeColor "Button.Normal.Background" "#0078d4")
+        $this._projectButton.ForegroundColor = (Get-ThemeColor "Button.Normal.Foreground" "#ffffff")
         
         # Project button click handler
         $screenRef = $this
@@ -163,9 +173,9 @@ class TaskListScreen : Screen {
         $this._filterBox.TabIndex = 2
         $this._filterBox.IsFocusable = $true
         $this._filterBox.Placeholder = "🔎 Type to filter tasks..."
-        $this._filterBox.BackgroundColor = (Get-ThemeColor "textbox.background" "#333333")
-        $this._filterBox.ForegroundColor = (Get-ThemeColor "textbox.foreground" "#ffffff")
-        $this._filterBox.BorderColor = (Get-ThemeColor "textbox.border" "#555555")
+        $this._filterBox.BackgroundColor = (Get-ThemeColor "Input.Background" "#333333")
+        $this._filterBox.ForegroundColor = (Get-ThemeColor "Input.Foreground" "#ffffff")
+        $this._filterBox.BorderColor = (Get-ThemeColor "Input.Border" "#555555")
         
         # Filter text change handler
         $this._filterBox.OnChange = {
@@ -184,8 +194,8 @@ class TaskListScreen : Screen {
         $this._detailPanel.Height = $this.Height - $contextHeight - 6  # Account for context panel and status bar
         $this._detailPanel.Title = " 📝 Task Details "
         $this._detailPanel.HasBorder = $true
-        $this._detailPanel.BorderColor = (Get-ThemeColor "palette.border" "#444444")
-        $this._detailPanel.BackgroundColor = (Get-ThemeColor "palette.background" "#2a2a2a")
+        $this._detailPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
+        $this._detailPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#2a2a2a")
         $this._mainPanel.AddChild($this._detailPanel)
 
         # === STATUS BAR ===
@@ -195,8 +205,8 @@ class TaskListScreen : Screen {
         $this._statusBar.Width = $this.Width - 2
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $true
-        $this._statusBar.BorderColor = (Get-ThemeColor "palette.border" "#444444")
-        $this._statusBar.BackgroundColor = (Get-ThemeColor "statusbar.background" "#333333")
+        $this._statusBar.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
+        $this._statusBar.BackgroundColor = (Get-ThemeColor "Panel.Background" "#333333")
         $this._mainPanel.AddChild($this._statusBar)
 
         # === HELP LABEL ===
@@ -206,8 +216,8 @@ class TaskListScreen : Screen {
         $this._helpLabel.Y = 0
         $this._helpLabel.Width = $this._statusBar.Width - 2
         $this._helpLabel.Height = 1
-        $this._helpLabel.ForegroundColor = (Get-ThemeColor "statusbar.foreground" "#cccccc")
-        $this._helpLabel.BackgroundColor = (Get-ThemeColor "statusbar.background" "#333333")
+        $this._helpLabel.ForegroundColor = (Get-ThemeColor "Label.Foreground" "#cccccc")
+        $this._helpLabel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#333333")
         $this._statusBar.AddChild($this._helpLabel)
 
         # Set initialization flag
@@ -413,50 +423,49 @@ class TaskListScreen : Screen {
             }
         }
         
-        return [System.Collections.Generic.List[PmcTask]]::new($sorted)
+        # Convert array to List
+        $result = [System.Collections.Generic.List[PmcTask]]::new()
+        foreach ($task in $sorted) {
+            $result.Add($task)
+        }
+        return $result
     }
 
     hidden [void] RefreshTaskList() {
-        if (-not $this._taskListBox) { return }
-        
-        $this._taskListBox.ClearItems()
+        if (-not $this._taskGrid) { return }
         
         if (-not $this._filteredTasks -or $this._filteredTasks.Count -eq 0) {
-            $this._taskListBox.AddItem("📭 No tasks found")
+            $this._taskGrid.SetItems(@())
             $this._selectedTask = $null
             $this.UpdateTaskDetails()
             return
         }
         
-        foreach ($task in $this._filteredTasks) {
-            $priorityIcon = switch ($task.Priority) {
-                "Critical" { "🔥" }
-                "High" { "📢" }
-                "Medium" { "📋" }
-                "Low" { "📝" }
-                default { "❓" }
-            }
-            
-            $statusIcon = switch ($task.Status) {
-                "Pending" { "⏳" }
-                "InProgress" { "🔄" }
-                "Completed" { "✅" }
-                "Cancelled" { "❌" }
-                default { "❓" }
-            }
-            
-            $displayText = "$priorityIcon $statusIcon $($task.Title)"
-            $this._taskListBox.AddItem($displayText)
-        }
+        # Pass raw task objects to DataGridComponent
+        # ViewDefinition transformer will handle all formatting
+        $this._taskGrid.SetItems($this._filteredTasks)
         
         # Update selection
-        if ($this._taskListBox.SelectedIndex -ge 0 -and $this._taskListBox.SelectedIndex -lt $this._filteredTasks.Count) {
-            $this._selectedTask = $this._filteredTasks[$this._taskListBox.SelectedIndex]
+        if ($this._taskGrid.SelectedIndex -ge 0 -and $this._taskGrid.SelectedIndex -lt $this._filteredTasks.Count) {
+            $this._selectedTask = $this._taskGrid.GetSelectedRawItem()
         } else {
             $this._selectedTask = $null
         }
         
         $this.UpdateTaskDetails()
+    }
+
+    [void] OnTaskSelectionChanged([object]$sender, [int]$newIndex) {
+        Write-Log -Level Debug -Message "TaskListScreen.OnTaskSelectionChanged: Index $newIndex"
+        
+        if ($newIndex -ge 0 -and $newIndex -lt $this._filteredTasks.Count) {
+            # Get the raw task object (not the transformed one)
+            $this._selectedTask = $this._taskGrid.GetSelectedRawItem()
+            $this.UpdateTaskDetails()
+        } else {
+            $this._selectedTask = $null
+            $this.UpdateTaskDetails()
+        }
     }
 
     hidden [void] UpdateTaskDetails() {

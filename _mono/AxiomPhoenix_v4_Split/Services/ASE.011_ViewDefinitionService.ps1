@@ -46,7 +46,7 @@ class ViewDefinitionService {
     }
     
     hidden [void] _RegisterDefaultViewDefinitions() {
-        # Task summary view for lists and grids
+        # Task summary view for lists and grids - Enhanced with dynamic styling
         $this.RegisterViewDefinition('task.summary', @{
             Columns = @(
                 @{ Name="Status";   Header="S"; Width=3 },
@@ -57,31 +57,49 @@ class ViewDefinitionService {
             Transformer = {
                 param($task)
                 
-                # Status indicator  
+                # Status indicator with style
                 $statusChar = switch ($task.Status) {
-                    ([TaskStatus]::Pending) { "o" }
-                    ([TaskStatus]::InProgress) { "*" }
-                    ([TaskStatus]::Completed) { "✓" }
+                    ([TaskStatus]::Pending) { "○" }
+                    ([TaskStatus]::InProgress) { "◐" }
+                    ([TaskStatus]::Completed) { "●" }
                     ([TaskStatus]::Cancelled) { "✗" }
                     default { "?" }
                 }
                 
-                # Priority indicator
+                # Priority indicator with style
                 $priorityChar = switch ($task.Priority) {
                     ([TaskPriority]::Low) { "↓" }
-                    ([TaskPriority]::Medium) { "-" }
+                    ([TaskPriority]::Medium) { "→" }
                     ([TaskPriority]::High) { "↑" }
-                    default { "-" }
+                    default { "→" }
                 }
                 
-                # Progress display
+                # Progress display with conditional styling
                 $progressText = "$($task.Progress)%"
                 
+                # Check if task is overdue
+                $isOverdue = $task.DueDate -and $task.DueDate -lt [DateTime]::Now -and $task.Status -ne [TaskStatus]::Completed
+                
                 return @{
-                    Status   = $statusChar
-                    Priority = $priorityChar  
-                    Title    = $task.Title
-                    Progress = $progressText
+                    Status   = @{ 
+                        Text = $statusChar
+                        Style = "task.status.$($task.Status.ToString().ToLower())"
+                    }
+                    Priority = @{ 
+                        Text = $priorityChar
+                        Style = "task.priority.$($task.Priority.ToString().ToLower())"
+                    }
+                    Title    = @{ 
+                        Text = $task.Title
+                        Style = if ($isOverdue) { "task.title.overdue" } else { "task.title.normal" }
+                    }
+                    Progress = @{ 
+                        Text = $progressText
+                        Style = if ($task.Progress -eq 100) { "task.progress.complete" } 
+                                elseif ($task.Progress -ge 75) { "task.progress.high" }
+                                elseif ($task.Progress -ge 50) { "task.progress.medium" }
+                                else { "task.progress.low" }
+                    }
                 }
             }
         })
@@ -166,7 +184,7 @@ class ViewDefinitionService {
             }
         })
         
-        # Project summary view
+        # Project summary view - Enhanced with dynamic styling
         $this.RegisterViewDefinition('project.summary', @{
             Columns = @(
                 @{ Name="Key";        Header="Key"; Width=10 },
@@ -177,17 +195,31 @@ class ViewDefinitionService {
             Transformer = {
                 param($project)
                 
-                $statusText = "Inactive"
-                if ($project.IsActive) { $statusText = "Active" }
+                $statusText = if ($project.IsActive) { "Active" } else { "Inactive" }
+                $ownerText = if ($project.Owner) { $project.Owner } else { "Unassigned" }
                 
-                $ownerText = "Unassigned"
-                if ($project.Owner) { $ownerText = $project.Owner }
+                # Check if project is overdue
+                $isOverdue = $project.BFDate -and $project.BFDate -lt [DateTime]::Now -and $project.IsActive
                 
                 return @{
-                    Key    = $project.Key
-                    Name   = $project.Name
-                    Status = $statusText
-                    Owner  = $ownerText
+                    Key    = @{ 
+                        Text = $project.Key
+                        Style = "project.key.normal"
+                    }
+                    Name   = @{ 
+                        Text = $project.Name
+                        Style = if ($isOverdue) { "project.name.overdue" } 
+                                elseif (-not $project.IsActive) { "project.name.inactive" }
+                                else { "project.name.normal" }
+                    }
+                    Status = @{ 
+                        Text = $statusText
+                        Style = if ($project.IsActive) { "project.status.active" } else { "project.status.inactive" }
+                    }
+                    Owner  = @{ 
+                        Text = $ownerText
+                        Style = if ($project.Owner) { "project.owner.assigned" } else { "project.owner.unassigned" }
+                    }
                 }
             }
         })

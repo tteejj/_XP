@@ -159,7 +159,7 @@ class EventManager {
     
     [hashtable[]] GetEventHistory([string]$eventName = $null) {
         if ($eventName) {
-            return $this.EventHistory | Where-Object { $_.EventName -eq $eventName }
+            return $this.EventHistory.Where({ $_.EventName -eq $eventName })
         }
         return $this.EventHistory | ForEach-Object { $_ }
     }

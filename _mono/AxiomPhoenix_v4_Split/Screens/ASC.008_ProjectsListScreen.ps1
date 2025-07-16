@@ -11,7 +11,7 @@ class ProjectsListScreen : Screen {
     hidden [Panel] $_detailPanel
     hidden [Panel] $_actionPanel
     hidden [TextBoxComponent] $_searchBox
-    hidden [ListBox] $_projectListBox
+    hidden [DataGridComponent] $_projectGrid
     hidden [List[PmcProject]] $_allProjects
     hidden [List[PmcProject]] $_filteredProjects
     hidden [LabelComponent] $_statusLabel
@@ -24,6 +24,9 @@ class ProjectsListScreen : Screen {
     
     # Search state
     hidden [string] $_searchText = ""
+    
+    # Event subscriptions
+    hidden [string] $_projectChangeSubscriptionId = $null
     
     ProjectsListScreen([object]$serviceContainer) : base("ProjectsListScreen", $serviceContainer) {
         $this._dataManager = $serviceContainer.GetService("DataManager")
@@ -104,40 +107,31 @@ class ProjectsListScreen : Screen {
         
         $this._listPanel.AddChild($this._searchBox)
         
-        # Project list
-        $this._projectListBox = [ListBox]::new("ProjectList")
-        $this._projectListBox.X = 1
-        $this._projectListBox.Y = 3
-        $this._projectListBox.Width = $this._listPanel.Width - 2
-        $this._projectListBox.Height = $this._listPanel.Height - 5
-        $this._projectListBox.HasBorder = $false
-        $this._projectListBox.IsFocusable = $true
-        $this._projectListBox.TabIndex = 1
-        $this._projectListBox.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#007acc"
-        $this._projectListBox.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#ffffff"
+        # Project grid with ViewDefinition
+        $this._projectGrid = [DataGridComponent]::new("ProjectGrid")
+        $this._projectGrid.X = 1
+        $this._projectGrid.Y = 3
+        $this._projectGrid.Width = $this._listPanel.Width - 2
+        $this._projectGrid.Height = $this._listPanel.Height - 5
+        $this._projectGrid.IsFocusable = $true
+        $this._projectGrid.TabIndex = 1
+        $this._projectGrid.ShowHeaders = $true
+        $this._projectGrid.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#007acc"
+        $this._projectGrid.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#ffffff"
         
-        # Add visual focus feedback for list box - store colors before closure
-        $listFocusBorder = Get-ThemeColor "input.focused.border" "#00d4ff"
-        $listNormalBorder = Get-ThemeColor "Panel.Border" "#666666"
+        # Get ViewDefinition from service
+        $viewService = $this.ServiceContainer.GetService("ViewDefinitionService")
+        $projectViewDef = $viewService.GetViewDefinition('project.summary')
+        $this._projectGrid.SetViewDefinition($projectViewDef)
         
-        $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = $listFocusBorder
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        $this._projectListBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = $listNormalBorder
-            $this.RequestRedraw()
-        }.GetNewClosure() -Force
-        
-        # Handle list selection changes
+        # Handle grid selection changes
         $screenRef = $this
-        $this._projectListBox.SelectedIndexChanged = {
+        $this._projectGrid.OnSelectionChanged = {
             param($sender, $newIndex)
             $screenRef.UpdateDetailPanel()
         }.GetNewClosure()
         
-        $this._listPanel.AddChild($this._projectListBox)
+        $this._listPanel.AddChild($this._projectGrid)
         
         # Detail panel (right side)
         $this._detailPanel = [Panel]::new("ProjectDetailPanel")
@@ -382,12 +376,25 @@ class ProjectsListScreen : Screen {
         }
         $this.FilterProjects($this._searchText)
         
+        # Subscribe to data change events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            $screenRef = $this
+            $projectHandler = {
+                param($eventData)
+                Write-Log -Level Debug -Message "ProjectsListScreen: Project data changed, refreshing"
+                $screenRef.LoadProjects()
+            }.GetNewClosure()
+            
+            $this._projectChangeSubscriptionId = $eventManager.Subscribe("Projects.Changed", $projectHandler)
+        }
+        
         # Call base class to handle focus management
         ([Screen]$this).OnEnter()
         
-        # GUIDE: Ensure ListBox gets initial focus if no search text
-        if ([string]::IsNullOrEmpty($this._searchText) -and $this._projectListBox.Items.Count -gt 0) {
-            $this.SetChildFocus($this._projectListBox)
+        # GUIDE: Ensure Grid gets initial focus if no search text
+        if ([string]::IsNullOrEmpty($this._searchText) -and $this._projectGrid.Items.Count -gt 0) {
+            $this.SetChildFocus($this._projectGrid)
         }
         
         $this.RequestRedraw()
@@ -395,7 +402,31 @@ class ProjectsListScreen : Screen {
     
     [void] OnExit() {
         Write-Log -Level Debug -Message "ProjectsListScreen.OnExit: Cleaning up"
-        # Nothing to clean up
+        
+        # Unsubscribe from events
+        $eventManager = $this.ServiceContainer?.GetService("EventManager")
+        if ($eventManager) {
+            if ($this._projectChangeSubscriptionId) {
+                $eventManager.Unsubscribe("Projects.Changed", $this._projectChangeSubscriptionId)
+                $this._projectChangeSubscriptionId = $null
+            }
+        }
+    }
+    
+    hidden [void] LoadProjects() {
+        Write-Log -Level Debug -Message "ProjectsListScreen.LoadProjects: Reloading projects from data manager"
+        
+        # Reload all projects from data manager
+        $this._allProjects = [List[PmcProject]]::new()
+        $projects = $this._dataManager.GetProjects()
+        foreach ($project in $projects) {
+            $this._allProjects.Add($project)
+        }
+        
+        # Reapply current filter
+        $this.FilterProjects($this._currentFilter)
+        
+        Write-Log -Level Debug -Message "ProjectsListScreen.LoadProjects: Loaded $($this._allProjects.Count) projects"
     }
     
     hidden [void] FilterProjects([string]$searchTerm) {
@@ -412,14 +443,9 @@ class ProjectsListScreen : Screen {
             }
         }
         
-        # Update list
-        $this._projectListBox.ClearItems()
-        foreach ($project in $this._filteredProjects) {
-            $icon = if ($project.IsActive) { "📁" } else { "📂" }
-            $status = if ($project.IsActive) { "" } else { " [Archived]" }
-            $itemText = "$icon $($project.Key) - $($project.Name)$status"
-            $this._projectListBox.AddItem($itemText)
-        }
+        # Update grid with raw project objects
+        # ViewDefinition transformer will handle all formatting
+        $this._projectGrid.SetItems($this._filteredProjects.ToArray())
         
         # Update status
         $count = $this._filteredProjects.Count
@@ -432,9 +458,9 @@ class ProjectsListScreen : Screen {
         
         # Select first item if available
         if ($this._filteredProjects.Count -gt 0) {
-            $this._projectListBox.SelectedIndex = 0
+            $this._projectGrid.SelectedIndex = 0
         } else {
-            $this._projectListBox.SelectedIndex = -1 # No items, no selection
+            $this._projectGrid.SelectedIndex = -1 # No items, no selection
         }
         
         $this.UpdateDetailPanel()
@@ -442,8 +468,8 @@ class ProjectsListScreen : Screen {
     }
     
     hidden [void] UpdateDetailPanel() {
-        if ($this._projectListBox.SelectedIndex -lt 0 -or 
-            $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
+        if ($this._projectGrid.SelectedIndex -lt 0 -or 
+            $this._projectGrid.SelectedIndex -ge $this._filteredProjects.Count) {
             # Clear all details
             foreach ($label in $this._detailLabels.Values) {
                 $label.Text = ""
@@ -452,7 +478,7 @@ class ProjectsListScreen : Screen {
             return
         }
         
-        $project = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+        $project = $this._projectGrid.GetSelectedRawItem()
         
         # Update basic fields
         $this._detailLabels["Key"].Text = $project.Key
@@ -508,9 +534,9 @@ class ProjectsListScreen : Screen {
     }
     
     hidden [void] ViewSelectedProject() {
-        if ($this._projectListBox.SelectedIndex -ge 0 -and 
-            $this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count) {
-            $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+        if ($this._projectGrid.SelectedIndex -ge 0 -and 
+            $this._projectGrid.SelectedIndex -lt $this._filteredProjects.Count) {
+            $selectedProject = $this._projectGrid.GetSelectedRawItem()
             
             $navService = $this.ServiceContainer?.GetService("NavigationService")
             if ($navService) {
@@ -532,9 +558,9 @@ class ProjectsListScreen : Screen {
     }
     
     hidden [void] EditSelectedProject() {
-        if ($this._projectListBox.SelectedIndex -ge 0 -and 
-            $this._projectListBox.SelectedIndex -lt $this._filteredProjects.Count) {
-            $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+        if ($this._projectGrid.SelectedIndex -ge 0 -and 
+            $this._projectGrid.SelectedIndex -lt $this._filteredProjects.Count) {
+            $selectedProject = $this._projectGrid.GetSelectedRawItem()
             
             $navService = $this.ServiceContainer?.GetService("NavigationService")
             if ($navService) {
@@ -546,24 +572,24 @@ class ProjectsListScreen : Screen {
     }
     
     hidden [void] DeleteSelectedProject() {
-        if ($this._projectListBox.SelectedIndex -lt 0 -or 
-            $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
+        if ($this._projectGrid.SelectedIndex -lt 0 -or 
+            $this._projectGrid.SelectedIndex -ge $this._filteredProjects.Count) {
             return
         }
         
-        $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+        $selectedProject = $this._projectGrid.GetSelectedRawItem()
         
         # Simple confirmation - in real app would use dialog
         Write-Log -Level Warning -Message "Delete not implemented for project: $($selectedProject.Key)"
     }
     
     hidden [void] ArchiveSelectedProject() {
-        if ($this._projectListBox.SelectedIndex -lt 0 -or 
-            $this._projectListBox.SelectedIndex -ge $this._filteredProjects.Count) {
+        if ($this._projectGrid.SelectedIndex -lt 0 -or 
+            $this._projectGrid.SelectedIndex -ge $this._filteredProjects.Count) {
             return
         }
         
-        $selectedProject = $this._filteredProjects[$this._projectListBox.SelectedIndex]
+        $selectedProject = $this._projectGrid.GetSelectedRawItem()
         
         if ($selectedProject.IsActive) {
             $selectedProject.IsActive = $false

@@ -1,0 +1,21 @@
+{
+  "Projects": [],
+  "Version": "4.0",
+  "Tasks": [],
+  "Metadata": {},
+  "SavedAt": "2025-07-16T13:16:39.0165434-06:00",
+  "TimeEntries": [
+    {
+      "StartTime": "2025-07-16T12:16:38",
+      "TaskId": null,
+      "HourlyRate": 0.0,
+      "UserId": null,
+      "EndTime": "2025-07-16T13:16:38",
+      "BillingType": "Billable",
+      "Id": "c03ea832-a9a7-481a-9992-580b5ad4cdc9",
+      "ProjectKey": "PROJ1",
+      "Metadata": {},
+      "Description": "Updated time entry"
+    }
+  ]
+}

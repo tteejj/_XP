@@ -1,0 +1,39 @@
+{
+  "Metadata": {},
+  "SavedAt": "2025-07-16T13:29:19.723267-06:00",
+  "Version": "4.0",
+  "Projects": [],
+  "Tasks": [
+    {
+      "Tags": [],
+      "ProjectKey": "General",
+      "Description": null,
+      "Status": "Pending",
+      "Completed": false,
+      "UpdatedAt": "2025-07-16T13:29:17",
+      "Category": null,
+      "Progress": 0,
+      "Id": "2d800e38-dbfc-4d94-aa0e-5159aa08d6b3",
+      "CreatedAt": "2025-07-16T13:29:17",
+      "Title": "High Priority Pending Task",
+      "DueDate": "2025-07-15T13:29:17",
+      "Priority": "High"
+    },
+    {
+      "Tags": [],
+      "ProjectKey": "General",
+      "Description": null,
+      "Status": "InProgress",
+      "Completed": false,
+      "UpdatedAt": "2025-07-16T13:29:17",
+      "Category": null,
+      "Progress": 50,
+      "Id": "c6d77b70-9abb-40e9-9850-a90e4515fd47",
+      "CreatedAt": "2025-07-16T13:29:17",
+      "Title": "Medium Priority In Progress",
+      "DueDate": "2025-07-21T13:29:17",
+      "Priority": "Medium"
+    }
+  ],
+  "TimeEntries": []
+}

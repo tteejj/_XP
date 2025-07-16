@@ -243,22 +243,38 @@ class NewTaskEntryScreen : Screen {
         
         # Create new task
         if ($null -ne $this._dataManager) {
-            # Create a simple task object (assuming PmcTask class exists)
-            $task = [PmcTask]::new($title.Trim())
-            
-            # Add description if provided
-            $description = $this._descriptionTextBox.Text
-            if (-not [string]::IsNullOrWhiteSpace($description)) {
-                $task.Description = $description.Trim()
+            try {
+                # Create a simple task object (assuming PmcTask class exists)
+                $task = [PmcTask]::new($title.Trim())
+                
+                # Add description if provided
+                $description = $this._descriptionTextBox.Text
+                if (-not [string]::IsNullOrWhiteSpace($description)) {
+                    $task.Description = $description.Trim()
+                }
+                
+                # Set default values
+                $task.Priority = [TaskPriority]::Medium
+                $task.Status = [TaskStatus]::Pending
+                $task.ProjectKey = "General"
+                
+                # Save the task
+                $result = $this._dataManager.AddTask($task)
+                Write-Log -Level Info -Message "NewTaskEntryScreen: Successfully saved task '$title'"
+                
+                # Trigger events to notify other components
+                $eventManager = $this.ServiceContainer.GetService("EventManager")
+                if ($eventManager) {
+                    $eventManager.PublishEvent("Tasks.Changed", @{ Action = "Added"; Task = $task })
+                }
             }
-            
-            # Set default values
-            $task.Priority = [TaskPriority]::Medium
-            $task.Status = [TaskStatus]::Pending
-            $task.ProjectKey = "General"
-            
-            # Save the task
-            $this._dataManager.AddTask($task) | Out-Null
+            catch {
+                Write-Log -Level Error -Message "NewTaskEntryScreen: Failed to save task '$title': $_"
+                return
+            }
+        } else {
+            Write-Log -Level Error -Message "NewTaskEntryScreen: DataManager is null, cannot save task"
+            return
         }
         
         # Go back to previous screen
