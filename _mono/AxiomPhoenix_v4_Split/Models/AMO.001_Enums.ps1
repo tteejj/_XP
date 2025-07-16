@@ -29,6 +29,11 @@ enum TaskPriority {
 enum BillingType {
     Billable
     NonBillable
+    Administrative
+    Meeting
+    Training
+    Research
+    Internal
 }
 
 enum DialogResult {

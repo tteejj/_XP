@@ -81,7 +81,7 @@ class EditTaskScreen : Screen {
         $this._formPanel.Width = $this.Width - 2
         $this._formPanel.Height = $this.Height - 5  # Leave room for status bar
         $this._formPanel.Title = " Task Details "
-        $this._formPanel.BorderStyle = "Single"
+        $this._formPanel.HasBorder = $true
         $this._formPanel.BorderColor = Get-ThemeColor "Panel.Border" "#333333"
         $this._mainPanel.AddChild($this._formPanel)
         

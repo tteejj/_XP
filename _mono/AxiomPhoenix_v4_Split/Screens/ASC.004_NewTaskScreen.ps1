@@ -37,7 +37,7 @@ class NewTaskScreen : Screen {
         $this._panel.Width = $panelWidth
         $this._panel.Height = $panelHeight
         $this._panel.Title = " New Task "
-        $this._panel.BorderStyle = "Single"
+        $this._panel.HasBorder = $true
         $this.AddChild($this._panel)
         
         $y = 2
@@ -57,6 +57,20 @@ class NewTaskScreen : Screen {
         $this._titleBox.Height = 3
         $this._titleBox.IsFocusable = $true
         $this._titleBox.TabIndex = 0
+        
+        # Add missing focus handlers as per guide
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "input.focused.border"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._panel.AddChild($this._titleBox)
         
         $y += 4
@@ -76,6 +90,20 @@ class NewTaskScreen : Screen {
         $this._descriptionBox.Height = 3
         $this._descriptionBox.IsFocusable = $true
         $this._descriptionBox.TabIndex = 1
+        
+        # Add missing focus handlers as per guide
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
+            $this.BorderColor = Get-ThemeColor "input.focused.border"
+            $this.ShowCursor = $true
+            $this.RequestRedraw()
+        } -Force
+        
+        $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
+            $this.BorderColor = Get-ThemeColor "input.border"
+            $this.ShowCursor = $false
+            $this.RequestRedraw()
+        } -Force
+        
         $this._panel.AddChild($this._descriptionBox)
         
         $y += 4

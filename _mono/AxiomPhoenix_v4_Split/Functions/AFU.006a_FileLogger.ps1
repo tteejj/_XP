@@ -1,5 +1,11 @@
 # AFU.006a_FileLogger.ps1 - File-based logging to replace console output
 
+# DISABLED FOR PERFORMANCE - FILE LOGGING CAUSES SEVERE PERFORMANCE ISSUES
+# This file overrides all PowerShell output functions and redirects to log file
+# Commenting out all functionality to restore normal output behavior
+
+return
+
 # Global variable to store the log file path
 $global:AxiomPhoenixLogFile = Join-Path ([System.IO.Path]::GetDirectoryName($PSCommandPath)) "..\axiom-phoenix-debug.log"
 

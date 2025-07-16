@@ -241,7 +241,7 @@ class ProjectEditDialog : Dialog {
         $descField.Width = $this._scrollPanel.ContentWidth - 4
         $descField.Height = 5
         $descField.SetText($this._project.Description)
-        $descField.BorderStyle = "Single"
+        $descField.HasBorder = $true
         $descField.IsFocusable = $true
         $descField.TabIndex = 8
         $this._AddFieldVisualFeedback($descField)

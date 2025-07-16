@@ -13,6 +13,20 @@
 
 #region Rendering System
 
+# PERFORMANCE: Track dirty regions to avoid full-screen renders
+$script:DirtyRegions = [System.Collections.Generic.List[object]]::new()
+$script:FullRedrawRequested = $true
+
+function Add-DirtyRegion {
+    param([int]$X, [int]$Y, [int]$Width, [int]$Height)
+    $script:DirtyRegions.Add(@{ X = $X; Y = $Y; Width = $Width; Height = $Height })
+}
+
+function Request-FullRedraw {
+    $script:FullRedrawRequested = $true
+    $script:DirtyRegions.Clear()
+}
+
 function Invoke-TuiRender {
     [CmdletBinding()]
     param()
@@ -102,42 +116,60 @@ function Render-DifferentialBuffer {
         $currentRun = $null
         $runCells = [System.Collections.Generic.List[object]]::new()
         
-        for ($y = 0; $y -lt $current.Height; $y++) {
-            for ($x = 0; $x -lt $current.Width; $x++) {
-                $currentCell = $current.GetCell($x, $y)
-                $previousCell = $previous.GetCell($x, $y)
-                
-                if ($currentCell.DiffersFrom($previousCell)) {
-                    # Start new run if we don't have one, or if this cell isn't consecutive
-                    if ($null -eq $currentRun -or $currentRun.Y -ne $y -or $currentRun.X + $currentRun.Length -ne $x) {
-                        # Flush previous run if we have one
-                        if ($null -ne $currentRun) {
-                            FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+        # PERFORMANCE: Only check dirty regions unless full redraw requested
+        $checkRegions = if ($script:FullRedrawRequested -or $script:DirtyRegions.Count -eq 0) {
+            @(@{ X = 0; Y = 0; Width = $current.Width; Height = $current.Height })
+        } else {
+            $script:DirtyRegions
+        }
+        
+        foreach ($region in $checkRegions) {
+            $startX = [Math]::Max(0, $region.X)
+            $endX = [Math]::Min($current.Width, $region.X + $region.Width)
+            $startY = [Math]::Max(0, $region.Y)
+            $endY = [Math]::Min($current.Height, $region.Y + $region.Height)
+            
+            for ($y = $startY; $y -lt $endY; $y++) {
+                for ($x = $startX; $x -lt $endX; $x++) {
+                    $currentCell = $current.GetCell($x, $y)
+                    $previousCell = $previous.GetCell($x, $y)
+                    
+                    if ($currentCell.DiffersFrom($previousCell)) {
+                        # Start new run if we don't have one, or if this cell isn't consecutive
+                        if ($null -eq $currentRun -or $currentRun.Y -ne $y -or $currentRun.X + $currentRun.Length -ne $x) {
+                            # Flush previous run if we have one
+                            if ($null -ne $currentRun) {
+                                FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                            }
+                            
+                            # Start new run
+                            $currentRun = @{ X = $x; Y = $y; Length = 0 }
+                            $runCells.Clear()
                         }
                         
-                        # Start new run
-                        $currentRun = @{ X = $x; Y = $y; Length = 0 }
-                        $runCells.Clear()
-                    }
-                    
-                    # Add cell to current run
-                    $runCells.Add($currentCell)
-                    $currentRun.Length++
-                } else {
-                    # End current run if we have one
-                    if ($null -ne $currentRun) {
-                        FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
-                        $currentRun = $null
+                        # Add cell to current run
+                        $runCells.Add($currentCell)
+                        $currentRun.Length++
+                    } else {
+                        # End current run if we have one
+                        if ($null -ne $currentRun) {
+                            FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                            $currentRun = $null
+                        }
                     }
                 }
-            }
-            
-            # End run at end of line
-            if ($null -ne $currentRun) {
-                FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
-                $currentRun = $null
+                
+                # End run at end of line
+                if ($null -ne $currentRun) {
+                    FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                    $currentRun = $null
+                }
             }
         }
+        
+        # Clear dirty regions after processing
+        $script:DirtyRegions.Clear()
+        $script:FullRedrawRequested = $false
         
         # Reset styling at the very end of the string
         if ($ansiBuilder.Length -gt 0) {

@@ -109,7 +109,7 @@ class FileCommanderScreen : Screen {
         $this._leftPanel.Width = $halfWidth
         $this._leftPanel.Height = $panelHeight
         $this._leftPanel.HasBorder = $true
-        $this._leftPanel.BorderStyle = "Single"
+        $this._leftPanel.HasBorder = $true
         # Use property assignment
         $this._leftPanel.BorderColor = Get-ThemeColor "Panel.Border" "#00D4FF"  # Initially active
         $this._mainPanel.AddChild($this._leftPanel)
@@ -167,7 +167,7 @@ class FileCommanderScreen : Screen {
         $this._rightPanel.Width = $this.Width - $halfWidth
         $this._rightPanel.Height = $panelHeight
         $this._rightPanel.HasBorder = $true
-        $this._rightPanel.BorderStyle = "Single"
+        $this._rightPanel.HasBorder = $true
         # Use property assignment
         $this._rightPanel.BorderColor = Get-ThemeColor "Panel.Border" "#666666"  # Initially inactive
         $this._mainPanel.AddChild($this._rightPanel)

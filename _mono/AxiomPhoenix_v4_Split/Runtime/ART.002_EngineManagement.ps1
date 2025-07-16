@@ -256,8 +256,8 @@ function Start-AxiomPhoenix {
         
         $serviceNames = @(
             'ActionService', 'KeybindingService', 'NavigationService', 
-            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'FocusManager', 'DialogManager', 
-            'TuiFrameworkService', 'CommandPaletteManager'
+            'DataManager', 'ThemeManager', 'EventManager', 'Logger', 'DialogManager',
+            'ViewDefinitionService', 'FileSystemService'
         )
         
         foreach ($serviceName in $serviceNames) {

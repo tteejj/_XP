@@ -1,105 +1,86 @@
 # ==============================================================================
 # Axiom-Phoenix v4.0 - Dashboard Screen
+# SIMPLIFIED: Numeric keys only, scrollable list with Enter selection
 # ==============================================================================
 
 class DashboardScreen : Screen {
-    hidden [Panel] $_panel
-    hidden [int] $_selectedIndex = 0
-    hidden [string[]] $_menuItems
-    hidden [bool] $_isInitialized = $false
+    hidden [Panel] $_mainPanel
+    hidden [ListBox] $_menuListBox
     hidden [string] $_themeChangeSubscriptionId = $null
+    hidden $_navService
+    
+    # Menu items with their target screens
+    hidden [hashtable[]] $_menuItems = @(
+        @{ Text = "1. Dashboard (Current)"; Action = $null },
+        @{ Text = "2. Project Dashboard"; Action = "ProjectDashboardScreen" },
+        @{ Text = "3. Task List"; Action = "TaskListScreen" },
+        @{ Text = "4. Projects"; Action = "ProjectsListScreen" },
+        @{ Text = "5. File Browser"; Action = "FileBrowserScreen" },
+        @{ Text = "6. Text Editor"; Action = "TextEditScreen" },
+        @{ Text = "7. Theme Picker"; Action = "ThemeScreen" },
+        @{ Text = "8. Command Palette"; Action = "CommandPaletteScreen" },
+        @{ Text = "9. View Timesheet"; Action = "TimesheetScreen" },
+        @{ Text = "0. Quit"; Action = "Quit" }
+    )
     
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {
-        $this._menuItems = @(
-            "[1] Dashboard (Current)",
-            "[2] Task List", 
-            "[3] Projects",
-            "[4] File Browser",
-            "[5] Text Editor",
-            "[6] Theme Picker",
-            "[7] Command Palette",
-            "────────────────",
-            "[Q] Quit"
-        )
-        # Start on first valid menu item (skip separators)
-        $this._selectedIndex = 0
-        while ($this._selectedIndex -lt $this._menuItems.Count -and $this._menuItems[$this._selectedIndex] -eq "────────────────") {
-            $this._selectedIndex++
-        }
+        Write-Log -Level Debug -Message "DashboardScreen: Constructor called"
+        $this._navService = $serviceContainer.GetService("NavigationService")
     }
 
     [void] Initialize() {
         if ($this._isInitialized) { return }
         
-        # Create simple Panel container
+        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting"
+        
+        # Create main panel
         $panelWidth = [Math]::Min(60, $this.Width - 4)
-        $panelHeight = [Math]::Min(16, $this.Height - 4)
+        $panelHeight = [Math]::Min(18, $this.Height - 4)
         
-        $this._panel = [Panel]::new("MainPanel")
-        $this._panel.IsFocusable = $true
-        $this._panel.TabIndex = 0
-        $this._panel.X = [Math]::Floor(($this.Width - $panelWidth) / 2)
-        $this._panel.Y = [Math]::Floor(($this.Height - $panelHeight) / 2)
-        $this._panel.Width = $panelWidth
-        $this._panel.Height = $panelHeight
-        $this._panel.HasBorder = $true
-        $this._panel.Title = " Axiom-Phoenix v4.0 - Main Menu "
+        $this._mainPanel = [Panel]::new("MainPanel")
+        $this._mainPanel.X = [Math]::Floor(($this.Width - $panelWidth) / 2)
+        $this._mainPanel.Y = [Math]::Floor(($this.Height - $panelHeight) / 2)
+        $this._mainPanel.Width = $panelWidth
+        $this._mainPanel.Height = $panelHeight
+        $this._mainPanel.HasBorder = $true
+        $this._mainPanel.Title = " Axiom-Phoenix v4.0 - Main Menu "
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "palette.background"
+        $this._mainPanel.BorderColor = Get-ThemeColor "palette.border"
+        $this._mainPanel.ForegroundColor = Get-ThemeColor "foreground"
         
-        $this.AddChild($this._panel)
-        $this.UpdateThemeColors()
+        # Create ListBox for menu items
+        $this._menuListBox = [ListBox]::new("MenuList")
+        $this._menuListBox.IsFocusable = $true
+        $this._menuListBox.TabIndex = 0
+        $this._menuListBox.X = 2
+        $this._menuListBox.Y = 2
+        $this._menuListBox.Width = $panelWidth - 4
+        $this._menuListBox.Height = $panelHeight - 4
+        $this._menuListBox.HasBorder = $false
+        
+        # Add menu items to ListBox
+        foreach ($item in $this._menuItems) {
+            $this._menuListBox.AddItem($item.Text)
+        }
+        
+        # Set event handler for selection changes
+        $currentScreenRef = $this
+        $this._menuListBox.SelectedIndexChanged = {
+            param($sender, $index)
+            Write-Log -Level Debug -Message "Menu selection changed to: $index"
+        }.GetNewClosure()
+        
+        # Add components
+        $this._mainPanel.AddChild($this._menuListBox)
+        $this.AddChild($this._mainPanel)
         
         $this._isInitialized = $true
+        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Completed"
     }
 
-    hidden [void] _RenderContent() {
-        # First let base render all children (including Panel)
-        ([UIElement]$this)._RenderContent()
-        
-        # Then draw menu items on top of Panel's content area
-        if ($this._panel -and $this._private_buffer) {
-            $panelX = $this._panel.X
-            $panelY = $this._panel.Y
-            $panelWidth = $this._panel.Width
-            $panelHeight = $this._panel.Height
-            
-            # Calculate content area inside Panel border
-            $contentX = $panelX + 2
-            $contentY = $panelY + 1
-            $contentWidth = $panelWidth - 4
-            $contentHeight = $panelHeight - 2
-            
-            # Get theme colors
-            $normalFg = Get-ThemeColor "foreground" "#d4d4d4"
-            $normalBg = Get-ThemeColor "palette.background" "#1e1e1e"
-            $selectedFg = Get-ThemeColor "listbox.selectedforeground" "#ffffff"
-            $selectedBg = Get-ThemeColor "listbox.selectedbackground" "#007acc"
-            $separatorFg = Get-ThemeColor "palette.muted" "#666666"
-            
-            # Draw menu items
-            for ($i = 0; $i -lt $this._menuItems.Count -and $i -lt $contentHeight; $i++) {
-                $item = $this._menuItems[$i]
-                $y = $contentY + $i
-                
-                if ($i -eq $this._selectedIndex) {
-                    # Highlighted item
-                    for ($xx = $contentX; $xx -lt ($contentX + $contentWidth); $xx++) {
-                        $this._private_buffer.SetCell($xx, $y, [TuiCell]::new(' ', $selectedFg, $selectedBg))
-                    }
-                    if ($item -ne "────────────────") {
-                        Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $selectedFg; BG = $selectedBg }
-                    }
-                } else {
-                    # Normal item
-                    $itemFg = if ($item -eq "────────────────") { $separatorFg } else { $normalFg }
-                    Write-TuiText -Buffer $this._private_buffer -X $contentX -Y $y -Text $item -Style @{ FG = $itemFg; BG = $normalBg }
-                }
-            }
-        }
-    }
 
     [void] OnEnter() {
-        $this.UpdateThemeColors()
-        $this.UpdatePanelLayout()
+        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
         
         # Subscribe to theme change events
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
@@ -107,85 +88,81 @@ class DashboardScreen : Screen {
             $thisScreen = $this
             $handler = {
                 param($eventData)
+                Write-Log -Level Debug -Message "DashboardScreen: Theme changed event received"
                 $thisScreen.UpdateThemeColors()
                 $thisScreen.RequestRedraw()
             }.GetNewClosure()
             
             $this._themeChangeSubscriptionId = $eventManager.Subscribe("Theme.Changed", $handler)
+            Write-Log -Level Debug -Message "DashboardScreen: Subscribed to Theme.Changed events"
         }
         
+        # MUST call base to set initial focus
         ([Screen]$this).OnEnter()
         $this.RequestRedraw()
     }
     
     [void] OnResize() {
-        ([UIElement]$this).OnResize($this.Width, $this.Height)
-        $this.UpdatePanelLayout()
-    }
-    
-    hidden [void] UpdatePanelLayout() {
-        if ($this._panel) {
+        ([Screen]$this).OnResize()
+        if ($this._mainPanel -and $this._menuListBox) {
+            # Recalculate panel size and position for current screen size
             $panelWidth = [Math]::Min(60, $this.Width - 4)
-            $panelHeight = [Math]::Min(16, $this.Height - 4)
+            $panelHeight = [Math]::Min(18, $this.Height - 4)
             
-            $this._panel.X = [Math]::Floor(($this.Width - $panelWidth) / 2)
-            $this._panel.Y = [Math]::Floor(($this.Height - $panelHeight) / 2)
-            $this._panel.Width = $panelWidth
-            $this._panel.Height = $panelHeight
+            $this._mainPanel.X = [Math]::Floor(($this.Width - $panelWidth) / 2)
+            $this._mainPanel.Y = [Math]::Floor(($this.Height - $panelHeight) / 2)
+            $this._mainPanel.Width = $panelWidth
+            $this._mainPanel.Height = $panelHeight
+            
+            # Update ListBox size
+            $this._menuListBox.Width = $panelWidth - 4
+            $this._menuListBox.Height = $panelHeight - 4
         }
     }
     
     hidden [void] UpdateThemeColors() {
-        if ($this._panel) {
-            $this._panel.BackgroundColor = Get-ThemeColor "palette.background"
-            $this._panel.BorderColor = Get-ThemeColor "palette.border"
-            $this._panel.ForegroundColor = Get-ThemeColor "foreground"
+        try {
+            # Update panel colors
+            if ($this._mainPanel) {
+                $this._mainPanel.BackgroundColor = Get-ThemeColor "palette.background"
+                $this._mainPanel.BorderColor = Get-ThemeColor "palette.border"
+                $this._mainPanel.ForegroundColor = Get-ThemeColor "foreground"
+            }
             
-            $this._panel | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-                $this.BorderColor = Get-ThemeColor "palette.primary"
-                $this.RequestRedraw()
-            } -Force
+            # Update ListBox colors
+            if ($this._menuListBox) {
+                $this._menuListBox.BackgroundColor = Get-ThemeColor "palette.background"
+                $this._menuListBox.ForegroundColor = Get-ThemeColor "foreground"
+            }
             
-            $this._panel | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-                $this.BorderColor = Get-ThemeColor "palette.border"
-                $this.RequestRedraw()
-            } -Force
+            # Update screen colors
+            $this.BackgroundColor = Get-ThemeColor "palette.background"
+            $this.ForegroundColor = Get-ThemeColor "foreground"
+            
+            Write-Log -Level Debug -Message "DashboardScreen: Updated theme colors"
+        } catch {
+            Write-Log -Level Error -Message "DashboardScreen: Error updating colors: $_"
         }
-        
-        $this.BackgroundColor = Get-ThemeColor "palette.background"
-        $this.ForegroundColor = Get-ThemeColor "foreground"
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
-        if (([Screen]$this).HandleInput($keyInfo)) {
-            return $true
-        }
+        # Get focused component
+        $focused = $this.GetFocusedChild()
         
+        # Handle screen-level actions based on focused component
         switch ($keyInfo.Key) {
-            ([ConsoleKey]::UpArrow) {
-                do {
-                    $this._selectedIndex--
-                    if ($this._selectedIndex -lt 0) { $this._selectedIndex = $this._menuItems.Count - 1 }
-                } while ($this._menuItems[$this._selectedIndex] -eq "────────────────")
-                $this.RequestRedraw()
-                return $true
-            }
-            ([ConsoleKey]::DownArrow) {
-                do {
-                    $this._selectedIndex++
-                    if ($this._selectedIndex -ge $this._menuItems.Count) { $this._selectedIndex = 0 }
-                } while ($this._menuItems[$this._selectedIndex] -eq "────────────────")
-                $this.RequestRedraw()
-                return $true
-            }
             ([ConsoleKey]::Enter) {
-                $this.ExecuteMenuItem($this._selectedIndex)
-                return $true
+                # Execute action when Enter is pressed on ListBox
+                if ($focused -eq $this._menuListBox -and $this._menuListBox.SelectedIndex -ge 0) {
+                    $this.ExecuteMenuItem($this._menuListBox.SelectedIndex)
+                    return $true
+                }
             }
         }
         
+        # Handle direct number keys (0-9) for quick navigation
         switch ($keyInfo.KeyChar) {
             '1' { $this.ExecuteMenuItem(0); return $true }
             '2' { $this.ExecuteMenuItem(1); return $true }
@@ -194,34 +171,73 @@ class DashboardScreen : Screen {
             '5' { $this.ExecuteMenuItem(4); return $true }
             '6' { $this.ExecuteMenuItem(5); return $true }
             '7' { $this.ExecuteMenuItem(6); return $true }
-            { $_ -eq 'q' -or $_ -eq 'Q' } { $this.ExecuteMenuItem(8); return $true }
+            '8' { $this.ExecuteMenuItem(7); return $true }
+            '9' { $this.ExecuteMenuItem(8); return $true }
+            '0' { $this.ExecuteMenuItem(9); return $true }
         }
         
-        return $false
+        # Let base handle Tab and route to components (ListBox handles arrows)
+        return ([Screen]$this).HandleInput($keyInfo)
     }
     
     hidden [void] ExecuteMenuItem([int]$index) {
-        $actionService = $this.ServiceContainer?.GetService("ActionService")
-        if (-not $actionService) { return }
+        if ($index -lt 0 -or $index -ge $this._menuItems.Count) { return }
         
-        switch ($index) {
-            0 { # Already on dashboard
+        $menuItem = $this._menuItems[$index]
+        $action = $menuItem.Action
+        
+        Write-Log -Level Debug -Message "DashboardScreen: Executing menu item $index - $($menuItem.Text)"
+        
+        # Handle special cases
+        if ($null -eq $action) {
+            # Current screen, do nothing
+            return
+        }
+        elseif ($action -eq "Quit") {
+            # Exit application
+            $actionService = $this.ServiceContainer?.GetService("ActionService")
+            if ($actionService) {
+                $actionService.ExecuteAction("app.exit", @{})
             }
-            1 { $actionService.ExecuteAction("navigation.taskList", @{}) }
-            2 { $actionService.ExecuteAction("navigation.projects", @{}) }
-            3 { $actionService.ExecuteAction("tools.fileCommander", @{}) }
-            4 { $actionService.ExecuteAction("tools.textEditor", @{}) }
-            5 { $actionService.ExecuteAction("navigation.themePicker", @{}) }
-            6 { $actionService.ExecuteAction("app.commandPalette", @{}) }
-            8 { $actionService.ExecuteAction("app.exit", @{}) }
+        }
+        else {
+            # Navigate to screen
+            $this.NavigateToScreen($action)
+        }
+    }
+    
+    hidden [void] NavigateToScreen([string]$screenClassName) {
+        if (-not $this._navService) {
+            Write-Log -Level Error -Message "DashboardScreen: NavigationService not available"
+            return
+        }
+        
+        try {
+            Write-Log -Level Debug -Message "DashboardScreen: Creating $screenClassName"
+            $screen = New-Object $screenClassName -ArgumentList $this.ServiceContainer
+            
+            Write-Log -Level Debug -Message "DashboardScreen: Initializing $screenClassName"
+            $screen.Initialize()
+            
+            Write-Log -Level Debug -Message "DashboardScreen: Navigating to $screenClassName"
+            $this._navService.NavigateTo($screen)
+        } catch {
+            Write-Log -Level Error -Message "DashboardScreen: Failed to navigate to $screenClassName : $_"
         }
     }
     
     [void] OnExit() {
+        Write-Log -Level Debug -Message "DashboardScreen.OnExit: Cleaning up"
+        
+        # Unsubscribe from theme change events
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager -and $this._themeChangeSubscriptionId) {
             $eventManager.Unsubscribe("Theme.Changed", $this._themeChangeSubscriptionId)
             $this._themeChangeSubscriptionId = $null
+            Write-Log -Level Debug -Message "DashboardScreen: Unsubscribed from Theme.Changed events"
         }
+        
+        # Base class handles cleanup
+        ([Screen]$this).OnExit()
     }
 }

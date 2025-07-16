@@ -32,17 +32,11 @@ function Process-TuiInput {
     }
     
     # Second priority: Global hotkeys
-    # DEBUG: Add detailed service checking for Tab issue diagnosis
-    Write-Log -Level Debug -Message "Process-TuiInput: Checking global hotkeys - TuiState.Services exists: $($null -ne $global:TuiState.Services)"
-    if ($global:TuiState.Services) {
-        Write-Log -Level Debug -Message "Process-TuiInput: Services count: $($global:TuiState.Services.Count), Keys: $($global:TuiState.Services.Keys -join ', ')"
-    }
+    # PERFORMANCE: Cache service references
     $keybindingService = $global:TuiState.Services.KeybindingService
-    Write-Log -Level Debug -Message "Process-TuiInput: KeybindingService exists: $($null -ne $keybindingService)"
     if ($keybindingService) {
         # Check for Ctrl+P specifically for command palette
         if ($KeyInfo.Modifiers -band [ConsoleModifiers]::Control -and $KeyInfo.Key -eq [ConsoleKey]::P) {
-            Write-Log -Level Debug -Message "Ctrl+P detected - opening command palette"
             $actionService = $global:TuiState.Services.ActionService
             if ($actionService) {
                 $actionService.ExecuteAction("app.commandPalette", @{KeyInfo = $KeyInfo})
@@ -51,37 +45,26 @@ function Process-TuiInput {
             }
         }
         
-        # Check other global hotkeys with proper method signature
+        # Check other global hotkeys
         $actionName = $keybindingService.GetAction($KeyInfo)
-        Write-Log -Level Debug -Message "Process-TuiInput: GetAction result: '$actionName' for key $($KeyInfo.Key)"
         if ($actionName) {
-            Write-Log -Level Debug -Message "Global hotkey detected: $actionName"
             $actionService = $global:TuiState.Services.ActionService
             if ($actionService) {
-                Write-Log -Level Debug -Message "Process-TuiInput: Executing action '$actionName'"
                 $actionService.ExecuteAction($actionName, @{KeyInfo = $KeyInfo})
                 $global:TuiState.IsDirty = $true
-                Write-Log -Level Debug -Message "Process-TuiInput: Action '$actionName' executed successfully"
                 return
-            } else {
-                Write-Log -Level Warning -Message "Process-TuiInput: ActionService not found for action '$actionName'"
             }
         }
-    } else {
-        Write-Log -Level Warning -Message "Process-TuiInput: KeybindingService is NULL - global hotkeys disabled!"
     }
     
     # Third priority: Current screen (handles its own focus management)
     $navService = $global:TuiState.Services.NavigationService
     $currentScreen = if ($navService) { $navService.CurrentScreen } else { $null }
     if ($currentScreen) {
-        Write-Log -Level Debug -Message "Routing input to current screen: $($currentScreen.Name)"
         if ($currentScreen.HandleInput($KeyInfo)) {
             $global:TuiState.IsDirty = $true
             return
         }
-    } else {
-        Write-Log -Level Warning -Message "No current screen available for input routing"
     }
     
     Write-Log -Level Debug -Message "Input not handled by any component"

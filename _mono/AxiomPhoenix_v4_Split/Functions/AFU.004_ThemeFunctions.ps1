@@ -2,6 +2,11 @@
 # Axiom-Phoenix v4.0 - Theme Functions (Enhanced for Palette-Based System)
 # ==============================================================================
 
+# PERFORMANCE: Cache ThemeManager reference and frequently requested colors
+$script:CachedThemeManager = $null
+$script:ColorCache = @{}
+$script:CacheVersion = 0
+
 # Get theme color with standardized key validation
 function Get-ThemeColor {
     param(
@@ -10,36 +15,43 @@ function Get-ThemeColor {
         [switch]$NoValidation
     )
     
-    # Try multiple paths to find ThemeManager - CRITICAL FIX for service access
-    $themeManager = $null
-    
-    # Path 1: Direct Services hashtable (Start.ps1 setup)
-    if ($global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ThemeManager) {
-        $themeManager = $global:TuiState.Services.ThemeManager
-    }
-    
-    # Path 2: ServiceContainer access (modern pattern)
-    if (-not $themeManager -and $global:TuiState -and $global:TuiState.ServiceContainer) {
-        try {
-            $themeManager = $global:TuiState.ServiceContainer.GetService("ThemeManager")
-        } catch {
-            # ServiceContainer might not be ready
+    # PERFORMANCE: Use cached ThemeManager reference
+    if (-not $script:CachedThemeManager) {
+        # Path 1: Direct Services hashtable (Start.ps1 setup)
+        if ($global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ThemeManager) {
+            $script:CachedThemeManager = $global:TuiState.Services.ThemeManager
+        }
+        
+        # Path 2: ServiceContainer access (modern pattern)
+        if (-not $script:CachedThemeManager -and $global:TuiState -and $global:TuiState.ServiceContainer) {
+            try {
+                $script:CachedThemeManager = $global:TuiState.ServiceContainer.GetService("ThemeManager")
+            } catch {
+                # ServiceContainer might not be ready
+            }
+        }
+        
+        # Path 3: Legacy Services.ServiceContainer pattern (fallback)
+        if (-not $script:CachedThemeManager -and $global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ServiceContainer) {
+            try {
+                $script:CachedThemeManager = $global:TuiState.Services.ServiceContainer.GetService("ThemeManager")
+            } catch {
+                # ServiceContainer might not be ready
+            }
         }
     }
     
-    # Path 3: Legacy Services.ServiceContainer pattern (fallback)
-    if (-not $themeManager -and $global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ServiceContainer) {
-        try {
-            $themeManager = $global:TuiState.Services.ServiceContainer.GetService("ThemeManager")
-        } catch {
-            # ServiceContainer might not be ready
-        }
-    }
-    
-    if (-not $themeManager) {
-        Write-Warning "ThemeManager not available (tried all paths), using fallback for '$Key'"
+    if (-not $script:CachedThemeManager) {
         return $Fallback -or "#FFFFFF"
     }
+    
+    # PERFORMANCE: Check color cache first
+    $cacheKey = "$Key|$Fallback|$NoValidation"
+    if ($script:ColorCache.ContainsKey($cacheKey)) {
+        return $script:ColorCache[$cacheKey]
+    }
+    
+    $themeManager = $script:CachedThemeManager
     
     # Check if key is in registry using public method
     if (-not $NoValidation -and $themeManager.IsValidThemeKey($Key)) {
@@ -49,10 +61,16 @@ function Get-ThemeColor {
             $registryFallback = $keyInfo.Fallback
             
             $color = $themeManager.GetColor($actualPath)
-            if ($color) { return $color }
+            if ($color) { 
+                # PERFORMANCE: Cache the result
+                $script:ColorCache[$cacheKey] = $color
+                return $color 
+            }
             
             # Use parameter fallback first, then registry fallback
-            return $Fallback -or $registryFallback
+            $result = $Fallback -or $registryFallback
+            $script:ColorCache[$cacheKey] = $result
+            return $result
         }
     }
     
@@ -62,7 +80,16 @@ function Get-ThemeColor {
     }
     
     $color = $themeManager.GetColor($Key)
-    return $color -or $Fallback -or "#FFFFFF"
+    $result = $color -or $Fallback -or "#FFFFFF"
+    # PERFORMANCE: Cache the result
+    $script:ColorCache[$cacheKey] = $result
+    return $result
+}
+
+# PERFORMANCE: Clear theme cache when theme changes
+function Clear-ThemeCache {
+    $script:ColorCache.Clear()
+    $script:CachedThemeManager = $null
 }
 
 # Get any theme value (colors, borders, etc.) with fallback

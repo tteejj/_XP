@@ -224,18 +224,48 @@ class Screen : UIElement {
             return [System.Collections.Generic.List[UIElement]]::new()
         }
         
+        # PERFORMANCE: Only rebuild if cache is invalid
         if (-not $this._focusCacheValid -or $null -eq $this._focusableCache) {
             $this._collectingFocus = $true
             try {
+                # PERFORMANCE: If we had a previous cache, try incremental update
+                if ($null -ne $this._focusableCache -and $this._focusableCache.Count -gt 0) {
+                    # Check if any cached elements are now invalid
+                    $needsFullRebuild = $false
+                    for ($i = $this._focusableCache.Count - 1; $i -ge 0; $i--) {
+                        $element = $this._focusableCache[$i]
+                        if (-not $element.Visible -or -not $element.Enabled -or -not $element.IsFocusable) {
+                            $this._focusableCache.RemoveAt($i)
+                            $needsFullRebuild = $true
+                        }
+                    }
+                    
+                    # Only do full rebuild if we found invalid elements
+                    if (-not $needsFullRebuild) {
+                        $this._focusCacheValid = $true
+                        return $this._focusableCache
+                    }
+                }
+                
                 $this._focusableCache = [System.Collections.Generic.List[UIElement]]::new()
                 $visitedElements = [System.Collections.Generic.HashSet[UIElement]]::new()
                 $this._CollectFocusableRecursive($this, $this._focusableCache, $visitedElements)
                 
-                # Sort by TabIndex for predictable tab order
-                $sortedArray = $this._focusableCache.ToArray() | Sort-Object TabIndex
-                $this._focusableCache.Clear()
-                foreach ($item in $sortedArray) {
-                    $this._focusableCache.Add($item)
+                # PERFORMANCE: Use ArrayList for faster sorting with large collections
+                if ($this._focusableCache.Count -gt 10) {
+                    $sortedArray = [System.Collections.ArrayList]::new($this._focusableCache)
+                    $sortedArray.Sort({ param($x, $y) $x.TabIndex.CompareTo($y.TabIndex) })
+                    $this._focusableCache.Clear()
+                    foreach ($item in $sortedArray) {
+                        $this._focusableCache.Add($item)
+                    }
+                } else {
+                    # Use standard sort for small collections
+                    $sortedArray = $this._focusableCache.ToArray() | Sort-Object TabIndex
+                    $this._focusableCache.Clear()
+                    foreach ($item in $sortedArray) {
+                        $this._focusableCache.Add($item)
+                    }
                 }
                 
                 $this._focusCacheValid = $true

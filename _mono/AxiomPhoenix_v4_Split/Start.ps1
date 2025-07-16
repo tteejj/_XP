@@ -95,7 +95,7 @@ try {
         $logger.MinimumLevel = "Debug"
         Write-Host "DEBUG logging enabled. Performance will be impacted." -ForegroundColor Yellow
     } else {
-        $logger.MinimumLevel = "Info" # Default to high-performance mode
+        $logger.MinimumLevel = "Warning" # Default to high-performance mode
     }
     # --- END OF SWITCH ---
     
@@ -138,6 +138,12 @@ try {
     Write-Host "  • Registering FileSystemService..." -ForegroundColor Gray
     $container.Register("FileSystemService", [FileSystemService]::new($container.GetService("Logger")))
     
+    Write-Host "  • Registering TimeSheetService..." -ForegroundColor Gray
+    $container.Register("TimeSheetService", [TimeSheetService]::new($container.GetService("DataManager"), $container.GetService("EventManager")))
+    
+    Write-Host "  • Registering CommandService..." -ForegroundColor Gray
+    $container.Register("CommandService", [CommandService]::new($container.GetService("DataManager"), $container.GetService("EventManager")))
+    
     Write-Host "Services initialized successfully!" -ForegroundColor Green
 
     # Initialize global state (CRITICAL FIX)
@@ -154,6 +160,8 @@ try {
             DialogManager = $container.GetService("DialogManager")
             ViewDefinitionService = $container.GetService("ViewDefinitionService")
             FileSystemService = $container.GetService("FileSystemService")
+            TimeSheetService = $container.GetService("TimeSheetService")
+            CommandService = $container.GetService("CommandService")
         }
     }
 
@@ -180,6 +188,9 @@ try {
     $project1.Owner = "Sarah Chen"
     $project1.ID1 = "CRM-2024-A"
     $project1.ID2 = "MAIN-CRM-001"
+    $project1.Contact = "Alice Johnson"
+    $project1.ContactPhone = "(555) 123-4567"
+    $project1.Category = "System Integration"
     $project1.AssignedDate = (Get-Date).AddDays(-45)
     $project1.BFDate = (Get-Date).AddDays(30)
     $project1.SetMetadata("ClientID", "BN-789456")
@@ -204,13 +215,16 @@ try {
     $project1.CaaFileName = "CRM_Requirements_v2.docx"
     $project1.RequestFileName = "Architecture_Diagram.pdf"
     $project1.T2020FileName = "Development_Timeline.xlsx"
-    $dataManager.AddProject($project1)
+    $dataManager.AddProject($project1) | Out-Null
     
     $project2 = [PmcProject]::new("PROJ-002", "Mobile App Redesign")
     $project2.Description = "Complete UI/UX overhaul of the mobile application to improve user engagement and modernize the interface."
     $project2.Owner = "Michael Torres"
     $project2.ID1 = "MOB-2024-B"
     $project2.ID2 = "MAIN-MOB-002"
+    $project2.Contact = "Bob Martinez"
+    $project2.ContactPhone = "(555) 987-6543"
+    $project2.Category = "Mobile Development"
     $project2.AssignedDate = (Get-Date).AddDays(-20)
     $project2.BFDate = (Get-Date).AddDays(-5)  # Overdue
     $project2.SetMetadata("ClientID", "BN-456123")
@@ -227,15 +241,19 @@ try {
     Set-Content -Path (Join-Path $project2FolderPath "Budget_Estimate.xlsx") -Value "Budget estimate" -Force
     $project2.CaaFileName = "UI_Mockups.pdf"
     $project2.RequestFileName = "User_Research.docx"
-    $dataManager.AddProject($project2)
+    $dataManager.AddProject($project2) | Out-Null
     
     $project3 = [PmcProject]::new("PROJ-003", "Data Analytics Platform")
     $project3.Description = "Build a comprehensive data analytics platform with real-time dashboards and predictive analytics capabilities."
     $project3.Owner = "Dr. Emily Watson"
     $project3.ID1 = "DATA-2024-C"
     $project3.ID2 = "MAIN-DATA-003"
+    $project3.Contact = "Dr. Carol Stevens"
+    $project3.ContactPhone = "(555) 555-1234"
+    $project3.Category = "Data Analytics"
     $project3.AssignedDate = (Get-Date).AddDays(-90)
     $project3.BFDate = (Get-Date).AddDays(60)
+    $project3.CompletedDate = (Get-Date).AddDays(-10)  # Recently completed
     $project3.SetMetadata("ClientID", "BN-321789")
     $project3.SetMetadata("Technology", "PowerBI, Azure ML")
     $project3.IsActive = $false  # Archived project
@@ -245,13 +263,16 @@ try {
         New-Item -ItemType Directory -Path $project3FolderPath -Force | Out-Null
     }
     $project3.ProjectFolderPath = $project3FolderPath
-    $dataManager.AddProject($project3)
+    $dataManager.AddProject($project3) | Out-Null
     
     $project4 = [PmcProject]::new("PROJ-004", "Security Audit 2024")
     $project4.Description = "Annual security audit and penetration testing for all client-facing applications and infrastructure."
     $project4.Owner = "James Mitchell"
     $project4.ID1 = "SEC-2024-D"
     $project4.ID2 = "MAIN-SEC-004"
+    $project4.Contact = "David Kim"
+    $project4.ContactPhone = "(555) 789-0123"
+    $project4.Category = "Security & Compliance"
     $project4.AssignedDate = (Get-Date).AddDays(-10)
     $project4.BFDate = (Get-Date).AddDays(7)
     $project4.SetMetadata("ClientID", "BN-654987")
@@ -262,7 +283,7 @@ try {
         New-Item -ItemType Directory -Path $project4FolderPath -Force | Out-Null
     }
     $project4.ProjectFolderPath = $project4FolderPath
-    $dataManager.AddProject($project4)
+    $dataManager.AddProject($project4) | Out-Null
     
     # Create sample tasks
     $sampleTasks = @()
@@ -310,10 +331,119 @@ try {
     $sampleTasks += $task6
     
     foreach ($task in $sampleTasks) {
-        $dataManager.AddTask($task)
+        $dataManager.AddTask($task) | Out-Null
     }
     
-    Write-Host "Sample data created: $($dataManager.GetProjects().Count) projects, $($dataManager.GetTasks().Count) tasks" -ForegroundColor Green
+    # Create sample time entries for the current week
+    Write-Host "Creating sample time entries..." -ForegroundColor Gray
+    $timeSheetService = $container.GetService("TimeSheetService")
+    $currentWeekStart = $timeSheetService.GetWeekStartDate([DateTime]::Now)
+    
+    # Time entries for various projects throughout the week
+    $sampleTimeEntries = @()
+    
+    # Monday entries
+    $entry1 = [TimeEntry]::new()
+    $entry1.ProjectKey = "PROJ-001"
+    $entry1.TaskId = $sampleTasks[0].Id  # Database design task
+    $entry1.StartTime = $currentWeekStart.AddHours(9)
+    $entry1.EndTime = $currentWeekStart.AddHours(12)
+    $entry1.Description = "Database schema design and modeling"
+    $entry1.BillingType = [BillingType]::Billable
+    $entry1.UserId = "CurrentUser"
+    $sampleTimeEntries += $entry1
+    
+    $entry2 = [TimeEntry]::new()
+    $entry2.ProjectKey = "PROJ-002"
+    $entry2.TaskId = $sampleTasks[5].Id  # Mobile UI task
+    $entry2.StartTime = $currentWeekStart.AddHours(13)
+    $entry2.EndTime = $currentWeekStart.AddHours(17)
+    $entry2.Description = "Mobile UI component refactoring"
+    $entry2.BillingType = [BillingType]::Billable
+    $entry2.UserId = "CurrentUser"
+    $sampleTimeEntries += $entry2
+    
+    # Tuesday entries
+    $entry3 = [TimeEntry]::new()
+    $entry3.ProjectKey = "PROJ-001"
+    $entry3.TaskId = $sampleTasks[1].Id  # API development
+    $entry3.StartTime = $currentWeekStart.AddDays(1).AddHours(9)
+    $entry3.EndTime = $currentWeekStart.AddDays(1).AddHours(17)
+    $entry3.Description = "REST API development and testing"
+    $entry3.BillingType = [BillingType]::Billable
+    $entry3.UserId = "CurrentUser"
+    $sampleTimeEntries += $entry3
+    
+    # Wednesday entries
+    $entry4 = [TimeEntry]::new()
+    $entry4.ProjectKey = "PROJ-003"
+    $entry4.TaskId = $sampleTasks[2].Id  # Cloud migration
+    $entry4.StartTime = $currentWeekStart.AddDays(2).AddHours(9)
+    $entry4.EndTime = $currentWeekStart.AddDays(2).AddHours(15)
+    $entry4.Description = "Cloud infrastructure setup and configuration"
+    $entry4.BillingType = [BillingType]::Billable
+    $entry4.UserId = "CurrentUser"
+    $sampleTimeEntries += $entry4
+    
+    # Administrative/non-billable time
+    $entry5 = [TimeEntry]::new()
+    $entry5.ProjectKey = "PROJ-001"
+    $entry5.StartTime = $currentWeekStart.AddDays(2).AddHours(15)
+    $entry5.EndTime = $currentWeekStart.AddDays(2).AddHours(17)
+    $entry5.Description = "Team meetings and project planning"
+    $entry5.BillingType = [BillingType]::NonBillable
+    $entry5.UserId = "CurrentUser"
+    $sampleTimeEntries += $entry5
+    
+    # Thursday entries
+    $entry6 = [TimeEntry]::new()
+    $entry6.ProjectKey = "PROJ-004"
+    $entry6.TaskId = $sampleTasks[4].Id  # Security audit
+    $entry6.StartTime = $currentWeekStart.AddDays(3).AddHours(9)
+    $entry6.EndTime = $currentWeekStart.AddDays(3).AddHours(13)
+    $entry6.Description = "Security vulnerability assessment"
+    $entry6.BillingType = [BillingType]::Billable
+    $entry6.UserId = "CurrentUser"
+    $sampleTimeEntries += $entry6
+    
+    # Friday entries
+    $entry7 = [TimeEntry]::new()
+    $entry7.ProjectKey = "PROJ-001"
+    $entry7.TaskId = $sampleTasks[0].Id  # Database design follow-up
+    $entry7.StartTime = $currentWeekStart.AddDays(4).AddHours(9)
+    $entry7.EndTime = $currentWeekStart.AddDays(4).AddHours(12)
+    $entry7.Description = "Database optimization and performance tuning"
+    $entry7.BillingType = [BillingType]::Billable
+    $entry7.UserId = "CurrentUser"
+    $sampleTimeEntries += $entry7
+    
+    # ID1-based (non-project) time entries for administrative work
+    $adminEntry1 = [TimeEntry]::new("ADM-MEET", $currentWeekStart.AddDays(1).AddHours(15), "Team standup and sprint planning", [BillingType]::Meeting)
+    $adminEntry1.EndTime = $currentWeekStart.AddDays(1).AddHours(16)
+    $adminEntry1.UserId = "CurrentUser"
+    $sampleTimeEntries += $adminEntry1
+    
+    $adminEntry2 = [TimeEntry]::new("ADM-TRAIN", $currentWeekStart.AddDays(2).AddHours(8), "PowerShell training course", [BillingType]::Training)
+    $adminEntry2.EndTime = $currentWeekStart.AddDays(2).AddHours(10)
+    $adminEntry2.UserId = "CurrentUser"
+    $sampleTimeEntries += $adminEntry2
+    
+    $adminEntry3 = [TimeEntry]::new("ADM-ADMIN", $currentWeekStart.AddDays(3).AddHours(14), "Timesheet and expense report submission", [BillingType]::Administrative)
+    $adminEntry3.EndTime = $currentWeekStart.AddDays(3).AddHours(15)
+    $adminEntry3.UserId = "CurrentUser"
+    $sampleTimeEntries += $adminEntry3
+    
+    $researchEntry = [TimeEntry]::new("RES-TECH", $currentWeekStart.AddDays(4).AddHours(13), "Research new automation frameworks", [BillingType]::Research)
+    $researchEntry.EndTime = $currentWeekStart.AddDays(4).AddHours(15)
+    $researchEntry.UserId = "CurrentUser"
+    $sampleTimeEntries += $researchEntry
+    
+    # Add all time entries to data manager
+    foreach ($entry in $sampleTimeEntries) {
+        $dataManager.AddTimeEntry($entry) | Out-Null
+    }
+    
+    Write-Host "Sample data created: $($dataManager.GetProjects().Count) projects, $($dataManager.GetTasks().Count) tasks, $($dataManager.GetTimeEntries().Count) time entries" -ForegroundColor Green
 
     # Launch the application
     Write-Host "`nStarting Axiom-Phoenix v4.0..." -ForegroundColor Cyan

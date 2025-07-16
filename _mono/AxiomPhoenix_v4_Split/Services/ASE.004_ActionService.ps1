@@ -172,31 +172,9 @@ class ActionService {
                 return
             }
             
-            $palette = [CommandPalette]::new("CommandPalette", $container)
-            
-            $allActions = @($actionService.GetAllActions().Values | ForEach-Object {
-                @{
-                    Name = $_.Name
-                    Category = $_.Category
-                    Description = $_.Description
-                    Hotkey = $_.Hotkey
-                }
-            })
-            
-            $palette.SetActions($allActions)
-            
-            # FIXED: Use OnClose with DeferredAction for robust execution
-            $palette.OnClose = {
-                param($result)
-                if ($result -and $result.Name) {
-                    $evtMgr = $global:TuiState.Services.EventManager
-                    if ($evtMgr) {
-                        $evtMgr.Publish("DeferredAction", @{ ActionName = $result.Name })
-                    }
-                }
-            }.GetNewClosure()
-            
-            $navService.NavigateTo($palette)
+            $commandScreen = New-Object CommandPaletteScreen -ArgumentList $container
+            $commandScreen.Initialize()
+            $navService.NavigateTo($commandScreen)
         }, @{
             Category = "Application"
             Description = "Show command palette"
@@ -209,7 +187,7 @@ class ActionService {
         $this.RegisterAction("navigation.dashboard", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            $dashboardScreen = [DashboardScreen]::new($container)
+            $dashboardScreen = New-Object DashboardScreen -ArgumentList $container
             $dashboardScreen.Initialize()
             $navService.NavigateTo($dashboardScreen)
         }, @{
@@ -220,7 +198,7 @@ class ActionService {
         $this.RegisterAction("navigation.taskList", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            $taskListScreen = [TaskListScreen]::new($container)
+            $taskListScreen = New-Object TaskListScreen -ArgumentList $container
             $taskListScreen.Initialize()
             $navService.NavigateTo($taskListScreen)
         }, @{
@@ -231,7 +209,7 @@ class ActionService {
         $this.RegisterAction("navigation.projects", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            $projectsScreen = [ProjectsListScreen]::new($container)
+            $projectsScreen = New-Object ProjectsListScreen -ArgumentList $container
             $projectsScreen.Initialize()
             $navService.NavigateTo($projectsScreen)
         }, @{
@@ -242,7 +220,7 @@ class ActionService {
         $this.RegisterAction("tools.fileCommander", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            $fileCommander = [FileCommanderScreen]::new($container)
+            $fileCommander = New-Object FileBrowserScreen -ArgumentList $container
             $fileCommander.Initialize()
             $navService.NavigateTo($fileCommander)
         }, @{
@@ -254,7 +232,7 @@ class ActionService {
         $this.RegisterAction("tools.textEditor", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            $editor = [TextEditorScreen]::new($container)
+            $editor = New-Object TextEditScreen -ArgumentList $container
             $editor.Initialize()
             $navService.NavigateTo($editor)
         }, @{
@@ -266,7 +244,7 @@ class ActionService {
         $this.RegisterAction("navigation.themePicker", {
             $navService = $global:TuiState.Services.NavigationService
             $container = $global:TuiState.ServiceContainer
-            $themeScreen = [ThemeScreen]::new($container)
+            $themeScreen = New-Object ThemeScreen -ArgumentList $container
             $themeScreen.Initialize()
             $navService.NavigateTo($themeScreen)
         }, @{

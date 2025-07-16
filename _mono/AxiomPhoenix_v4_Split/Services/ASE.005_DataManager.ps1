@@ -15,12 +15,13 @@
 
 # ===== CLASS: DataManager =====
 # Module: data-manager (from axiom)
-# Dependencies: EventManager (optional), PmcTask, PmcProject
+# Dependencies: EventManager (optional), PmcTask, PmcProject, TimeEntry
 # Purpose: High-performance data management with transactions, backups, and robust serialization
 class DataManager : System.IDisposable {
     # Private fields for high-performance indexes
     hidden [System.Collections.Generic.Dictionary[string, PmcTask]]$_taskIndex
     hidden [System.Collections.Generic.Dictionary[string, PmcProject]]$_projectIndex
+    hidden [System.Collections.Generic.Dictionary[string, TimeEntry]]$_timeEntryIndex
     hidden [string]$_dataFilePath
     hidden [string]$_backupPath
     hidden [datetime]$_lastSaveTime
@@ -48,6 +49,7 @@ class DataManager : System.IDisposable {
         # Initialize indexes
         $this._taskIndex = [System.Collections.Generic.Dictionary[string, PmcTask]]::new()
         $this._projectIndex = [System.Collections.Generic.Dictionary[string, PmcProject]]::new()
+        $this._timeEntryIndex = [System.Collections.Generic.Dictionary[string, TimeEntry]]::new()
         
         # Set up directories
         $baseDir = Split-Path -Path $this._dataFilePath -Parent
@@ -82,6 +84,7 @@ class DataManager : System.IDisposable {
             # Clear existing data
             $this._taskIndex.Clear()
             $this._projectIndex.Clear()
+            $this._timeEntryIndex.Clear()
             
             # Load tasks using FromLegacyFormat
             if ($data.ContainsKey('Tasks')) {
@@ -109,6 +112,34 @@ class DataManager : System.IDisposable {
                 }
             }
             
+            # Load time entries
+            if ($data.ContainsKey('TimeEntries')) {
+                foreach ($entryData in $data.TimeEntries) {
+                    try {
+                        $entry = [TimeEntry]::new()
+                        $entry.Id = $entryData.Id
+                        $entry.TaskId = $entryData.TaskId
+                        $entry.ProjectKey = $entryData.ProjectKey
+                        $entry.StartTime = [DateTime]::Parse($entryData.StartTime)
+                        if ($entryData.EndTime) {
+                            $entry.EndTime = [DateTime]::Parse($entryData.EndTime)
+                        }
+                        $entry.Description = $entryData.Description
+                        $entry.BillingType = [System.Enum]::Parse([BillingType], $entryData.BillingType, $true)
+                        $entry.UserId = $entryData.UserId
+                        $entry.HourlyRate = [decimal]$entryData.HourlyRate
+                        if ($entryData.Metadata) {
+                            $entry.Metadata = $entryData.Metadata.Clone()
+                        }
+                        
+                        $this._timeEntryIndex[$entry.Id] = $entry
+                    }
+                    catch {
+                        Write-Warning "DataManager: Failed to load time entry: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
             # Load metadata
             if ($data.ContainsKey('Metadata')) {
                 $this.Metadata = $data.Metadata.Clone()
@@ -117,13 +148,14 @@ class DataManager : System.IDisposable {
             $this._lastSaveTime = [datetime]::Now
             $this._dataModified = $false
             
-            # Write-Verbose "DataManager: Loaded $($this._taskIndex.Count) tasks and $($this._projectIndex.Count) projects"
+            # Write-Verbose "DataManager: Loaded $($this._taskIndex.Count) tasks, $($this._projectIndex.Count) projects, and $($this._timeEntryIndex.Count) time entries"
             
             # Publish event
             if ($this.EventManager) {
                 $this.EventManager.Publish("Data.Loaded", @{
                     TaskCount = $this._taskIndex.Count
                     ProjectCount = $this._projectIndex.Count
+                    TimeEntryCount = $this._timeEntryIndex.Count
                     Source = $this._dataFilePath
                 })
             }
@@ -146,6 +178,7 @@ class DataManager : System.IDisposable {
             $saveData = @{
                 Tasks = @()
                 Projects = @()
+                TimeEntries = @()
                 Metadata = $this.Metadata.Clone()
                 SavedAt = [datetime]::Now
                 Version = "4.0"
@@ -161,6 +194,22 @@ class DataManager : System.IDisposable {
                 $saveData.Projects += $project.ToLegacyFormat()
             }
             
+            # Convert time entries for serialization
+            foreach ($entry in $this._timeEntryIndex.Values) {
+                $saveData.TimeEntries += @{
+                    Id = $entry.Id
+                    TaskId = $entry.TaskId
+                    ProjectKey = $entry.ProjectKey
+                    StartTime = $entry.StartTime.ToString("yyyy-MM-ddTHH:mm:ss")
+                    EndTime = if ($entry.EndTime) { $entry.EndTime.ToString("yyyy-MM-ddTHH:mm:ss") } else { $null }
+                    Description = $entry.Description
+                    BillingType = $entry.BillingType.ToString()
+                    UserId = $entry.UserId
+                    HourlyRate = $entry.HourlyRate
+                    Metadata = $entry.Metadata.Clone()
+                }
+            }
+            
             $saveData | ConvertTo-Json -Depth 10 -WarningAction SilentlyContinue | Set-Content -Path $this._dataFilePath -Encoding UTF8 -Force
             $this._lastSaveTime = [datetime]::Now
             $this._dataModified = $false
@@ -172,6 +221,7 @@ class DataManager : System.IDisposable {
                 $this.EventManager.Publish("Data.Saved", @{
                     TaskCount = $saveData.Tasks.Count
                     ProjectCount = $saveData.Projects.Count
+                    TimeEntryCount = $saveData.TimeEntries.Count
                     Destination = $this._dataFilePath
                 })
             }
@@ -405,6 +455,12 @@ class DataManager : System.IDisposable {
             $this.DeleteTask($task.Id) | Out-Null
         }
         
+        # Delete all time entries associated with this project
+        $timeEntriesToDelete = @($this._timeEntryIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+        foreach ($entry in $timeEntriesToDelete) {
+            $this.DeleteTimeEntry($entry.Id) | Out-Null
+        }
+        
         $project = $this._projectIndex[$projectKey]
         $this._projectIndex.Remove($projectKey) | Out-Null
         $this._dataModified = $true
@@ -422,6 +478,110 @@ class DataManager : System.IDisposable {
         }
         
         # Write-Verbose "DataManager: Deleted project '$projectKey' and $($tasksToDelete.Count) associated tasks"
+        return $true
+    }
+    
+    # Time entry management methods
+    [TimeEntry[]] GetTimeEntries() {
+        return @($this._timeEntryIndex.Values)
+    }
+    
+    [TimeEntry] GetTimeEntry([string]$entryId) {
+        if ($this._timeEntryIndex.ContainsKey($entryId)) {
+            return $this._timeEntryIndex[$entryId]
+        }
+        return $null
+    }
+    
+    [TimeEntry[]] GetTimeEntriesByProject([string]$projectKey) {
+        return @($this._timeEntryIndex.Values | Where-Object { $_.ProjectKey -eq $projectKey })
+    }
+    
+    [TimeEntry[]] GetTimeEntriesByTask([string]$taskId) {
+        return @($this._timeEntryIndex.Values | Where-Object { $_.TaskId -eq $taskId })
+    }
+    
+    [TimeEntry[]] GetTimeEntriesByDateRange([DateTime]$startDate, [DateTime]$endDate) {
+        return @($this._timeEntryIndex.Values | Where-Object { 
+            $_.StartTime -ge $startDate -and $_.StartTime -le $endDate 
+        })
+    }
+    
+    [TimeEntry[]] GetTimeEntriesByID1([string]$id1) {
+        return @($this._timeEntryIndex.Values | Where-Object { $_.ID1 -eq $id1 })
+    }
+    
+    [TimeEntry] AddTimeEntry([TimeEntry]$entry) {
+        if ($null -eq $entry) {
+            throw [System.ArgumentNullException]::new("entry", "Time entry cannot be null")
+        }
+        
+        if ([string]::IsNullOrEmpty($entry.Id)) {
+            $entry.Id = [guid]::NewGuid().ToString()
+        }
+        
+        if ($this._timeEntryIndex.ContainsKey($entry.Id)) {
+            throw [System.InvalidOperationException]::new("Time entry with ID '$($entry.Id)' already exists")
+        }
+        
+        $this._timeEntryIndex[$entry.Id] = $entry
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("TimeEntries.Changed", @{ Action = "Created"; TimeEntry = $entry })
+        }
+        
+        # Write-Verbose "DataManager: Added time entry for project '$($entry.ProjectKey)' with ID '$($entry.Id)'"
+        return $entry
+    }
+    
+    [TimeEntry] UpdateTimeEntry([TimeEntry]$entry) {
+        if ($null -eq $entry) {
+            throw [System.ArgumentNullException]::new("entry", "Time entry cannot be null")
+        }
+        
+        if (-not $this._timeEntryIndex.ContainsKey($entry.Id)) {
+            throw [System.InvalidOperationException]::new("Time entry with ID '$($entry.Id)' not found")
+        }
+        
+        $this._timeEntryIndex[$entry.Id] = $entry
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("TimeEntries.Changed", @{ Action = "Updated"; TimeEntry = $entry })
+        }
+        
+        # Write-Verbose "DataManager: Updated time entry with ID '$($entry.Id)'"
+        return $entry
+    }
+    
+    [bool] DeleteTimeEntry([string]$entryId) {
+        if (-not $this._timeEntryIndex.ContainsKey($entryId)) {
+            # Write-Verbose "DataManager: Time entry '$entryId' not found for deletion"
+            return $false
+        }
+        
+        $entry = $this._timeEntryIndex[$entryId]
+        $this._timeEntryIndex.Remove($entryId) | Out-Null
+        $this._dataModified = $true
+        
+        if ($this.AutoSave -and $this._updateTransactionCount -eq 0) {
+            $this.SaveData()
+        }
+        
+        if ($this.EventManager) {
+            $this.EventManager.Publish("TimeEntries.Changed", @{ Action = "Deleted"; TimeEntryId = $entryId })
+        }
+        
+        # Write-Verbose "DataManager: Deleted time entry with ID '$entryId'"
         return $true
     }
     

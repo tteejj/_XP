@@ -241,6 +241,10 @@ class PmcProject : ValidationBase {
     [string]$CaaFileName                     # Relative name of the associated CAA file
     [string]$RequestFileName                 # Relative name of the associated Request file
     [string]$T2020FileName                   # Relative name of the associated T2020 file
+    [string]$Contact                         # Primary contact person
+    [string]$ContactPhone                    # Primary contact phone number
+    [Nullable[datetime]]$CompletedDate       # When project was completed
+    [string]$Category                        # Project category/type
 
     # Default constructor
     PmcProject() {}
@@ -274,6 +278,14 @@ class PmcProject : ValidationBase {
     # Activate: Marks the project as active
     [void] Activate() {
         $this.IsActive = $true
+        $this.CompletedDate = $null
+        $this.UpdatedAt = [DateTime]::Now
+    }
+    
+    # Complete: Marks the project as completed
+    [void] Complete() {
+        $this.IsActive = $false
+        $this.CompletedDate = [DateTime]::Now
         $this.UpdatedAt = [DateTime]::Now
     }
 
@@ -312,6 +324,9 @@ class PmcProject : ValidationBase {
         $bfDateStr = $null
         if ($this.BFDate) { $bfDateStr = $this.BFDate.ToString("yyyy-MM-ddTHH:mm:ss") }
         
+        $completedDateStr = $null
+        if ($this.CompletedDate) { $completedDateStr = $this.CompletedDate.ToString("yyyy-MM-ddTHH:mm:ss") }
+        
         return @{
             Key = $this.Key
             Name = $this.Name
@@ -331,6 +346,10 @@ class PmcProject : ValidationBase {
             CaaFileName = $this.CaaFileName
             RequestFileName = $this.RequestFileName
             T2020FileName = $this.T2020FileName
+            Contact = $this.Contact
+            ContactPhone = $this.ContactPhone
+            CompletedDate = $completedDateStr
+            Category = $this.Category
         }
     }
     
@@ -364,6 +383,12 @@ class PmcProject : ValidationBase {
         if ($data.ContainsKey('CaaFileName')) { $project.CaaFileName = $data.CaaFileName }
         if ($data.ContainsKey('RequestFileName')) { $project.RequestFileName = $data.RequestFileName }
         if ($data.ContainsKey('T2020FileName')) { $project.T2020FileName = $data.T2020FileName }
+        if ($data.ContainsKey('Contact')) { $project.Contact = $data.Contact }
+        if ($data.ContainsKey('ContactPhone')) { $project.ContactPhone = $data.ContactPhone }
+        if ($data.ContainsKey('CompletedDate') -and $data.CompletedDate) { 
+            $project.CompletedDate = [DateTime]::Parse($data.CompletedDate)
+        }
+        if ($data.ContainsKey('Category')) { $project.Category = $data.Category }
         
         return $project
     }
@@ -382,8 +407,9 @@ class PmcProject : ValidationBase {
 # Purpose: Represents a time entry for a task
 class TimeEntry : ValidationBase {
     [string]$Id = [Guid]::NewGuid().ToString()  # Unique identifier
-    [string]$TaskId                              # Associated task ID
-    [string]$ProjectKey                          # Associated project key
+    [string]$TaskId                              # Associated task ID (optional for ID1 entries)
+    [string]$ProjectKey                          # Associated project key (optional for ID1 entries)
+    [string]$ID1                                 # ID1 code for non-project time tracking
     [DateTime]$StartTime                         # When work started
     [Nullable[DateTime]]$EndTime                 # When work ended (null if ongoing)
     [string]$Description                         # What was done
@@ -395,7 +421,7 @@ class TimeEntry : ValidationBase {
     # Default constructor
     TimeEntry() {}
 
-    # Constructor with basic details
+    # Constructor with basic details (project-based)
     TimeEntry([string]$taskId, [string]$projectKey, [DateTime]$startTime) {
         [ValidationBase]::ValidateNotEmpty($taskId, "TaskId")
         [ValidationBase]::ValidateNotEmpty($projectKey, "ProjectKey")
@@ -403,6 +429,17 @@ class TimeEntry : ValidationBase {
         $this.TaskId = $taskId
         $this.ProjectKey = $projectKey
         $this.StartTime = $startTime
+    }
+    
+    # Constructor for ID1-based time tracking (non-project)
+    TimeEntry([string]$id1, [DateTime]$startTime, [string]$description, [BillingType]$billingType) {
+        [ValidationBase]::ValidateNotEmpty($id1, "ID1")
+        [ValidationBase]::ValidateNotEmpty($description, "Description")
+        
+        $this.ID1 = $id1
+        $this.StartTime = $startTime
+        $this.Description = $description
+        $this.BillingType = $billingType
     }
 
     # GetDuration: Returns the duration of the time entry
@@ -438,12 +475,35 @@ class TimeEntry : ValidationBase {
         return $null -eq $this.EndTime
     }
 
+    # IsID1Entry: Checks if this is an ID1-based (non-project) time entry
+    [bool] IsID1Entry() {
+        return -not [string]::IsNullOrEmpty($this.ID1)
+    }
+    
+    # IsProjectEntry: Checks if this is a project-based time entry
+    [bool] IsProjectEntry() {
+        return -not [string]::IsNullOrEmpty($this.ProjectKey)
+    }
+    
+    # GetDisplayKey: Returns the appropriate key for display (ID1 or ProjectKey)
+    [string] GetDisplayKey() {
+        if ($this.IsID1Entry()) {
+            return $this.ID1
+        }
+        elseif ($this.IsProjectEntry()) {
+            return $this.ProjectKey
+        }
+        else {
+            return "UNASSIGNED"
+        }
+    }
+
     # ToString: Returns a string representation of the time entry
     [string] ToString() {
         $duration = $this.GetDuration()
         $status = "Completed"
         if ($this.IsRunning()) { $status = "Running" }
-        return "$($this.ProjectKey) - $($duration.ToString('hh\:mm\:ss')) [$status]"
+        return "$($this.GetDisplayKey()) - $($duration.ToString('hh\:mm\:ss')) [$status]"
     }
 }
 

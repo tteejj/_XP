@@ -81,7 +81,7 @@ class TextEditorScreen : Screen {
         $this._statusBar.Width = $this.Width
         $this._statusBar.Height = 3
         $this._statusBar.HasBorder = $true
-        $this._statusBar.BorderStyle = "Single"
+        $this._statusBar.HasBorder = $true
         $this._statusBar.BackgroundColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
         $this.AddChild($this._statusBar)
         

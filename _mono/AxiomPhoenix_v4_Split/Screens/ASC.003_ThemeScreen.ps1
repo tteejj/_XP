@@ -74,7 +74,7 @@ class ThemeScreen : Screen {
         $listPanel.Width = $listWidth
         $listPanel.Height = $this.Height - 8
         $listPanel.Title = " Themes "
-        $listPanel.BorderStyle = "Single"
+        $listPanel.HasBorder = $true
         $listPanel.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
         $listPanel.BorderColor = Get-ThemeColor "palette.border" "#007acc"
         $this._mainPanel.AddChild($listPanel)
@@ -122,7 +122,7 @@ class ThemeScreen : Screen {
         $this._previewPanel.Width = $this.Width - $listWidth - 8
         $this._previewPanel.Height = $this.Height - 8
         $this._previewPanel.Title = " Preview "
-        $this._previewPanel.BorderStyle = "Single"
+        $this._previewPanel.HasBorder = $true
         $this._previewPanel.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
         $this._previewPanel.BorderColor = Get-ThemeColor "palette.border" "#007acc"
         $this._mainPanel.AddChild($this._previewPanel)
@@ -181,7 +181,7 @@ class ThemeScreen : Screen {
         $this._colorSwatchPanel.Width = $this._previewPanel.Width - 4
         $this._colorSwatchPanel.Height = 6
         $this._colorSwatchPanel.Title = " Colors "
-        $this._colorSwatchPanel.BorderStyle = "Single"
+        $this._colorSwatchPanel.HasBorder = $true
         $this._colorSwatchPanel.BackgroundColor = Get-ThemeColor "palette.background"
         $this._colorSwatchPanel.BorderColor = Get-ThemeColor "palette.border"
         $this._previewPanel.AddChild($this._colorSwatchPanel)
