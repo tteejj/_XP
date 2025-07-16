@@ -428,3 +428,97 @@ This is the most advanced pattern and provides the greatest protection against c
     3.  **Ensure Unsubscription:** Your base `Screen` class's `Cleanup` or `OnExit` method must be robust. It should loop through all event subscriptions created by that screen and automatically unsubscribe them to prevent memory leaks. The `Screen` class in your framework already has a mechanism for this with `$this.EventSubscriptions`. Use it consistently.
 
 By implementing these three patterns in order, you will steadily transform your framework from a collection of powerful scripts into a cohesive, robust, and enjoyable-to-develop application platform.
+
+
+
+
+###############№#################$$
+THE COMBINED PLAN
+##############################$$
+Excellent question. It shows you're thinking strategically about development, which is just as important as the code itself.
+
+The short answer is: **Yes, absolutely. Integration first, then speed.**
+
+Here is the detailed breakdown of why this is the correct approach and the recommended roadmap that blends the two concepts intelligently.
+
+### The "Why": Architecture Before Optimization
+
+This is a fundamental principle in software engineering for a very good reason. Think of it like building a house:
+
+1.  **Integration is the Foundation and Frame:** The integration patterns (`ActionService`, `ViewDefinitionService`, `EventManager`) are your architectural blueprint. They define how rooms connect, where the plumbing goes, and how the electrical system is laid out. This structure ensures the house is logical, stable, and easy to add new rooms to later.
+
+2.  **Speed is the High-Efficiency Wiring and Appliances:** The performance optimizations (caching, avoiding pipelines, etc.) are like upgrading to high-efficiency wiring, a better HVAC system, or faster appliances.
+
+You **must** build the frame before you start running wires. If you optimize a component's rendering logic first, and then an architectural change makes that entire component obsolete, you've wasted your effort. By building the clean, integrated architecture first, you make it drastically easier to identify and fix the *real* performance bottlenecks later.
+
+### The Recommended Roadmap: A Phased Approach
+
+Instead of a rigid "all integration, then all speed" plan, the most efficient path is a phased approach that groups related tasks together. This allows you to get the best of both worlds, implementing easy performance wins while you are already refactoring the architecture.
+
+Here is a recommended, step-by-step roadmap:
+
+---
+
+#### **Phase 1: Foundational Command & Control (The Biggest Payoff)**
+
+**Objective:** Centralize all user commands and get the easiest performance wins. This immediately makes the code cleaner and a bit faster.
+
+| Tasks Included | Category | Rationale |
+| :--- | :--- | :--- |
+| 1. **Centralize with `ActionService`** | Integration | This is the highest-impact integration task. It cleans up all `HandleInput` methods and makes your `CommandPalette` instantly powerful. |
+| 2. **Avoid PowerShell Pipelines** | Performance | While you're refactoring `HandleInput` methods, this is an easy, mechanical change that provides a small but widespread performance boost with zero risk. |
+
+**How:**
+1.  Go through each screen's `HandleInput` method.
+2.  For every action (like "Delete", "Edit", "New"), create a corresponding entry in `ActionService`'s registration.
+3.  Change the `HandleInput` method to simply call `ExecuteAction(...)`, passing any necessary context (like the selected item).
+4.  While you're in those loops and methods, replace any `| Where-Object` or `| Sort-Object` with their faster `.Where()` and `.OrderBy()` .NET equivalents.
+
+---
+
+#### **Phase 2: Architect the Data-Driven UI**
+
+**Objective:** Decouple your data models from the components that display them. This is a major architectural step that makes all future UI work much simpler.
+
+| Tasks Included | Category | Rationale |
+| :--- | :--- | :--- |
+| 1. **Implement `ViewDefinitionService`** | Integration | This creates the central repository for how your data should look. |
+| 2. **Cache Data-Bound Strings** | Performance | This performance task is a natural part of implementing the `ViewDefinitionService`. While defining the "view," you can pre-render and cache the display strings. |
+
+**How:**
+1.  Flesh out the `ViewDefinitionService` with definitions for your `PmcTask` and `PmcProject` objects.
+2.  Modify your `DataGridComponent` (or `ListBox`/`Table`) to accept a `$ViewDefinition` property.
+3.  The component's `SetItems` method should now do two things: store the raw data items, and create a parallel array of pre-formatted display strings based on the `ViewDefinition`'s transformer.
+4.  The component's `OnRender` method now becomes trivial: it just displays the pre-formatted strings from its cache.
+5.  Refactor screens like `ProjectsListScreen` to use this new, smarter component.
+
+---
+
+#### **Phase 3: Enable the Event-Driven Experience**
+
+**Objective:** Fully decouple your application's modules. This is the final major architectural step that ensures long-term scalability.
+
+| Tasks Included | Category | Rationale |
+| :--- | :--- | :--- |
+| 1. **Implement the `EventManager`** | Integration | This is the final piece of the puzzle, allowing components to react to changes without direct knowledge of one another. |
+| 2. **Cache Layout Calculations (`Panel`)** | Performance | This is a good, isolated performance task to tackle here. It fits well because the `EventManager` reduces the need for components to call each other, so making them independently faster is the next logical step. |
+
+**How:**
+1.  Go to your single source of truth for data, the `DataManager`, and have it `Publish` an event every time a task or project is added, updated, or deleted.
+2.  Go to any screen that displays this data (like `TaskListScreen`) and have it `Subscribe` to the relevant event in its `OnEnter` method, calling its internal refresh method in the handler.
+3.  While that's running, modify the `Panel` component to cache its layout calculations, as described previously.
+
+---
+
+#### **Phase 4: Final Rendering Optimizations**
+
+**Objective:** After the architecture is stable, squeeze the maximum performance out of the core rendering loop.
+
+| Tasks Included | Category | Rationale |
+| :--- | :--- | :--- |
+| 1. **Advanced Rendering (Layers / Direct-to-ANSI)** | Performance | With a stable and predictable architecture, you can now safely modify the core rendering engine without fear that future architectural changes will invalidate your work. |
+
+**How:**
+1.  Implement either the Z-Index Layers or the Direct-to-ANSI rendering patterns. This will be a significant change but will be much easier now that the rest of the application logic is clean and decoupled from the rendering process.
+
+By following this roadmap, you prioritize building a **stable, logical, and maintainable** system first, while picking up easy performance wins along the way. This ensures that by the time you focus purely on speed, you are optimizing a system that is robust and a pleasure to work with.
