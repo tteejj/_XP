@@ -1,0 +1,430 @@
+Of course. This is the perfect question to ask, as it moves the discussion from low-level performance to high-level architectural integrity and power. The following is a detailed guide on how to integrate your framework's components to work together seamlessly, following the principles of modern application design.
+
+First, let's address your crucial "self-critique" questions.
+
+### What I Assumed & What Can Be Better
+
+*   **My Assumption:** I've assumed your goal is to build a **durable, scalable, and maintainable framework**, not just a single, small application. The patterns I'm detailing are designed for complexity and long-term development. For a tiny, one-off script, they would be overkill.
+*   **What I Got Wrong (or Overlooked):** In the previous discussion, I didn't emphasize the critical missing link for the "Data-Driven UI" pattern: your `Table` and `ListBox` components need to be made "smarter" to natively understand `ViewDefinitions`. I will detail this below.
+*   **What Can Be Better (The Next Level):**
+    1.  **Event Hell:** A potential pitfall of a highly event-driven system is "event spaghetti," where it becomes difficult to trace what event causes what action. The solution is disciplined logging and a clear, enforced naming convention for events (e.g., `Noun.Verb`, like `Tasks.Changed`, `Theme.Applied`).
+    2.  **Centralized State Management:** The most advanced step beyond this guide would be to implement a true centralized state store (like Redux or Vuex in the web world). In this model, the UI only *reads* from a global state object and can only change that state by dispatching "actions." This provides the ultimate level of predictability but adds another layer of complexity. What we are building here is a powerful and sufficient stepping stone toward that concept.
+
+---
+
+Here is a detailed, step-by-step guide to integrating your framework's parts.
+
+## Integration Pattern 1: The Data-Driven UI
+
+**The Why:** Screens should not be responsible for formatting data. A screen's job is to orchestrate—to say "display these projects using the 'summary' view." This decouples your data's appearance from the logic of the screen, making the entire UI vastly more reusable and easier to change.
+
+**The What:** We will make the `ProjectsListScreen` use the `ViewDefinitionService` to populate a data-aware `DataGridComponent`.
+
+**The How (Step-by-Step):**
+
+### Step 1: Enhance Your Data-Display Component
+Your `DataGridComponent` (`ACO.022`) is the perfect candidate. We will modify it to accept a view definition.
+
+**File: `Components\ACO.022_DataGridComponent.ps1`**
+
+```powershell
+# In the DataGridComponent class
+class DataGridComponent : UIElement {
+    # ... existing properties ...
+    [hashtable[]]$Items = @()
+    [hashtable]$ViewDefinition # NEW: Add a property to hold the view definition
+
+    # ... existing methods ...
+
+    # OVERWRITE OnRender with a smarter version
+    [void] OnRender() {
+        if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
+        $this._private_buffer.Clear() # Clear with theme color
+
+        if ($null -eq $this.ViewDefinition -or $this.Items.Count -eq 0) {
+            Write-TuiText -Buffer $this._private_buffer -X 1 -Y 1 -Text "No view or data."
+            return
+        }
+
+        $transformer = $this.ViewDefinition.Transformer
+        $columns = $this.ViewDefinition.Columns
+        $y = 0
+
+        # Render headers
+        if ($this.ShowHeaders) {
+            $x = 0
+            foreach ($column in $columns) {
+                # ... existing header rendering logic ...
+                $headerText = $column.Header.PadRight($column.Width)
+                Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $headerText -Style @{...}
+                $x += $column.Width + 1
+            }
+            $y++
+        }
+
+        # Render data rows using the transformer
+        for ($i = $this.ScrollOffset; $i -lt $this.Items.Count; $i++) {
+            if ($y -ge $this.Height) { break } # Stop if we run out of vertical space
+            
+            $rawItem = $this.Items[$i]
+            $transformedItem = & $transformer $rawItem # Use the transformer
+            
+            $x = 0
+            $isSelected = ($i -eq $this.SelectedIndex)
+            # ... set styles based on isSelected ...
+
+            foreach ($column in $columns) {
+                # Get the value from the TRANSFORMED item
+                $value = $transformedItem[$column.Name].ToString()
+                $value = $value.PadRight($column.Width).Substring(0, $column.Width)
+                Write-TuiText -Buffer $this._private_buffer -X $x -Y $y -Text $value -Style @{...}
+                $x += $column.Width + 1
+            }
+            $y++
+        }
+        $this._needs_redraw = $false
+    }
+}
+```
+
+### Step 2: Refactor `ProjectsListScreen` to Use the New Pattern
+Now, simplify the screen to delegate all rendering decisions.
+
+**File: `Screens\ASC.008_ProjectsListScreen.ps1`**
+
+```powershell
+class ProjectsListScreen : Screen {
+    hidden $_dataGrid # REPLACES _projectListBox
+    hidden $_viewService # NEW: Service reference
+
+    # ... In Constructor ...
+    ProjectsListScreen([object]$serviceContainer) : base("ProjectsListScreen", $serviceContainer) {
+        $this._dataManager = $serviceContainer.GetService("DataManager")
+        $this._viewService = $serviceContainer.GetService("ViewDefinitionService") # Get the service
+        # ...
+    }
+
+    # ... In Initialize ...
+    [void] Initialize() {
+        # ... create panels ...
+
+        # Create the new DataGridComponent instead of a ListBox
+        $this._dataGrid = [DataGridComponent]::new("ProjectGrid")
+        $this._dataGrid.X = 1
+        $this._dataGrid.Y = 3
+        # ... set width, height, IsFocusable, TabIndex ...
+
+        # Get the view and apply it to the grid!
+        $viewDef = $this._viewService.GetViewDefinition('project.summary')
+        $this._dataGrid.ViewDefinition = $viewDef
+        $this._dataGrid.ShowHeaders = $true
+
+        $this._listPanel.AddChild($this._dataGrid)
+    }
+
+    # ... In _RefreshData or OnEnter ...
+    hidden [void] _RefreshData() {
+        $this._allProjects = $this._dataManager.GetProjects()
+        # Filter projects as before...
+        $this._filteredProjects = ...
+
+        # The magic happens here: Just pass the raw data. The grid handles the rest.
+        $this._dataGrid.SetItems($this._filteredProjects)
+
+        $this.RequestRedraw()
+    }
+}
+```
+**The result:** `ProjectsListScreen` is now much simpler. It has no idea how a project is formatted. You can change the "project.summary" view in `ViewDefinitionService`, and this screen will update automatically without a single line of code change here.
+
+---
+
+## Integration Pattern 2: Centralized Command & Control
+
+**The Why:** Your UI should be "dumb." A button's only job is to say "I was clicked!" and announce the action `ui.save`. A screen's `HandleInput` should only say "The 'E' key was pressed, which means `project.edit`." All logic for *what saving or editing actually means* belongs in one central place: the `ActionService`.
+
+**The What:** We will refactor the `SimpleTaskDialog` and `ProjectsListScreen` to use the `ActionService` for all operations.
+
+**The How (Step-by-Step):**
+
+### Step 1: Register Context-Aware Actions
+Define actions that can accept parameters, like the object they should act upon.
+
+**File: `Services\ASE.004_ActionService.ps1`**
+
+```powershell
+# In RegisterDefaultActions or a new method
+$this.RegisterAction("project.edit", {
+    param($params) # All actions should accept a params hashtable
+    $project = $params.Project
+    if (-not $project) { Write-Log -Level Error -Message "Action 'project.edit' requires a project."; return }
+
+    $navService = $params.ServiceContainer.GetService("NavigationService")
+    $editDialog = [ProjectEditDialog]::new($params.ServiceContainer, $project)
+    $editDialog.Initialize()
+    $navService.NavigateTo($editDialog)
+})```
+
+### Step 2: Refactor a Screen's `HandleInput`
+Modify `ProjectsListScreen` to trigger actions instead of calling private methods.
+
+**File: `Screens\ASC.008_ProjectsListScreen.ps1`**
+
+```powershell
+# In ProjectsListScreen
+hidden $_actionService # Add service reference in constructor
+
+[bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
+    # ... base HandleInput call ...
+    $keyChar = $keyInfo.KeyChar.ToString().ToUpper()
+
+    if ($keyChar -eq 'E') {
+        $selectedProject = $this._filteredProjects[$this._dataGrid.SelectedIndex]
+        if ($selectedProject) {
+            # Trigger the action, passing context
+            $this._actionService.ExecuteAction("project.edit", @{
+                Project = $selectedProject
+                ServiceContainer = $this.ServiceContainer # Pass container for the action
+            })
+            return $true
+        }
+    }
+    # ...
+}
+```
+
+### Step 3: Refactor Component `OnClick` Handlers
+The "Save" button in a dialog should just trigger a generic "dialog.confirm" action.
+
+**File: `Components\ACO.025_SimpleTaskDialog.ps1`**
+
+```powershell
+# In SimpleTaskDialog Initialize method
+$this._saveButton.OnClick = {
+    $actionService = $this.ServiceContainer.GetService("ActionService")
+    # Tell the world "the dialog was confirmed", don't implement the save here.
+    $actionService.ExecuteAction("dialog.confirm", @{ Source = $this })
+}.GetNewClosure()
+```
+
+The logic for what happens on confirmation now lives cleanly inside the action's scriptblock.
+
+---
+
+## Integration Pattern 3: The Event-Driven Experience
+
+**The Why:** Components and screens should be deaf and blind to each other. The `EditTaskScreen` should have no idea that a `TaskListScreen` even exists. When a task is saved, the `DataManager` should simply announce "A task was updated!" to the entire application. Anyone who cares (like the `TaskListScreen`) can listen and react.
+
+**The What:** We will make the `TaskListScreen` automatically refresh when a task is changed anywhere in the application.
+
+**The How (Step-by-Step):**
+
+### Step 1: The `DataManager` Publishes Events
+This is the most important step. Your single source of truth for data announces all changes.
+
+**File: `Services\ASE.005_DataManager.ps1`**
+
+```powershell
+# In class DataManager
+[PmcTask] UpdateTask([PmcTask]$task) {
+    # ... existing logic to update the task ...
+    
+    # Announce the change to the application
+    if ($this.EventManager) {
+        $this.EventManager.Publish("Tasks.Changed", @{
+            Action = "Updated"
+            Task = $task
+        })
+    }
+    return $task
+}
+
+# Do the same for AddTask and DeleteTask
+```
+
+### Step 2: The `TaskListScreen` Subscribes to Events
+The screen now listens for changes instead of being told to refresh directly.
+
+**File: `Screens\ASC.002_TaskListScreen.ps1`**
+
+```powershell
+class TaskListScreen : Screen {
+    hidden $_eventManager
+
+    # ... In Constructor ...
+    TaskListScreen([object]$serviceContainer) : base(...) {
+        $this._eventManager = $serviceContainer.GetService("EventManager")
+        #...
+    }
+
+    [void] OnEnter() {
+        # CRITICAL: Capture $this for the scriptblock
+        $screenRef = $this
+        $this._eventManager.Subscribe("Tasks.Changed", {
+            # This block now runs automatically whenever a task changes, anywhere.
+            $screenRef._RefreshData()
+        })
+
+        # ... other OnEnter logic ...
+        ([Screen]$this).OnEnter()
+    }
+
+    [void] OnExit() {
+        # The base Screen class should be modified to automatically
+        # unsubscribe from all events created via its SubscribeToEvent method.
+        # This prevents memory leaks.
+        ([Screen]$this).OnExit()
+    }
+}
+```
+**The result:** You can now edit a task in the `EditTaskScreen`. When you save, the `DataManager` fires the `Tasks.Changed` event. The `TaskListScreen`, which is listening in the background, hears this event and calls its own `_RefreshData` method. The two screens never directly communicated, yet the UI updates perfectly. This is the power of a decoupled, event-driven architecture.
+
+
+Excellent question. It's crucial to evaluate architectural changes not just on performance, but on how they impact the developer's experience, productivity, and the long-term health of the project.
+
+To answer your first question directly: **Yes, absolutely.** While these patterns require a bit more initial setup, they are specifically designed to make development vastly easier and faster *as the project grows*. They are an investment that pays for itself the moment you need to add a new feature or change an existing one. For a solo developer with plans to expand, adopting these patterns early is the single best thing you can do to prevent future headaches.
+
+Now, let's rate these integration patterns just like we did the performance upgrades, but with a focus on developer experience.
+
+### Rating Definitions
+
+*   **Coding Difficulty:** The complexity of writing the new code.
+*   **Integration Difficulty:** The effort required to refactor existing code to use the new pattern.
+*   **Immediate Payoff:** How quickly you will *feel* the benefit and see development get easier.
+*   **Long-Term Scalability:** How well this pattern supports adding new, complex features in the future.
+*   **Developer Grief Reduction:** An estimate of how many future bugs, maintenance headaches, and "Where do I even change this?" moments this pattern will prevent.
+
+---
+
+### Integration Patterns: Detailed Breakdown and Ratings
+
+| Integration Pattern | Coding Difficulty | Integration Difficulty | Immediate Payoff | Long-Term Scalability | Developer Grief Reduction |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. Centralized Command & Control** | Low | Low | **Very High** | **Very High** | **Very High** |
+| **2. The Data-Driven UI** | Medium | Medium | Medium | **Very High** | **High** |
+| **3. The Event-Driven Experience** | Medium | Medium | Low | **Critical** | **Very High** |
+
+---
+
+### Detailed Analysis: The How, What, and Why
+
+Here is the detailed breakdown of each pattern, explaining the ratings and the implementation steps.
+
+#### 1. Centralized Command & Control (`ActionService`)
+
+This pattern has the highest immediate payoff for the lowest effort. It's the best place to start.
+
+*   **Why the Ratings?**
+    *   **Immediate Payoff (Very High):** The moment you refactor, your `CommandPalette` instantly becomes a fully functional, self-populating list of every command in your application. Managing hotkeys becomes trivial—you change them in one place, and the whole app respects the change. This is a huge, satisfying win.
+    *   **Grief Reduction (Very High):** You eliminate duplicate logic. No more having a menu item and a hotkey call slightly different versions of the same code. Debugging becomes simple: instead of hunting through `HandleInput` methods, you just check which action was triggered.
+
+*   **How to Implement (Detailed Steps):**
+    1.  **Identify All Actions:** Go through your `HandleInput` methods in every screen. Any time a keypress leads to a specific function call (like `_DeleteTask`, `_ShowNewTaskDialog`, `_CycleSortMode`), that is a candidate for an action.
+    2.  **Register the Actions:** In your `Start.ps1` or a dedicated service registration script, create scriptblocks for these actions in the `ActionService`. Crucially, make them generic by using the `$params` hashtable.
+        ```powershell
+        # In ActionService registration
+        $actionService.RegisterAction("task.delete.confirm", {
+            param($params)
+            $task = $params.Task
+            $dialogManager = $params.ServiceContainer.GetService("DialogManager")
+            
+            if (!$task) { return }
+
+            $dialogManager.ShowConfirm("Delete Task", "Delete '$($task.Title)'?", {
+                $dataManager = $params.ServiceContainer.GetService("DataManager")
+                $dataManager.DeleteTask($task.Id)
+            })
+        }, @{ Category="Task" })
+        ```
+    3.  **Refactor UI to Trigger Actions:** Replace the direct method calls in your UI with calls to `ExecuteAction`.
+        ```powershell
+        # In TaskListScreen's HandleInput
+        if ($keyInfo.Key -eq 'Delete') {
+            $selectedTask = $this._GetSelectedTask()
+            # The screen is now just a trigger. It has no logic for deletion itself.
+            $this._actionService.ExecuteAction("task.delete.confirm", @{
+                Task = $selectedTask
+                ServiceContainer = $this.ServiceContainer
+            })
+            return $true
+        }
+        ```
+
+#### 2. The Data-Driven UI (`ViewDefinitionService`)
+
+This is the foundational work for building a professional, maintainable UI.
+
+*   **Why the Ratings?**
+    *   **Immediate Payoff (Medium):** The benefit isn't truly felt until you need to display the *same data* in a *different way* (e.g., a summary list vs. a detailed table). The initial refactoring can feel like you're just moving code around. The payoff comes with the *second* implementation, which will be dramatically faster.
+    *   **Long-Term Scalability (Very High):** This is non-negotiable for a scalable UI. It ensures that your application's "look" is completely separate from its logic. You can hire a designer to tweak the `ViewDefinitionService` files without them ever needing to touch a line of screen logic.
+
+*   **How to Implement (Detailed Steps):**
+    1.  **Enhance `DataGridComponent`:** As detailed previously, modify your `DataGridComponent` to accept a `$ViewDefinition` hashtable and use its `Transformer` and `Columns` properties to render itself.
+    2.  **Define Your Views:** Go to `ASE.011_ViewDefinitionService.ps1` and create definitions for all your primary data models. Think about all the ways you might want to see a "Task" or a "Project".
+        ```powershell
+        # In ViewDefinitionService._RegisterDefaultViewDefinitions
+        $this.RegisterViewDefinition('project.list.summary', @{
+            Columns = @(
+                @{ Name="Status"; Header="S"; Width=3 },
+                @{ Name="Key"; Header="Key"; Width=12 },
+                @{ Name="Name"; Header="Project Name"; Width=40 }
+            )
+            Transformer = {
+                param($project)
+                @{
+                    Status = if ($project.IsActive) { "✔" } else { "✖" }
+                    Key    = $project.Key
+                    Name   = $project.Name
+                }
+            }
+        })
+        ```
+    3.  **Refactor Screens:** Replace `ListBox` components that show complex data with your new, smarter `DataGridComponent`.
+        ```powershell
+        # In ProjectsListScreen.Initialize
+        $this._projectGrid = [DataGridComponent]::new("ProjectGrid")
+        $this._projectGrid.ViewDefinition = $this._viewService.GetViewDefinition('project.list.summary')
+        
+        # In _RefreshData
+        $projects = $this._dataManager.GetProjects()
+        $this._projectGrid.SetItems($projects) # Pass raw objects
+        ```
+
+#### 3. The Event-Driven Experience (`EventManager`)
+
+This is the most advanced pattern and provides the greatest protection against complex bugs.
+
+*   **Why the Ratings?**
+    *   **Immediate Payoff (Low):** If you only have one or two screens, the benefit is invisible. It can feel like you're adding complexity for no reason. The "aha!" moment comes when you create a dialog to edit an item, and upon closing it, the list behind it magically updates without you writing a single line of code to connect them.
+    *   **Long-Term Scalability (Critical):** This is what allows different parts of your application to function as independent, decoupled modules. Without it, you create a "spiderweb" of direct dependencies where `ScreenA` has to know about `ScreenB` to tell it to refresh. This becomes unmanageable very quickly.
+    *   **Grief Reduction (Very High):** This pattern eliminates an entire class of "stale state" bugs, which are among the hardest to track down. It ensures data consistency across the entire UI.
+
+*   **How to Implement (Detailed Steps):**
+    1.  **Publish Events from Your Data Source:** Your `DataManager` is the single source of truth. It must announce every single change.
+        ```powershell
+        # In DataManager.DeleteProject
+        [bool] DeleteProject([string]$projectKey) {
+            # ... logic to delete ...
+            if ($this.EventManager) {
+                # Announce what happened
+                $this.EventManager.Publish("Projects.Changed", @{ Action="Deleted"; Key=$projectKey })
+            }
+            return $true
+        }
+        ```
+    2.  **Screens Subscribe to What They Care About:** A screen that displays projects should listen for project changes.
+        ```powershell
+        # In ProjectsListScreen.OnEnter
+        [void] OnEnter() {
+            # Subscribe to the event. The $screenRef closure is essential.
+            $screenRef = $this
+            $this.SubscribeToEvent("Projects.Changed", {
+                Write-Log -Level Info -Message "ProjectsListScreen detected a change, refreshing data."
+                $screenRef._RefreshData()
+            })
+            # ... other logic ...
+        }
+        ```
+    3.  **Ensure Unsubscription:** Your base `Screen` class's `Cleanup` or `OnExit` method must be robust. It should loop through all event subscriptions created by that screen and automatically unsubscribe them to prevent memory leaks. The `Screen` class in your framework already has a mechanism for this with `$this.EventSubscriptions`. Use it consistently.
+
+By implementing these three patterns in order, you will steadily transform your framework from a collection of powerful scripts into a cohesive, robust, and enjoyable-to-develop application platform.
