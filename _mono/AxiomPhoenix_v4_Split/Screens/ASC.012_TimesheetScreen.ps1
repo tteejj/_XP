@@ -224,6 +224,8 @@ class TimesheetScreen : Screen {
             'A' { $this._ShowAddEntryDialog(); return $true }
             'e' { $this._ExportTimesheetToClipboard(); return $true }
             'E' { $this._ExportTimesheetToClipboard(); return $true }
+            'd' { $this._DeleteSelectedTimeEntry(); return $true }
+            'D' { $this._DeleteSelectedTimeEntry(); return $true }
             '<' { $this._NavigateToPreviousWeek(); return $true }
             '>' { $this._NavigateToNextWeek(); return $true }
         }
@@ -305,6 +307,37 @@ class TimesheetScreen : Screen {
         catch {
             Write-Log -Level Error -Message "Export to clipboard failed: $_"
             $this._statusLabel.Text = "Export failed: $($_.Exception.Message)"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "status.error"
+            $this.RequestRedraw()
+        }
+    }
+    
+    hidden [void] _DeleteSelectedTimeEntry() {
+        if ($this._timesheetTable.SelectedIndex -lt 0) {
+            $this._statusLabel.Text = "No time entry selected"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "status.warning"
+            $this.RequestRedraw()
+            return
+        }
+        
+        try {
+            # Get selected row data
+            $selectedRow = $this._timesheetTable.Items[$this._timesheetTable.SelectedIndex]
+            
+            # The timesheet table shows project/ID1 rows, not individual entries
+            # We need to show a dialog to select which time entry to delete
+            # For now, show a message that this feature needs refinement
+            $this._statusLabel.Text = "[D]elete time entry - Feature needs individual entry selection"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "status.info"
+            $this.RequestRedraw()
+            
+            # TODO: Implement time entry selection dialog
+            # This would show all time entries for the selected project/day
+            # and allow the user to select which specific entry to delete
+            
+        } catch {
+            Write-Log -Level Error -Message "Delete time entry failed: $_"
+            $this._statusLabel.Text = "Delete failed: $($_.Exception.Message)"
             $this._statusLabel.ForegroundColor = Get-ThemeColor "status.error"
             $this.RequestRedraw()
         }

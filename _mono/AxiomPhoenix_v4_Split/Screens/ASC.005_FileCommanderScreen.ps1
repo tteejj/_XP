@@ -28,6 +28,8 @@ class FileCommanderScreen : Screen {
     hidden [object[]] $_rightItems = @()
     hidden [object] $_selectedItem
     hidden [object] $_pendingDelete = $null
+    hidden [string] $_inputMode = ""
+    hidden [string] $_inputBuffer = ""
     hidden [hashtable] $_fileTypeIcons = @{
         ".ps1" = "🔧"
         ".txt" = "📄"
@@ -620,10 +622,69 @@ class FileCommanderScreen : Screen {
     }
 
     hidden [void] CreateDirectory() {
-        # In a real implementation, would show input dialog
-        # For now, just show status
-        $this._statusLabel.Text = "Create directory: Feature requires dialog system"
-        $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+        try {
+            # Get current directory from active panel
+            $currentDir = if ($this._leftActive) { $this._leftPath } else { $this._rightPath }
+            
+            # Simple input prompt (basic implementation)
+            $this._statusLabel.Text = "Enter directory name (then press Enter): "
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+            $this.RequestRedraw()
+            
+            # Set up input mode
+            $this._inputMode = "createDir"
+            $this._inputBuffer = ""
+            
+        } catch {
+            Write-Log -Level Error -Message "CreateDirectory failed: $_"
+            $this._statusLabel.Text = "Create directory failed: $($_.Exception.Message)"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Error" "#ff0000"
+        }
+    }
+
+    hidden [void] _CreateDirectoryFromInput() {
+        try {
+            if ([string]::IsNullOrWhiteSpace($this._inputBuffer)) {
+                $this._statusLabel.Text = "Directory name cannot be empty"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Error" "#ff0000"
+                $this.RequestRedraw()
+                return
+            }
+            
+            # Get current directory from active panel
+            $currentDir = if ($this._leftActive) { $this._leftPath } else { $this._rightPath }
+            $newDirPath = Join-Path $currentDir $this._inputBuffer
+            
+            # Create directory
+            $fileSystemService = $this.ServiceContainer.GetService("FileSystemService")
+            if ($fileSystemService) {
+                $success = $fileSystemService.CreateDirectory($newDirPath)
+                if ($success) {
+                    $this._statusLabel.Text = "Directory created: $($this._inputBuffer)"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
+                    $this.RefreshPanels()
+                } else {
+                    $this._statusLabel.Text = "Failed to create directory: $($this._inputBuffer)"
+                    $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Error" "#ff0000"
+                }
+            } else {
+                # Fallback to direct .NET call
+                New-Item -ItemType Directory -Path $newDirPath -Force | Out-Null
+                $this._statusLabel.Text = "Directory created: $($this._inputBuffer)"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00ff88"
+                $this.RefreshPanels()
+            }
+            
+        } catch {
+            Write-Log -Level Error -Message "CreateDirectoryFromInput failed: $_"
+            $this._statusLabel.Text = "Create directory failed: $($_.Exception.Message)"
+            $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Error" "#ff0000"
+        } finally {
+            # Reset input mode
+            $this._inputMode = ""
+            $this._inputBuffer = ""
+            $this.RequestRedraw()
+        }
     }
 
     hidden [void] ShowHelp() {
@@ -681,6 +742,40 @@ class FileCommanderScreen : Screen {
             $this._pendingDelete = $null
             $this.RequestRedraw()
             return $true
+        }
+        
+        # Handle input modes (like creating directory)
+        if ($this._inputMode -eq "createDir") {
+            if ($key.Key -eq [ConsoleKey]::Enter) {
+                # Create directory
+                $this._CreateDirectoryFromInput()
+                return $true
+            }
+            elseif ($key.Key -eq [ConsoleKey]::Escape) {
+                # Cancel input
+                $this._inputMode = ""
+                $this._inputBuffer = ""
+                $this._statusLabel.Text = "Create directory cancelled"
+                $this._statusLabel.ForegroundColor = Get-ThemeColor "Label.Foreground" "#00d4ff"
+                $this.RequestRedraw()
+                return $true
+            }
+            elseif ($key.Key -eq [ConsoleKey]::Backspace) {
+                # Handle backspace
+                if ($this._inputBuffer.Length -gt 0) {
+                    $this._inputBuffer = $this._inputBuffer.Substring(0, $this._inputBuffer.Length - 1)
+                    $this._statusLabel.Text = "Enter directory name (then press Enter): $($this._inputBuffer)"
+                    $this.RequestRedraw()
+                }
+                return $true
+            }
+            elseif ($key.KeyChar -and $key.KeyChar -ne [char]0) {
+                # Add character to input buffer
+                $this._inputBuffer += $key.KeyChar
+                $this._statusLabel.Text = "Enter directory name (then press Enter): $($this._inputBuffer)"
+                $this.RequestRedraw()
+                return $true
+            }
         }
         
         # IMPORTANT: Call base class first - handles Tab navigation and routes to focused component

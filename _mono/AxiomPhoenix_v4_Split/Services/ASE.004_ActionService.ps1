@@ -305,6 +305,69 @@ class ActionService {
             Description = "Focus Previous Component"
             Hotkey = "Shift+Tab"
         })
+
+        # Task management actions
+        $this.RegisterAction("navigation.newTask", {
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $newTaskScreen = New-Object NewTaskScreen -ArgumentList $container
+            $newTaskScreen.Initialize()
+            $navService.NavigateTo($newTaskScreen)
+        }, @{
+            Category = "Tasks"
+            Description = "Create New Task"
+        })
+
+        $this.RegisterAction("navigation.editTask", {
+            param([string]$TaskId)
+            $navService = $global:TuiState.Services.NavigationService
+            $container = $global:TuiState.ServiceContainer
+            $dataManager = $container.GetService("DataManager")
+            
+            if ($TaskId -and $dataManager) {
+                $task = $dataManager.GetTask($TaskId)
+                if ($task) {
+                    $editTaskScreen = New-Object EditTaskScreen -ArgumentList $container, $task
+                    $editTaskScreen.Initialize()
+                    $navService.NavigateTo($editTaskScreen)
+                }
+            }
+        }, @{
+            Category = "Tasks"
+            Description = "Edit Task"
+        })
+
+        $this.RegisterAction("tasks.delete", {
+            param([string]$TaskId)
+            $container = $global:TuiState.ServiceContainer
+            $dataManager = $container.GetService("DataManager")
+            $dialogManager = $container.GetService("DialogManager")
+            
+            if ($TaskId -and $dataManager) {
+                $task = $dataManager.GetTask($TaskId)
+                if ($task) {
+                    # Show confirmation dialog
+                    $result = $dialogManager.ShowConfirmation(
+                        "Delete Task",
+                        "Are you sure you want to delete the task '$($task.Title)'?"
+                    )
+                    
+                    if ($result) {
+                        $success = $dataManager.DeleteTask($TaskId)
+                        if ($success) {
+                            Write-Log -Level Info -Message "Task deleted: $($task.Title)"
+                        } else {
+                            Write-Log -Level Error -Message "Failed to delete task: $($task.Title)"
+                        }
+                        return $success
+                    }
+                }
+            }
+            return $false
+        }, @{
+            Category = "Tasks"
+            Description = "Delete Task"
+        })
     }
 }
 

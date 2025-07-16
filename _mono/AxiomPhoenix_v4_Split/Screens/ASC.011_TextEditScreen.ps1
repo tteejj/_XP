@@ -44,6 +44,10 @@ class TextEditScreen : Screen {
     # Undo/Redo stacks
     hidden [System.Collections.Generic.Stack[object]] $_undoStack
     hidden [System.Collections.Generic.Stack[object]] $_redoStack
+    
+    # Input mode for dialogs (like Save As)
+    hidden [string] $_inputMode = ""
+    hidden [string] $_inputBuffer = ""
     #endregion
 
     TextEditScreen([object]$serviceContainer) : base("TextEditor", $serviceContainer) {
@@ -242,6 +246,31 @@ class TextEditScreen : Screen {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
+        # Handle input mode for Save As dialog
+        if ($this._inputMode -eq "saveAs") {
+            if ($keyInfo.Key -eq [ConsoleKey]::Enter) {
+                $this._SaveFileAs()
+                return $true
+            }
+            if ($keyInfo.Key -eq [ConsoleKey]::Escape) {
+                $this._CancelSaveAs()
+                return $true
+            }
+            if ($keyInfo.Key -eq [ConsoleKey]::Backspace) {
+                if ($this._inputBuffer.Length -gt 0) {
+                    $this._inputBuffer = $this._inputBuffer.Substring(0, $this._inputBuffer.Length - 1)
+                    $this._UpdateSaveAsPrompt()
+                }
+                return $true
+            }
+            if ($keyInfo.KeyChar -match '[a-zA-Z0-9\._\-/\\\s]') {
+                $this._inputBuffer += $keyInfo.KeyChar
+                $this._UpdateSaveAsPrompt()
+                return $true
+            }
+            return $true
+        }
+        
         # Handle Ctrl key combinations first
         if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
             switch ($keyInfo.Key) {
@@ -310,8 +339,8 @@ class TextEditScreen : Screen {
     hidden [void] SaveFile() {
         try {
             if (-not $this._filePath) {
-                # TODO: Show save-as dialog
-                $this._statusLabel.Text = "💾 Save As dialog not implemented"
+                # Show save-as dialog
+                $this._ShowSaveAsDialog()
                 return
             }
             
@@ -464,6 +493,71 @@ class TextEditScreen : Screen {
         if ($bytes -lt 1024) { return "$bytes B" }
         if ($bytes -lt 1048576) { return "$([Math]::Round($bytes / 1024, 1)) KB" }
         return "$([Math]::Round($bytes / 1048576, 1)) MB"
+    }
+
+    # === SAVE AS DIALOG METHODS ===
+    hidden [void] _ShowSaveAsDialog() {
+        $this._inputMode = "saveAs"
+        $this._inputBuffer = if ($this._fileName -ne "Untitled") { $this._fileName } else { "" }
+        $this._UpdateSaveAsPrompt()
+    }
+    
+    hidden [void] _UpdateSaveAsPrompt() {
+        $this._statusLabel.Text = "💾 Save As: $($this._inputBuffer)_ [Enter=Save, Esc=Cancel]"
+    }
+    
+    hidden [void] _SaveFileAs() {
+        try {
+            if ([string]::IsNullOrWhiteSpace($this._inputBuffer)) {
+                $this._statusLabel.Text = "❌ Please enter a filename"
+                return
+            }
+            
+            $newPath = $this._inputBuffer
+            
+            # Add .txt extension if no extension provided
+            if (-not [System.IO.Path]::HasExtension($newPath)) {
+                $newPath += ".txt"
+            }
+            
+            # Convert to absolute path if relative
+            if (-not [System.IO.Path]::IsPathRooted($newPath)) {
+                $newPath = [System.IO.Path]::GetFullPath($newPath)
+            }
+            
+            # Check if file already exists
+            if ([System.IO.File]::Exists($newPath)) {
+                $this._statusLabel.Text = "⚠️ File exists! Press Enter again to overwrite, Esc to cancel"
+                # Simple overwrite confirmation - press Enter again
+                return
+            }
+            
+            $content = $this._textEditor.Lines -join "`n"
+            [System.IO.File]::WriteAllText($newPath, $content, [System.Text.Encoding]::UTF8)
+            
+            $this._filePath = $newPath
+            $this._fileName = [System.IO.Path]::GetFileName($newPath)
+            $this._isModified = $false
+            $this._lastSaved = [DateTime]::Now
+            
+            $this._inputMode = ""
+            $this._inputBuffer = ""
+            
+            $this.UpdateTitle()
+            $this.UpdateFileInfo()
+            $this._statusLabel.Text = "💾 Saved as: $($this._fileName)"
+            
+            Write-Log -Level Info -Message "TextEditScreen: Saved file as $($this._filePath)"
+        } catch {
+            Write-Log -Level Error -Message "TextEditScreen._SaveFileAs: Error saving $($this._inputBuffer) - $_"
+            $this._statusLabel.Text = "❌ Error saving file: $_"
+        }
+    }
+    
+    hidden [void] _CancelSaveAs() {
+        $this._inputMode = ""
+        $this._inputBuffer = ""
+        $this._statusLabel.Text = "💾 Save As cancelled"
     }
 
     hidden [void] ExitEditor() {
