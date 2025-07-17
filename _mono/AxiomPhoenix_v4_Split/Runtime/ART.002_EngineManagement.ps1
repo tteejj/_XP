@@ -174,6 +174,11 @@ function Start-TuiEngine {
                             $shouldRender = $true
                             $renderState.BatchedRequests = 0
                         }
+                    } elseif ($global:TuiState.IsDirty) {
+                        # Legacy IsDirty flag support
+                        $shouldRender = $true
+                        $renderState.ShouldRender = $true  # Reset the render gate
+                        $global:TuiState.IsDirty = $false
                     }
                     
                     # Phase 5: CONDITIONAL RENDERING
@@ -206,12 +211,10 @@ function Start-TuiEngine {
                             }
                         }
                     } else {
-                        # Longer sleep when idle to save CPU
-                        $sleepTime = $idleCheckTime
-                        if ($sleepTime.TotalMilliseconds -gt 1) {
-                            # Use event-based waiting for better responsiveness
-                            [void]$global:TuiState.RenderEvent.Wait([int]$sleepTime.TotalMilliseconds)
-                            [void]$global:TuiState.RenderEvent.Reset()
+                        # Shorter sleep when idle to maintain input responsiveness
+                        $sleepTime = [Math]::Min(50, $idleCheckTime.TotalMilliseconds)  # Max 50ms sleep
+                        if ($sleepTime -gt 1) {
+                            Start-Sleep -Milliseconds ([int]$sleepTime)
                         }
                     }
                     
