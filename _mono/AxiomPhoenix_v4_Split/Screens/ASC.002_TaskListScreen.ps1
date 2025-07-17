@@ -87,8 +87,8 @@ class TaskListScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " ╔═ Task Management System ═╗ "
         $this._mainPanel.BorderStyle = "Double"
-        $this._mainPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#007acc")
-        $this._mainPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#1e1e1e")
+        $this._mainPanel.BorderColor = Get-ThemeColor "panel.border"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "panel.background"
         $this.AddChild($this._mainPanel)
 
         # Calculate panel dimensions
@@ -104,8 +104,8 @@ class TaskListScreen : Screen {
         $this._listPanel.Height = $this.Height - 4  # Account for status bar
         $this._listPanel.Title = " 📋 Tasks "
         $this._listPanel.HasBorder = $true
-        $this._listPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
-        $this._listPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#2a2a2a")
+        $this._listPanel.BorderColor = Get-ThemeColor "panel.border"
+        $this._listPanel.BackgroundColor = Get-ThemeColor "panel.background"
         $this._mainPanel.AddChild($this._listPanel)
 
         # === TASK GRID WITH VIEW DEFINITION ===
@@ -117,10 +117,10 @@ class TaskListScreen : Screen {
         $this._taskGrid.TabIndex = 0
         $this._taskGrid.IsFocusable = $true
         $this._taskGrid.ShowHeaders = $true
-        $this._taskGrid.NormalBackgroundColor = (Get-ThemeColor "List.Background" "#1a1a1a")
-        $this._taskGrid.NormalForegroundColor = (Get-ThemeColor "List.ItemNormal" "#ffffff")
-        $this._taskGrid.SelectedBackgroundColor = (Get-ThemeColor "List.ItemSelectedBackground" "#0078d4")
-        $this._taskGrid.SelectedForegroundColor = (Get-ThemeColor "List.ItemSelected" "#ffffff")
+        $this._taskGrid.NormalBackgroundColor = Get-ThemeColor "list.background"
+        $this._taskGrid.NormalForegroundColor = Get-ThemeColor "list.foreground"
+        $this._taskGrid.SelectedBackgroundColor = Get-ThemeColor "list.selected.background"
+        $this._taskGrid.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground"
         
         # Get ViewDefinition from service
         $viewService = $this.ServiceContainer.GetService("ViewDefinitionService")
@@ -140,8 +140,8 @@ class TaskListScreen : Screen {
         $this._contextPanel.Height = $contextHeight
         $this._contextPanel.Title = " 🔍 Filters & Options "
         $this._contextPanel.HasBorder = $true
-        $this._contextPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
-        $this._contextPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#2a2a2a")
+        $this._contextPanel.BorderColor = Get-ThemeColor "panel.border"
+        $this._contextPanel.BackgroundColor = Get-ThemeColor "panel.background"
         $this._mainPanel.AddChild($this._contextPanel)
 
         # === PROJECT SELECTOR BUTTON ===
@@ -153,8 +153,8 @@ class TaskListScreen : Screen {
         $this._projectButton.Height = 1
         $this._projectButton.TabIndex = 1
         $this._projectButton.IsFocusable = $true
-        $this._projectButton.BackgroundColor = (Get-ThemeColor "Button.Normal.Background" "#0078d4")
-        $this._projectButton.ForegroundColor = (Get-ThemeColor "Button.Normal.Foreground" "#ffffff")
+        $this._projectButton.BackgroundColor = Get-ThemeColor "button.normal.background"
+        $this._projectButton.ForegroundColor = Get-ThemeColor "button.normal.foreground"
         
         # Project button click handler
         $screenRef = $this
@@ -173,9 +173,9 @@ class TaskListScreen : Screen {
         $this._filterBox.TabIndex = 2
         $this._filterBox.IsFocusable = $true
         $this._filterBox.Placeholder = "🔎 Type to filter tasks..."
-        $this._filterBox.BackgroundColor = (Get-ThemeColor "Input.Background" "#333333")
-        $this._filterBox.ForegroundColor = (Get-ThemeColor "Input.Foreground" "#ffffff")
-        $this._filterBox.BorderColor = (Get-ThemeColor "Input.Border" "#555555")
+        $this._filterBox.BackgroundColor = Get-ThemeColor "input.background"
+        $this._filterBox.ForegroundColor = Get-ThemeColor "input.foreground"
+        $this._filterBox.BorderColor = Get-ThemeColor "input.border"
         
         # Filter text change handler
         $this._filterBox.OnChange = {
@@ -194,8 +194,8 @@ class TaskListScreen : Screen {
         $this._detailPanel.Height = $this.Height - $contextHeight - 6  # Account for context panel and status bar
         $this._detailPanel.Title = " 📝 Task Details "
         $this._detailPanel.HasBorder = $true
-        $this._detailPanel.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
-        $this._detailPanel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#2a2a2a")
+        $this._detailPanel.BorderColor = Get-ThemeColor "panel.border"
+        $this._detailPanel.BackgroundColor = Get-ThemeColor "panel.background"
         $this._mainPanel.AddChild($this._detailPanel)
 
         # === STATUS BAR ===
@@ -205,8 +205,8 @@ class TaskListScreen : Screen {
         $this._statusBar.Width = $this.Width - 2
         $this._statusBar.Height = 2
         $this._statusBar.HasBorder = $true
-        $this._statusBar.BorderColor = (Get-ThemeColor "Panel.Border" "#444444")
-        $this._statusBar.BackgroundColor = (Get-ThemeColor "Panel.Background" "#333333")
+        $this._statusBar.BorderColor = Get-ThemeColor "panel.border"
+        $this._statusBar.BackgroundColor = Get-ThemeColor "panel.background"
         $this._mainPanel.AddChild($this._statusBar)
 
         # === HELP LABEL ===
@@ -216,8 +216,8 @@ class TaskListScreen : Screen {
         $this._helpLabel.Y = 0
         $this._helpLabel.Width = $this._statusBar.Width - 2
         $this._helpLabel.Height = 1
-        $this._helpLabel.ForegroundColor = (Get-ThemeColor "Label.Foreground" "#cccccc")
-        $this._helpLabel.BackgroundColor = (Get-ThemeColor "Panel.Background" "#333333")
+        $this._helpLabel.ForegroundColor = Get-ThemeColor "label.foreground"
+        $this._helpLabel.BackgroundColor = Get-ThemeColor "panel.background"
         $this._statusBar.AddChild($this._helpLabel)
 
         # Set initialization flag

@@ -79,80 +79,157 @@ function Start-TuiEngine {
     param(
         [int]$TargetFPS = 30,
         [switch]$EnablePerformanceMonitoring,
-        [int]$PerformanceReportInterval = 300  # frames
+        [int]$PerformanceReportInterval = 300,  # frames
+        [int]$IdleCheckInterval = 100,         # Check every 100ms when idle
+        [switch]$OptimizedRendering = $true    # Use demand-driven rendering by default
     )
     
     try {
-        Write-Log -Level Info -Message "Starting TUI Engine with target FPS: $TargetFPS"
+        Write-Log -Level Info -Message "Starting TUI Engine with target FPS: $TargetFPS (Optimized: $OptimizedRendering)"
         
-        Write-Log -Level Debug -Message "Start-TuiEngine: Setting up frame timing"
-        $targetFrameTime = [timespan]::FromSeconds(1.0 / $TargetFPS)
-        $frameStopwatch = [System.Diagnostics.Stopwatch]::new()
-        
-        Write-Log -Level Debug -Message "Start-TuiEngine: Initializing engine state"
-        $global:TuiState.Running = $true
-        $global:TuiState.FrameCount = 0
-        $global:TuiState.DeferredActions = New-Object 'System.Collections.Concurrent.ConcurrentQueue[hashtable]'
-        
-        Write-Log -Level Debug -Message "Start-TuiEngine: Entering main render loop"
-        while ($global:TuiState.Running) {
-            $frameStopwatch.Restart()
+        if ($OptimizedRendering) {
+            # Use optimized demand-driven rendering
+            Initialize-OptimizedRenderState
             
-            try {
-                # Phase 1: Handle console resize
-                if ([Console]::WindowWidth -ne $global:TuiState.BufferWidth -or 
-                    [Console]::WindowHeight -ne $global:TuiState.BufferHeight) {
-                    Invoke-WithErrorHandling -Component "TuiEngine" -Context "Resize" -ScriptBlock { Update-TuiEngineSize }
-                }
+            # Create event for waking up render loop
+            $global:TuiState.RenderEvent = [System.Threading.ManualResetEventSlim]::new($false)
+            
+            $targetFrameTime = [timespan]::FromSeconds(1.0 / $TargetFPS)
+            $idleCheckTime = [timespan]::FromMilliseconds($IdleCheckInterval)
+            $frameStopwatch = [System.Diagnostics.Stopwatch]::new()
+            
+            $global:TuiState.Running = $true
+            $global:TuiState.FrameCount = 0
+            $global:TuiState.DeferredActions = New-Object 'System.Collections.Concurrent.ConcurrentQueue[hashtable]'
+            $renderState = $global:TuiState.RenderState
+            
+            # Initial render
+            $renderState.ShouldRender = $true
+            $renderState.RenderRequested = $true
+            
+            Write-Log -Level Debug -Message "Start-TuiEngine: Entering optimized render loop"
+            while ($global:TuiState.Running) {
+                $frameStopwatch.Restart()
                 
-                # Phase 2: Process input
-                Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
-                    # Linux-compatible key input detection
-                    $keyAvailable = $false
-                    try {
-                        $keyAvailable = [Console]::KeyAvailable
-                    } catch {
-                        # Use Console.In.Peek for Linux compatibility
-                        try { $keyAvailable = [Console]::In.Peek() -ne -1 } catch {}
+                try {
+                    # Phase 1: Handle console resize
+                    if ([Console]::WindowWidth -ne $global:TuiState.BufferWidth -or 
+                        [Console]::WindowHeight -ne $global:TuiState.BufferHeight) {
+                        
+                        Invoke-WithErrorHandling -Component "TuiEngine" -Context "Resize" -ScriptBlock { Update-TuiEngineSize }
+                        
+                        if ($renderState.AutoRenderOnResize) {
+                            [void](Request-OptimizedRedraw -Source "Resize" -Immediate)
+                        }
                     }
                     
-                    if ($keyAvailable) {
-                        $keyInfo = [Console]::ReadKey($true)
-                        if ($keyInfo) { Process-TuiInput -KeyInfo $keyInfo }
-                    }
-                }
-                
-                # Phase 3: Process deferred actions
-                if ($global:TuiState.DeferredActions.Count -gt 0) {
-                    $deferredAction = $null
-                    if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
-                        if ($deferredAction -and $deferredAction.ActionName) {
-                            Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
-                                $actionService = $global:TuiState.Services.ActionService
-                                if ($actionService) { $actionService.ExecuteAction($deferredAction.ActionName, @{}) }
+                    # Phase 2: Process input
+                    Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
+                        $keyAvailable = $false
+                        try {
+                            $keyAvailable = [Console]::KeyAvailable
+                        } catch {
+                            try { $keyAvailable = [Console]::In.Peek() -ne -1 } catch {}
+                        }
+                        
+                        if ($keyAvailable) {
+                            $keyInfo = [Console]::ReadKey($true)
+                            if ($keyInfo) { 
+                                Process-TuiInput -KeyInfo $keyInfo 
+                                
+                                if ($renderState.AutoRenderOnInput) {
+                                    [void](Request-OptimizedRedraw -Source "Input" -Immediate)
+                                }
                             }
                         }
                     }
-                }
-                
-                # Phase 4: Render frame
-                Invoke-WithErrorHandling -Component "TuiEngine" -Context "Render" -ScriptBlock { Invoke-TuiRender }
-                
-                $global:TuiState.FrameCount++
-                
-                # Phase 5: Frame rate throttling
-                $frameStopwatch.Stop()
-                $elapsedTime = $frameStopwatch.Elapsed
-                
-                if ($elapsedTime -lt $targetFrameTime) {
-                    $sleepTime = $targetFrameTime - $elapsedTime
-                    if ($sleepTime.TotalMilliseconds -gt 1) { Start-Sleep -Milliseconds ([int]$sleepTime.TotalMilliseconds) }
+                    
+                    # Phase 3: Process deferred actions
+                    if ($global:TuiState.DeferredActions.Count -gt 0) {
+                        $deferredAction = $null
+                        if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
+                            if ($deferredAction -and $deferredAction.ActionName) {
+                                Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
+                                    $actionService = $global:TuiState.Services.ActionService
+                                    if ($actionService) { 
+                                        $actionService.ExecuteAction($deferredAction.ActionName, @{})
+                                        [void](Request-OptimizedRedraw -Source "DeferredAction")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    # Phase 4: OPTIMIZED RENDERING DECISION
+                    $shouldRender = $false
+                    
+                    if ($renderState.RenderRequested) {
+                        # Immediate render requested
+                        $shouldRender = $true
+                        $renderState.RenderRequested = $false
+                    } elseif ($renderState.BatchedRequests -gt 0) {
+                        # Check if batching delay has elapsed
+                        $timeSinceLastRender = [DateTime]::Now - $renderState.LastRenderTime
+                        if ($timeSinceLastRender.TotalMilliseconds -ge $renderState.MaxBatchDelay) {
+                            $shouldRender = $true
+                            $renderState.BatchedRequests = 0
+                        }
+                    }
+                    
+                    # Phase 5: CONDITIONAL RENDERING
+                    $doRender = $shouldRender -and $renderState.ShouldRender
+                    if ($doRender) {
+                        # Actually render
+                        Invoke-WithErrorHandling -Component "TuiEngine" -Context "Render" -ScriptBlock { Invoke-TuiRender }
+                        $renderState.LastRenderTime = [DateTime]::Now
+                        $renderState.ShouldRender = $false  # Reset render gate
+                        $global:TuiState.FrameCount++
+                        
+                        # Performance tracking
+                        $renderState.IdleTime = [TimeSpan]::Zero
+                    } else {
+                        # No render needed - track idle time and savings
+                        $renderState.IdleTime = $renderState.IdleTime.Add($frameStopwatch.Elapsed)
+                        $renderState.FramesSaved++
+                    }
+                    
+                    # Phase 6: ADAPTIVE FRAME TIMING
+                    $frameStopwatch.Stop()
+                    $elapsedTime = $frameStopwatch.Elapsed
+                    
+                    if ($shouldRender) {
+                        # Normal frame timing for active rendering
+                        if ($elapsedTime -lt $targetFrameTime) {
+                            $sleepTime = $targetFrameTime - $elapsedTime
+                            if ($sleepTime.TotalMilliseconds -gt 1) { 
+                                Start-Sleep -Milliseconds ([int]$sleepTime.TotalMilliseconds) 
+                            }
+                        }
+                    } else {
+                        # Longer sleep when idle to save CPU
+                        $sleepTime = $idleCheckTime
+                        if ($sleepTime.TotalMilliseconds -gt 1) {
+                            # Use event-based waiting for better responsiveness
+                            [void]$global:TuiState.RenderEvent.Wait([int]$sleepTime.TotalMilliseconds)
+                            [void]$global:TuiState.RenderEvent.Reset()
+                        }
+                    }
+                    
+                    # Performance reporting
+                    if ($EnablePerformanceMonitoring -and ($global:TuiState.FrameCount % $PerformanceReportInterval -eq 0)) {
+                        $report = Get-OptimizedRenderReport
+                        Write-Log -Level Info -Message "Render Optimization: $($report.FramesSaved) frames saved, $($report.CPUSavingsPercent)% CPU saved"
+                    }
+                    
+                } catch {
+                    Write-Log -Level Error -Message "TUI Engine: Unhandled error in frame $($global:TuiState.FrameCount): $($_.Exception.Message)"
+                    Start-Sleep -Milliseconds 50
                 }
             }
-            catch {
-                Write-Log -Level Error -Message "TUI Engine: Unhandled error in frame $($global:TuiState.FrameCount): $($_.Exception.Message)"
-                Start-Sleep -Milliseconds 50
-            }
+        } else {
+            # Use legacy continuous rendering
+            Write-Log -Level Debug -Message "Start-TuiEngine: Using legacy continuous rendering"
+            Start-TuiEngineLegacy -TargetFPS $TargetFPS -EnablePerformanceMonitoring:$EnablePerformanceMonitoring -PerformanceReportInterval $PerformanceReportInterval
         }
     }
     catch {
@@ -160,7 +237,171 @@ function Start-TuiEngine {
         Invoke-PanicHandler $_
     }
     finally {
+        # Cleanup
+        if ($global:TuiState.RenderEvent) {
+            $global:TuiState.RenderEvent.Dispose()
+        }
         Stop-TuiEngine
+    }
+}
+
+# Legacy continuous rendering function (for compatibility/fallback)
+function Start-TuiEngineLegacy {
+    [CmdletBinding()]
+    param(
+        [int]$TargetFPS = 30,
+        [switch]$EnablePerformanceMonitoring,
+        [int]$PerformanceReportInterval = 300
+    )
+    
+    $targetFrameTime = [timespan]::FromSeconds(1.0 / $TargetFPS)
+    $frameStopwatch = [System.Diagnostics.Stopwatch]::new()
+    
+    $global:TuiState.Running = $true
+    $global:TuiState.FrameCount = 0
+    $global:TuiState.DeferredActions = New-Object 'System.Collections.Concurrent.ConcurrentQueue[hashtable]'
+    
+    while ($global:TuiState.Running) {
+        $frameStopwatch.Restart()
+        
+        try {
+            # Phase 1: Handle console resize
+            if ([Console]::WindowWidth -ne $global:TuiState.BufferWidth -or 
+                [Console]::WindowHeight -ne $global:TuiState.BufferHeight) {
+                Invoke-WithErrorHandling -Component "TuiEngine" -Context "Resize" -ScriptBlock { Update-TuiEngineSize }
+            }
+            
+            # Phase 2: Process input
+            Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
+                $keyAvailable = $false
+                try {
+                    $keyAvailable = [Console]::KeyAvailable
+                } catch {
+                    try { $keyAvailable = [Console]::In.Peek() -ne -1 } catch {}
+                }
+                
+                if ($keyAvailable) {
+                    $keyInfo = [Console]::ReadKey($true)
+                    if ($keyInfo) { Process-TuiInput -KeyInfo $keyInfo }
+                }
+            }
+            
+            # Phase 3: Process deferred actions
+            if ($global:TuiState.DeferredActions.Count -gt 0) {
+                $deferredAction = $null
+                if ($global:TuiState.DeferredActions.TryDequeue([ref]$deferredAction)) {
+                    if ($deferredAction -and $deferredAction.ActionName) {
+                        Invoke-WithErrorHandling -Component "TuiEngine" -Context "DeferredAction" -ScriptBlock {
+                            $actionService = $global:TuiState.Services.ActionService
+                            if ($actionService) { $actionService.ExecuteAction($deferredAction.ActionName, @{}) }
+                        }
+                    }
+                }
+            }
+            
+            # Phase 4: Render frame
+            Invoke-WithErrorHandling -Component "TuiEngine" -Context "Render" -ScriptBlock { Invoke-TuiRender }
+            
+            $global:TuiState.FrameCount++
+            
+            # Phase 5: Frame rate throttling
+            $frameStopwatch.Stop()
+            $elapsedTime = $frameStopwatch.Elapsed
+            
+            if ($elapsedTime -lt $targetFrameTime) {
+                $sleepTime = $targetFrameTime - $elapsedTime
+                if ($sleepTime.TotalMilliseconds -gt 1) { Start-Sleep -Milliseconds ([int]$sleepTime.TotalMilliseconds) }
+            }
+        }
+        catch {
+            Write-Log -Level Error -Message "TUI Engine: Unhandled error in frame $($global:TuiState.FrameCount): $($_.Exception.Message)"
+            Start-Sleep -Milliseconds 50
+        }
+    }
+}
+
+# Optimized render state initialization
+function Initialize-OptimizedRenderState {
+    if (-not $global:TuiState.PSObject.Properties['RenderState']) {
+        $global:TuiState.RenderState = @{
+            # Core rendering control
+            ShouldRender = $false           # Main render gate
+            RenderRequested = $false        # Immediate render request
+            
+            # Performance tracking
+            LastRenderTime = [DateTime]::Now
+            IdleTime = [TimeSpan]::Zero
+            FramesSaved = 0
+            
+            # Render batching
+            BatchedRequests = 0
+            MaxBatchDelay = 16              # Max 16ms batching (~60fps cap)
+            
+            # Automatic render scenarios
+            AutoRenderOnInput = $true       # Render after input
+            AutoRenderOnResize = $true      # Render after resize
+            AutoRenderOnFocus = $true       # Render on focus changes
+            
+            # Debugging
+            DebugMode = $false
+            RenderRequestStack = @()        # Track what requested renders
+        }
+    }
+}
+
+# Enhanced RequestRedraw with context tracking
+function Request-OptimizedRedraw {
+    param(
+        [string]$Source = "Unknown",
+        [switch]$Immediate,
+        [switch]$Force
+    )
+    
+    # Initialize render state if not present
+    if (-not $global:TuiState.PSObject.Properties['RenderState']) {
+        Initialize-OptimizedRenderState
+    }
+    
+    $renderState = $global:TuiState.RenderState
+    
+    # Track render request source for debugging
+    if ($renderState.DebugMode) {
+        $renderState.RenderRequestStack += @{
+            Source = $Source
+            Time = [DateTime]::Now
+            Immediate = $Immediate.IsPresent
+        }
+    }
+    
+    # Set render flags
+    $renderState.ShouldRender = $true
+    
+    if ($Immediate -or $Force) {
+        $renderState.RenderRequested = $true
+    } else {
+        $renderState.BatchedRequests++
+    }
+    
+    # Wake up the render loop if it's sleeping
+    if ($global:TuiState.PSObject.Properties['RenderEvent']) {
+        [void]$global:TuiState.RenderEvent.Set()
+    }
+}
+
+# Performance reporting for render optimization
+function Get-OptimizedRenderReport {
+    $renderState = $global:TuiState.RenderState
+    $totalFrames = $global:TuiState.FrameCount + $renderState.FramesSaved
+    
+    return @{
+        FramesRendered = $global:TuiState.FrameCount
+        FramesSaved = $renderState.FramesSaved
+        TotalFrames = $totalFrames
+        CPUSavingsPercent = if ($totalFrames -gt 0) { [math]::Round(($renderState.FramesSaved / $totalFrames) * 100, 1) } else { 0 }
+        IdleTime = $renderState.IdleTime
+        LastRenderTime = $renderState.LastRenderTime
+        BatchedRequests = $renderState.BatchedRequests
+        RenderRequestSources = $renderState.RenderRequestStack | Group-Object Source | ForEach-Object { @{ Source = $_.Name; Count = $_.Count } }
     }
 }
 
@@ -303,7 +544,7 @@ function Start-AxiomPhoenix {
         }
         
         Write-Log -Level Debug -Message "Start-AxiomPhoenix: About to call Start-TuiEngine"
-        Start-TuiEngine
+        Start-TuiEngine -EnablePerformanceMonitoring
         Write-Log -Level Debug -Message "Start-AxiomPhoenix: Start-TuiEngine completed"
     }
     catch {

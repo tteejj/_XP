@@ -39,6 +39,7 @@ class ThemeManager {
         # Panel Components  
         "panel.background" = @{ Path = "Components.Panel.Background"; Fallback = "#1A1A1A" }
         "panel.border" = @{ Path = "Components.Panel.Border"; Fallback = "#007ACC" }
+        "panel.border.focused" = @{ Path = "Components.Panel.FocusedBorder"; Fallback = "#00D4FF" }
         "panel.title" = @{ Path = "Components.Panel.Title"; Fallback = "#00D4FF" }
         "panel.header" = @{ Path = "Components.Panel.Header"; Fallback = "#1A1A1A" }
         "panel.foreground" = @{ Path = "Components.Panel.Foreground"; Fallback = "#FFFFFF" }
@@ -268,8 +269,18 @@ class ThemeManager {
             $this.CurrentTheme = $this.Themes[$themeName].Clone()
             $this.ThemeName = $themeName
             
+            # PERFORMANCE FIX: Clear theme cache on theme changes
+            if (Get-Command 'Clear-ThemeCache' -ErrorAction SilentlyContinue) {
+                Clear-ThemeCache
+            }
+            
             # CRITICAL: Update all existing UI components with new theme colors
             $this.RefreshAllComponents()
+            
+            # PERFORMANCE: Pre-warm cache for Performance theme
+            if ($themeName -eq "Performance" -and (Get-Command 'Initialize-PerformanceThemeCache' -ErrorAction SilentlyContinue)) {
+                Initialize-PerformanceThemeCache
+            }
             
             # Force complete redraw
             if ($global:TuiState) {
@@ -316,33 +327,38 @@ class ThemeManager {
         try {
             $componentType = $component.GetType().Name
             
+            # PERFORMANCE: If component has ResolveThemeColors method, use it
+            if ($component.PSObject.Methods['ResolveThemeColors']) {
+                $component.ResolveThemeColors()
+            }
+            
             # Update component based on its type - this updates CACHED colors
             switch -Regex ($componentType) {
                 "Screen" {
                     if ($component.PSObject.Properties['BackgroundColor']) {
-                        $component.BackgroundColor = $this.GetColor("Screen.Background")
+                        $component.BackgroundColor = $this.GetColor("screen.background")
                     }
                     if ($component.PSObject.Properties['ForegroundColor']) {
-                        $component.ForegroundColor = $this.GetColor("Screen.Foreground")
+                        $component.ForegroundColor = $this.GetColor("screen.foreground")
                     }
                 }
                 "Panel" {
                     if ($component.PSObject.Properties['BackgroundColor']) {
-                        $component.BackgroundColor = $this.GetColor("Panel.Background")
+                        $component.BackgroundColor = $this.GetColor("panel.background")
                     }
                     if ($component.PSObject.Properties['BorderColor']) {
-                        $component.BorderColor = $this.GetColor("Panel.Border")
+                        $component.BorderColor = $this.GetColor("panel.border")
                     }
                     if ($component.PSObject.Properties['TitleColor']) {
-                        $component.TitleColor = $this.GetColor("Panel.Title")
+                        $component.TitleColor = $this.GetColor("panel.title")
                     }
                 }
                 ".*Label.*|LabelComponent" {
                     if ($component.PSObject.Properties['ForegroundColor']) {
-                        $component.ForegroundColor = $this.GetColor("Label.Foreground")
+                        $component.ForegroundColor = $this.GetColor("label.foreground")
                     }
                     if ($component.PSObject.Properties['BackgroundColor']) {
-                        $bgColor = $this.GetColor("Panel.Background")
+                        $bgColor = $this.GetColor("panel.background")
                         if ($bgColor) {
                             $component.BackgroundColor = $bgColor
                         }
@@ -350,35 +366,35 @@ class ThemeManager {
                 }
                 ".*Button.*|ButtonComponent" {
                     if ($component.PSObject.Properties['BackgroundColor']) {
-                        $component.BackgroundColor = $this.GetColor("Button.Normal.Background")
+                        $component.BackgroundColor = $this.GetColor("button.normal.background")
                     }
                     if ($component.PSObject.Properties['ForegroundColor']) {
-                        $component.ForegroundColor = $this.GetColor("Button.Normal.Foreground")
+                        $component.ForegroundColor = $this.GetColor("button.normal.foreground")
                     }
                     if ($component.PSObject.Properties['BorderColor']) {
-                        $component.BorderColor = $this.GetColor("Button.Border")
+                        $component.BorderColor = $this.GetColor("button.border")
                     }
                 }
                 ".*List.*|ListBox" {
                     if ($component.PSObject.Properties['BackgroundColor']) {
-                        $component.BackgroundColor = $this.GetColor("List.Background")
+                        $component.BackgroundColor = $this.GetColor("list.background")
                     }
                     if ($component.PSObject.Properties['ForegroundColor']) {
-                        $component.ForegroundColor = $this.GetColor("List.ItemNormal")
+                        $component.ForegroundColor = $this.GetColor("list.foreground")
                     }
                     if ($component.PSObject.Properties['BorderColor']) {
-                        $component.BorderColor = $this.GetColor("Input.Border")
+                        $component.BorderColor = $this.GetColor("input.border")
                     }
                 }
                 ".*TextBox.*|.*Input.*" {
                     if ($component.PSObject.Properties['BackgroundColor']) {
-                        $component.BackgroundColor = $this.GetColor("Input.Background")
+                        $component.BackgroundColor = $this.GetColor("input.background")
                     }
                     if ($component.PSObject.Properties['ForegroundColor']) {
-                        $component.ForegroundColor = $this.GetColor("Input.Foreground")
+                        $component.ForegroundColor = $this.GetColor("input.foreground")
                     }
                     if ($component.PSObject.Properties['BorderColor']) {
-                        $component.BorderColor = $this.GetColor("Input.Border")
+                        $component.BorderColor = $this.GetColor("input.border")
                     }
                 }
             }
@@ -420,8 +436,8 @@ class ThemeManager {
     [void] LoadDefaultTheme() {
         $availableThemes = $this.GetAvailableThemes()
         if ($availableThemes.Count -gt 0) {
-            # Load first external theme if available, otherwise fallback
-            $preferredOrder = @("Default", "Retro Amber", "Synthwave", "Green Console", "Fallback")
+            # PERFORMANCE: Load Performance theme as default for optimal speed
+            $preferredOrder = @("Performance", "Default", "Retro Amber", "Synthwave", "Green Console", "Fallback")
             $themeToLoad = "Fallback"  # Default fallback
             
             foreach ($preferred in $preferredOrder) {
@@ -431,6 +447,7 @@ class ThemeManager {
                 }
             }
             
+            Write-Host "ThemeManager: Loading default theme '$themeToLoad'" -ForegroundColor Green
             $this.LoadTheme($themeToLoad)
         }
     }

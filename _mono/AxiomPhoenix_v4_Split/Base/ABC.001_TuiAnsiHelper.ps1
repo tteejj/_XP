@@ -26,8 +26,13 @@ class TuiAnsiHelper {
     static [hashtable] HexToRgb([string]$hexColor) {
         # Handle non-string values
         if ($hexColor -is [bool] -or $hexColor -eq $true -or $hexColor -eq $false) {
-            $caller = (Get-PSCallStack)[1..3] | ForEach-Object { "$($_.FunctionName):$($_.ScriptLineNumber)" } | Join-String -Separator " -> "
-            Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor' (boolean value passed where color expected) - Called from: $caller"
+            # PERFORMANCE: Only get expensive call stack if debugging is enabled
+            if ($global:TuiDebugMode) {
+                $caller = (Get-PSCallStack)[1..3] | ForEach-Object { "$($_.FunctionName):$($_.ScriptLineNumber)" } | Join-String -Separator " -> "
+                Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor' (boolean value passed where color expected) - Called from: $caller"
+            } else {
+                Write-Log -Level Warning -Message "Invalid hex color format: '$hexColor' (boolean value passed where color expected)"
+            }
             return $null
         }
         

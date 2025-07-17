@@ -284,7 +284,7 @@ class DataGridComponent : UIElement {
         }
         
         if ($handled) {
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "DataGrid:$($this.Name)"
         }
         
         return $handled
@@ -327,13 +327,13 @@ class DataGridComponent : UIElement {
         $this.CacheValid = $false  # Invalidate cache
         $this.SelectedIndex = 0
         $this.ScrollOffset = 0
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "DataGrid:$($this.Name)"
     }
     
     [void] SetViewDefinition([hashtable]$viewDefinition) {
         $this.ViewDefinition = $viewDefinition
         $this.CacheValid = $false  # Invalidate cache
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "DataGrid:$($this.Name)"
     }
     
     hidden [void] _EnsureDisplayCache() {
@@ -376,7 +376,7 @@ class DataGridComponent : UIElement {
     
     [void] SetColumns([hashtable[]]$columns) {
         $this.Columns = $columns
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "DataGrid:$($this.Name)"
     }
 }
 #<!-- END_PAGE: ACO.022 -->

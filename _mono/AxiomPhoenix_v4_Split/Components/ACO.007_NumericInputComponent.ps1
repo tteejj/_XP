@@ -43,10 +43,10 @@ class NumericInputComponent : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
-            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
-            $borderColorValue = Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor
-            if ($this.IsFocused) { $borderColorValue = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" }
+            $bgColor = Get-ThemeColor -Key "Input.Background" -Fallback $this.BackgroundColor
+            $fgColor = Get-ThemeColor -Key "Input.Foreground" -Fallback $this.ForegroundColor
+            $borderColorValue = Get-ThemeColor -Key "Input.Border" -Fallback $this.BorderColor
+            if ($this.IsFocused) { $borderColorValue = Get-ThemeColor -Key "Input.FocusedBorder" -Fallback "#00FFFF" }
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
             

@@ -84,14 +84,14 @@ class ButtonComponent : UIElement {
         $this.BackgroundColor = Get-ThemeColor "Button.Focused.Background" "#0078d4"
         $this.ForegroundColor = Get-ThemeColor "Button.Focused.Foreground" "#ffffff"
         $this.BorderColor = Get-ThemeColor "Button.Focused.Border" "#00ff88"
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "Button:$($this.Name)"
     }
     
     [void] OnBlur() {
         $this.BackgroundColor = Get-ThemeColor "Button.Normal.Background" "#404040"
         $this.ForegroundColor = Get-ThemeColor "Button.Normal.Foreground" "#d4d4d4"
         $this.BorderColor = Get-ThemeColor "Button.Normal.Border" "#666666"
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "Button:$($this.Name)"
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -101,7 +101,7 @@ class ButtonComponent : UIElement {
 
         if ($key.Key -in @([ConsoleKey]::Enter, [ConsoleKey]::Spacebar)) {
             $this.IsPressed = $true
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "Button:$($this.Name)"
             
             if ($this.OnClick) {
                 try {
@@ -116,7 +116,7 @@ class ButtonComponent : UIElement {
             }
             
             $this.IsPressed = $false
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "Button:$($this.Name)"
             
             return $true
         }

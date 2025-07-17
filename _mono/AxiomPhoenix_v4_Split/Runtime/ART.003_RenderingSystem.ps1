@@ -27,11 +27,45 @@ function Request-FullRedraw {
     $script:DirtyRegions.Clear()
 }
 
+# PERFORMANCE: Function to get performance report
+function Get-TuiPerformanceReport {
+    [CmdletBinding()]
+    param()
+    
+    $report = @{
+        RenderMetrics = $global:TuiPerformanceMetrics
+        MemoryMetrics = $global:TuiMemoryMetrics
+        TemplatePoolSize = if ($global:TuiTemplateCellPool) { $global:TuiTemplateCellPool.Count } else { 0 }
+        GCInfo = @{
+            Gen0Collections = [System.GC]::CollectionCount(0)
+            Gen1Collections = [System.GC]::CollectionCount(1)
+            Gen2Collections = [System.GC]::CollectionCount(2)
+            TotalMemory = [System.GC]::GetTotalMemory($false)
+        }
+        OptimizationSavings = @{}
+    }
+    
+    # Calculate optimization savings
+    if ($global:TuiMemoryMetrics) {
+        $totalCells = $global:TuiMemoryMetrics.TuiCellsCreated + $global:TuiMemoryMetrics.TuiCellsReused
+        if ($totalCells -gt 0) {
+            $reusePercentage = ($global:TuiMemoryMetrics.TuiCellsReused / $totalCells) * 100
+            $report.OptimizationSavings.CellReusePercentage = [Math]::Round($reusePercentage, 2)
+            $report.OptimizationSavings.ObjectsAvoided = $global:TuiMemoryMetrics.TuiCellsReused
+        }
+    }
+    
+    return $report
+}
+
 function Invoke-TuiRender {
     [CmdletBinding()]
     param()
     
     try {
+        # PERFORMANCE: Track render metrics
+        $renderStartTime = [System.Diagnostics.Stopwatch]::StartNew()
+        
         if ($null -eq $global:TuiState.CompositorBuffer) {
             return
         }
@@ -81,8 +115,58 @@ function Invoke-TuiRender {
         # Differential rendering - compare current compositor to previous
         Render-DifferentialBuffer
         
-        # FIXED: Swap buffers for next frame using the efficient Clone() method
-        $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer.Clone()
+        # PERFORMANCE: Swap buffers instead of cloning for differential rendering
+        try {
+            $tempBuffer = $global:TuiState.PreviousCompositorBuffer
+            $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer
+            $global:TuiState.CompositorBuffer = $tempBuffer
+            
+            # PERFORMANCE: Track buffer swaps
+            if ($global:TuiMemoryMetrics -and $global:TuiDebugMode) {
+                $global:TuiMemoryMetrics.BufferSwaps++
+            }
+            
+            # Clear the swapped buffer for next frame
+            $global:TuiState.CompositorBuffer.Clear([TuiCell]::new(' ', "#ffffff", "#000000"))
+        }
+        catch {
+            # FALLBACK: If buffer swapping fails, fall back to cloning
+            if ($global:TuiDebugMode) {
+                Write-Log -Level Warning -Message "Buffer swapping failed, falling back to cloning: $_"
+            }
+            $global:TuiState.PreviousCompositorBuffer = $global:TuiState.CompositorBuffer.Clone()
+        }
+        
+        # PERFORMANCE: Record render metrics
+        $renderStartTime.Stop()
+        if (-not $global:TuiPerformanceMetrics) {
+            $global:TuiPerformanceMetrics = @{
+                RenderTimes = [System.Collections.Generic.List[long]]::new()
+                FrameCount = 0
+                TotalRenderTime = 0
+                AverageRenderTime = 0
+                MaxRenderTime = 0
+                MinRenderTime = [long]::MaxValue
+            }
+        }
+        
+        $renderTimeMs = $renderStartTime.ElapsedMilliseconds
+        $global:TuiPerformanceMetrics.RenderTimes.Add($renderTimeMs)
+        $global:TuiPerformanceMetrics.FrameCount++
+        $global:TuiPerformanceMetrics.TotalRenderTime += $renderTimeMs
+        $global:TuiPerformanceMetrics.AverageRenderTime = $global:TuiPerformanceMetrics.TotalRenderTime / $global:TuiPerformanceMetrics.FrameCount
+        
+        if ($renderTimeMs -gt $global:TuiPerformanceMetrics.MaxRenderTime) {
+            $global:TuiPerformanceMetrics.MaxRenderTime = $renderTimeMs
+        }
+        if ($renderTimeMs -lt $global:TuiPerformanceMetrics.MinRenderTime) {
+            $global:TuiPerformanceMetrics.MinRenderTime = $renderTimeMs
+        }
+        
+        # Keep only last 100 render times to prevent memory buildup
+        if ($global:TuiPerformanceMetrics.RenderTimes.Count -gt 100) {
+            $global:TuiPerformanceMetrics.RenderTimes.RemoveAt(0)
+        }
         
     }
     catch {
@@ -116,60 +200,67 @@ function Render-DifferentialBuffer {
         $currentRun = $null
         $runCells = [System.Collections.Generic.List[object]]::new()
         
-        # PERFORMANCE: Only check dirty regions unless full redraw requested
-        $checkRegions = if ($script:FullRedrawRequested -or $script:DirtyRegions.Count -eq 0) {
-            @(@{ X = 0; Y = 0; Width = $current.Width; Height = $current.Height })
+        # PERFORMANCE: Use dirty row tracking for optimal rendering
+        $dirtyRows = if ($script:FullRedrawRequested) {
+            # Full redraw - check all rows
+            0..($current.Height - 1)
         } else {
-            $script:DirtyRegions
+            # Use buffer's dirty row tracking
+            $current.GetDirtyRows()
         }
         
-        foreach ($region in $checkRegions) {
-            $startX = [Math]::Max(0, $region.X)
-            $endX = [Math]::Min($current.Width, $region.X + $region.Width)
-            $startY = [Math]::Max(0, $region.Y)
-            $endY = [Math]::Min($current.Height, $region.Y + $region.Height)
+        # PERFORMANCE: Track metrics for dirty row optimization
+        if ($global:TuiPerformanceMetrics) {
+            $global:TuiPerformanceMetrics.DirtyRowsChecked = $dirtyRows.Count
+            $global:TuiPerformanceMetrics.TotalRows = $current.Height
+        }
+        
+        foreach ($y in $dirtyRows) {
+            if ($y -lt 0 -or $y -ge $current.Height) { continue }
             
-            for ($y = $startY; $y -lt $endY; $y++) {
-                for ($x = $startX; $x -lt $endX; $x++) {
-                    $currentCell = $current.GetCell($x, $y)
-                    $previousCell = $previous.GetCell($x, $y)
-                    
-                    if ($currentCell.DiffersFrom($previousCell)) {
-                        # Start new run if we don't have one, or if this cell isn't consecutive
-                        if ($null -eq $currentRun -or $currentRun.Y -ne $y -or $currentRun.X + $currentRun.Length -ne $x) {
-                            # Flush previous run if we have one
-                            if ($null -ne $currentRun) {
-                                FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
-                            }
-                            
-                            # Start new run
-                            $currentRun = @{ X = $x; Y = $y; Length = 0 }
-                            $runCells.Clear()
-                        }
-                        
-                        # Add cell to current run
-                        $runCells.Add($currentCell)
-                        $currentRun.Length++
-                    } else {
-                        # End current run if we have one
+            # Check entire row for changes
+            for ($x = 0; $x -lt $current.Width; $x++) {
+                $currentCell = $current.GetCell($x, $y)
+                $previousCell = $previous.GetCell($x, $y)
+                
+                if ($currentCell.DiffersFrom($previousCell)) {
+                    # Start new run if we don't have one, or if this cell isn't consecutive
+                    if ($null -eq $currentRun -or $currentRun.Y -ne $y -or $currentRun.X + $currentRun.Length -ne $x) {
+                        # Flush previous run if we have one
                         if ($null -ne $currentRun) {
                             FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
-                            $currentRun = $null
                         }
+                        
+                        # Start new run
+                        $currentRun = @{ X = $x; Y = $y; Length = 0 }
+                        $runCells.Clear()
+                    }
+                    
+                    # Add cell to current run
+                    $runCells.Add($currentCell)
+                    $currentRun.Length++
+                } else {
+                    # End current run if we have one
+                    if ($null -ne $currentRun) {
+                        FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                        $currentRun = $null
                     }
                 }
-                
-                # End run at end of line
-                if ($null -ne $currentRun) {
-                    FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
-                    $currentRun = $null
-                }
+            }
+            
+            # End run at end of line
+            if ($null -ne $currentRun) {
+                FlushRun $ansiBuilder $currentRun $runCells ([ref]$lastFg) ([ref]$lastBg) ([ref]$lastBold) ([ref]$lastItalic) ([ref]$lastUnderline) ([ref]$lastStrikethrough)
+                $currentRun = $null
             }
         }
         
         # Clear dirty regions after processing
         $script:DirtyRegions.Clear()
         $script:FullRedrawRequested = $false
+        
+        # PERFORMANCE: Clear dirty row tracking after rendering
+        $current.ClearDirtyTracking()
         
         # Reset styling at the very end of the string
         if ($ansiBuilder.Length -gt 0) {

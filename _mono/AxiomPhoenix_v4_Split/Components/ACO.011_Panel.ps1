@@ -99,13 +99,13 @@ class Panel : UIElement {
                 # FIXED: Determine border color based on focus state and effective properties.
                 $borderColorValue = $this.GetEffectiveBorderColor()
                 if ($this.IsFocused) {
-                    $borderColorValue = Get-ThemeColor "Panel.Title" "#007acc"
+                    $borderColorValue = Get-ThemeColor "panel.border.focused"
                 }
                 
                 # Draw the panel border and title
                 Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 `
                     -Width $this.Width -Height $this.Height `
-                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = (Get-ThemeColor "Panel.Title" "#007acc") } `
+                    -Style @{ BorderFG = $borderColorValue; BG = $bgColor; BorderStyle = $this.BorderStyle; TitleFG = (Get-ThemeColor "panel.title") } `
                     -Title $this.Title
             }
 
@@ -293,19 +293,25 @@ class Panel : UIElement {
         $borderSize = 0
         if ($this.HasBorder) { $borderSize = 1 }
         
+        # FIXED: Account for title height in content dimensions
+        $titleHeight = 0
+        if ($this.HasBorder -and -not [string]::IsNullOrEmpty($this.Title)) {
+            $titleHeight = 0  # Title is integrated in border, no extra space needed
+        }
+        
         # Store old dimensions for comparison
         $oldContentWidth = $this.ContentWidth
         $oldContentHeight = $this.ContentHeight
         
         # Content area starts after border and padding
         $this.ContentX = $borderSize + $this.Padding
-        $this.ContentY = $borderSize + $this.Padding
+        $this.ContentY = $borderSize + $this.Padding + $titleHeight
         
-        # Calculate space used by borders and padding on both sides
+        # Calculate space used by borders, padding, and title on both sides
         $horizontalUsed = (2 * $borderSize) + (2 * $this.Padding)
-        $verticalUsed = (2 * $borderSize) + (2 * $this.Padding)
+        $verticalUsed = (2 * $borderSize) + (2 * $this.Padding) + $titleHeight
         
-        # Content width/height is total width/height minus space used by borders and padding
+        # Content width/height is total width/height minus space used by borders, padding, and title
         $this.ContentWidth = [Math]::Max(0, $this.Width - $horizontalUsed)
         $this.ContentHeight = [Math]::Max(0, $this.Height - $verticalUsed)
         

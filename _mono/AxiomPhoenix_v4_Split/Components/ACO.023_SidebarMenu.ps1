@@ -9,6 +9,16 @@ class SidebarMenu : UIElement {
     SidebarMenu([string]$name) : base($name) {
         $this.IsFocusable = $false  # Menu is not focusable, responds to keys directly
         $this.Width = 20
+        
+        # PERFORMANCE: Pre-resolve theme colors at initialization
+        $this.DefineThemeColors(@(
+            "Panel.Background|#1E1E1E",
+            "component.border|#404040", 
+            "Panel.Border|#606060",
+            "Panel.Title|#FFFFFF",
+            "Palette.Primary|#0078D4",
+            "Label.Foreground|#FFFFFF"
+        ))
     }
     
     [void] AddMenuItem([string]$key, [string]$label, [string]$action) {
@@ -29,15 +39,15 @@ class SidebarMenu : UIElement {
     [void] OnRender() {
         if (-not $this._private_buffer) { return }
         
-        # Clear buffer with background color
-        $bgColor = Get-ThemeColor -ColorName "panel.background" -DefaultColor "#1E1E1E"
+        # PERFORMANCE: Use pre-resolved theme colors instead of calling Get-ThemeColor during render
+        $bgColor = $this.GetPreResolvedThemeColor("Panel.Background", "#1E1E1E")
         $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))
         
         # Draw border if enabled
         if ($this.ShowBorder) {
             Write-TuiBox -Buffer $this._private_buffer -X 0 -Y 0 -Width $this.Width -Height $this.Height -Style @{
                 BorderStyle = "Single"
-                BorderFG = Get-ThemeColor "component.border"
+                BorderFG = $this.GetPreResolvedThemeColor("component.border", "#404040")
                 BorderBG = $bgColor
                 FillBackground = $true
                 FillBG = $bgColor
@@ -49,7 +59,7 @@ class SidebarMenu : UIElement {
         
         # Draw title
         if ($this.Title) {
-            $titleColor = Get-ThemeColor -ColorName "component.title" -DefaultColor "#FFFFFF"
+            $titleColor = $this.GetPreResolvedThemeColor("Panel.Title", "#FFFFFF")
             Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $this.Title -Style @{
                 FG = $titleColor
                 BG = $bgColor
@@ -61,7 +71,7 @@ class SidebarMenu : UIElement {
         foreach ($item in $this.MenuItems) {
             if ($item.Key -eq "-") {
                 # Separator
-                $sepColor = Get-ThemeColor -ColorName "component.border" -DefaultColor "#606060"
+                $sepColor = $this.GetPreResolvedThemeColor("Panel.Border", "#606060")
                 Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text ("─" * ($this.Width - 2)) -Style @{
                     FG = $sepColor
                     BG = $bgColor
@@ -76,8 +86,8 @@ class SidebarMenu : UIElement {
                     $label = $label.Substring(0, $maxTextWidth - 2) + ".."
                 }
                 
-                $accentColor = Get-ThemeColor -ColorName "Accent" -DefaultColor "#0078D4"
-                $fgColor = Get-ThemeColor -ColorName "Foreground" -DefaultColor "#FFFFFF"
+                $accentColor = $this.GetPreResolvedThemeColor("Palette.Primary", "#0078D4")
+                $fgColor = $this.GetPreResolvedThemeColor("Label.Foreground", "#FFFFFF")
                 
                 Write-TuiText -Buffer $this._private_buffer -X 1 -Y $y -Text $keyDisplay -Style @{
                     FG = $accentColor
@@ -111,7 +121,8 @@ class SidebarMenu : UIElement {
         
         if ($action) {
             Write-Log -Level Debug -Message "SidebarMenu.HandleKey: Found action '$action' for key '$key'"
-            $actionService = $global:TuiState.Services.ActionService
+            # DEPENDENCY INJECTION: Use injected ActionService instead of service locator
+            $actionService = $this.GetService("ActionService")
             if ($actionService) {
                 try {
                     $actionService.ExecuteAction($action, @{})
@@ -120,7 +131,7 @@ class SidebarMenu : UIElement {
                     Write-Log -Level Error -Message "Failed to execute menu action '$action': $_"
                 }
             } else {
-                Write-Log -Level Error -Message "SidebarMenu.HandleKey: ActionService is null!"
+                Write-Log -Level Error -Message "SidebarMenu.HandleKey: ActionService not available!"
             }
         } else {
             Write-Log -Level Debug -Message "SidebarMenu.HandleKey: No action found for key '$key'"

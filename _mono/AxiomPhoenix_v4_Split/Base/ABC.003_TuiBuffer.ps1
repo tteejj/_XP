@@ -127,14 +127,29 @@ class TuiBuffer {
         $zIndex = 0
         if ($style.ContainsKey('ZIndex')) { $zIndex = [int]$style['ZIndex'] }
 
+        # PERFORMANCE: Create template cell (pooling temporarily disabled for debugging)
+        $templateCell = [TuiCell]::new(' ', $fg, $bg, $bold, $italic, $underline, $strikethrough)
+        $templateCell.ZIndex = $zIndex
+        
+        # PERFORMANCE: Track object creation for memory monitoring
+        if ($global:TuiMemoryMetrics -and $global:TuiDebugMode) {
+            $global:TuiMemoryMetrics.TuiCellsCreated++
+        }
+        
+        # PERFORMANCE: Track reuse
+        if ($global:TuiMemoryMetrics -and $global:TuiDebugMode) {
+            $global:TuiMemoryMetrics.TuiCellsReused += $text.Length
+            Write-Log -Level Debug -Message "WriteString: Using template cell for text '$text' (length: $($text.Length)) at ($x, $y)"
+        }
+        
         $currentX = $x
         foreach ($char in $text.ToCharArray()) {
             if ($currentX -ge $this.Width) { break } 
             if ($currentX -ge 0) {
-                # Pass all style parameters to TuiCell constructor
-                $cell = [TuiCell]::new($char, $fg, $bg, $bold, $italic, $underline, $strikethrough)
-                $cell.ZIndex = $zIndex # Assign ZIndex
-                $this.SetCell($currentX, $y, $cell)
+                # PERFORMANCE: Create a copy of the template cell with the specific character
+                $cellCopy = [TuiCell]::new($templateCell)
+                $cellCopy.Char = $char
+                $this.SetCell($currentX, $y, $cellCopy)
             }
             $currentX++
         }
@@ -170,8 +185,13 @@ class TuiBuffer {
                 }
                 
                 $targetCell = $this.GetCell($targetX, $targetY)
-                $blendedCell = $targetCell.BlendWith($sourceCell)
-                $this.SetCell($targetX, $targetY, $blendedCell)
+                # PERFORMANCE: Use mutable blending to avoid cell creation
+                $targetCell.BlendWithMutable($sourceCell)
+                
+                # PERFORMANCE: Track blend operations
+                if ($global:TuiMemoryMetrics -and $global:TuiDebugMode) {
+                    $global:TuiMemoryMetrics.BlendOperations++
+                }
             }
         }
         $this.IsDirty = $true

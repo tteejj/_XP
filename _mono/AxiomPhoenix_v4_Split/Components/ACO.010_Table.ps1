@@ -144,15 +144,15 @@ class Table : UIElement {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
-            $fgColor = Get-ThemeColor "Label.Foreground" "#e0e0e0"
+            $bgColor = Get-ThemeColor "panel.background"
+            $fgColor = Get-ThemeColor "label.foreground"
             if ($this.IsFocused) { 
-                $borderColor = Get-ThemeColor "palette.primary" "#007acc" 
+                $borderColor = Get-ThemeColor "panel.border.focused"
             } else { 
-                $borderColor = Get-ThemeColor "Panel.Border" "#404040" 
+                $borderColor = Get-ThemeColor "panel.border"
             }
-            $headerBg = Get-ThemeColor "List.HeaderBackground" "#2d2d2d"
-            $selectedBg = Get-ThemeColor "List.ItemSelectedBackground" "#007acc"
+            $headerBg = Get-ThemeColor "list.header.background"
+            $selectedBg = Get-ThemeColor "list.selected.background"
             
             $this._private_buffer.Clear([TuiCell]::new(' ', $fgColor, $bgColor))
             
@@ -215,7 +215,7 @@ class Table : UIElement {
                 
                 if ($this.AllowSelection -and $itemIndex -eq $this.SelectedIndex) {
                     $rowBg = $selectedBg
-                    $rowFg = Get-ThemeColor "List.ItemSelectedForeground" "#ffffff"
+                    $rowFg = Get-ThemeColor "list.selected.foreground"
                 }
                 
                 $this.DrawRow($item, $contentX, $currentY, $contentWidth, $rowFg, $rowBg)
@@ -250,7 +250,7 @@ class Table : UIElement {
                     }
                     
                     $drawX = [Math]::Max($x, $currentX)
-                    Write-TuiText -Buffer $this._private_buffer -X $drawX -Y $y -Text $headerText -Style @{ FG = Get-ThemeColor "List.HeaderForeground" "#ffffff"; BG = $headerBg }
+                    Write-TuiText -Buffer $this._private_buffer -X $drawX -Y $y -Text $headerText -Style @{ FG = Get-ThemeColor "list.header.foreground"; BG = $headerBg }
                 }
             }
             
@@ -301,8 +301,8 @@ class Table : UIElement {
         $scrollbarHeight = [Math]::Max(1, [int]($height * $height / $this.Items.Count))
         $scrollbarPos = [int](($height - $scrollbarHeight) * $this._scrollOffset / ($this.Items.Count - $height))
         
-        $scrollbarColor = Get-ThemeColor "List.Scrollbar" "#666666"
-        $bgColor = Get-ThemeColor "Panel.Background" "#1e1e1e"
+        $scrollbarColor = Get-ThemeColor "list.scrollbar"
+        $bgColor = Get-ThemeColor "panel.background"
         
         for ($i = 0; $i -lt $height; $i++) {
             $char = '│'

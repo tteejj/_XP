@@ -130,13 +130,13 @@ class TextBoxComponent : UIElement {
     [void] OnFocus() {
         $this.BorderColor = Get-ThemeColor "input.focused.border" "#0078d4"
         $this.ShowCursor = $true
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "TextBox:$($this.Name)"
     }
     
     [void] OnBlur() {
         $this.BorderColor = Get-ThemeColor "input.border" "#404040"
         $this.ShowCursor = $false
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "TextBox:$($this.Name)"
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -197,7 +197,7 @@ class TextBoxComponent : UIElement {
                     }
                 }
             }
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "TextBox:$($this.Name)"
         }
         
         return $handled

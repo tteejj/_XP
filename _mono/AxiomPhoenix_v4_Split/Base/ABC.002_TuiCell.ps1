@@ -98,6 +98,57 @@ class TuiCell {
         # A more advanced system could check for a special transparent color.
         return [TuiCell]::new($other)
     }
+    
+    # PERFORMANCE: Mutable version that modifies this cell in-place
+    [void] BlendWithMutable([object]$other) {
+        if ($null -eq $other) { return }
+        
+        try {
+            # If Z-Indexes are different, the higher one wins.
+            if ($other.ZIndex -gt $this.ZIndex) {
+                $this.Char = $other.Char
+                $this.ForegroundColor = $other.ForegroundColor
+                $this.BackgroundColor = $other.BackgroundColor
+                $this.Bold = $other.Bold
+                $this.Italic = $other.Italic
+                $this.Underline = $other.Underline
+                $this.Strikethrough = $other.Strikethrough
+                $this.ZIndex = $other.ZIndex
+                $this.Metadata = $other.Metadata
+            }
+            elseif ($other.ZIndex -eq $this.ZIndex) {
+                # If Z-Indexes are the same, the 'other' (top) cell wins by default
+                $this.Char = $other.Char
+                $this.ForegroundColor = $other.ForegroundColor
+                $this.BackgroundColor = $other.BackgroundColor
+                $this.Bold = $other.Bold
+                $this.Italic = $other.Italic
+                $this.Underline = $other.Underline
+                $this.Strikethrough = $other.Strikethrough
+                $this.ZIndex = $other.ZIndex
+                $this.Metadata = $other.Metadata
+            }
+            # If other.ZIndex < this.ZIndex, do nothing (this cell wins)
+        }
+        catch {
+            # FALLBACK: If mutable blending fails, fall back to immutable blending
+            if ($global:TuiDebugMode) {
+                Write-Log -Level Warning -Message "BlendWithMutable failed, falling back to immutable blend: $_"
+            }
+            $blended = $this.BlendWith($other)
+            if ($blended) {
+                $this.Char = $blended.Char
+                $this.ForegroundColor = $blended.ForegroundColor
+                $this.BackgroundColor = $blended.BackgroundColor
+                $this.Bold = $blended.Bold
+                $this.Italic = $blended.Italic
+                $this.Underline = $blended.Underline
+                $this.Strikethrough = $blended.Strikethrough
+                $this.ZIndex = $blended.ZIndex
+                $this.Metadata = $blended.Metadata
+            }
+        }
+    }
 
     [bool] DiffersFrom([object]$other) {
         if ($null -eq $other) { return $true }

@@ -60,7 +60,7 @@ class UIElement {
     [bool] $IsFocused = $false  
     [bool] $IsOverlay = $false
     [int] $TabIndex = 0        
-    [int] $ZIndex = 0          
+    hidden [int] $_zIndex = 0
     [UIElement] $Parent = $null 
     [System.Collections.Generic.List[UIElement]] $Children 
     
@@ -76,18 +76,137 @@ class UIElement {
     hidden [hashtable] $_themeColorCache = @{}
     hidden [string] $_lastThemeName = ""
     
+    # PERFORMANCE: Pre-resolved theme colors at initialization
+    hidden [hashtable] $_preResolvedThemeColors = @{}
+    hidden [string[]] $_requiredThemeColors = @()
+    
+    # DEPENDENCY INJECTION: Injected services (replaces service locator anti-pattern)
+    hidden [hashtable] $_injectedServices = @{}
+    
+    # PERFORMANCE: Cached sorted children list
+    hidden [System.Collections.Generic.List[UIElement]] $_sortedChildren = $null
+    hidden [bool] $_sortedChildrenValid = $false
+    
+    # PERFORMANCE: Render caching properties
+    hidden [string] $_lastRenderHash = ""
+    hidden [bool] $_renderCacheValid = $false
+    hidden [hashtable] $_renderState = @{}
+    
     [hashtable] $Metadata = @{} 
+
+    # PERFORMANCE: Property getter for sorted children
+    hidden [System.Collections.Generic.List[UIElement]] GetSortedChildren() {
+        if (-not $this._sortedChildrenValid) {
+            $this._sortedChildren.Clear()
+            foreach ($child in ($this.Children | Sort-Object ZIndex)) {
+                $this._sortedChildren.Add($child)
+            }
+            $this._sortedChildrenValid = $true
+        }
+        return $this._sortedChildren
+    }
+    
+    # PERFORMANCE: Method to invalidate sorted children cache when ZIndex changes
+    [void] InvalidateSortedChildren() {
+        $this._sortedChildrenValid = $false
+        # Also invalidate parent's cache if we have one
+        if ($this.Parent) {
+            $this.Parent.InvalidateSortedChildren()
+        }
+    }
+    
+    # PERFORMANCE: ZIndex property with cache invalidation
+    [int] GetZIndex() {
+        return $this._zIndex
+    }
+    
+    [void] SetZIndex([int]$value) {
+        if ($this._zIndex -ne $value) {
+            $this._zIndex = $value
+            # Invalidate parent's sorted children cache
+            if ($this.Parent) {
+                $this.Parent.InvalidateSortedChildren()
+            }
+        }
+    }
+    
+    # PERFORMANCE: Calculate hash of render-affecting properties
+    hidden [string] GetRenderHash() {
+        $hashComponents = @(
+            $this.X, $this.Y, $this.Width, $this.Height
+            $this.Visible, $this.Enabled, $this.IsFocused
+            $this.ForegroundColor, $this.BackgroundColor, $this.BorderColor
+            $this._zIndex
+        )
+        
+        # Add component-specific properties if they exist
+        if ($this.PSObject.Properties['Text']) { $hashComponents += $this.Text }
+        if ($this.PSObject.Properties['Value']) { $hashComponents += $this.Value }
+        if ($this.PSObject.Properties['Items']) { $hashComponents += @($this.Items).Count }
+        if ($this.PSObject.Properties['SelectedIndex']) { $hashComponents += $this.SelectedIndex }
+        
+        # Include children hash
+        $childrenHash = ($this.Children | ForEach-Object { "$($_.Name):$($_._lastRenderHash)" }) -join "|"
+        $hashComponents += $childrenHash
+        
+        return ($hashComponents -join "|").GetHashCode().ToString()
+    }
+    
+    # PERFORMANCE: Check if render is needed
+    hidden [bool] NeedsRender() {
+        if (-not $this._renderCacheValid -or $this._needs_redraw) {
+            return $true
+        }
+        
+        $currentHash = $this.GetRenderHash()
+        if ($currentHash -ne $this._lastRenderHash) {
+            $this._lastRenderHash = $currentHash
+            return $true
+        }
+        
+        return $false
+    }
+    
+    # PERFORMANCE: Invalidate render cache
+    [void] InvalidateRenderCache() {
+        $this._renderCacheValid = $false
+        $this._needs_redraw = $true
+        
+        # Invalidate parent cache too
+        if ($this.Parent) {
+            $this.Parent.InvalidateRenderCache()
+        }
+    }
+    
+    # PERFORMANCE: Add ZIndex property with cache invalidation
+    hidden [void] _InitializeZIndexProperty() {
+        $this | Add-Member -MemberType ScriptProperty -Name "ZIndex" -Value {
+            return $this._zIndex
+        } -SecondValue {
+            param($value)
+            if ($this._zIndex -ne $value) {
+                $this._zIndex = $value
+                if ($this.Parent) {
+                    $this.Parent.InvalidateSortedChildren()
+                }
+            }
+        } -Force
+    }
 
     UIElement() {
         $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._sortedChildren = [System.Collections.Generic.List[UIElement]]::new()
         $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        $this._InitializeZIndexProperty()
         # Write-Verbose "UIElement 'Unnamed' created with default size ($($this.Width)x$($this.Height))."
     }
 
     UIElement([string]$name) {
         $this.Name = $name
         $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._sortedChildren = [System.Collections.Generic.List[UIElement]]::new()
         $this._private_buffer = [TuiBuffer]::new($this.Width, $this.Height, "$($this.Name).Buffer")
+        $this._InitializeZIndexProperty()
         # Write-Verbose "UIElement '$($this.Name)' created with default size ($($this.Width)x$($this.Height))."
     }
 
@@ -99,7 +218,9 @@ class UIElement {
         $this.Width = $width
         $this.Height = $height
         $this.Children = [System.Collections.Generic.List[UIElement]]::new()
+        $this._sortedChildren = [System.Collections.Generic.List[UIElement]]::new()
         $this._private_buffer = [TuiBuffer]::new($width, $height, "Unnamed.Buffer")
+        $this._InitializeZIndexProperty()
         # Write-Verbose "UIElement 'Unnamed' created at ($x, $y) with dimensions $($width)x$($height)."
     }
 
@@ -138,6 +259,9 @@ class UIElement {
                 }
             }
             
+            # PERFORMANCE: Invalidate sorted children cache
+            $this._sortedChildrenValid = $false
+            
             $this.RequestRedraw()
             # Write-Verbose "Added child '$($child.Name)' to parent '$($this.Name)'."
         }
@@ -161,6 +285,9 @@ class UIElement {
                         Write-Warning "Error calling RemovedFromParent on child '$($child.Name)': $($_.Exception.Message)"
                     }
                 }
+                
+                # PERFORMANCE: Invalidate sorted children cache
+                $this._sortedChildrenValid = $false
                 
                 $this.RequestRedraw()
                 # Write-Verbose "Removed child '$($child.Name)' from parent '$($this.Name)'."
@@ -318,6 +445,142 @@ class UIElement {
         }
         return $this.GetThemeColor("Panel.Border", "#404040")
     }
+    
+    # PERFORMANCE: Define theme colors that this component needs (call in constructor)
+    [void] DefineThemeColors([string[]]$themeColorKeys) {
+        $this._requiredThemeColors = $themeColorKeys
+        $this.ResolveThemeColors()
+    }
+    
+    # PERFORMANCE: Pre-resolve all required theme colors for this component
+    [void] ResolveThemeColors() {
+        # Get current theme name for cache validation
+        $currentTheme = $global:TuiState?.Services?.ThemeManager?.ThemeName
+        if (-not $currentTheme) {
+            $currentTheme = "default"
+        }
+        
+        # Clear cache if theme changed
+        if ($this._lastThemeName -ne $currentTheme) {
+            $this._preResolvedThemeColors = @{}
+            $this._lastThemeName = $currentTheme
+        }
+        
+        # Resolve each required theme color
+        foreach ($themeKey in $this._requiredThemeColors) {
+            if (-not $this._preResolvedThemeColors.ContainsKey($themeKey)) {
+                # Extract fallback from key if it contains a pipe separator
+                $fallback = "#ffffff"
+                $actualKey = $themeKey
+                
+                if ($themeKey.Contains('|')) {
+                    $parts = $themeKey -split '\|', 2
+                    $actualKey = $parts[0]
+                    $fallback = $parts[1]
+                }
+                
+                # Resolve the color using existing GetThemeColor logic
+                $resolvedColor = $fallback
+                
+                # First try using the global Get-ThemeColor function if available
+                if (Get-Command 'Get-ThemeColor' -ErrorAction SilentlyContinue) {
+                    $resolvedColor = Get-ThemeColor $actualKey $fallback
+                }
+                else {
+                    # Fallback to direct theme manager access
+                    $themeManager = $global:TuiState?.Services?.ThemeManager
+                    if (-not $themeManager) {
+                        $themeManager = $global:TuiState?.ServiceContainer?.GetService("ThemeManager")
+                    }
+                    
+                    if ($themeManager) {
+                        $resolvedColor = $themeManager.GetColor($actualKey, $fallback)
+                    }
+                }
+                
+                # Cache the resolved color
+                $this._preResolvedThemeColors[$themeKey] = $resolvedColor
+            }
+        }
+    }
+    
+    # PERFORMANCE: Get pre-resolved theme color (much faster than GetThemeColor during render)
+    [string] GetPreResolvedThemeColor([string]$themeKey, [string]$fallback = "#ffffff") {
+        # Check if we have this color pre-resolved
+        if ($this._preResolvedThemeColors.ContainsKey($themeKey)) {
+            return $this._preResolvedThemeColors[$themeKey]
+        }
+        
+        # If not pre-resolved, fall back to regular GetThemeColor and cache it
+        $resolvedColor = $this.GetThemeColor($themeKey, $fallback)
+        $this._preResolvedThemeColors[$themeKey] = $resolvedColor
+        return $resolvedColor
+    }
+    
+    # PERFORMANCE: Invalidate theme cache when theme changes
+    [void] InvalidateThemeCache() {
+        $this._preResolvedThemeColors = @{}
+        $this._themeColorCache = @{}
+        $this._lastThemeName = ""
+        
+        # Re-resolve if we have required colors defined
+        if ($this._requiredThemeColors.Count -gt 0) {
+            $this.ResolveThemeColors()
+        }
+        
+        # Invalidate render cache since colors changed
+        $this.InvalidateRenderCache()
+    }
+    
+    # DEPENDENCY INJECTION: Inject services during component construction
+    [void] InjectServices([hashtable]$services) {
+        if ($services) {
+            foreach ($key in $services.Keys) {
+                $this._injectedServices[$key] = $services[$key]
+            }
+        }
+    }
+    
+    # DEPENDENCY INJECTION: Inject a single service
+    [void] InjectService([string]$serviceName, [object]$service) {
+        $this._injectedServices[$serviceName] = $service
+    }
+    
+    # DEPENDENCY INJECTION: Get an injected service (replaces service locator calls)
+    [object] GetService([string]$serviceName) {
+        if ($this._injectedServices.ContainsKey($serviceName)) {
+            return $this._injectedServices[$serviceName]
+        }
+        
+        # FALLBACK: If service not injected, fall back to global service access with warning
+        if ($global:TuiDebugMode) {
+            Write-Log -Level Warning -Message "Component '$($this.Name)' requesting non-injected service '$serviceName' - consider using dependency injection"
+        }
+        
+        # Try direct Services access first
+        if ($global:TuiState?.Services?.ContainsKey($serviceName)) {
+            return $global:TuiState.Services[$serviceName]
+        }
+        
+        # Fall back to service container
+        if ($global:TuiState?.ServiceContainer) {
+            return $global:TuiState.ServiceContainer.GetService($serviceName)
+        }
+        
+        return $null
+    }
+    
+    # DEPENDENCY INJECTION: Check if a service is available
+    [bool] HasService([string]$serviceName) {
+        return $this._injectedServices.ContainsKey($serviceName) -or
+               $global:TuiState?.Services?.ContainsKey($serviceName) -or
+               ($global:TuiState?.ServiceContainer -and $global:TuiState.ServiceContainer.GetService($serviceName))
+    }
+    
+    # DEPENDENCY INJECTION: Get list of injected services
+    [string[]] GetInjectedServiceNames() {
+        return @($this._injectedServices.Keys)
+    }
 
     [void] OnFocus() 
     { 
@@ -380,6 +643,22 @@ class UIElement {
     {
         if (-not $this.Visible) { return }
         
+        # PERFORMANCE: Check if render is actually needed
+        if (-not $this.NeedsRender()) {
+            # Component hasn't changed, but still need to recurse to children
+            foreach ($child in $this.GetSortedChildren()) {
+                if ($child.Visible) {
+                    $child._RenderContent()
+                }
+            }
+            return
+        }
+        
+        # PERFORMANCE: Track render cache metrics
+        if ($global:TuiPerformanceMetrics -and $global:TuiDebugMode) {
+            $global:TuiPerformanceMetrics.ComponentRenders++
+        }
+        
         # Phase 1: Render Self (if needed)
         $parentDidRedraw = $false
         if ($this._needs_redraw -or ($null -eq $this._private_buffer) -or 
@@ -418,7 +697,7 @@ class UIElement {
         }
         
         # Phase 2: Render and Blend Children (with optimization)
-        foreach ($child in $this.Children | Sort-Object ZIndex) {
+        foreach ($child in $this.GetSortedChildren()) {
             if ($child.Visible) {
                 try {
                     # Always recurse to allow children to render if they need to

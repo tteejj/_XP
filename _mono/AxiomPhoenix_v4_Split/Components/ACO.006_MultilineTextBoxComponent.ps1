@@ -36,17 +36,25 @@ class MultilineTextBoxComponent : UIElement {
         $this.Lines.Add("")
         $this.Width = 40
         $this.Height = 10
+        
+        # PERFORMANCE: Pre-resolve theme colors at initialization
+        $this.DefineThemeColors(@(
+            "Input.Background|#1E1E1E",
+            "Input.Foreground|#D4D4D4", 
+            "Input.Border|#404040",
+            "Input.FocusedBorder|#00FFFF"
+        ))
     }
 
     [void] OnRender() {
         if (-not $this.Visible -or $null -eq $this._private_buffer) { return }
         
         try {
-            # Get theme-aware colors, using component properties as defaults if not found in theme
-            $bgColor = Get-ThemeColor -ColorName "input.background" -DefaultColor $this.BackgroundColor
-            $fgColor = Get-ThemeColor -ColorName "input.foreground" -DefaultColor $this.ForegroundColor
-            $borderColorValue = Get-ThemeColor -ColorName "component.border" -DefaultColor $this.BorderColor
-            if ($this.IsFocused) { $borderColorValue = Get-ThemeColor -ColorName "Primary" -DefaultColor "#00FFFF" }
+            # PERFORMANCE: Use pre-resolved theme colors instead of calling Get-ThemeColor during render
+            $bgColor = $this.GetPreResolvedThemeColor("Input.Background", $this.BackgroundColor)
+            $fgColor = $this.GetPreResolvedThemeColor("Input.Foreground", $this.ForegroundColor)
+            $borderColorValue = $this.GetPreResolvedThemeColor("Input.Border", $this.BorderColor)
+            if ($this.IsFocused) { $borderColorValue = $this.GetPreResolvedThemeColor("Input.FocusedBorder", "#00FFFF") }
             
             # Clear buffer with background color
             $this._private_buffer.Clear([TuiCell]::new(' ', $bgColor, $bgColor))

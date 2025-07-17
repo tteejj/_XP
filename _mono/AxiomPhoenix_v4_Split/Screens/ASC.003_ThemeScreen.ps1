@@ -47,13 +47,13 @@ class ThemeScreen : Screen {
         $this._mainPanel.Height = $this.Height
         $this._mainPanel.Title = " Theme Selection "
         $this._mainPanel.BorderStyle = "Double"
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
-        $this._mainPanel.BorderColor = Get-ThemeColor "palette.border" "#007acc"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "panel.background"
+        $this._mainPanel.BorderColor = Get-ThemeColor "panel.border"
         $this.AddChild($this._mainPanel)
         
         # Set screen background colors
-        $this.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
-        $this.ForegroundColor = Get-ThemeColor "foreground" "#d4d4d4"
+        $this.BackgroundColor = Get-ThemeColor "screen.background"
+        $this.ForegroundColor = Get-ThemeColor "screen.foreground"
         
         # Title label
         $this._titleLabel = [LabelComponent]::new("Title")
@@ -61,8 +61,8 @@ class ThemeScreen : Screen {
         $this._titleLabel.X = 2
         $this._titleLabel.Y = 1
         $this._titleLabel.Text = "Select a theme for your terminal experience"
-        $this._titleLabel.ForegroundColor = Get-ThemeColor "foreground" "#d4d4d4"
-        $this._titleLabel.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
+        $this._titleLabel.ForegroundColor = Get-ThemeColor "label.foreground"
+        $this._titleLabel.BackgroundColor = Get-ThemeColor "panel.background"
         $this._mainPanel.AddChild($this._titleLabel)
         
         # List panel (left side)
@@ -75,8 +75,8 @@ class ThemeScreen : Screen {
         $listPanel.Height = $this.Height - 8
         $listPanel.Title = " Themes "
         $listPanel.HasBorder = $true
-        $listPanel.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
-        $listPanel.BorderColor = Get-ThemeColor "palette.border" "#007acc"
+        $listPanel.BackgroundColor = Get-ThemeColor "panel.background"
+        $listPanel.BorderColor = Get-ThemeColor "panel.border"
         $this._mainPanel.AddChild($listPanel)
         
         # Theme list
@@ -88,19 +88,19 @@ class ThemeScreen : Screen {
         $this._themeList.Width = $listPanel.Width - 2
         $this._themeList.Height = $listPanel.Height - 2
         $this._themeList.HasBorder = $false
-        $this._themeList.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
-        $this._themeList.ForegroundColor = Get-ThemeColor "foreground" "#d4d4d4"
-        $this._themeList.SelectedBackgroundColor = Get-ThemeColor "listbox.selectedbackground" "#007acc"
-        $this._themeList.SelectedForegroundColor = Get-ThemeColor "listbox.selectedforeground" "#ffffff"
+        $this._themeList.BackgroundColor = Get-ThemeColor "list.background"
+        $this._themeList.ForegroundColor = Get-ThemeColor "list.foreground"
+        $this._themeList.SelectedBackgroundColor = Get-ThemeColor "list.selected.background"
+        $this._themeList.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground"
         
         # Add focus visual feedback
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
-            $this.BorderColor = Get-ThemeColor "palette.primary" "#0078d4"
+            $this.BorderColor = Get-ThemeColor "list.focused.background"
             $this.RequestRedraw()
         } -Force
         
         $this._themeList | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
-            $this.BorderColor = Get-ThemeColor "palette.border" "#007acc"
+            $this.BorderColor = Get-ThemeColor "list.background"
             $this.RequestRedraw()
         } -Force
         
@@ -123,8 +123,8 @@ class ThemeScreen : Screen {
         $this._previewPanel.Height = $this.Height - 8
         $this._previewPanel.Title = " Preview "
         $this._previewPanel.HasBorder = $true
-        $this._previewPanel.BackgroundColor = Get-ThemeColor "palette.background" "#1e1e1e"
-        $this._previewPanel.BorderColor = Get-ThemeColor "palette.border" "#007acc"
+        $this._previewPanel.BackgroundColor = Get-ThemeColor "panel.background"
+        $this._previewPanel.BorderColor = Get-ThemeColor "panel.border"
         $this._mainPanel.AddChild($this._previewPanel)
         
         # Description label

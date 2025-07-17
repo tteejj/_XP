@@ -14,6 +14,21 @@ $ErrorActionPreference = 'Stop'
 $VerbosePreference = if ($env:AXIOM_VERBOSE -eq '1') { 'Continue' } else { 'SilentlyContinue' }
 $WarningPreference = $VerbosePreference
 
+# PERFORMANCE: Set debug mode for expensive operations
+$global:TuiDebugMode = $Debug.IsPresent
+
+# PERFORMANCE: Initialize memory metrics tracking
+if ($global:TuiDebugMode) {
+    $global:TuiMemoryMetrics = @{
+        TuiCellsCreated = 0
+        TuiCellsReused = 0
+        BufferSwaps = 0
+        BlendOperations = 0
+        LastGCCount = [System.GC]::CollectionCount(0)
+        GCPressure = 0
+    }
+}
+
 # Initialize scriptDir FIRST
 $scriptDir = $PSScriptRoot
 if ([string]::IsNullOrEmpty($scriptDir)) {
@@ -444,6 +459,93 @@ try {
     }
     
     Write-Host "Sample data created: $($dataManager.GetProjects().Count) projects, $($dataManager.GetTasks().Count) tasks, $($dataManager.GetTimeEntries().Count) time entries" -ForegroundColor Green
+
+    # DEPENDENCY INJECTION: Component factory function (replaces service locator anti-pattern)
+    function New-TuiComponent {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [string]$ComponentType,
+            
+            [Parameter(Mandatory)]
+            [string]$Name,
+            
+            [hashtable]$Parameters = @{},
+            
+            [string[]]$RequiredServices = @(),
+            
+            [hashtable]$ServiceOverrides = @{}
+        )
+        
+        # Create component instance
+        $component = switch ($ComponentType.ToLower()) {
+            "sidebarmenu" { 
+                [SidebarMenu]::new($Name)
+            }
+            "multilinetextbox" {
+                [MultilineTextBoxComponent]::new($Name)
+            }
+            "confirmdialog" {
+                [ConfirmDialog]::new($Name)
+            }
+            default { 
+                throw "Unknown component type: $ComponentType" 
+            }
+        }
+        
+        # Apply any additional parameters
+        foreach ($param in $Parameters.Keys) {
+            if ($component | Get-Member -Name $param -MemberType Property) {
+                $component.$param = $Parameters[$param]
+            }
+        }
+        
+        # Determine which services to inject based on component type
+        $servicesToInject = @{}
+        
+        # Default services that most components need
+        $commonServices = @("ThemeManager", "Logger")
+        
+        # Component-specific service requirements
+        $componentServiceMap = @{
+            "sidebarmenu" = @("ActionService", "NavigationService")
+            "multilinetextbox" = @("EventManager")
+            "confirmdialog" = @("NavigationService", "EventManager")
+            # Add more component mappings as needed
+        }
+        
+        # Combine common services with component-specific services
+        $allRequiredServices = $commonServices + $componentServiceMap[$ComponentType.ToLower()] + $RequiredServices | Sort-Object -Unique
+        
+        # Inject services from container
+        foreach ($serviceName in $allRequiredServices) {
+            if ($ServiceOverrides.ContainsKey($serviceName)) {
+                # Use override if provided
+                $servicesToInject[$serviceName] = $ServiceOverrides[$serviceName]
+            } else {
+                # Get from container
+                $service = $container.GetService($serviceName)
+                if ($service) {
+                    $servicesToInject[$serviceName] = $service
+                } else {
+                    Write-Warning "Service '$serviceName' not found in container for component '$Name'"
+                }
+            }
+        }
+        
+        # Inject all services at once
+        $component.InjectServices($servicesToInject)
+        
+        if ($global:TuiDebugMode) {
+            $injectedNames = $servicesToInject.Keys -join ", "
+            Write-Log -Level Debug -Message "Component '$Name' ($ComponentType) created with injected services: $injectedNames"
+        }
+        
+        return $component
+    }
+    
+    # Make factory function available globally
+    $global:NewTuiComponent = ${function:New-TuiComponent}
 
     # Launch the application
     Write-Host "`nStarting Axiom-Phoenix v4.0..." -ForegroundColor Cyan

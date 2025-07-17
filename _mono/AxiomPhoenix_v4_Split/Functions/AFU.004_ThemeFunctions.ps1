@@ -7,6 +7,44 @@ $script:CachedThemeManager = $null
 $script:ColorCache = @{}
 $script:CacheVersion = 0
 
+# PERFORMANCE: String interning for frequently used theme keys
+$script:InternedThemeKeys = @{}
+
+# PERFORMANCE: Batch theme color lookup
+$script:BatchColorResults = @{}
+
+# PERFORMANCE: Consolidated service access pattern
+function Get-TuiService {
+    param([string]$ServiceName)
+    
+    if (-not $global:TuiState) { return $null }
+    
+    # Modern pattern: ServiceContainer first
+    if ($global:TuiState.ServiceContainer) {
+        try {
+            return $global:TuiState.ServiceContainer.GetService($ServiceName)
+        } catch {
+            # ServiceContainer might not be ready
+        }
+    }
+    
+    # Legacy pattern: Direct Services hashtable
+    if ($global:TuiState.Services -and $global:TuiState.Services.$ServiceName) {
+        return $global:TuiState.Services.$ServiceName
+    }
+    
+    # Legacy pattern: Services.ServiceContainer
+    if ($global:TuiState.Services -and $global:TuiState.Services.ServiceContainer) {
+        try {
+            return $global:TuiState.Services.ServiceContainer.GetService($ServiceName)
+        } catch {
+            # ServiceContainer might not be ready
+        }
+    }
+    
+    return $null
+}
+
 # Get theme color with standardized key validation
 function Get-ThemeColor {
     param(
@@ -15,38 +53,25 @@ function Get-ThemeColor {
         [switch]$NoValidation
     )
     
-    # PERFORMANCE: Use cached ThemeManager reference
+    # PERFORMANCE: Use cached ThemeManager reference with consolidated service access
     if (-not $script:CachedThemeManager) {
-        # Path 1: Direct Services hashtable (Start.ps1 setup)
-        if ($global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ThemeManager) {
-            $script:CachedThemeManager = $global:TuiState.Services.ThemeManager
-        }
-        
-        # Path 2: ServiceContainer access (modern pattern)
-        if (-not $script:CachedThemeManager -and $global:TuiState -and $global:TuiState.ServiceContainer) {
-            try {
-                $script:CachedThemeManager = $global:TuiState.ServiceContainer.GetService("ThemeManager")
-            } catch {
-                # ServiceContainer might not be ready
-            }
-        }
-        
-        # Path 3: Legacy Services.ServiceContainer pattern (fallback)
-        if (-not $script:CachedThemeManager -and $global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ServiceContainer) {
-            try {
-                $script:CachedThemeManager = $global:TuiState.Services.ServiceContainer.GetService("ThemeManager")
-            } catch {
-                # ServiceContainer might not be ready
-            }
-        }
+        $script:CachedThemeManager = Get-TuiService "ThemeManager"
     }
     
     if (-not $script:CachedThemeManager) {
         return $Fallback -or "#FFFFFF"
     }
     
+    # PERFORMANCE: Use string interning for frequently used keys
+    $internedKey = $Key
+    if ($script:InternedThemeKeys.ContainsKey($Key)) {
+        $internedKey = $script:InternedThemeKeys[$Key]
+    } else {
+        $script:InternedThemeKeys[$Key] = $Key
+    }
+    
     # PERFORMANCE: Check color cache first
-    $cacheKey = "$Key|$Fallback|$NoValidation"
+    $cacheKey = "$internedKey|$Fallback|$NoValidation"
     if ($script:ColorCache.ContainsKey($cacheKey)) {
         return $script:ColorCache[$cacheKey]
     }
@@ -77,6 +102,12 @@ function Get-ThemeColor {
     # Legacy mode - direct path lookup with warning
     if (-not $NoValidation) {
         Write-Warning "Theme key '$Key' not in registry. Add to _validThemeKeys or use -NoValidation. Using direct lookup."
+        
+        # DEVELOPMENT: Log invalid theme keys for debugging
+        if ($global:TuiState.PSObject.Properties['DebugMode'] -and $global:TuiState.DebugMode) {
+            $logPath = Join-Path $env:TEMP "theme_validation.log"
+            "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Invalid theme key: $Key" | Add-Content $logPath
+        }
     }
     
     $color = $themeManager.GetColor($Key)
@@ -90,6 +121,67 @@ function Get-ThemeColor {
 function Clear-ThemeCache {
     $script:ColorCache.Clear()
     $script:CachedThemeManager = $null
+    $script:BatchColorResults.Clear()
+    $script:InternedThemeKeys.Clear()
+}
+
+# PERFORMANCE: Batch theme color lookup for multiple keys
+function Get-ThemeColorBatch {
+    param(
+        [string[]]$Keys,
+        [string]$DefaultFallback = "#FFFFFF"
+    )
+    
+    $results = @{}
+    $uncachedKeys = @()
+    
+    # Check cache first
+    foreach ($key in $Keys) {
+        $cacheKey = "$key|$DefaultFallback|$false"
+        if ($script:ColorCache.ContainsKey($cacheKey)) {
+            $results[$key] = $script:ColorCache[$cacheKey]
+        } else {
+            $uncachedKeys += $key
+        }
+    }
+    
+    # Batch resolve uncached keys
+    if ($uncachedKeys.Count -gt 0) {
+        foreach ($key in $uncachedKeys) {
+            $color = Get-ThemeColor $key $DefaultFallback
+            $results[$key] = $color
+        }
+    }
+    
+    return $results
+}
+
+# PERFORMANCE: Pre-warm cache with Performance theme's most used colors
+function Initialize-PerformanceThemeCache {
+    if (-not $script:CachedThemeManager) { return }
+    
+    # Check if Performance theme is loaded
+    if ($script:CachedThemeManager.ThemeName -eq "Performance") {
+        $mostUsedColors = @(
+            "label.foreground"
+            "panel.background"
+            "panel.border"
+            "panel.border.focused"
+            "list.background"
+            "list.selected.background"
+            "button.normal.background"
+            "input.background"
+            "screen.background"
+            "screen.foreground"
+        )
+        
+        # Pre-warm cache with most frequently used colors
+        foreach ($colorKey in $mostUsedColors) {
+            $null = Get-ThemeColor $colorKey
+        }
+        
+        Write-Host "Performance theme cache pre-warmed with $($mostUsedColors.Count) colors" -ForegroundColor Green
+    }
 }
 
 # Get any theme value (colors, borders, etc.) with fallback
@@ -99,31 +191,8 @@ function Get-ThemeValue {
         [object]$DefaultValue = $null
     )
     
-    # Try multiple paths to find ThemeManager - CRITICAL FIX for service access
-    $themeManager = $null
-    
-    # Path 1: Direct Services hashtable (Start.ps1 setup)
-    if ($global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ThemeManager) {
-        $themeManager = $global:TuiState.Services.ThemeManager
-    }
-    
-    # Path 2: ServiceContainer access (modern pattern)
-    if (-not $themeManager -and $global:TuiState -and $global:TuiState.ServiceContainer) {
-        try {
-            $themeManager = $global:TuiState.ServiceContainer.GetService("ThemeManager")
-        } catch {
-            # ServiceContainer might not be ready
-        }
-    }
-    
-    # Path 3: Legacy Services.ServiceContainer pattern (fallback)
-    if (-not $themeManager -and $global:TuiState -and $global:TuiState.Services -and $global:TuiState.Services.ServiceContainer) {
-        try {
-            $themeManager = $global:TuiState.Services.ServiceContainer.GetService("ThemeManager")
-        } catch {
-            # ServiceContainer might not be ready
-        }
-    }
+    # Use consolidated service access
+    $themeManager = Get-TuiService "ThemeManager"
     
     if ($themeManager) {
         return $themeManager.GetThemeValue($Path, $DefaultValue)

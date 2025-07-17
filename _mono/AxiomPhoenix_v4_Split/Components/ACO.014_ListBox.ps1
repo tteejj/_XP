@@ -61,7 +61,7 @@ class ListBox : UIElement {
         if ($this.SelectedIndex -eq -1 -and $this.Items.Count -eq 1) {
             $this.SelectedIndex = 0
         }
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
     }
 
     [void] ClearItems() {
@@ -70,7 +70,7 @@ class ListBox : UIElement {
         $this._cacheVersion = 0
         $this.SelectedIndex = -1
         $this.ScrollOffset = 0
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
     }
 
     [void] OnRender() {
@@ -279,13 +279,13 @@ class ListBox : UIElement {
     [void] OnFocus() {
         ([UIElement]$this).OnFocus()
         $this.BorderColor = (Get-ThemeColor "input.focused.border" "#00d4ff")
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
     }
 
     [void] OnBlur() {
         ([UIElement]$this).OnBlur()
         $this.BorderColor = (Get-ThemeColor "Panel.Border" "#666666")
-        $this.RequestRedraw()
+        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
@@ -329,7 +329,7 @@ class ListBox : UIElement {
         }
         
         if ($handled) {
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
             
             # Trigger SelectedIndexChanged event if index changed
             if ($oldIndex -ne $this.SelectedIndex -and $this.SelectedIndexChanged) {

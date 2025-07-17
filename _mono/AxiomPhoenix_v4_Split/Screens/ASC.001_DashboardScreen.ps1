@@ -44,9 +44,9 @@ class DashboardScreen : Screen {
         $this._mainPanel.Height = $panelHeight
         $this._mainPanel.HasBorder = $true
         $this._mainPanel.Title = " Axiom-Phoenix v4.0 - Main Menu "
-        $this._mainPanel.BackgroundColor = Get-ThemeColor "palette.background"
-        $this._mainPanel.BorderColor = Get-ThemeColor "palette.border"
-        $this._mainPanel.ForegroundColor = Get-ThemeColor "foreground"
+        $this._mainPanel.BackgroundColor = Get-ThemeColor "panel.background"
+        $this._mainPanel.BorderColor = Get-ThemeColor "panel.border"
+        $this._mainPanel.ForegroundColor = Get-ThemeColor "panel.foreground"
         
         # Create ListBox for menu items
         $this._menuListBox = [ListBox]::new("MenuList")
@@ -124,20 +124,20 @@ class DashboardScreen : Screen {
         try {
             # Update panel colors
             if ($this._mainPanel) {
-                $this._mainPanel.BackgroundColor = Get-ThemeColor "palette.background"
-                $this._mainPanel.BorderColor = Get-ThemeColor "palette.border"
-                $this._mainPanel.ForegroundColor = Get-ThemeColor "foreground"
+                $this._mainPanel.BackgroundColor = Get-ThemeColor "panel.background"
+                $this._mainPanel.BorderColor = Get-ThemeColor "panel.border"
+                $this._mainPanel.ForegroundColor = Get-ThemeColor "panel.foreground"
             }
             
             # Update ListBox colors
             if ($this._menuListBox) {
-                $this._menuListBox.BackgroundColor = Get-ThemeColor "palette.background"
-                $this._menuListBox.ForegroundColor = Get-ThemeColor "foreground"
+                $this._menuListBox.BackgroundColor = Get-ThemeColor "list.background"
+                $this._menuListBox.ForegroundColor = Get-ThemeColor "list.foreground"
             }
             
             # Update screen colors
-            $this.BackgroundColor = Get-ThemeColor "palette.background"
-            $this.ForegroundColor = Get-ThemeColor "foreground"
+            $this.BackgroundColor = Get-ThemeColor "screen.background"
+            $this.ForegroundColor = Get-ThemeColor "screen.foreground"
             
             Write-Log -Level Debug -Message "DashboardScreen: Updated theme colors"
         } catch {
