@@ -22,6 +22,12 @@ class TuiBuffer {
     # Performance tracking
     hidden [System.Collections.Generic.HashSet[int]]$_dirtyRows = $null
     hidden [bool]$_trackDirtyRegions = $true
+    
+    # PERFORMANCE: Object pooling for temporary cell operations
+    hidden [TuiCell[]] $_cellPool = $null
+    hidden [int] $_poolIndex = 0
+    hidden [TuiCell] $_defaultCell = $null
+    hidden [TuiCell] $_templateCell = $null
 
     # Constructor with 2 parameters
     TuiBuffer([int]$width, [int]$height) {
@@ -50,7 +56,7 @@ class TuiBuffer {
     }
 
     hidden [void] InitializeCells() {
-        # Create 2D array step by step to avoid assignment issues
+        # PERFORMANCE: Pre-allocate ALL cells during initialization
         $tempArray = New-Object 'System.Object[,]' $this.Height,$this.Width
         for ($y = 0; $y -lt $this.Height; $y++) {
             for ($x = 0; $x -lt $this.Width; $x++) {
@@ -58,14 +64,35 @@ class TuiBuffer {
             }
         }
         $this.Cells = $tempArray
+        
+        # PERFORMANCE: Initialize object pool for temporary operations
+        $this._cellPool = @()
+        for ($i = 0; $i -lt 50; $i++) {  # Pool of 50 temporary cells
+            $this._cellPool += [TuiCell]::new()
+        }
+        
+        # PERFORMANCE: Create reusable template cells
+        $this._defaultCell = [TuiCell]::new()
+        $this._templateCell = [TuiCell]::new()
     }
 
-    [void] Clear() { $this.Clear([TuiCell]::new()) }
+    # PERFORMANCE: Get pooled cell for temporary operations
+    hidden [TuiCell] GetPooledCell() {
+        if ($this._poolIndex -ge $this._cellPool.Length) { 
+            $this._poolIndex = 0 
+        }
+        $cell = $this._cellPool[$this._poolIndex++]
+        $cell.Reset()  # Reset to defaults
+        return $cell
+    }
+
+    [void] Clear() { $this.Clear($this._defaultCell) }
 
     [void] Clear([TuiCell]$fillCell) {
+        # PERFORMANCE: Update existing cells instead of creating new ones
         for ($y = 0; $y -lt $this.Height; $y++) {
             for ($x = 0; $x -lt $this.Width; $x++) {
-                $this.Cells[$y, $x] = [TuiCell]::new($fillCell) 
+                $this.Cells[$y, $x].CopyFrom($fillCell)
             }
         }
         $this.IsDirty = $true
@@ -96,66 +123,44 @@ class TuiBuffer {
 
     # PERFORMANCE OPTIMIZATION: Batch string writing to reduce logging overhead
     [void] WriteString([int]$x, [int]$y, [string]$text, [hashtable]$style = @{}) {
+        # PERFORMANCE: Fast bounds check and early exit
         if ([string]::IsNullOrEmpty($text) -or $y -lt 0 -or $y -ge $this.Height) {
-            # Only log significant issues, not empty strings (common case)
-            if (-not [string]::IsNullOrEmpty($text)) {
-                Write-Log -Level Debug -Message "WriteString: Skipped for buffer '$($this.Name)' due to out-of-bounds Y."
-            }
             return
         }
         
-        # Extract properties from the style object, providing safe defaults (now expecting hex colors)
-        # Use hashtable indexing syntax to avoid "property not found" errors
-        $fg = "#FFFFFF"  # Default Foreground hex
-        if ($style.ContainsKey('FG')) { $fg = $style['FG'] }
+        # PERFORMANCE: Use template cell and update it once
+        $template = $this._templateCell
+        $template.Reset()
         
-        $bg = "#000000"  # Default Background hex
-        if ($style.ContainsKey('BG')) { $bg = $style['BG'] }
+        # PERFORMANCE: Batch extract style properties with minimal checks
+        if ($style.ContainsKey('FG')) { $template.ForegroundColor = $style['FG'] }
+        if ($style.ContainsKey('BG')) { $template.BackgroundColor = $style['BG'] }
+        if ($style.ContainsKey('Bold')) { $template.Bold = [bool]$style['Bold'] }
+        if ($style.ContainsKey('Italic')) { $template.Italic = [bool]$style['Italic'] }
+        if ($style.ContainsKey('Underline')) { $template.Underline = [bool]$style['Underline'] }
+        if ($style.ContainsKey('Strikethrough')) { $template.Strikethrough = [bool]$style['Strikethrough'] }
+        if ($style.ContainsKey('ZIndex')) { $template.ZIndex = [int]$style['ZIndex'] }
         
-        $bold = $false
-        if ($style.ContainsKey('Bold')) { $bold = [bool]$style['Bold'] }
-        
-        $italic = $false
-        if ($style.ContainsKey('Italic')) { $italic = [bool]$style['Italic'] }
-        
-        $underline = $false
-        if ($style.ContainsKey('Underline')) { $underline = [bool]$style['Underline'] }
-        
-        $strikethrough = $false
-        if ($style.ContainsKey('Strikethrough')) { $strikethrough = [bool]$style['Strikethrough'] }
-        
-        $zIndex = 0
-        if ($style.ContainsKey('ZIndex')) { $zIndex = [int]$style['ZIndex'] }
-
-        # PERFORMANCE: Create template cell (pooling temporarily disabled for debugging)
-        $templateCell = [TuiCell]::new(' ', $fg, $bg, $bold, $italic, $underline, $strikethrough)
-        $templateCell.ZIndex = $zIndex
-        
-        # PERFORMANCE: Track object creation for memory monitoring
-        if ($global:TuiMemoryMetrics -and $global:TuiDebugMode) {
-            $global:TuiMemoryMetrics.TuiCellsCreated++
-        }
-        
-        # PERFORMANCE: Track reuse
-        if ($global:TuiMemoryMetrics -and $global:TuiDebugMode) {
-            $global:TuiMemoryMetrics.TuiCellsReused += $text.Length
-            Write-Log -Level Debug -Message "WriteString: Using template cell for text '$text' (length: $($text.Length)) at ($x, $y)"
-        }
-        
+        # PERFORMANCE: Direct character array processing with in-place updates
+        $chars = $text.ToCharArray()
         $currentX = $x
-        foreach ($char in $text.ToCharArray()) {
+        
+        foreach ($char in $chars) {
             if ($currentX -ge $this.Width) { break } 
             if ($currentX -ge 0) {
-                # PERFORMANCE: Create a copy of the template cell with the specific character
-                $cellCopy = [TuiCell]::new($templateCell)
-                $cellCopy.Char = $char
-                $this.SetCell($currentX, $y, $cellCopy)
+                # PERFORMANCE: Update existing cell in buffer directly
+                $existingCell = $this.Cells[$y, $currentX]
+                $existingCell.CopyFrom($template)
+                $existingCell.Char = $char
             }
             $currentX++
         }
+        
+        # PERFORMANCE: Minimal dirty tracking
         $this.IsDirty = $true
-        # PERFORMANCE CRITICAL: Removed debug logging that was called thousands of times per frame
-        # Original line: Write-Log -Level Debug -Message "WriteString: Wrote '$text' to buffer '$($this.Name)' at ($x, $y)."
+        if ($this._trackDirtyRegions) {
+            [void]$this._dirtyRows.Add($y)
+        }
     }
 
     # PERFORMANCE OPTIMIZATION: Smart blending that skips empty cells

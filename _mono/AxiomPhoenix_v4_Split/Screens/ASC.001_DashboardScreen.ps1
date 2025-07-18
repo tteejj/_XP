@@ -24,14 +24,14 @@ class DashboardScreen : Screen {
     )
     
     DashboardScreen([object]$serviceContainer) : base("DashboardScreen", $serviceContainer) {
-        Write-Log -Level Debug -Message "DashboardScreen: Constructor called"
+        # #Write-Host "DASHBOARD: Constructor called" -ForegroundColor Gray
         $this._navService = $serviceContainer.GetService("NavigationService")
     }
 
     [void] Initialize() {
         if ($this._isInitialized) { return }
         
-        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Starting"
+        # #Write-Host "DASHBOARD: Initialize starting" -ForegroundColor Gray
         
         # Create main panel
         $panelWidth = [Math]::Min(60, $this.Width - 4)
@@ -67,7 +67,7 @@ class DashboardScreen : Screen {
         $currentScreenRef = $this
         $this._menuListBox.SelectedIndexChanged = {
             param($sender, $index)
-            Write-Log -Level Debug -Message "Menu selection changed to: $index"
+            # #Write-Host "DASHBOARD: Menu selection changed to: $index" -ForegroundColor Gray
         }.GetNewClosure()
         
         # Add components
@@ -75,12 +75,13 @@ class DashboardScreen : Screen {
         $this.AddChild($this._mainPanel)
         
         $this._isInitialized = $true
-        Write-Log -Level Debug -Message "DashboardScreen.Initialize: Completed"
+        # #Write-Host "DASHBOARD: Initialize completed" -ForegroundColor Gray
     }
 
 
     [void] OnEnter() {
-        Write-Log -Level Debug -Message "DashboardScreen.OnEnter: Screen activated"
+        # #Write-Host "DASHBOARD: OnEnter - Screen activated" -ForegroundColor Green
+        # #Write-Host "DASHBOARD: OnEnter called" -ForegroundColor Green
         
         # Subscribe to theme change events
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
@@ -88,18 +89,37 @@ class DashboardScreen : Screen {
             $thisScreen = $this
             $handler = {
                 param($eventData)
-                Write-Log -Level Debug -Message "DashboardScreen: Theme changed event received"
+                # #Write-Host "DASHBOARD: Theme changed event received" -ForegroundColor Gray
                 $thisScreen.UpdateThemeColors()
                 $thisScreen.RequestRedraw()
             }.GetNewClosure()
             
             $this._themeChangeSubscriptionId = $eventManager.Subscribe("Theme.Changed", $handler)
-            Write-Log -Level Debug -Message "DashboardScreen: Subscribed to Theme.Changed events"
+            # #Write-Host "DASHBOARD: Subscribed to Theme.Changed events" -ForegroundColor Gray
+        }
+        
+        # Log ListBox state before calling base
+        if ($this._menuListBox) {
+            # #Write-Host "DASHBOARD: ListBox state before base call - IsFocusable=$($this._menuListBox.IsFocusable) IsFocused=$($this._menuListBox.IsFocused) TabIndex=$($this._menuListBox.TabIndex)" -ForegroundColor Gray
+        } else {
+            #Write-Host "DASHBOARD: ERROR - _menuListBox is NULL!" -ForegroundColor Red
         }
         
         # MUST call base to set initial focus
+        # #Write-Host "DASHBOARD: Calling base OnEnter" -ForegroundColor Gray
         ([Screen]$this).OnEnter()
+        
+        # Log ListBox state after calling base
+        if ($this._menuListBox) {
+            # #Write-Host "DASHBOARD: ListBox state after base call - IsFocusable=$($this._menuListBox.IsFocusable) IsFocused=$($this._menuListBox.IsFocused) TabIndex=$($this._menuListBox.TabIndex)" -ForegroundColor Gray
+        }
+        
+        # Log focused component
+        $focused = $this.GetFocusedChild()
+        # #Write-Host "DASHBOARD: Focused component after base call = $(if ($focused) { $focused.GetType().Name } else { 'NULL' })" -ForegroundColor Gray
+        
         $this.RequestRedraw()
+        # #Write-Host "DASHBOARD: OnEnter completed" -ForegroundColor Gray
     }
     
     [void] OnResize() {
@@ -139,27 +159,44 @@ class DashboardScreen : Screen {
             $this.BackgroundColor = Get-ThemeColor "screen.background"
             $this.ForegroundColor = Get-ThemeColor "screen.foreground"
             
-            Write-Log -Level Debug -Message "DashboardScreen: Updated theme colors"
+            # #Write-Host "DASHBOARD: Updated theme colors" -ForegroundColor Gray
         } catch {
-            Write-Log -Level Error -Message "DashboardScreen: Error updating colors: $_"
+            #Write-Host "DASHBOARD: ERROR updating colors: $_" -ForegroundColor Red
         }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
-        if ($null -eq $keyInfo) { return $false }
+        "$(Get-Date -Format 'HH:mm:ss.fff') DASHBOARD: HandleInput Key=$($keyInfo.Key)" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+        if ($null -eq $keyInfo) { 
+            "$(Get-Date -Format 'HH:mm:ss.fff') DASHBOARD: NULL keyInfo" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            return $false 
+        }
         
         # Get focused component
         $focused = $this.GetFocusedChild()
+        # #Write-Host "DASHBOARD: Focused component = $(if ($focused) { $focused.GetType().Name } else { 'NULL' })" -ForegroundColor Gray
+        
+        # Log ListBox state
+        if ($this._menuListBox) {
+            # #Write-Host "DASHBOARD: ListBox.SelectedIndex=$($this._menuListBox.SelectedIndex) IsFocused=$($this._menuListBox.IsFocused) IsFocusable=$($this._menuListBox.IsFocusable)" -ForegroundColor Gray
+        } else {
+            #Write-Host "DASHBOARD: ERROR - _menuListBox is NULL!" -ForegroundColor Red
+        }
         
         # Handle screen-level actions based on focused component
         switch ($keyInfo.Key) {
             ([ConsoleKey]::Enter) {
+                # #Write-Host "DASHBOARD: Enter key pressed" -ForegroundColor Yellow
                 # Execute action when Enter is pressed on ListBox
                 if ($focused -eq $this._menuListBox -and $this._menuListBox.SelectedIndex -ge 0) {
+                    # #Write-Host "DASHBOARD: Executing menu item via Enter" -ForegroundColor Yellow
                     $this.ExecuteMenuItem($this._menuListBox.SelectedIndex)
                     return $true
+                } else {
+                    # #Write-Host "DASHBOARD: Enter pressed but conditions not met - focused=$($focused -eq $this._menuListBox) selectedIndex=$($this._menuListBox.SelectedIndex)" -ForegroundColor Yellow
                 }
             }
+            # Remove arrow key interception - let them pass through to ListBox
         }
         
         # Handle direct number keys (0-9) for quick navigation
@@ -177,7 +214,15 @@ class DashboardScreen : Screen {
         }
         
         # Let base handle Tab and route to components (ListBox handles arrows)
-        return ([Screen]$this).HandleInput($keyInfo)
+        "$(Get-Date -Format 'HH:mm:ss.fff') DASHBOARD: Calling base Screen.HandleInput" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+        try {
+            $result = ([Screen]$this).HandleInput($keyInfo)
+            "$(Get-Date -Format 'HH:mm:ss.fff') DASHBOARD: Base returned $result" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            return $result
+        } catch {
+            "$(Get-Date -Format 'HH:mm:ss.fff') DASHBOARD: EXCEPTION: $_" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            return $false
+        }
     }
     
     hidden [void] ExecuteMenuItem([int]$index) {
@@ -186,7 +231,7 @@ class DashboardScreen : Screen {
         $menuItem = $this._menuItems[$index]
         $action = $menuItem.Action
         
-        Write-Log -Level Debug -Message "DashboardScreen: Executing menu item $index - $($menuItem.Text)"
+        # #Write-Host "DASHBOARD: Executing menu item $index - $($menuItem.Text)" -ForegroundColor Yellow
         
         # Handle special cases
         if ($null -eq $action) {
@@ -208,33 +253,33 @@ class DashboardScreen : Screen {
     
     hidden [void] NavigateToScreen([string]$screenClassName) {
         if (-not $this._navService) {
-            Write-Log -Level Error -Message "DashboardScreen: NavigationService not available"
+            #Write-Host "DASHBOARD: ERROR - NavigationService not available" -ForegroundColor Red
             return
         }
         
         try {
-            Write-Log -Level Debug -Message "DashboardScreen: Creating $screenClassName"
+            # #Write-Host "DASHBOARD: Creating $screenClassName" -ForegroundColor Gray
             $screen = New-Object $screenClassName -ArgumentList $this.ServiceContainer
             
-            Write-Log -Level Debug -Message "DashboardScreen: Initializing $screenClassName"
+            # #Write-Host "DASHBOARD: Initializing $screenClassName" -ForegroundColor Gray
             $screen.Initialize()
             
-            Write-Log -Level Debug -Message "DashboardScreen: Navigating to $screenClassName"
+            # #Write-Host "DASHBOARD: Navigating to $screenClassName" -ForegroundColor Gray
             $this._navService.NavigateTo($screen)
         } catch {
-            Write-Log -Level Error -Message "DashboardScreen: Failed to navigate to $screenClassName : $_"
+            #Write-Host "DASHBOARD: ERROR - Failed to navigate to $screenClassName : $_" -ForegroundColor Red
         }
     }
     
     [void] OnExit() {
-        Write-Log -Level Debug -Message "DashboardScreen.OnExit: Cleaning up"
+        # #Write-Host "DASHBOARD: OnExit cleaning up" -ForegroundColor Gray
         
         # Unsubscribe from theme change events
         $eventManager = $this.ServiceContainer?.GetService("EventManager")
         if ($eventManager -and $this._themeChangeSubscriptionId) {
             $eventManager.Unsubscribe("Theme.Changed", $this._themeChangeSubscriptionId)
             $this._themeChangeSubscriptionId = $null
-            Write-Log -Level Debug -Message "DashboardScreen: Unsubscribed from Theme.Changed events"
+            # #Write-Host "DASHBOARD: Unsubscribed from Theme.Changed events" -ForegroundColor Gray
         }
         
         # Base class handles cleanup

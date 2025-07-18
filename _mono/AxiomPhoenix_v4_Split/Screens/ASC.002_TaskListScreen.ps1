@@ -117,10 +117,10 @@ class TaskListScreen : Screen {
         $this._taskGrid.TabIndex = 0
         $this._taskGrid.IsFocusable = $true
         $this._taskGrid.ShowHeaders = $true
-        $this._taskGrid.NormalBackgroundColor = Get-ThemeColor "list.background"
-        $this._taskGrid.NormalForegroundColor = Get-ThemeColor "list.foreground"
-        $this._taskGrid.SelectedBackgroundColor = Get-ThemeColor "list.selected.background"
-        $this._taskGrid.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground"
+        $this._taskGrid.NormalBackgroundColor = Get-ThemeColor "list.background" "#1F2937"
+        $this._taskGrid.NormalForegroundColor = Get-ThemeColor "list.foreground" "#FFFFFF"
+        $this._taskGrid.SelectedBackgroundColor = Get-ThemeColor "list.selected.background" "#0080FF"
+        $this._taskGrid.SelectedForegroundColor = Get-ThemeColor "list.selected.foreground" "#FFFFFF"
         
         # Get ViewDefinition from service
         $viewService = $this.ServiceContainer.GetService("ViewDefinitionService")

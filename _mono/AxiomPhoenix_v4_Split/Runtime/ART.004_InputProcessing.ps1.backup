@@ -7,7 +7,6 @@
 # ==============================================================================
 
 function Process-TuiInput {
-    #Write-Host "INPUT-DEBUG: Process-TuiInput called with Key=$($KeyInfo.Key)" -ForegroundColor Blue
     param([System.ConsoleKeyInfo]$KeyInfo)
     
     if ($null -eq $KeyInfo) { return }
@@ -178,4 +177,3 @@ function Move-FocusToNext {
     # Set focus to next component
     Set-ComponentFocus -Component $sortedComponents[$nextIndex]
 }
-

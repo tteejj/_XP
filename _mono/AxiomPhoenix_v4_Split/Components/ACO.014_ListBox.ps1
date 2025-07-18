@@ -61,7 +61,7 @@ class ListBox : UIElement {
         if ($this.SelectedIndex -eq -1 -and $this.Items.Count -eq 1) {
             $this.SelectedIndex = 0
         }
-        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
+        try { Request-OptimizedRedraw -Source "ListBox:$($this.Name)" } catch { $global:TuiState.IsDirty = $true }
     }
 
     [void] ClearItems() {
@@ -70,7 +70,7 @@ class ListBox : UIElement {
         $this._cacheVersion = 0
         $this.SelectedIndex = -1
         $this.ScrollOffset = 0
-        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
+        try { Request-OptimizedRedraw -Source "ListBox:$($this.Name)" } catch { $global:TuiState.IsDirty = $true }
     }
 
     [void] OnRender() {
@@ -279,30 +279,48 @@ class ListBox : UIElement {
     [void] OnFocus() {
         ([UIElement]$this).OnFocus()
         $this.BorderColor = (Get-ThemeColor "input.focused.border" "#00d4ff")
-        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
+        try { Request-OptimizedRedraw -Source "ListBox:$($this.Name)" } catch { $global:TuiState.IsDirty = $true }
     }
 
     [void] OnBlur() {
         ([UIElement]$this).OnBlur()
         $this.BorderColor = (Get-ThemeColor "Panel.Border" "#666666")
-        Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
+        try { Request-OptimizedRedraw -Source "ListBox:$($this.Name)" } catch { $global:TuiState.IsDirty = $true }
     }
 
     [bool] HandleInput([System.ConsoleKeyInfo]$key) {
-        if ($null -eq $key -or $this.Items.Count -eq 0) { return $false }
+        # CRITICAL DEBUG: Log to file instead of console
+        "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Key=$($key.Key) SelectedIndex=$($this.SelectedIndex)" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+        
+        if ($null -eq $key) { 
+            "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: NULL key" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            return $false 
+        }
+        if ($this.Items.Count -eq 0) { 
+            "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: No items" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            return $false 
+        }
         
         $handled = $true
         $oldIndex = $this.SelectedIndex
         
         switch ($key.Key) {
             ([ConsoleKey]::UpArrow) {
+                "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: UP ARROW - current $($this.SelectedIndex)" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
                 if ($this.SelectedIndex -gt 0) {
                     $this.SelectedIndex--
+                    "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: UP ARROW - new $($this.SelectedIndex)" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+                } else {
+                    "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: UP ARROW - at top" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
                 }
             }
             ([ConsoleKey]::DownArrow) {
+                "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: DOWN ARROW - current $($this.SelectedIndex)" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
                 if ($this.SelectedIndex -lt $this.Items.Count - 1) {
                     $this.SelectedIndex++
+                    "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: DOWN ARROW - new $($this.SelectedIndex)" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+                } else {
+                    "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: DOWN ARROW - at bottom" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
                 }
             }
             ([ConsoleKey]::Home) {
@@ -328,15 +346,44 @@ class ListBox : UIElement {
             }
         }
         
+        #Write-Host "LISTBOX: End of switch - handled=$handled, oldIndex=$oldIndex, newIndex=$($this.SelectedIndex)" -ForegroundColor Cyan
+        
         if ($handled) {
-            Request-OptimizedRedraw -Source "ListBox:$($this.Name)"
+            "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Input handled - forcing visual update" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            
+            # CRITICAL: Force immediate rendering through multiple channels
+            $global:TuiState.IsDirty = $true
+            "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Set IsDirty=true" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            
+            # Force immediate redraw
+            try {
+                Request-OptimizedRedraw -Source "ListBox:$($this.Name)" -Immediate -Force
+                "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Called Request-OptimizedRedraw" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            } catch {
+                "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Request-OptimizedRedraw failed: $_" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            }
+            
+            # Force render state for immediate update
+            if ($global:TuiState.PSObject.Properties['RenderState']) {
+                $global:TuiState.RenderState.RenderRequested = $true
+                $global:TuiState.RenderState.ShouldRender = $true
+                "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Set render flags" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            }
+            
+            # Invalidate render cache to force full redraw
+            $this._needs_redraw = $true
+            $this.InvalidateRenderCache()
             
             # Trigger SelectedIndexChanged event if index changed
             if ($oldIndex -ne $this.SelectedIndex -and $this.SelectedIndexChanged) {
+                "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Triggering selection event" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
                 $this.SelectedIndexChanged.Invoke($this, $this.SelectedIndex)
             }
+        } else {
+            "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: Input NOT handled" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
         }
         
+        "$(Get-Date -Format 'HH:mm:ss.fff') LISTBOX: RETURNING $handled" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
         return $handled
     }
 

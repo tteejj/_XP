@@ -21,6 +21,8 @@ $script:TuiVerbosePreference = 'SilentlyContinue'
 
 #region TuiAnsiHelper - ANSI Code Generation with Truecolor Support
 class TuiAnsiHelper {
+    # PERFORMANCE: ANSI sequence cache for common combinations
+    static hidden [System.Collections.Concurrent.ConcurrentDictionary[string, string]] $_ansiCache = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
     # No caches needed, sequences are generated dynamically now.
 
     static [hashtable] HexToRgb([string]$hexColor) {
@@ -53,6 +55,25 @@ class TuiAnsiHelper {
     }
 
     static [string] GetAnsiSequence([string]$fgHex, [string]$bgHex, [hashtable]$attributes) {
+        # PERFORMANCE: Generate cache key
+        $attrKey = ""
+        if ($attributes) {
+            $keys = @()
+            if ($attributes.ContainsKey('Bold') -and [bool]$attributes['Bold']) { $keys += "B" }
+            if ($attributes.ContainsKey('Italic') -and [bool]$attributes['Italic']) { $keys += "I" }
+            if ($attributes.ContainsKey('Underline') -and [bool]$attributes['Underline']) { $keys += "U" }
+            if ($attributes.ContainsKey('Strikethrough') -and [bool]$attributes['Strikethrough']) { $keys += "S" }
+            $attrKey = $keys -join ""
+        }
+        $cacheKey = "$fgHex|$bgHex|$attrKey"
+        
+        # PERFORMANCE: Check cache first
+        $cache = [TuiAnsiHelper]::_ansiCache
+        if ($cache.ContainsKey($cacheKey)) {
+            return $cache[$cacheKey]
+        }
+        
+        # Generate ANSI sequence
         $sequences = [System.Collections.Generic.List[string]]::new()
 
         # Foreground color (Truecolor - SGR 38;2)
@@ -79,8 +100,14 @@ class TuiAnsiHelper {
             if ($attributes.ContainsKey('Strikethrough') -and [bool]$attributes['Strikethrough']) { $sequences.Add("9") }
         }
 
-        if ($sequences.Count -eq 0) { return "" }
-        return "`e[$($sequences -join ';')m"
+        $result = if ($sequences.Count -eq 0) { "" } else { "`e[$($sequences -join ';')m" }
+        
+        # PERFORMANCE: Cache the result (limit cache size to prevent memory bloat)
+        if ($cache.Count -lt 1000) {
+            $cache.TryAdd($cacheKey, $result)
+        }
+        
+        return $result
     }
 
     static [string] Reset() { return "`e[0m" }

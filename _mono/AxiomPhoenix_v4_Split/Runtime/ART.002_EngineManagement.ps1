@@ -123,23 +123,53 @@ function Start-TuiEngine {
                         }
                     }
                     
-                    # Phase 2: Process input
+                    # Phase 2: Process input - FIXED INPUT DETECTION
                     Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
                         $keyAvailable = $false
+                        
+                        # CRITICAL FIX: Use Host.UI.RawUI first for better compatibility
                         try {
-                            $keyAvailable = [Console]::KeyAvailable
+                            # Method 1: Host.UI.RawUI.KeyAvailable (most compatible)
+                            if ($Host.UI.RawUI.KeyAvailable) {
+                                $keyAvailable = $true
+                            }
                         } catch {
-                            try { $keyAvailable = [Console]::In.Peek() -ne -1 } catch {}
+                            # Method 2: Console.In.Peek() fallback
+                            try {
+                                $peekResult = [Console]::In.Peek()
+                                if ($peekResult -ne -1) {
+                                    $keyAvailable = $true
+                                }
+                            } catch {
+                                # Method 3: Console.KeyAvailable last resort
+                                try {
+                                    if ([Console]::KeyAvailable) {
+                                        $keyAvailable = $true
+                                    }
+                                } catch {
+                                    # All methods failed - no input detection possible
+                                    $keyAvailable = $false
+                                }
+                            }
                         }
                         
                         if ($keyAvailable) {
-                            $keyInfo = [Console]::ReadKey($true)
-                            if ($keyInfo) { 
-                                Process-TuiInput -KeyInfo $keyInfo 
-                                
-                                if ($renderState.AutoRenderOnInput) {
-                                    [void](Request-OptimizedRedraw -Source "Input" -Immediate)
+                            # #Write-Host "INPUT ENGINE: Reading key..." -ForegroundColor Blue
+                            try {
+                                $keyInfo = [Console]::ReadKey($true)
+                                if ($keyInfo) { 
+                                    # #Write-Host "INPUT ENGINE: Got key: $($keyInfo.Key) - processing..." -ForegroundColor Green
+                                    Process-TuiInput -KeyInfo $keyInfo 
+                                    
+                                    if ($renderState.AutoRenderOnInput) {
+                                        [void](Request-OptimizedRedraw -Source "Input" -Immediate)
+                                    }
+                                    # #Write-Host "INPUT ENGINE: Key processing completed successfully" -ForegroundColor Green
+                                } else {
+                                    # #Write-Host "INPUT ENGINE: ReadKey returned null" -ForegroundColor Red
                                 }
+                            } catch {
+                                # #Write-Host "INPUT ENGINE: ReadKey failed: $($_.Exception.Message)" -ForegroundColor Red
                             }
                         }
                     }
@@ -163,28 +193,37 @@ function Start-TuiEngine {
                     # Phase 4: OPTIMIZED RENDERING DECISION
                     $shouldRender = $false
                     
+                    #Write-Host "RENDER-DECISION: RenderRequested=$($renderState.RenderRequested), BatchedRequests=$($renderState.BatchedRequests), IsDirty=$($global:TuiState.IsDirty)" -ForegroundColor Cyan
+                    
                     if ($renderState.RenderRequested) {
                         # Immediate render requested
                         $shouldRender = $true
                         $renderState.RenderRequested = $false
+                        #Write-Host "RENDER-DECISION: Immediate render requested - shouldRender=true" -ForegroundColor Green
                     } elseif ($renderState.BatchedRequests -gt 0) {
                         # Check if batching delay has elapsed
                         $timeSinceLastRender = [DateTime]::Now - $renderState.LastRenderTime
                         if ($timeSinceLastRender.TotalMilliseconds -ge $renderState.MaxBatchDelay) {
                             $shouldRender = $true
                             $renderState.BatchedRequests = 0
+                            #Write-Host "RENDER-DECISION: Batched render delay elapsed - shouldRender=true" -ForegroundColor Green
+                        } else {
+                            #Write-Host "RENDER-DECISION: Batched render delay NOT elapsed ($(($timeSinceLastRender.TotalMilliseconds)) < $($renderState.MaxBatchDelay))" -ForegroundColor Yellow
                         }
                     } elseif ($global:TuiState.IsDirty) {
                         # Legacy IsDirty flag support
                         $shouldRender = $true
                         $renderState.ShouldRender = $true  # Reset the render gate
                         $global:TuiState.IsDirty = $false
+                        #Write-Host "RENDER-DECISION: IsDirty flag set - shouldRender=true" -ForegroundColor Green
                     }
                     
                     # Phase 5: CONDITIONAL RENDERING
                     $doRender = $shouldRender -and $renderState.ShouldRender
+                    #Write-Host "ENGINE: shouldRender=$shouldRender, renderState.ShouldRender=$($renderState.ShouldRender), doRender=$doRender" -ForegroundColor Magenta
                     if ($doRender) {
                         # Actually render
+                        #Write-Host "ENGINE: Calling Invoke-TuiRender" -ForegroundColor Magenta
                         Invoke-WithErrorHandling -Component "TuiEngine" -Context "Render" -ScriptBlock { Invoke-TuiRender }
                         $renderState.LastRenderTime = [DateTime]::Now
                         $renderState.ShouldRender = $false  # Reset render gate
@@ -225,7 +264,7 @@ function Start-TuiEngine {
                     }
                     
                 } catch {
-                    Write-Log -Level Error -Message "TUI Engine: Unhandled error in frame $($global:TuiState.FrameCount): $($_.Exception.Message)"
+                    # Write-Log -Level Error -Message "TUI Engine: Unhandled error in frame $($global:TuiState.FrameCount): $($_.Exception.Message)"
                     Start-Sleep -Milliseconds 50
                 }
             }
@@ -236,7 +275,7 @@ function Start-TuiEngine {
         }
     }
     catch {
-        Write-Log -Level Fatal -Message "TUI Engine critical error: $($_.Exception.Message)"
+        # Write-Log -Level Fatal -Message "TUI Engine critical error: $($_.Exception.Message)"
         Invoke-PanicHandler $_
     }
     finally {
@@ -274,13 +313,21 @@ function Start-TuiEngineLegacy {
                 Invoke-WithErrorHandling -Component "TuiEngine" -Context "Resize" -ScriptBlock { Update-TuiEngineSize }
             }
             
-            # Phase 2: Process input
+            # Phase 2: Process input  
             Invoke-WithErrorHandling -Component "TuiEngine" -Context "Input" -ScriptBlock {
                 $keyAvailable = $false
+                
+                # Use same improved input detection as optimized engine
                 try {
-                    $keyAvailable = [Console]::KeyAvailable
+                    $keyAvailable = $Host.UI.RawUI.KeyAvailable
                 } catch {
-                    try { $keyAvailable = [Console]::In.Peek() -ne -1 } catch {}
+                    try { 
+                        $keyAvailable = [Console]::In.Peek() -ne -1 
+                    } catch {
+                        try { 
+                            $keyAvailable = [Console]::KeyAvailable 
+                        } catch {}
+                    }
                 }
                 
                 if ($keyAvailable) {
@@ -317,7 +364,7 @@ function Start-TuiEngineLegacy {
             }
         }
         catch {
-            Write-Log -Level Error -Message "TUI Engine: Unhandled error in frame $($global:TuiState.FrameCount): $($_.Exception.Message)"
+            # Write-Log -Level Error -Message "TUI Engine: Unhandled error in frame $($global:TuiState.FrameCount): $($_.Exception.Message)"
             Start-Sleep -Milliseconds 50
         }
     }
@@ -360,8 +407,12 @@ function Request-OptimizedRedraw {
         [switch]$Force
     )
     
+    # DEBUG: Show redraw requests
+    #Write-Host "REDRAW: Request from $Source (Immediate=$($Immediate.IsPresent), Force=$($Force.IsPresent))" -ForegroundColor Yellow
+    
     # Initialize render state if not present
     if (-not $global:TuiState.PSObject.Properties['RenderState']) {
+        #Write-Host "REDRAW: Initializing render state" -ForegroundColor Yellow
         Initialize-OptimizedRenderState
     }
     
@@ -378,11 +429,14 @@ function Request-OptimizedRedraw {
     
     # Set render flags
     $renderState.ShouldRender = $true
+    #Write-Host "REDRAW: Set ShouldRender = true" -ForegroundColor Yellow
     
     if ($Immediate -or $Force) {
         $renderState.RenderRequested = $true
+        #Write-Host "REDRAW: Set RenderRequested = true (immediate)" -ForegroundColor Yellow
     } else {
         $renderState.BatchedRequests++
+        #Write-Host "REDRAW: Incremented BatchedRequests to $($renderState.BatchedRequests)" -ForegroundColor Yellow
     }
     
     # Wake up the render loop if it's sleeping

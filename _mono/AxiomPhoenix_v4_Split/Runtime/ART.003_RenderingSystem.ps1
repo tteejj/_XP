@@ -63,10 +63,14 @@ function Invoke-TuiRender {
     param()
     
     try {
+        # DEBUG: Show when rendering happens
+        #Write-Host "RENDER: Invoke-TuiRender called" -ForegroundColor Green
+        
         # PERFORMANCE: Track render metrics
         $renderStartTime = [System.Diagnostics.Stopwatch]::StartNew()
         
         if ($null -eq $global:TuiState.CompositorBuffer) {
+            #Write-Host "RENDER: CompositorBuffer is NULL - returning" -ForegroundColor Red
             return
         }
         

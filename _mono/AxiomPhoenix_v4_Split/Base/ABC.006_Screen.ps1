@@ -314,6 +314,9 @@ class Screen : UIElement {
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
         if ($null -eq $keyInfo) { return $false }
         
+        # CRITICAL DEBUG: Log to file instead of console
+        "$(Get-Date -Format 'HH:mm:ss.fff') SCREEN: Key=$($keyInfo.Key) Focus=$(if ($this._focusedChild) { $this._focusedChild.GetType().Name + ' (' + $this._focusedChild.Name + ')' } else { 'NULL' })" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+        
         # Handle Tab navigation at screen level FIRST (per guide - automatic Tab handling)
         if ($keyInfo.Key -eq [ConsoleKey]::Tab) {
             if (($keyInfo.Modifiers -band [ConsoleModifiers]::Shift) -eq [ConsoleModifiers]::Shift) {
@@ -326,9 +329,21 @@ class Screen : UIElement {
         
         # Route input to focused child
         if ($null -ne $this._focusedChild) {
-            if ($this._focusedChild.HandleInput($keyInfo)) {
-                return $true
+            "$(Get-Date -Format 'HH:mm:ss.fff') SCREEN: Routing to $($this._focusedChild.GetType().Name)" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+            try {
+                $result = $this._focusedChild.HandleInput($keyInfo)
+                "$(Get-Date -Format 'HH:mm:ss.fff') SCREEN: $($this._focusedChild.GetType().Name) returned $result" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+                if ($result) {
+                    "$(Get-Date -Format 'HH:mm:ss.fff') SCREEN: Input handled by child" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+                    return $true
+                } else {
+                    "$(Get-Date -Format 'HH:mm:ss.fff') SCREEN: Input NOT handled by child" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
+                }
+            } catch {
+                "$(Get-Date -Format 'HH:mm:ss.fff') SCREEN: EXCEPTION: $_" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
             }
+        } else {
+            "$(Get-Date -Format 'HH:mm:ss.fff') SCREEN: No focused child" | Out-File -FilePath "/tmp/arrow-debug.log" -Append
         }
         
         # If child did not handle it, check for global keybindings

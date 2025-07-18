@@ -62,13 +62,13 @@ class NewTaskScreen : Screen {
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
             $this.BorderColor = Get-ThemeColor "input.focused.border"
             $this.ShowCursor = $true
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "TitleBox:OnFocus"
         } -Force
         
         $this._titleBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
             $this.BorderColor = Get-ThemeColor "input.border"
             $this.ShowCursor = $false
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "TitleBox:OnBlur"
         } -Force
         
         $this._panel.AddChild($this._titleBox)
@@ -95,13 +95,13 @@ class NewTaskScreen : Screen {
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnFocus -Value {
             $this.BorderColor = Get-ThemeColor "input.focused.border"
             $this.ShowCursor = $true
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "DescBox:OnFocus"
         } -Force
         
         $this._descriptionBox | Add-Member -MemberType ScriptMethod -Name OnBlur -Value {
             $this.BorderColor = Get-ThemeColor "input.border"
             $this.ShowCursor = $false
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "DescBox:OnBlur"
         } -Force
         
         $this._panel.AddChild($this._descriptionBox)
@@ -162,7 +162,10 @@ class NewTaskScreen : Screen {
         
         $this.InvalidateFocusCache()
         ([Screen]$this).OnEnter()
-        $this.RequestRedraw()
+        
+        # Set initial focus to first input field
+        $this.SetChildFocus($this._titleBox)
+        Request-OptimizedRedraw -Source "NewTaskScreen:OnEnter"
     }
     
     [bool] HandleInput([System.ConsoleKeyInfo]$keyInfo) {
@@ -184,6 +187,13 @@ class NewTaskScreen : Screen {
             ([ConsoleKey]::Escape) {
                 $this._Cancel()
                 return $true
+            }
+            ([ConsoleKey]::S) {
+                # Handle Ctrl+S for save
+                if ($keyInfo.Modifiers -band [ConsoleModifiers]::Control) {
+                    $this._SaveTask()
+                    return $true
+                }
             }
         }
         
@@ -221,7 +231,7 @@ class NewTaskScreen : Screen {
     hidden [void] _SaveTask() {
         if ([string]::IsNullOrWhiteSpace($this._titleBox.Text)) {
             $this._titleBox.BorderColor = Get-ThemeColor "status.error"
-            $this.RequestRedraw()
+            Request-OptimizedRedraw -Source "NewTaskScreen:SaveValidation"
             return
         }
         

@@ -267,10 +267,10 @@ class ThemeScreen : Screen {
                 $palette = $themeObject.Palette
                 
                 # Update all preview elements with theme colors
-                $this._descriptionLabel.ForegroundColor = $palette.Foreground
+                $this._descriptionLabel.ForegroundColor = $palette.TextPrimary
                 $this._descriptionLabel.BackgroundColor = $palette.Background
                 
-                $this._previewTextLabel.ForegroundColor = $palette.Foreground
+                $this._previewTextLabel.ForegroundColor = $palette.TextPrimary
                 $this._previewTextLabel.BackgroundColor = $palette.Background
                 
                 $this._previewButtonLabel.ForegroundColor = $palette.ButtonFocusedFg
@@ -300,8 +300,8 @@ class ThemeScreen : Screen {
         # Create color swatches
         $swatchColors = @(
             @{ Name = "BG"; Color = $palette.Background },
-            @{ Name = "FG"; Color = $palette.Foreground },
-            @{ Name = "Accent"; Color = $palette.PrimaryAccent },
+            @{ Name = "FG"; Color = $palette.TextPrimary },
+            @{ Name = "Accent"; Color = $palette.Primary },
             @{ Name = "Border"; Color = $palette.Border },
             @{ Name = "Button"; Color = $palette.ButtonFocusedBg },
             @{ Name = "Select"; Color = $palette.ListSelectedBg }

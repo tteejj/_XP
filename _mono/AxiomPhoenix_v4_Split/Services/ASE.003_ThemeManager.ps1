@@ -495,7 +495,14 @@ class ThemeManager {
         }
         
         # Return the value as-is if it's not a palette reference
-        return $current
+        # IMPORTANT: Always ensure we return a string, never boolean or other types
+        if ($current -is [string]) {
+            return $current
+        } else {
+            # If it's not a string (e.g., boolean), return the default instead
+            Write-Warning "GetThemeValue: Invalid color type '$($current.GetType().Name)' for path '$path'. Using default '$defaultValue'"
+            return $defaultValue
+        }
     }
     
     # Get color using new theme paths only

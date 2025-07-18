@@ -187,6 +187,34 @@ class TuiCell {
         return "$sequence$($this.Char)" # Append character directly
     }
 
+    # PERFORMANCE: Efficient property copying without object creation
+    [void] CopyFrom([object]$other) {
+        if ($null -eq $other) { return }
+        
+        $this.Char = $other.Char
+        $this.ForegroundColor = $other.ForegroundColor
+        $this.BackgroundColor = $other.BackgroundColor
+        $this.Bold = $other.Bold
+        $this.Italic = $other.Italic
+        $this.Underline = $other.Underline
+        $this.Strikethrough = $other.Strikethrough
+        $this.ZIndex = $other.ZIndex
+        $this.Metadata = $other.Metadata
+    }
+    
+    # PERFORMANCE: Reset to default values without object creation
+    [void] Reset() {
+        $this.Char = ' '
+        $this.ForegroundColor = "#FFFFFF"
+        $this.BackgroundColor = "#000000"
+        $this.Bold = $false
+        $this.Italic = $false
+        $this.Underline = $false
+        $this.Strikethrough = $false
+        $this.ZIndex = 0
+        $this.Metadata = $null
+    }
+
     [hashtable] ToLegacyFormat() {
         return @{ Char = $this.Char; FG = $this.ForegroundColor; BG = $this.BackgroundColor }
     }
