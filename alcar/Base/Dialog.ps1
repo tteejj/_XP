@@ -122,30 +122,45 @@ class Dialog : Screen {
         
         # Draw shadow if enabled
         if ($this.ShowShadow) {
-            $shadowColor = if ($this.ShadowColor) { $this.ShadowColor } else { [VT]::RGBBG(10, 10, 10) }
+            $shadowColorValue = ""
+            if ([string]::IsNullOrEmpty($this.ShadowColor)) {
+                $shadowColorValue = [VT]::RGBBG(10, 10, 10)
+            } else {
+                $shadowColorValue = $this.ShadowColor
+            }
             for ($y = 1; $y -le $this.DialogHeight; $y++) {
                 $output += [VT]::MoveTo($this.DialogX + 2, $this.DialogY + $y)
-                $output += $shadowColor + (" " * $this.DialogWidth) + [VT]::Reset()
+                $output += $shadowColorValue + (" " * $this.DialogWidth) + [VT]::Reset()
             }
         }
         
         # Draw dialog background
-        $bgColor = if ($this.DialogBackgroundColor) { $this.DialogBackgroundColor } else { [VT]::RGBBG(30, 30, 40) }
+        $bgColorValue = ""
+        if ([string]::IsNullOrEmpty($this.DialogBackgroundColor)) {
+            $bgColorValue = [VT]::RGBBG(30, 30, 40)
+        } else {
+            $bgColorValue = $this.DialogBackgroundColor
+        }
         for ($y = 0; $y -lt $this.DialogHeight; $y++) {
             $output += [VT]::MoveTo($this.DialogX, $this.DialogY + $y)
-            $output += $bgColor + (" " * $this.DialogWidth) + [VT]::Reset()
+            $output += $bgColorValue + (" " * $this.DialogWidth) + [VT]::Reset()
         }
         
         # Draw border
-        $borderColor = if ($this.DialogBorderColor) { $this.DialogBorderColor } else { [VT]::RGB(100, 100, 150) }
-        $output += $this.DrawDialogBorder($borderColor)
+        $borderColorValue = ""
+        if ([string]::IsNullOrEmpty($this.DialogBorderColor)) {
+            $borderColorValue = [VT]::RGB(100, 100, 150)
+        } else {
+            $borderColorValue = $this.DialogBorderColor
+        }
+        $output += $this.DrawDialogBorder($borderColorValue)
         
         # Draw title
         if ($this.Title) {
             $titleText = " $($this.Title) "
             $titleX = $this.DialogX + [int](($this.DialogWidth - $titleText.Length) / 2)
             $output += [VT]::MoveTo($titleX, $this.DialogY)
-            $output += $borderColor + [VT]::Bold() + $titleText + [VT]::Reset()
+            $output += $borderColorValue + [VT]::Bold() + $titleText + [VT]::Reset()
         }
         
         # Draw message

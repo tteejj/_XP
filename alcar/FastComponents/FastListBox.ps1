@@ -20,7 +20,11 @@ class FastListBox : FastComponentBase {
         $this.Width = $width
         $this.Height = $height
         $this.PrecomputeBorders()
-        $this._visibleItems = $height - (if ($this.HasBorder) { 2 } else { 0 })
+        if ($this.HasBorder) {
+            $this._visibleItems = $height - 2
+        } else {
+            $this._visibleItems = $height
+        }
     }
     
     [void] PrecomputeBorders() {
@@ -72,9 +76,15 @@ class FastListBox : FastComponentBase {
         }
         
         # Draw items - direct loop, no method calls
-        $contentX = $this.X + (if ($this.HasBorder) { 1 } else { 0 })
-        $contentY = $this.Y + (if ($this.HasBorder) { 1 } else { 0 })
-        $contentWidth = $this.Width - (if ($this.HasBorder) { 2 } else { 0 })
+        if ($this.HasBorder) {
+            $contentX = $this.X + 1
+            $contentY = $this.Y + 1
+            $contentWidth = $this.Width - 2
+        } else {
+            $contentX = $this.X
+            $contentY = $this.Y
+            $contentWidth = $this.Width
+        }
         
         $endIndex = [Math]::Min($this.ScrollOffset + $this._visibleItems, $this.Items.Count)
         

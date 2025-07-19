@@ -498,9 +498,9 @@ class TextEditorScreenV2 : Screen {
         
         # File info
         $fileName = if ($this.FilePath) { [System.IO.Path]::GetFileName($this.FilePath) } else { "New File" }
-        $modified = if ($this.Modified) { "*" } else { "" }
+        $modifiedIndicator = if ($this.Modified) { "*" } else { "" }
         $this.StatusBarItems.Add(@{
-            Label = "$fileName$modified"
+            Label = "$fileName$modifiedIndicator"
         }) | Out-Null
         
         # Position info

@@ -21,6 +21,7 @@ try {
         "Models",
         "Services",
         "Components",
+        "FastComponents",
         "Screens"
     )
     
@@ -73,12 +74,6 @@ try {
                 . $renderOptimizerFile
             }
             
-            $navigationStandardFile = Join-Path $folderPath "NavigationStandard.ps1"
-            if (Test-Path $navigationStandardFile) {
-                if ($Debug) { Write-Host "  - Loading NavigationStandard.ps1" -ForegroundColor DarkGray }
-                . $navigationStandardFile
-            }
-            
             # Skip the rest of Core files
             continue
         } elseif ($folder -eq "Base") {
@@ -87,6 +82,13 @@ try {
             if (Test-Path $screenFile) {
                 if ($Debug) { Write-Host "  - Loading Screen.ps1 (base classes)" -ForegroundColor DarkGray }
                 . $screenFile
+            }
+            
+            # Load Dialog base class (contains DialogResult enum)
+            $dialogFile = Join-Path $folderPath "Dialog.ps1"
+            if (Test-Path $dialogFile) {
+                if ($Debug) { Write-Host "  - Loading Dialog.ps1 (dialog base)" -ForegroundColor DarkGray }
+                . $dialogFile
             }
             
             # Load Component base class
@@ -101,6 +103,13 @@ try {
             if (Test-Path $screenManagerFile) {
                 if ($Debug) { Write-Host "  - Loading ScreenManager.ps1" -ForegroundColor DarkGray }
                 . $screenManagerFile
+            }
+            
+            # Load NavigationStandard after Screen class is defined
+            $navigationStandardFile = Join-Path $PSScriptRoot "Core/NavigationStandard.ps1"
+            if (Test-Path $navigationStandardFile) {
+                if ($Debug) { Write-Host "  - Loading NavigationStandard.ps1" -ForegroundColor DarkGray }
+                . $navigationStandardFile
             }
             
             continue
@@ -121,14 +130,14 @@ try {
             # Load all screens
             $screenFiles = @(
                 "TaskScreen.ps1",
-                "MainMenuScreen.ps1",
                 "ProjectsScreen.ps1",
                 "DashboardScreen.ps1",
                 "SettingsScreen.ps1",
                 "SettingsScreen_v2.ps1",
-                "FileBrowserScreen.ps1",
                 "TextEditorScreen.ps1",
-                "TextEditorScreen_v2.ps1"
+                "TextEditorScreen_v2.ps1",
+                "FileBrowserScreen.ps1",
+                "MainMenuScreen.ps1"
             )
             
             foreach ($screenFile in $screenFiles) {
@@ -156,6 +165,29 @@ try {
                 }
             }
             continue
+        } elseif ($folder -eq "Components") {
+            # Load all components except CommandPalette (which needs Screen types)
+            $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Where-Object { $_.Name -ne "CommandPalette.ps1" } | Sort-Object Name
+            foreach ($file in $files) {
+                if ($Debug) { Write-Host "  - Loading $($file.Name)" -ForegroundColor DarkGray }
+                . $file.FullName
+            }
+            continue
+        } elseif ($folder -eq "FastComponents") {
+            # Load FastComponentBase first
+            $baseFile = Join-Path $folderPath "FastComponentBase.ps1"
+            if (Test-Path $baseFile) {
+                if ($Debug) { Write-Host "  - Loading FastComponentBase.ps1 (base class)" -ForegroundColor DarkGray }
+                . $baseFile
+            }
+            
+            # Then load all other FastComponents
+            $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Where-Object { $_.Name -ne "FastComponentBase.ps1" } | Sort-Object Name
+            foreach ($file in $files) {
+                if ($Debug) { Write-Host "  - Loading $($file.Name)" -ForegroundColor DarkGray }
+                . $file.FullName
+            }
+            continue
         } else {
             $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Sort-Object Name
         }
@@ -164,6 +196,13 @@ try {
             if ($Debug) { Write-Host "  - Loading $($file.Name)" -ForegroundColor DarkGray }
             . $file.FullName
         }
+    }
+    
+    # Load CommandPalette after all screens are loaded
+    $commandPaletteFile = Join-Path $PSScriptRoot "Components/CommandPalette.ps1"
+    if (Test-Path $commandPaletteFile) {
+        if ($Debug) { Write-Host "Loading CommandPalette.ps1 (after screens)" -ForegroundColor DarkGray }
+        . $commandPaletteFile
     }
     
     Write-Host "Framework loaded!" -ForegroundColor Green

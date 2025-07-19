@@ -21,7 +21,11 @@ class NumericInput : Component {
     
     NumericInput([string]$name) : base($name) {
         $this.IsFocusable = $true
-        $this.Height = if ($this.ShowBorder) { 3 } else { 1 }
+        if ($this.ShowBorder) {
+            $this.Height = 3
+        } else {
+            $this.Height = 1
+        }
         $this.Width = 15
         $this.UpdateTextValue()
     }
@@ -132,7 +136,11 @@ class NumericInput : Component {
         $contentY = if ($this.ShowBorder) { 1 } else { 0 }
         $contentX = if ($this.ShowBorder) { 1 } else { 0 }
         $spinnerSpace = if ($this.ShowSpinners) { 3 } else { 0 }
-        $contentWidth = $this.Width - (if ($this.ShowBorder) { 2 } else { 0 }) - $spinnerSpace
+        if ($this.ShowBorder) {
+            $contentWidth = $this.Width - 2 - $spinnerSpace
+        } else {
+            $contentWidth = $this.Width - $spinnerSpace
+        }
         
         # Build display text
         $displayText = $this.Prefix + $this._textValue + $this.Suffix
@@ -180,14 +188,14 @@ class NumericInput : Component {
             $spinnerColor = if ($this.IsFocused) { [VT]::RGB(255, 200, 100) } else { [VT]::RGB(100, 100, 100) }
             
             # Up arrow
-            $upEnabled = $this.Value < $this.Maximum
+            $upEnabled = $this.Value -lt $this.Maximum
             $upColor = if ($upEnabled) { $spinnerColor } else { [VT]::RGB(60, 60, 60) }
             $this.DrawText($buffer, $spinnerX, $contentY, $upColor + "▲" + [VT]::Reset())
             
             # Down arrow (if height allows)
             if ($this.Height -ge 3) {
                 $downY = if ($this.ShowBorder) { $this.Height - 2 } else { $this.Height - 1 }
-                $downEnabled = $this.Value > $this.Minimum
+                $downEnabled = $this.Value -gt $this.Minimum
                 $downColor = if ($downEnabled) { $spinnerColor } else { [VT]::RGB(60, 60, 60) }
                 $this.DrawText($buffer, $spinnerX, $downY, $downColor + "▼" + [VT]::Reset())
             }

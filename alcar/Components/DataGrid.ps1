@@ -130,7 +130,12 @@ class DataGrid : Component {
     }
     
     [void] DrawHeader([object]$buffer, [int]$x, [int]$y) {
-        $headerColor = if ($this.HeaderColor) { $this.HeaderColor } else { [VT]::RGB(150, 150, 200) }
+        $headerColorValue = ""
+        if ($this.HeaderColor) {
+            $headerColorValue = $this.HeaderColor
+        } else {
+            $headerColorValue = [VT]::RGB(150, 150, 200)
+        }
         $line = ""
         
         # Row number column
@@ -166,7 +171,7 @@ class DataGrid : Component {
         }
         
         # Draw the header line
-        $this.DrawText($buffer, $x, $y, $headerColor + [VT]::Bold() + $line + [VT]::Reset())
+        $this.DrawText($buffer, $x, $y, $headerColorValue + [VT]::Bold() + $line + [VT]::Reset())
         
         # Draw separator line if border enabled
         if ($this.ShowBorder) {
@@ -196,11 +201,21 @@ class DataGrid : Component {
             
             # Row background
             if ($isSelected) {
-                $bgColor = if ($this.SelectedColor) { $this.SelectedColor } else { [VT]::RGBBG(40, 40, 80) }
-                $this.DrawText($buffer, $x, $y, $bgColor + (" " * $this.Width) + [VT]::Reset())
+                $bgColorValue = ""
+                if ($this.SelectedColor) {
+                    $bgColorValue = $this.SelectedColor
+                } else {
+                    $bgColorValue = [VT]::RGBBG(40, 40, 80)
+                }
+                $this.DrawText($buffer, $x, $y, $bgColorValue + (" " * $this.Width) + [VT]::Reset())
             } elseif ($this.AlternateRows -and ($i % 2 -eq 1)) {
-                $altColor = if ($this.AlternateRowColor) { $this.AlternateRowColor } else { [VT]::RGBBG(25, 25, 30) }
-                $this.DrawText($buffer, $x, $y, $altColor + (" " * $this.Width) + [VT]::Reset())
+                $altColorValue = ""
+                if ($this.AlternateRowColor) {
+                    $altColorValue = $this.AlternateRowColor
+                } else {
+                    $altColorValue = [VT]::RGBBG(25, 25, 30)
+                }
+                $this.DrawText($buffer, $x, $y, $altColorValue + (" " * $this.Width) + [VT]::Reset())
             }
             
             # Build row content

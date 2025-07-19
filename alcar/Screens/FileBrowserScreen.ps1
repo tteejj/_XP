@@ -2,14 +2,14 @@
 
 class FileBrowserScreen : Screen {
     # Panels
-    hidden [Panel]$ParentPanel
-    hidden [Panel]$CurrentPanel
-    hidden [Panel]$PreviewPanel
+    hidden [FastPanel]$ParentPanel
+    hidden [FastPanel]$CurrentPanel
+    hidden [FastPanel]$PreviewPanel
     
     # ListBoxes
-    hidden [ListBox]$ParentList
-    hidden [ListBox]$CurrentList
-    hidden [ListBox]$PreviewList
+    hidden [FastFileListBox]$ParentList
+    hidden [FastFileListBox]$CurrentList
+    hidden [FastFileListBox]$PreviewList
     
     # State
     [string]$CurrentPath
@@ -28,7 +28,7 @@ class FileBrowserScreen : Screen {
         $panelWidth = [int]($width / 3)
         
         # Parent directory panel
-        $this.ParentPanel = [Panel]::new("ParentPanel")
+        $this.ParentPanel = [FastPanel]::new("ParentPanel")
         $this.ParentPanel.X = 0
         $this.ParentPanel.Y = 2
         $this.ParentPanel.Width = $panelWidth
@@ -36,17 +36,11 @@ class FileBrowserScreen : Screen {
         $this.ParentPanel.Title = "Parent"
         $this.ParentPanel.BorderStyle = "Single"
         
-        $this.ParentList = [ListBox]::new("ParentList")
-        $this.ParentList.X = 1
-        $this.ParentList.Y = 1
-        $this.ParentList.Width = $panelWidth - 2
-        $this.ParentList.Height = $height - 6
+        $this.ParentList = [FastFileListBox]::new(1, 1, $panelWidth - 2, $height - 6)
         $this.ParentList.HasBorder = $false
-        $this.ParentList.ItemFormatter = { param($item) $this.FormatFileItem($item) }.GetNewClosure()
-        $this.ParentPanel.AddChild($this.ParentList)
         
         # Current directory panel
-        $this.CurrentPanel = [Panel]::new("CurrentPanel")
+        $this.CurrentPanel = [FastPanel]::new("CurrentPanel")
         $this.CurrentPanel.X = $panelWidth
         $this.CurrentPanel.Y = 2
         $this.CurrentPanel.Width = $panelWidth
@@ -54,18 +48,12 @@ class FileBrowserScreen : Screen {
         $this.CurrentPanel.Title = "Current"
         $this.CurrentPanel.BorderStyle = "Double"
         
-        $this.CurrentList = [ListBox]::new("CurrentList")
-        $this.CurrentList.X = 1
-        $this.CurrentList.Y = 1
-        $this.CurrentList.Width = $panelWidth - 2
-        $this.CurrentList.Height = $height - 6
+        $this.CurrentList = [FastFileListBox]::new($panelWidth + 1, 3, $panelWidth - 2, $height - 6)
         $this.CurrentList.HasBorder = $false
-        $this.CurrentList.ItemFormatter = { param($item) $this.FormatFileItem($item) }.GetNewClosure()
-        $this.CurrentList.OnSelectionChanged = { param($sender, $index) $this.OnCurrentSelectionChanged() }.GetNewClosure()
-        $this.CurrentPanel.AddChild($this.CurrentList)
+        $this.CurrentList.IsFocused = $true
         
         # Preview panel
-        $this.PreviewPanel = [Panel]::new("PreviewPanel")
+        $this.PreviewPanel = [FastPanel]::new("PreviewPanel")
         $this.PreviewPanel.X = $panelWidth * 2
         $this.PreviewPanel.Y = 2
         $this.PreviewPanel.Width = $width - ($panelWidth * 2)
@@ -73,13 +61,8 @@ class FileBrowserScreen : Screen {
         $this.PreviewPanel.Title = "Preview"
         $this.PreviewPanel.BorderStyle = "Single"
         
-        $this.PreviewList = [ListBox]::new("PreviewList")
-        $this.PreviewList.X = 1
-        $this.PreviewList.Y = 1
-        $this.PreviewList.Width = $this.PreviewPanel.Width - 2
-        $this.PreviewList.Height = $height - 6
+        $this.PreviewList = [FastFileListBox]::new(($panelWidth * 2) + 1, 3, $this.PreviewPanel.Width - 2, $height - 6)
         $this.PreviewList.HasBorder = $false
-        $this.PreviewPanel.AddChild($this.PreviewList)
         
         # Load initial directory
         $this.LoadDirectory($this.CurrentPath)
@@ -267,6 +250,7 @@ class FileBrowserScreen : Screen {
             ".exe" { return "⚙️" }
             default { return "📄" }
         }
+        return "📄"  # Fallback return
     }
     
     [string] FormatFileSize([long]$bytes) {
@@ -308,7 +292,7 @@ class FileBrowserScreen : Screen {
             $files = Get-ChildItem -Path $this.CurrentPath -File -Force | Sort-Object Name
             $items += $files
             
-            $this.CurrentList.SetItems($items)
+            $this.CurrentList.SetFiles($items)
             
             # Update preview
             $this.OnCurrentSelectionChanged()
@@ -338,7 +322,7 @@ class FileBrowserScreen : Screen {
             $files = Get-ChildItem -Path $path -File -Force | Sort-Object Name
             $items += $files
             
-            $this.ParentList.SetItems($items)
+            $this.ParentList.SetFiles($items)
             
             # Select current directory in parent list
             $currentDirName = [System.IO.Path]::GetFileName($this.CurrentPath)

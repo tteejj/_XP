@@ -19,7 +19,11 @@ class DateInput : Component {
     DateInput([string]$name) : base($name) {
         $this.IsFocusable = $true
         $this.Width = 25
-        $this.Height = if ($this.ShowBorder) { 3 } else { 1 }
+        if ($this.ShowBorder) {
+            $this.Height = 3
+        } else {
+            $this.Height = 1
+        }
         $this._viewMonth = $this.Value
         $this._selectedDay = $this.Value.Day
     }
@@ -46,7 +50,11 @@ class DateInput : Component {
         if ($this._showCalendar) {
             $this.Height = if ($this.ShowBorder) { 12 } else { 10 }
         } else {
-            $this.Height = if ($this.ShowBorder) { 3 } else { 1 }
+            if ($this.ShowBorder) {
+            $this.Height = 3
+        } else {
+            $this.Height = 1
+        }
         }
         
         $this.Invalidate()
@@ -234,14 +242,22 @@ class DateInput : Component {
             switch ($key.Key) {
                 ([ConsoleKey]::Escape) {
                     $this._showCalendar = $false
-                    $this.Height = if ($this.ShowBorder) { 3 } else { 1 }
+                    if ($this.ShowBorder) {
+            $this.Height = 3
+        } else {
+            $this.Height = 1
+        }
                     $this.Invalidate()
                     return $true
                 }
                 ([ConsoleKey]::Enter) {
                     # Confirm selection
                     $this._showCalendar = $false
-                    $this.Height = if ($this.ShowBorder) { 3 } else { 1 }
+                    if ($this.ShowBorder) {
+            $this.Height = 3
+        } else {
+            $this.Height = 1
+        }
                     $this.Invalidate()
                     return $true
                 }

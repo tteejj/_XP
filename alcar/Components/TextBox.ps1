@@ -43,26 +43,60 @@ class TextBox : Component {
         if (-not $this.Visible) { return }
         
         # Determine colors
-        $bgColor = if ($this.BackgroundColor) { $this.BackgroundColor } else { [VT]::RGBBG(30, 30, 35) }
-        $fgColor = if ($this.ForegroundColor) { $this.ForegroundColor } else { [VT]::RGB(220, 220, 220) }
-        $borderColor = if ($this.BorderColor) { $this.BorderColor } else {
-            if ($this.IsFocused) { [VT]::RGB(100, 200, 255) } else { [VT]::RGB(80, 80, 100) }
+        $bgColorValue = ""
+        if ($this.BackgroundColor) {
+            $bgColorValue = $this.BackgroundColor
+        } else {
+            $bgColorValue = [VT]::RGBBG(30, 30, 35)
         }
-        $placeholderColor = if ($this.PlaceholderColor) { $this.PlaceholderColor } else { [VT]::RGB(100, 100, 120) }
+        
+        $fgColorValue = ""
+        if ($this.ForegroundColor) {
+            $fgColorValue = $this.ForegroundColor
+        } else {
+            $fgColorValue = [VT]::RGB(220, 220, 220)
+        }
+        
+        $borderColorValue = ""
+        if ($this.BorderColor) {
+            $borderColorValue = $this.BorderColor
+        } else {
+            if ($this.IsFocused) {
+                $borderColorValue = [VT]::RGB(100, 200, 255)
+            } else {
+                $borderColorValue = [VT]::RGB(80, 80, 100)
+            }
+        }
+        
+        $placeholderColorValue = ""
+        if ($this.PlaceholderColor) {
+            $placeholderColorValue = $this.PlaceholderColor
+        } else {
+            $placeholderColorValue = [VT]::RGB(100, 100, 120)
+        }
         
         # Calculate content area
-        $contentY = if ($this.ShowBorder) { 1 } else { 0 }
-        $contentX = if ($this.ShowBorder) { 1 } else { 0 }
-        $contentWidth = $this.Width - (if ($this.ShowBorder) { 2 } else { 0 })
+        if ($this.ShowBorder) {
+            $contentY = 1
+            $contentX = 1
+        } else {
+            $contentY = 0
+            $contentX = 0
+        }
+        if ($this.ShowBorder) {
+            $contentWidth = $this.Width - 2
+        } else {
+            $contentWidth = $this.Width
+        }
         
         # Clear background
         for ($y = 0; $y -lt $this.Height; $y++) {
-            $this.DrawText($buffer, 0, $y, $bgColor + (" " * $this.Width) + [VT]::Reset())
+            $this.DrawText($buffer, 0, $y, $bgColorValue + (" " * $this.Width) + [VT]::Reset())
         }
         
         # Draw border if enabled
         if ($this.ShowBorder) {
-            $this.DrawBorder($buffer, $borderColor)
+            $this.DrawBorder($buffer, $borderColorValue)
         }
         
         # Calculate visible text with scroll offset
@@ -77,7 +111,7 @@ class TextBox : Component {
                 $this.Placeholder
             }
             $this.DrawText($buffer, $contentX, $contentY, 
-                          $placeholderColor + $placeholderText + [VT]::Reset())
+                          $placeholderColorValue + $placeholderText + [VT]::Reset())
         } else {
             # Show text (with password masking if enabled)
             $displayText = if ($this.PasswordMode) {
@@ -95,7 +129,7 @@ class TextBox : Component {
             
             if ($visibleText) {
                 $this.DrawText($buffer, $contentX, $contentY, 
-                              $fgColor + $visibleText + [VT]::Reset())
+                              $fgColorValue + $visibleText + [VT]::Reset())
             }
         }
         

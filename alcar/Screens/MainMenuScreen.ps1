@@ -30,7 +30,7 @@ class MainMenuScreen : Screen {
                 Icon = "◈"
                 Key = "T"
                 Action = { 
-                    $screen = New-Object -TypeName "TaskScreen"
+                    $screen = [TaskScreen]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },
@@ -40,7 +40,7 @@ class MainMenuScreen : Screen {
                 Icon = "◈"
                 Key = "P"
                 Action = {
-                    $screen = New-Object -TypeName "ProjectsScreen"
+                    $screen = [ProjectsScreen]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },
@@ -50,7 +50,7 @@ class MainMenuScreen : Screen {
                 Icon = "◈"
                 Key = "D"
                 Action = {
-                    $screen = New-Object -TypeName "DashboardScreen"
+                    $screen = [DashboardScreen]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },
@@ -72,7 +72,7 @@ class MainMenuScreen : Screen {
                 Icon = "◆"
                 Key = "F"
                 Action = {
-                    $screen = New-Object -TypeName "FileBrowserScreen"
+                    $screen = [FileBrowserScreen]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },
@@ -93,7 +93,7 @@ class MainMenuScreen : Screen {
                 Icon = "◆"
                 Key = "E"
                 Action = {
-                    $screen = New-Object -TypeName "TextEditorScreen"
+                    $screen = [TextEditorScreen]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },
@@ -103,7 +103,7 @@ class MainMenuScreen : Screen {
                 Icon = "◆"
                 Key = "V"
                 Action = {
-                    $screen = New-Object -TypeName "TextEditorScreenV2"
+                    $screen = [TextEditorScreenV2]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },
@@ -114,7 +114,7 @@ class MainMenuScreen : Screen {
                 Icon = "○"
                 Key = "S"
                 Action = {
-                    $screen = New-Object -TypeName "SettingsScreenV2"
+                    $screen = [SettingsScreenV2]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },

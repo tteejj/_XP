@@ -51,8 +51,8 @@ class TextEditorScreen : Screen {
             $content = Get-Content -Path $this.FilePath -Raw
             if ($content) {
                 $this.Lines.Clear()
-                $lines = $content -split "`r?`n"
-                foreach ($line in $lines) {
+                $lineArray = $content -split "`r?`n"
+                foreach ($line in $lineArray) {
                     $this.Lines.Add($line) | Out-Null
                 }
             } else {
@@ -161,9 +161,9 @@ class TextEditorScreen : Screen {
         
         # File info
         $fileName = if ($this.FilePath) { [System.IO.Path]::GetFileName($this.FilePath) } else { "New File" }
-        $modified = if ($this.Modified) { "*" } else { "" }
+        $modifiedIndicator = if ($this.Modified) { "*" } else { "" }
         $this.StatusBarItems.Add(@{
-            Label = "$fileName$modified"
+            Label = "$fileName$modifiedIndicator"
         }) | Out-Null
         
         # Position info

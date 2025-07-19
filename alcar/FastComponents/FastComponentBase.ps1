@@ -19,9 +19,9 @@ class FastComponentBase {
     # Static initializer to pre-cache common sequences
     static FastComponentBase() {
         # Pre-cache common movements
-        for ($y = 1; $y -le 50; $y++) {
-            for ($x = 1; $x -le 100; $x++) {
-                [FastComponentBase]::VTCache.MoveTo["$x,$y"] = "`e[$y;${x}H"
+        for ($row = 1; $row -le 50; $row++) {
+            for ($col = 1; $col -le 100; $col++) {
+                [FastComponentBase]::VTCache.MoveTo["$col,$row"] = "`e[$row;${col}H"
             }
         }
         
@@ -44,12 +44,12 @@ class FastComponentBase {
     }
     
     # Helper to get cached MoveTo sequence
-    [string] MT([int]$x, [int]$y) {
-        $key = "$x,$y"
+    [string] MT([int]$xPos, [int]$yPos) {
+        $key = "$xPos,$yPos"
         $cached = [FastComponentBase]::VTCache.MoveTo[$key]
         if ($cached) { return $cached }
         # Cache miss - generate and cache
-        $seq = "`e[$y;${x}H"
+        $seq = "`e[$yPos;${xPos}H"
         [FastComponentBase]::VTCache.MoveTo[$key] = $seq
         return $seq
     }

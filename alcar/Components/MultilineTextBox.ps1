@@ -144,8 +144,13 @@ class MultilineTextBox : Component {
     
     [void] EnsureCursorVisible() {
         # Calculate content area
-        $contentHeight = $this.Height - (if ($this.ShowBorder) { 2 } else { 0 })
-        $contentWidth = $this.Width - (if ($this.ShowBorder) { 2 } else { 0 })
+        if ($this.ShowBorder) {
+            $contentHeight = $this.Height - 2
+            $contentWidth = $this.Width - 2
+        } else {
+            $contentHeight = $this.Height
+            $contentWidth = $this.Width
+        }
         
         if ($this.ShowLineNumbers) {
             $contentWidth -= $this.LineNumberWidth + 1
@@ -190,8 +195,13 @@ class MultilineTextBox : Component {
         # Calculate content area
         $contentY = if ($this.ShowBorder) { 1 } else { 0 }
         $contentX = if ($this.ShowBorder) { 1 } else { 0 }
-        $contentHeight = $this.Height - (if ($this.ShowBorder) { 2 } else { 0 })
-        $contentWidth = $this.Width - (if ($this.ShowBorder) { 2 } else { 0 })
+        if ($this.ShowBorder) {
+            $contentHeight = $this.Height - 2
+            $contentWidth = $this.Width - 2
+        } else {
+            $contentHeight = $this.Height
+            $contentWidth = $this.Width
+        }
         
         # Adjust for line numbers
         $textStartX = $contentX
