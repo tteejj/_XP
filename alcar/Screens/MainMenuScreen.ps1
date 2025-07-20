@@ -54,6 +54,24 @@ class MainMenuScreen : Screen {
                 }.GetNewClosure()
             },
             @{
+                Title = "ALCAR LazyGit Interface"
+                Category = 0
+                Icon = "🚀"
+                Key = "G"
+                Action = { 
+                    try {
+                        Write-Host "Creating ALCAR LazyGit Interface..." -ForegroundColor Cyan
+                        $screen = [ALCARLazyGitScreen]::new()
+                        Write-Host "ALCAR LazyGit Interface created, pushing to ScreenManager..." -ForegroundColor Cyan
+                        $global:ScreenManager.Push($screen)
+                        Write-Host "ALCAR LazyGit Interface pushed successfully" -ForegroundColor Cyan
+                    } catch {
+                        Write-Host "Error creating ALCAR LazyGit Interface: $($_.Exception.Message)" -ForegroundColor Red
+                        Write-Host "Stack trace: $($_.ScriptStackTrace)" -ForegroundColor Red
+                    }
+                }.GetNewClosure()
+            },
+            @{
                 Title = "Projects"
                 Category = 0
                 Icon = "◈"

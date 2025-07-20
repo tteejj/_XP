@@ -75,6 +75,24 @@ try {
                 . $renderOptimizerFile
             }
             
+            # Load LazyGit components in dependency order
+            $lazyGitFiles = @(
+                "ILazyGitView.ps1",
+                "LazyGitRenderer.ps1", 
+                "LazyGitLayout.ps1",
+                "LazyGitPanel.ps1",
+                "LazyGitFocusManager.ps1",
+                "EnhancedCommandBar.ps1"
+            )
+            
+            foreach ($lazyGitFile in $lazyGitFiles) {
+                $filePath = Join-Path $folderPath $lazyGitFile
+                if (Test-Path $filePath) {
+                    if ($Debug) { Write-Host "  - Loading $lazyGitFile (LazyGit)" -ForegroundColor DarkGray }
+                    . $filePath
+                }
+            }
+            
             # Skip the rest of Core files
             continue
         } elseif ($folder -eq "Base") {
@@ -161,6 +179,7 @@ try {
                 "TextEditorScreen_v2.ps1",
                 "SimpleTextEditor.ps1",
                 "FileBrowserScreen.ps1",
+                "ALCARLazyGitScreen.ps1",
                 "MainMenuScreen.ps1"
             )
             

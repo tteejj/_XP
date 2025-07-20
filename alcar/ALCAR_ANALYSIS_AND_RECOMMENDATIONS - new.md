@@ -222,3 +222,179 @@ class CommandPalette : Dialog {
 ALCAR shows strong architectural foundation with room for significant UX and integration improvements. The LazyGit-inspired approach demonstrates the potential for balancing aesthetics with performance. Focus should be on fixing critical issues first, then implementing the command palette and unified data service for maximum impact.
 
 The existing FastComponents and service architecture provide a solid foundation for these enhancements. The key is maintaining the application's performance characteristics while adding the requested visual and integration improvements.
+
+## LazyGit-Style Multi-Panel Screen Architecture
+
+### Feasibility Assessment: **HIGHLY FEASIBLE**
+
+Based on analysis of ALCAR's rendering system, a LazyGit-style multi-panel screen with 4+ vertical panels, main right panel, tabbed views, and persistent command palette is absolutely achievable with minimal flicker and snappy performance.
+
+### Current Rendering Performance Analysis
+
+**ALCAR uses a dual-architecture approach:**
+
+#### FastComponents System (Optimal for LazyGit-style)
+- **5-10x faster** than regular components
+- **<1ms input-to-render latency**
+- **Direct VT sequence building** with minimal overhead
+- **Pre-computed borders/colors** cached at startup
+- **StringBuilder-based rendering** (this IS the optimal buffering strategy)
+
+#### Why Cell-Based Double Buffering Was Slow
+- Object creation overhead for each cell
+- Memory allocation/deallocation per frame
+- Method dispatch for cell operations
+- **Solution**: Current StringBuilder approach is superior
+
+### Proposed LazyGit-Style Architecture
+
+#### Layout Design:
+```
+┌─────────────┬─────────────┬─────────────┬─────────────────────────┐
+│   Panel 1   │   Panel 2   │   Panel 3   │                         │
+│ (Filters)   │ (Projects)  │ (Tasks)     │      Main Panel         │
+│             │             │             │    (Task Details)       │
+│    20 cols  │    20 cols  │    20 cols  │                         │
+├─────────────┼─────────────┼─────────────┤                         │
+│   Panel 4   │   Panel 5   │   Panel 6   │                         │
+│ (Recent)    │ (Bookmarks) │ (Actions)   │                         │
+│             │             │             │                         │
+└─────────────┴─────────────┴─────────────┼─────────────────────────┤
+│ Command Palette: > _                    │                         │
+└─────────────────────────────────────────┴─────────────────────────┘
+```
+
+### Core Technical Implementation
+
+#### 1. LazyGitScreen Class
+```powershell
+class LazyGitScreen : Screen {
+    [LazyGitPanel[]]$LeftPanels = @()  # Vertical stack
+    [LazyGitPanel]$MainPanel
+    [LazyGitCommandPalette]$CommandPalette
+    
+    [int]$PanelWidth = 20
+    [int]$PanelCount = 6
+    [int]$ActivePanel = 0
+    
+    [hashtable]$PanelTabs = @{}  # Panel index -> Tab definitions
+}
+```
+
+#### 2. Customizable Panel System
+```powershell
+class LazyGitPanel {
+    [string]$Title
+    [ILazyGitView]$CurrentView
+    [hashtable]$AvailableViews = @{}
+    [string[]]$TabOrder = @()
+    [int]$CurrentTab = 0
+    
+    [void] SwitchToView([string]$viewName)
+    [void] NextTab()
+}
+
+interface ILazyGitView {
+    [string] Render([int]$width, [int]$height)
+    [bool] HandleInput([ConsoleKeyInfo]$key)
+    [object[]] GetData()
+}
+```
+
+#### 3. Persistent Command Palette
+```powershell
+class LazyGitCommandPalette {
+    [string]$CurrentInput = ""
+    [string[]]$FilteredCommands = @()
+    [hashtable]$Commands = @{
+        "nt" = @{ Name = "New Task"; Action = { $this.Parent.CreateTask() } }
+        "np" = @{ Name = "New Project"; Action = { $this.Parent.CreateProject() } }
+        "ft" = @{ Name = "Find Task"; Action = { $this.Parent.SearchTasks() } }
+    }
+}
+```
+
+### Enhanced Buffering Strategy
+
+**Use StringBuilder as the "buffer" (not cell-based):**
+```powershell
+class LazyGitRenderer {
+    hidden [StringBuilder]$_primaryBuffer
+    hidden [StringBuilder]$_secondaryBuffer
+    hidden [bool]$_useSecondary = $false
+    
+    [void] BeginFrame() {
+        $buffer = if ($this._useSecondary) { $this._secondaryBuffer } else { $this._primaryBuffer }
+        $buffer.Clear()
+        $buffer.EnsureCapacity(8192)
+    }
+    
+    [void] EndFrame() {
+        # Single atomic write to console
+        [Console]::Write($buffer.ToString())
+        $this._useSecondary = -not $this._useSecondary
+    }
+}
+```
+
+### Performance Optimizations
+
+#### 1. Selective Rendering
+```powershell
+[bool[]]$PanelDirty = @($true, $true, $true, $true, $true, $true)
+# Only render panels that changed
+```
+
+#### 2. Pre-computed Elements
+```powershell
+hidden [string]$_verticalSeparator = "`e[38;2;100;100;100m│`e[0m"
+hidden [string]$_horizontalSeparator = "`e[38;2;100;100;100m─`e[0m"
+```
+
+#### 3. Minimal VT Sequences
+- Use relative positioning instead of absolute when possible
+- Batch consecutive cell changes
+- Cache common color sequences
+
+### Implementation Roadmap
+
+#### Phase 1: Core Infrastructure (1-2 days)
+1. `LazyGitPanel` base class with tab support
+2. `ILazyGitView` interface and basic views  
+3. Enhanced StringBuilder buffering system
+
+#### Phase 2: Layout Engine (2-3 days)
+1. Multi-panel layout calculations
+2. Responsive panel sizing
+3. Panel focus management
+
+#### Phase 3: Command Palette (1-2 days)
+1. Persistent input area
+2. Fuzzy search with ranking
+3. Command registration system
+
+#### Phase 4: Views & Integration (2-3 days)
+1. Convert existing screens to views
+2. Cross-panel data synchronization
+3. Tab management per panel
+
+### Expected Performance
+
+**With FastComponent approach + optimizations:**
+- **60+ FPS** rendering capability
+- **<1ms** input latency  
+- **Minimal flicker** (single Console::Write per frame)
+- **Memory efficient** (StringBuilder reuse)
+- **Highly responsive** panel switching
+
+### Key Insight
+
+**The current FastComponent + StringBuilder approach IS the optimal buffering strategy.** Don't change the core rendering - build the LazyGit panels on top of the existing high-performance foundation.
+
+### Pluggable View Examples
+- `FilterListView` - Dynamic task/project filtering
+- `ProjectTreeView` - Hierarchical project display
+- `TaskKanbanView` - Kanban-style task board
+- `TimeTrackingView` - Real-time time entry
+- `RecentFilesView` - Recently accessed files
+- `BookmarksView` - Saved locations/searches
