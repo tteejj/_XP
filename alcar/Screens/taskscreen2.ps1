@@ -871,4 +871,19 @@ class TaskScreen {
         $dialog += [VT]::Reset()
         [Console]::Write($dialog)
     }
+    
+    # Buffer-based render - zero string allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Clear background
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
+        }
+        
+        # Legacy fallback - this file is not a proper Screen class
+        $this.Render()
+    }
 }

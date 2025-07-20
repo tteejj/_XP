@@ -22,30 +22,8 @@ class ProjectsScreen : Screen {
         # Start with left pane focused
         $this.Layout.SetFocus(0)
         
-        # Sample projects
-        $this.Projects = [System.Collections.ArrayList]@(
-            @{
-                Name = "BOLT-AXIOM"
-                Description = "Terminal UI Framework"
-                TaskCount = 15
-                CompletedCount = 8
-                Color = [VT]::RGB(0, 255, 255)
-            },
-            @{
-                Name = "Personal Website"
-                Description = "Portfolio and blog"
-                TaskCount = 8
-                CompletedCount = 3
-                Color = [VT]::RGB(255, 128, 0)
-            },
-            @{
-                Name = "Learning"
-                Description = "Courses and tutorials"
-                TaskCount = 12
-                CompletedCount = 10
-                Color = [VT]::RGB(128, 255, 0)
-            }
-        )
+        # Load actual projects from service
+        $this.LoadProjects()
         
         # Key bindings
         $this.InitializeKeyBindings()
@@ -55,21 +33,33 @@ class ProjectsScreen : Screen {
     }
     
     [void] InitializeKeyBindings() {
+        # STANDARDIZED NAVIGATION:
+        # Up/Down: Navigate within current pane
         $this.BindKey([ConsoleKey]::UpArrow, { $this.NavigateUp(); $this.RequestRender() })
         $this.BindKey([ConsoleKey]::DownArrow, { $this.NavigateDown(); $this.RequestRender() })
+        
+        # Left/Right: Move between panes
         $this.BindKey([ConsoleKey]::LeftArrow, { 
-            # In left pane, go back to main menu
-            if ($this.Layout.FocusedPane -eq 0) {
+            if ($this.Layout.FocusedPane -gt 0) {
+                $this.Layout.SetFocus($this.Layout.FocusedPane - 1)
+                $this.RequestRender()
+            } else {
+                # In leftmost pane, go back to main menu
                 $this.Active = $false
             }
         })
-        $this.BindKey([ConsoleKey]::Enter, { $this.OpenProject() })
         $this.BindKey([ConsoleKey]::RightArrow, { 
-            # Right arrow opens project when in left pane
-            if ($this.Layout.FocusedPane -eq 0) {
+            if ($this.Layout.FocusedPane -lt 2) {
+                $this.Layout.SetFocus($this.Layout.FocusedPane + 1) 
+                $this.RequestRender()
+            } else {
+                # In rightmost pane, open project
                 $this.OpenProject()
             }
         })
+        
+        # Standard actions
+        $this.BindKey([ConsoleKey]::Enter, { $this.OpenProject() })
         $this.BindKey([ConsoleKey]::Escape, { $this.Active = $false })
         $this.BindKey([ConsoleKey]::Backspace, { $this.Active = $false })
         
@@ -89,24 +79,80 @@ class ProjectsScreen : Screen {
         $this.AddStatusItem('Esc', 'back')
     }
     
+    # Fast string rendering - maximum performance like TaskScreen  
     [string] RenderContent() {
         $width = [Console]::WindowWidth
         $height = [Console]::WindowHeight
         
         $output = ""
         
-        # Clear background by drawing spaces everywhere
-        for ($y = 1; $y -le $height; $y++) {
-            $output += [VT]::MoveTo(1, $y)
-            $output += " " * $width
-        }
+        # Clear background efficiently
+        $output += [VT]::Clear()
         
+        # Update all panes first
         $this.UpdateLeftPane()
         $this.UpdateMiddlePane()
         $this.UpdateRightPane()
         
+        # Render layout in one pass
         $output += $this.Layout.Render()
+        
         return $output
+    }
+    
+    [void] LoadProjects() {
+        try {
+            $projectService = $global:ServiceContainer.GetService("ProjectService")
+            $taskService = $global:ServiceContainer.GetService("TaskService")
+            $projectsWithStats = $projectService.GetProjectsWithStats($taskService)
+            
+            $this.Projects = [System.Collections.ArrayList]::new()
+            
+            foreach ($projStat in $projectsWithStats) {
+                $project = $projStat.Project
+                
+                # Generate color based on project status
+                $color = [VT]::RGB(0, 255, 255)  # Default cyan
+                if ($project.Deleted) {
+                    $color = [VT]::RGB(128, 128, 128)  # Gray for deleted
+                } elseif ($project.ClosedDate -and $project.ClosedDate -ne [DateTime]::MinValue) {
+                    $color = [VT]::RGB(0, 255, 0)  # Green for completed
+                } elseif ($project.DateDue -lt [DateTime]::Now) {
+                    $color = [VT]::RGB(255, 0, 0)  # Red for overdue
+                } elseif ($project.DateDue -lt [DateTime]::Now.AddDays(7)) {
+                    $color = [VT]::RGB(255, 255, 0)  # Yellow for due soon
+                }
+                
+                $projectDisplay = @{
+                    Name = $project.Nickname
+                    FullName = $project.FullProjectName
+                    Description = $project.Note
+                    TaskCount = $projStat.TaskCount
+                    CompletedCount = $projStat.CompletedCount
+                    Color = $color
+                    Project = $project  # Store the full project object
+                }
+                
+                $this.Projects.Add($projectDisplay) | Out-Null
+            }
+            
+            # Ensure we have at least the default project
+            if ($this.Projects.Count -eq 0) {
+                $defaultProject = @{
+                    Name = "Default"
+                    FullName = "Default Project"
+                    Description = "No projects available"
+                    TaskCount = 0
+                    CompletedCount = 0
+                    Color = [VT]::RGB(128, 128, 128)
+                    Project = $null
+                }
+                $this.Projects.Add($defaultProject) | Out-Null
+            }
+        }
+        catch {
+            Write-Error "Failed to load projects: $_"
+        }
     }
     
     [void] UpdateLeftPane() {
@@ -190,31 +236,108 @@ class ProjectsScreen : Screen {
             return
         }
         
-        $project = $this.Projects[$this.SelectedIndex]
+        $projectDisplay = $this.Projects[$this.SelectedIndex]
+        $project = $projectDisplay.Project
         
-        # Project details
-        $this.Layout.RightPane.Content.Add($project.Color + " ● " + [VT]::TextBright() + $project.Name) | Out-Null
+        # Project header
+        $this.Layout.RightPane.Content.Add($projectDisplay.Color + " ● " + [VT]::TextBright() + $projectDisplay.Name) | Out-Null
         $this.Layout.RightPane.Content.Add([VT]::TextDim() + " " + ("─" * ($this.Layout.RightPane.Width - 3))) | Out-Null
         $this.Layout.RightPane.Content.Add("") | Out-Null
         
-        # Description
-        $this.Layout.RightPane.Content.Add([VT]::Text() + " " + $project.Description) | Out-Null
-        $this.Layout.RightPane.Content.Add("") | Out-Null
+        if ($project) {
+            # PMC-style project details
+            $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Full Name: " + [VT]::Text() + $project.FullProjectName) | Out-Null
+            $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Nickname: " + [VT]::Text() + $project.Nickname) | Out-Null
+            
+            if ($project.ID1) {
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " ID1: " + [VT]::Text() + $project.ID1) | Out-Null
+            }
+            if ($project.ID2) {
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " ID2: " + [VT]::Text() + $project.ID2) | Out-Null
+            }
+            
+            $this.Layout.RightPane.Content.Add("") | Out-Null
+            
+            # Dates
+            $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Assigned: " + [VT]::Text() + $project.DateAssigned.ToString("yyyy-MM-dd")) | Out-Null
+            $this.Layout.RightPane.Content.Add([VT]::TextDim() + " BF Date: " + [VT]::Text() + $project.BFDate.ToString("yyyy-MM-dd")) | Out-Null
+            
+            # Due date with color coding
+            $dueColor = [VT]::Text()
+            if ($project.DateDue -lt [DateTime]::Now) {
+                $dueColor = [VT]::RGB(255, 0, 0)  # Red for overdue
+            } elseif ($project.DateDue -lt [DateTime]::Now.AddDays(7)) {
+                $dueColor = [VT]::RGB(255, 255, 0)  # Yellow for due soon
+            }
+            $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Due Date: " + $dueColor + $project.DateDue.ToString("yyyy-MM-dd")) | Out-Null
+            
+            if ($project.ClosedDate -and $project.ClosedDate -ne [DateTime]::MinValue) {
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Closed: " + [VT]::Accent() + $project.ClosedDate.ToString("yyyy-MM-dd")) | Out-Null
+            }
+            
+            $this.Layout.RightPane.Content.Add("") | Out-Null
+            
+            # Time tracking
+            if ($project.CumulativeHrs -gt 0) {
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Hours: " + [VT]::Text() + $project.CumulativeHrs) | Out-Null
+            }
+            
+            # File paths
+            if ($project.CAAPath) {
+                $fileName = Split-Path $project.CAAPath -Leaf
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " CAA: " + [VT]::Text() + $fileName) | Out-Null
+            }
+            if ($project.RequestPath) {
+                $fileName = Split-Path $project.RequestPath -Leaf
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Request: " + [VT]::Text() + $fileName) | Out-Null
+            }
+            if ($project.T2020Path) {
+                $fileName = Split-Path $project.T2020Path -Leaf
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " T2020: " + [VT]::Text() + $fileName) | Out-Null
+            }
+            
+            # Note
+            if ($project.Note) {
+                $this.Layout.RightPane.Content.Add("") | Out-Null
+                $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Note:") | Out-Null
+                
+                # Word wrap note text
+                $maxWidth = $this.Layout.RightPane.Width - 4
+                $words = $project.Note -split '\s+'
+                $currentLine = " "
+                
+                foreach ($word in $words) {
+                    if (($currentLine + $word).Length -gt $maxWidth) {
+                        $this.Layout.RightPane.Content.Add([VT]::Text() + $currentLine) | Out-Null
+                        $currentLine = " " + $word
+                    } else {
+                        $currentLine += " " + $word
+                    }
+                }
+                if ($currentLine.Trim()) {
+                    $this.Layout.RightPane.Content.Add([VT]::Text() + $currentLine) | Out-Null
+                }
+            }
+        } else {
+            # Fallback for legacy projects
+            $this.Layout.RightPane.Content.Add([VT]::Text() + " " + $projectDisplay.Description) | Out-Null
+        }
         
-        # Statistics
-        $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Tasks: " + [VT]::Text() + $project.TaskCount) | Out-Null
-        $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Completed: " + [VT]::Accent() + $project.CompletedCount) | Out-Null
-        $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Remaining: " + [VT]::Warning() + ($project.TaskCount - $project.CompletedCount)) | Out-Null
+        # Task statistics
+        $this.Layout.RightPane.Content.Add("") | Out-Null
+        $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Tasks: " + [VT]::Text() + $projectDisplay.TaskCount) | Out-Null
+        $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Completed: " + [VT]::Accent() + $projectDisplay.CompletedCount) | Out-Null
+        $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Remaining: " + [VT]::Warning() + ($projectDisplay.TaskCount - $projectDisplay.CompletedCount)) | Out-Null
         
         # Progress bar
         $this.Layout.RightPane.Content.Add("") | Out-Null
-        $progress = if ($project.TaskCount -gt 0) { 
-            ($project.CompletedCount / $project.TaskCount) 
+        $progress = if ($projectDisplay.TaskCount -gt 0) { 
+            ($projectDisplay.CompletedCount / $projectDisplay.TaskCount) 
         } else { 0 }
         
         $barWidth = 20
         $filled = [int]($progress * $barWidth)
-        $bar = $project.Color + ("█" * $filled) + [VT]::TextDim() + ("░" * ($barWidth - $filled))
+        $bar = $projectDisplay.Color + ("█" * $filled) + [VT]::TextDim() + ("░" * ($barWidth - $filled))
         
         $this.Layout.RightPane.Content.Add([VT]::TextDim() + " Progress: " + $bar + [VT]::Reset() + " " + ([int]($progress * 100)) + "%") | Out-Null
     }
@@ -241,20 +364,38 @@ class ProjectsScreen : Screen {
     }
     
     [void] AddProject() {
-        # Would show add project dialog
-        Write-Host "`nAdd project not implemented yet" -ForegroundColor Yellow
-        Start-Sleep -Seconds 1
+        # Open guided project creation dialog with alternate buffer
+        $projectService = $global:ServiceContainer.GetService("ProjectService")
+        $screen = New-Object ProjectCreationDialog -ArgumentList $projectService
+        $global:ScreenManager.PushModal($screen)
+        
+        # Refresh projects list when we return
+        $this.LoadProjects()
     }
     
     [void] EditProject() {
-        # Would show edit project dialog
-        Write-Host "`nEdit project not implemented yet" -ForegroundColor Yellow
-        Start-Sleep -Seconds 1
+        if ($this.Projects.Count -gt 0 -and $this.Layout.FocusedPane -eq 0) {
+            $selectedProject = $this.Projects[$this.SelectedIndex]
+            
+            # Create edit dialog (reuse project creation dialog)
+            $dialog = New-Object ProjectCreationDialog -ArgumentList $this, $selectedProject
+            $dialog | Add-Member -NotePropertyName IsEdit -NotePropertyValue $true
+            $dialog | Add-Member -NotePropertyName ParentProjectScreen -NotePropertyValue $this
+            
+            $global:ScreenManager.Push($dialog)
+        }
     }
     
     [void] DeleteProject() {
-        # Would show delete confirmation
-        Write-Host "`nDelete project not implemented yet" -ForegroundColor Yellow
-        Start-Sleep -Seconds 1
+        if ($this.Projects.Count -gt 0 -and $this.Layout.FocusedPane -eq 0) {
+            $selectedProject = $this.Projects[$this.SelectedIndex]
+            
+            # Create simple confirmation dialog
+            $dialog = New-Object ConfirmDialog -ArgumentList $this, "Delete Project", "Are you sure you want to delete project '$($selectedProject.Name)'?"
+            $dialog | Add-Member -NotePropertyName ProjectToDelete -NotePropertyValue $selectedProject
+            $dialog | Add-Member -NotePropertyName ParentProjectScreen -NotePropertyValue $this
+            
+            $global:ScreenManager.Push($dialog)
+        }
     }
 }

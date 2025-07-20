@@ -1,6 +1,6 @@
 # Task Management Screen with Three-Pane Layout
 
-class TaskScreen {
+class TaskScreen : Screen {
     [ThreePaneLayout]$Layout
     [System.Collections.ArrayList]$Tasks
     [System.Collections.ArrayList]$Filters
@@ -351,5 +351,24 @@ class TaskScreen {
                 }
             }
         }
+    }
+    
+    # Buffer-based render - zero string allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Clear background
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
+        }
+        
+        $this.UpdateLeftPane()
+        $this.UpdateMiddlePane()
+        $this.UpdateRightPane()
+        
+        # Render layout directly to buffer
+        $this.Layout.RenderToBuffer($buffer)
     }
 }

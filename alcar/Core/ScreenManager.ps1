@@ -4,9 +4,21 @@ class ScreenManager {
     [System.Collections.Stack]$ScreenStack
     [Screen]$CurrentScreen
     [bool]$Running = $true
+    [bool]$UseAlternateBuffer = $false
     
     ScreenManager() {
         $this.ScreenStack = [System.Collections.Stack]::new()
+    }
+    
+    # PTUI Pattern: Alternate buffer switching for modal dialogs
+    [void] EnterAlternateBuffer() {
+        [Console]::Write("`e[?1049h")  # Enter alternate screen buffer
+        $this.UseAlternateBuffer = $true
+    }
+    
+    [void] ExitAlternateBuffer() {
+        [Console]::Write("`e[?1049l")  # Exit alternate screen buffer
+        $this.UseAlternateBuffer = $false
     }
     
     # Push a new screen onto the stack
@@ -23,8 +35,19 @@ class ScreenManager {
         # Don't render here - let the main loop handle it
     }
     
+    # PTUI Pattern: Push modal dialog with alternate buffer
+    [void] PushModal([Screen]$screen) {
+        $this.EnterAlternateBuffer()
+        $this.Push($screen)
+    }
+    
     # Pop current screen and return to previous
     [void] Pop() {
+        # PTUI Pattern: Exit alternate buffer if we're using it
+        if ($this.UseAlternateBuffer) {
+            $this.ExitAlternateBuffer()
+        }
+        
         if ($this.ScreenStack.Count -gt 0) {
             if ($this.CurrentScreen) {
                 $this.CurrentScreen.OnDeactivate()
@@ -113,7 +136,7 @@ class ScreenManager {
                     $this.CurrentScreen.Render()
                 }
                 
-                Start-Sleep -Milliseconds 50  # Increased to reduce flicker
+                # No sleep needed - fast rendering with proper VT100
             }
         } finally {
             # Cleanup - exit alternate buffer and restore cursor

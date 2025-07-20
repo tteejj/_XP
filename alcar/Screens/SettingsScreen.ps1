@@ -93,6 +93,25 @@ class SettingsScreen : Screen {
         $this.AddStatusItem('Esc', 'back')
     }
     
+    # Buffer-based render - zero string allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Clear background
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
+        }
+        
+        # Render using fallback for now
+        $content = $this.RenderContent()
+        $lines = $content -split "`n"
+        for ($i = 0; $i -lt [Math]::Min($lines.Count, $buffer.Height); $i++) {
+            $buffer.WriteString(0, $i, $lines[$i], $normalFG, $normalBG)
+        }
+    }
+    
     [string] RenderContent() {
         $width = [Console]::WindowWidth
         $height = [Console]::WindowHeight

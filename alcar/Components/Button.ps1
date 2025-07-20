@@ -59,8 +59,7 @@ class Button : Component {
         $this.IsPressed = $true
         $this.Invalidate()
         
-        # Visual feedback delay
-        Start-Sleep -Milliseconds 100
+        # No sleep needed - instant response
         
         if ($this.OnClick) {
             & $this.OnClick $this

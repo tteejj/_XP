@@ -19,6 +19,58 @@ class Pane {
         $this.Content = [System.Collections.ArrayList]::new()
     }
     
+    # Buffer-based border rendering - zero allocation
+    [void] DrawBorderToBuffer([Buffer]$buffer) {
+        $borderColor = if ($this.Active) { "#64C8FF" } else { "#646464" }
+        $normalBG = "#1E1E23"
+        
+        # Top border
+        $buffer.SetCell($this.X, $this.Y, '┌', $borderColor, $normalBG)
+        
+        if ($this.Title) {
+            $titleText = " $($this.Title) "
+            $titleWidth = $titleText.Length
+            $borderWidth = $this.Width - 2
+            $leftPad = [int](($borderWidth - $titleWidth) / 2)
+            
+            # Left padding
+            for ($i = 0; $i -lt $leftPad; $i++) {
+                $buffer.SetCell($this.X + 1 + $i, $this.Y, '─', $borderColor, $normalBG)
+            }
+            
+            # Title
+            for ($i = 0; $i -lt $titleText.Length; $i++) {
+                $buffer.SetCell($this.X + 1 + $leftPad + $i, $this.Y, $titleText[$i], "#FFFFFF", $normalBG)
+            }
+            
+            # Right padding
+            $rightPadStart = 1 + $leftPad + $titleWidth
+            for ($i = $rightPadStart; $i -lt $this.Width - 1; $i++) {
+                $buffer.SetCell($this.X + $i, $this.Y, '─', $borderColor, $normalBG)
+            }
+        } else {
+            for ($i = 1; $i -lt $this.Width - 1; $i++) {
+                $buffer.SetCell($this.X + $i, $this.Y, '─', $borderColor, $normalBG)
+            }
+        }
+        
+        $buffer.SetCell($this.X + $this.Width - 1, $this.Y, '┐', $borderColor, $normalBG)
+        
+        # Side borders
+        for ($i = 1; $i -lt $this.Height - 1; $i++) {
+            $buffer.SetCell($this.X, $this.Y + $i, '│', $borderColor, $normalBG)
+            $buffer.SetCell($this.X + $this.Width - 1, $this.Y + $i, '│', $borderColor, $normalBG)
+        }
+        
+        # Bottom border
+        $buffer.SetCell($this.X, $this.Y + $this.Height - 1, '└', $borderColor, $normalBG)
+        for ($i = 1; $i -lt $this.Width - 1; $i++) {
+            $buffer.SetCell($this.X + $i, $this.Y + $this.Height - 1, '─', $borderColor, $normalBG)
+        }
+        $buffer.SetCell($this.X + $this.Width - 1, $this.Y + $this.Height - 1, '┘', $borderColor, $normalBG)
+    }
+    
+    # Legacy string method kept for backward compatibility
     [string] DrawBorder() {
         $sb = [System.Text.StringBuilder]::new()
         $color = if ($this.Active) { [VT]::BorderActive() } else { [VT]::Border() }
@@ -63,6 +115,22 @@ class Pane {
         return $sb.ToString()
     }
     
+    # Buffer-based content rendering - zero allocation
+    [void] DrawContentToBuffer([Buffer]$buffer) {
+        $contentY = $this.Y + 1
+        $maxLines = $this.Height - 2
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
+        
+        for ($i = 0; $i -lt [Math]::Min($this.Content.Count, $maxLines); $i++) {
+            $content = $this.Content[$i]
+            if ($content) {
+                $buffer.WriteString($this.X + 1, $contentY + $i, $content, $normalFG, $normalBG)
+            }
+        }
+    }
+    
+    # Legacy string method
     [string] DrawContent() {
         $sb = [System.Text.StringBuilder]::new()
         $contentY = $this.Y + 1
@@ -136,6 +204,20 @@ class ThreePaneLayout {
         return $sb.ToString()
     }
     
+    # Buffer-based render - zero string allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Draw panes directly to buffer
+        $this.LeftPane.DrawBorderToBuffer($buffer)
+        $this.MiddlePane.DrawBorderToBuffer($buffer)
+        $this.RightPane.DrawBorderToBuffer($buffer)
+        
+        # Draw content directly to buffer
+        $this.LeftPane.DrawContentToBuffer($buffer)
+        $this.MiddlePane.DrawContentToBuffer($buffer)
+        $this.RightPane.DrawContentToBuffer($buffer)
+    }
+    
+    # Legacy string method
     [string] Render() {
         $sb = [System.Text.StringBuilder]::new()
         

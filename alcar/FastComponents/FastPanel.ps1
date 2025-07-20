@@ -22,73 +22,66 @@ class FastPanel : FastComponentBase {
         $this.Children.Add($child) | Out-Null
     }
     
-    [string] Render() {
-        if (-not $this.Visible) { return "" }
+    # Buffer-based render - zero allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        if (-not $this.Visible) { return }
         
-        $sb = [System.Text.StringBuilder]::new(2048)
+        # Colors
+        $borderFG = if ($this.IsFocused) { "#64C8FF" } else { "#646464" }
+        $normalBG = "#1E1E23"
         
         # Render border if enabled
         if ($this.HasBorder) {
             $chars = [FastPanel]::BorderChars[$this.BorderStyle]
-            $color = if ($this.IsFocused) { 
-                [FastComponentBase]::VTCache.Colors['Focus'] 
-            } else { 
-                [FastComponentBase]::VTCache.Colors['Normal'] 
-            }
             
             # Top border
-            [void]$sb.Append($this.MT($this.X, $this.Y))
-            [void]$sb.Append($color)
-            [void]$sb.Append($chars.TL)
+            $buffer.SetCell($this.X, $this.Y, $chars.TL, $borderFG, $normalBG)
             
             # Add title if present
             if ($this.Title) {
-                [void]$sb.Append($chars.H)
-                [void]$sb.Append(" $($this.Title) ")
-                $titleLen = $this.Title.Length + 2
-                [void]$sb.Append($chars.H * ($this.Width - $titleLen - 3))
+                $buffer.SetCell($this.X + 1, $this.Y, $chars.H, $borderFG, $normalBG)
+                $buffer.SetCell($this.X + 2, $this.Y, ' ', $borderFG, $normalBG)
+                
+                # Write title
+                for ($i = 0; $i -lt $this.Title.Length; $i++) {
+                    $buffer.SetCell($this.X + 3 + $i, $this.Y, $this.Title[$i], $borderFG, $normalBG)
+                }
+                
+                $buffer.SetCell($this.X + 3 + $this.Title.Length, $this.Y, ' ', $borderFG, $normalBG)
+                
+                # Fill remaining horizontal line
+                for ($x = 4 + $this.Title.Length; $x -lt $this.Width - 1; $x++) {
+                    $buffer.SetCell($this.X + $x, $this.Y, $chars.H, $borderFG, $normalBG)
+                }
             } else {
-                [void]$sb.Append($chars.H * ($this.Width - 2))
+                # Fill horizontal line
+                for ($x = 1; $x -lt $this.Width - 1; $x++) {
+                    $buffer.SetCell($this.X + $x, $this.Y, $chars.H, $borderFG, $normalBG)
+                }
             }
             
-            [void]$sb.Append($chars.TR)
-            [void]$sb.Append([FastComponentBase]::VTCache.Reset)
+            $buffer.SetCell($this.X + $this.Width - 1, $this.Y, $chars.TR, $borderFG, $normalBG)
             
             # Sides
             for ($y = 1; $y -lt $this.Height - 1; $y++) {
-                # Left side
-                [void]$sb.Append($this.MT($this.X, $this.Y + $y))
-                [void]$sb.Append($color)
-                [void]$sb.Append($chars.V)
-                [void]$sb.Append([FastComponentBase]::VTCache.Reset)
-                
-                # Right side
-                [void]$sb.Append($this.MT($this.X + $this.Width - 1, $this.Y + $y))
-                [void]$sb.Append($color)
-                [void]$sb.Append($chars.V)
-                [void]$sb.Append([FastComponentBase]::VTCache.Reset)
+                $buffer.SetCell($this.X, $this.Y + $y, $chars.V, $borderFG, $normalBG)
+                $buffer.SetCell($this.X + $this.Width - 1, $this.Y + $y, $chars.V, $borderFG, $normalBG)
             }
             
             # Bottom border
-            [void]$sb.Append($this.MT($this.X, $this.Y + $this.Height - 1))
-            [void]$sb.Append($color)
-            [void]$sb.Append($chars.BL)
-            [void]$sb.Append($chars.H * ($this.Width - 2))
-            [void]$sb.Append($chars.BR)
-            [void]$sb.Append([FastComponentBase]::VTCache.Reset)
+            $buffer.SetCell($this.X, $this.Y + $this.Height - 1, $chars.BL, $borderFG, $normalBG)
+            for ($x = 1; $x -lt $this.Width - 1; $x++) {
+                $buffer.SetCell($this.X + $x, $this.Y + $this.Height - 1, $chars.H, $borderFG, $normalBG)
+            }
+            $buffer.SetCell($this.X + $this.Width - 1, $this.Y + $this.Height - 1, $chars.BR, $borderFG, $normalBG)
         }
         
         # Render children
         foreach ($child in $this.Children) {
-            if ($child.Visible) {
-                # Render child content (adjust for border if present)
-                if ($child -is [FastComponentBase]) {
-                    [void]$sb.Append($child.Render())
-                }
+            if ($child.Visible -and ($child -is [FastComponentBase])) {
+                $child.RenderToBuffer($buffer)
             }
         }
-        
-        return $sb.ToString()
     }
     
     [bool] Input([ConsoleKey]$key) {

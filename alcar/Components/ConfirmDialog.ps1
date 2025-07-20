@@ -63,6 +63,48 @@ class ConfirmDialog : Dialog {
         $this.Close()
     }
     
+    # Buffer-based dialog content rendering - zero string allocation
+    [void] RenderDialogContentToBuffer([Buffer]$buffer) {
+        # Calculate button positions
+        $buttonY = $this.DialogY + $this.DialogHeight - 3
+        $totalButtonWidth = $this.YesText.Length + $this.NoText.Length + 10  # +4 per button, +2 space
+        $startX = $this.DialogX + [int](($this.DialogWidth - $totalButtonWidth) / 2)
+        
+        # Draw Yes button
+        $yesX = $startX
+        $this.DrawButtonToBuffer($buffer, $this.YesText, $yesX, $buttonY, $this._selectedButton -eq 0)
+        
+        # Draw No button
+        $noX = $startX + $this.YesText.Length + 6
+        $this.DrawButtonToBuffer($buffer, $this.NoText, $noX, $buttonY, $this._selectedButton -eq 1)
+        
+        # Help text
+        $helpY = $this.DialogY + $this.DialogHeight - 2
+        $helpText = "Press Y/N or use arrows"
+        $helpX = $this.DialogX + [int](($this.DialogWidth - $helpText.Length) / 2)
+        $buffer.WriteString($helpX, $helpY, $helpText, "#646464", "#1E1E23")
+    }
+    
+    # Buffer-based button drawing
+    [void] DrawButtonToBuffer([Buffer]$buffer, [string]$text, [int]$x, [int]$y, [bool]$selected) {
+        $bgColor = if ($selected) { "#282850" } else { "#1E1E23" }
+        $fgColor = if ($selected) { "#FFFFFF" } else { "#C8C8C8" }
+        $borderColor = if ($selected) { "#64C8FF" } else { "#646464" }
+        
+        # Button format: [ Text ]
+        $buttonText = "[ $text ]"
+        
+        # Draw button background
+        for ($i = 0; $i -lt $buttonText.Length; $i++) {
+            $buffer.SetCell($x + $i, $y, $buttonText[$i], $fgColor, $bgColor)
+        }
+        
+        # Draw border characters
+        $buffer.SetCell($x, $y, '[', $borderColor, $bgColor)
+        $buffer.SetCell($x + $buttonText.Length - 1, $y, ']', $borderColor, $bgColor)
+    }
+    
+    # Legacy string method for backward compatibility
     [string] RenderDialogContent() {
         $output = ""
         

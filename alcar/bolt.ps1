@@ -62,6 +62,7 @@ try {
                 . $layout2File
             }
             
+            
             $dateparserFile = Join-Path $folderPath "dateparser.ps1"
             if (Test-Path $dateparserFile) {
                 if ($Debug) { Write-Host "  - Loading dateparser.ps1" -ForegroundColor DarkGray }
@@ -112,6 +113,13 @@ try {
                 . $navigationStandardFile
             }
             
+            # Load EnhancedInputManager after Screen class
+            $enhancedInputFile = Join-Path $PSScriptRoot "Core/EnhancedInputManager.ps1"
+            if (Test-Path $enhancedInputFile) {
+                if ($Debug) { Write-Host "  - Loading EnhancedInputManager.ps1" -ForegroundColor DarkGray }
+                . $enhancedInputFile
+            }
+            
             continue
         } elseif ($folder -eq "Screens") {
             # Load dialog screens first
@@ -127,15 +135,31 @@ try {
                 . $editDialogFile
             }
             
-            # Load all screens
+            # Load all screens (dialogs first, then screens that reference them)
             $screenFiles = @(
+                "ProjectCreationDialog.ps1",
+                "TimeTrackingScreen.ps1",
+                "TimeEntryDialog.ps1",
+                "QuickTimeEntryDialog.ps1",
+                "TimesheetExportDialog.ps1",
+                "ProjectSelectionDialog.ps1",
+                "KanbanScreen.ps1",
                 "TaskScreen.ps1",
+                "TaskScreenLazyGit.ps1",
+                "TaskScreenLazyGitTest.ps1",
+                "EnhancedTaskScreen.ps1",
+                "PTUIDemoScreen.ps1",
                 "ProjectsScreen.ps1",
+                "ProjectsScreenNew.ps1",
+                "ProjectDetailsDialog.ps1",
+                "GuidedTimeEntryDialog.ps1",
+                "EditTimeEntryDialog.ps1",
                 "DashboardScreen.ps1",
                 "SettingsScreen.ps1",
                 "SettingsScreen_v2.ps1",
                 "TextEditorScreen.ps1",
                 "TextEditorScreen_v2.ps1",
+                "SimpleTextEditor.ps1",
                 "FileBrowserScreen.ps1",
                 "MainMenuScreen.ps1"
             )
@@ -154,7 +178,9 @@ try {
                 "ServiceContainer.ps1",
                 "ViewDefinitionService.ps1",
                 "TaskService.ps1",
-                "ProjectService.ps1"
+                "ProjectService.ps1",
+                "TimeTrackingService.ps1",
+                "UnifiedDataService.ps1"
             )
             
             foreach ($serviceFile in $serviceFiles) {
@@ -166,8 +192,19 @@ try {
             }
             continue
         } elseif ($folder -eq "Components") {
-            # Load all components except CommandPalette (which needs Screen types)
-            $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Where-Object { $_.Name -ne "CommandPalette.ps1" } | Sort-Object Name
+            # Load base components first (dependency order)
+            $baseComponents = @("ListBox.ps1", "SearchableListBox.ps1", "KanbanColumn.ps1")
+            foreach ($baseComponent in $baseComponents) {
+                $baseFile = Join-Path $folderPath $baseComponent
+                if (Test-Path $baseFile) {
+                    if ($Debug) { Write-Host "  - Loading $baseComponent (base class)" -ForegroundColor DarkGray }
+                    . $baseFile
+                }
+            }
+            
+            # Load all other components except CommandPalette and base components (already loaded)
+            $excludeFiles = @("CommandPalette.ps1") + $baseComponents
+            $files = Get-ChildItem -Path $folderPath -Filter "*.ps1" | Where-Object { $_.Name -notin $excludeFiles } | Sort-Object Name
             foreach ($file in $files) {
                 if ($Debug) { Write-Host "  - Loading $($file.Name)" -ForegroundColor DarkGray }
                 . $file.FullName
@@ -206,6 +243,10 @@ try {
     }
     
     Write-Host "Framework loaded!" -ForegroundColor Green
+    
+    # Initialize global data service
+    $global:UnifiedDataService = [UnifiedDataService]::new()
+    Write-Host "Global data service initialized" -ForegroundColor Green
     
     # Create and run screen manager
     $global:ScreenManager = [ScreenManager]::new()

@@ -21,21 +21,41 @@ class Screen {
     [void] OnActivate() { }
     [void] OnDeactivate() { }
     
-    # Main render - override in derived classes
+    # Main render - hybrid approach for best performance
     [void] Render() {
-        # Build entire screen in memory first
-        $sb = [System.Text.StringBuilder]::new(16384)  # Larger pre-allocation
-        
-        # Hide cursor and position at home only (no clear to prevent flicker)
-        # Screens must draw complete backgrounds to overwrite previous content
-        [void]$sb.Append("`e[?25l`e[H")
-        
-        # Render content
-        [void]$sb.Append($this.RenderContent())
-        [void]$sb.Append($this.RenderStatusBar())
-        
-        # Single atomic write operation
-        [Console]::Write($sb.ToString())
+        # Check if screen has fast string rendering
+        $legacyContent = $this.RenderContent()
+        if ($legacyContent) {
+            # Use fast string rendering
+            [Console]::Write("`e[?25l`e[H")
+            [Console]::Write($legacyContent)
+            
+            # Render status bar (if any) 
+            $statusBar = $this.RenderStatusBar()
+            if ($statusBar) {
+                [Console]::Write($statusBar)
+            }
+        } else {
+            # Use buffer rendering for complex screens
+            $width = [Console]::WindowWidth
+            $height = [Console]::WindowHeight
+            $screenBuffer = [Buffer]::new($width, $height)
+            
+            # Render to buffer
+            $this.RenderToBuffer($screenBuffer)
+            
+            # Hide cursor and position at home
+            [Console]::Write("`e[?25l`e[H")
+            
+            # Convert buffer to string and write
+            [Console]::Write($screenBuffer.ToString())
+            
+            # Render status bar (if any) 
+            $statusBar = $this.RenderStatusBar()
+            if ($statusBar) {
+                [Console]::Write($statusBar)
+            }
+        }
         
         # Mark as rendered
         $this.NeedsRender = $false

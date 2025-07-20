@@ -1,0 +1,268 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2025-01-20 12:00:00",
+    "lastModified": "2025-07-19 21:52:29"
+  },
+  "projects": [
+    {
+      "ID": "proj-001",
+      "Name": "Sample Project",
+      "Description": "Demo project for testing Kanban functionality",
+      "CreatedDate": "2025-01-20 12:00:00",
+      "ModifiedDate": "2025-07-19 21:52:29",
+      "Status": "Active",
+      "tasks": [
+        {
+          "ID": "task-001",
+          "Title": "Setup development environment",
+          "Description": "Configure workspace and tools",
+          "Status": "Completed",
+          "Priority": "High",
+          "Progress": 100,
+          "CreatedDate": "2025-01-20 10:00:00",
+          "ModifiedDate": "2025-01-20 11:30:00",
+          "DueDate": null,
+          "Tags": [
+            "setup",
+            "dev"
+          ],
+          "KanbanColumn": "Done"
+        },
+        {
+          "ID": "task-002",
+          "Title": "Implement user authentication",
+          "Description": "Add login and session management",
+          "Status": "InProgress",
+          "Priority": "High",
+          "Progress": 60,
+          "CreatedDate": "2025-01-20 10:30:00",
+          "ModifiedDate": "2025-07-19 21:48:21",
+          "DueDate": null,
+          "Tags": [
+            "auth",
+            "security"
+          ],
+          "KanbanColumn": "In Progress",
+          "SubtaskIds": "83c12523-647b-45f3-9872-d51bdf59ed14"
+        },
+        {
+          "ID": "task-003",
+          "Title": "Create user interface mockups",
+          "Description": "Design wireframes for main screens",
+          "Status": "InProgress",
+          "Priority": "Medium",
+          "Progress": 0,
+          "CreatedDate": "2025-01-20 11:00:00",
+          "ModifiedDate": "2025-07-19 21:42:26",
+          "DueDate": null,
+          "Tags": [
+            "ui",
+            "design"
+          ],
+          "KanbanColumn": "In Progress"
+        },
+        {
+          "ID": "task-004",
+          "Title": "Write API documentation",
+          "Description": "Document all endpoints and usage",
+          "Status": "Completed",
+          "Priority": "Low",
+          "Progress": 0,
+          "CreatedDate": "2025-01-20 11:15:00",
+          "ModifiedDate": "2025-07-19 21:42:18",
+          "DueDate": null,
+          "Tags": [
+            "docs",
+            "api"
+          ],
+          "KanbanColumn": "Done"
+        },
+        {
+          "DueDate": null,
+          "Description": "",
+          "Priority": "Medium",
+          "Tags": [],
+          "Status": "Completed",
+          "Title": "New Task",
+          "Progress": 0,
+          "KanbanColumn": "Done",
+          "CreatedDate": "2025-07-19 21:01:57",
+          "ID": "be612d61-df83-4808-8838-ba1547a25779",
+          "ModifiedDate": "2025-07-19 21:33:31"
+        },
+        {
+          "Tags": [],
+          "Priority": "Medium",
+          "Progress": 0,
+          "Description": "",
+          "DueDate": null,
+          "Status": "Pending",
+          "ModifiedDate": "2025-07-19 21:16:17",
+          "Title": "New Task",
+          "CreatedDate": "2025-07-19 21:16:17",
+          "ID": "82ff8b57-23cc-4ae3-acc9-f5920c02e336",
+          "KanbanColumn": "To Do"
+        },
+        {
+          "Priority": "Medium",
+          "Tags": [],
+          "ID": "e9493b5a-73ca-47bb-bbb2-eef526149520",
+          "DueDate": null,
+          "Progress": 0,
+          "Title": "New Task",
+          "CreatedDate": "2025-07-19 21:20:06",
+          "KanbanColumn": "To Do",
+          "ModifiedDate": "2025-07-19 21:20:06",
+          "Description": "",
+          "Status": "Pending"
+        },
+        {
+          "ID": "f239fe54-1934-45a8-a1f7-4f8b0793fc6d",
+          "ModifiedDate": "2025-07-19 21:42:35",
+          "KanbanColumn": "To Do",
+          "CreatedDate": "2025-07-19 21:42:35",
+          "Description": "",
+          "DueDate": null,
+          "Priority": "Medium",
+          "Progress": 0,
+          "Title": "New Task",
+          "Status": "Pending",
+          "Tags": []
+        },
+        {
+          "ID": "db93058e-cf2d-4906-b983-dee965952936",
+          "ModifiedDate": "2025-07-19 21:42:40",
+          "KanbanColumn": "To Do",
+          "CreatedDate": "2025-07-19 21:42:40",
+          "Description": "",
+          "DueDate": null,
+          "Priority": "Medium",
+          "Progress": 0,
+          "Title": "New Task",
+          "Status": "Pending",
+          "Tags": []
+        },
+        {
+          "ID": "ac3854a9-dba1-40f1-b2c5-9e70d9ea6883",
+          "ModifiedDate": "2025-07-19 21:48:50",
+          "KanbanColumn": "Done",
+          "CreatedDate": "2025-07-19 21:42:42",
+          "Description": "",
+          "DueDate": null,
+          "Priority": "Medium",
+          "Progress": 0,
+          "Title": "New Subtask",
+          "Status": "Completed",
+          "Tags": []
+        },
+        {
+          "ModifiedDate": "2025-07-19 21:47:59",
+          "Priority": "Medium",
+          "Tags": [],
+          "ID": "8f66b46d-41ad-43c4-8382-4677eb26a5c0",
+          "Title": "New Task",
+          "Progress": 0,
+          "KanbanColumn": "To Do",
+          "DueDate": null,
+          "CreatedDate": "2025-07-19 21:47:59",
+          "Description": "",
+          "Status": "Pending"
+        },
+        {
+          "Progress": 0,
+          "Priority": "Medium",
+          "Status": "InProgress",
+          "ParentId": "task-002",
+          "SubtaskIds": "d2e6cea4-d6e1-4733-8265-9fa03467cd1b",
+          "Description": "",
+          "ModifiedDate": "2025-07-19 21:48:56",
+          "KanbanColumn": "In Progress",
+          "Tags": [],
+          "CreatedDate": "2025-07-19 21:48:13",
+          "Title": "New Subtask",
+          "ID": "83c12523-647b-45f3-9872-d51bdf59ed14",
+          "DueDate": null
+        },
+        {
+          "Progress": 0,
+          "Priority": "Medium",
+          "Status": "InProgress",
+          "ParentId": "83c12523-647b-45f3-9872-d51bdf59ed14",
+          "SubtaskIds": "6fd797ba-1e37-4bdc-854e-b9aa8d8a739c",
+          "Description": "",
+          "ModifiedDate": "2025-07-19 21:48:58",
+          "KanbanColumn": "In Progress",
+          "Tags": [],
+          "CreatedDate": "2025-07-19 21:48:56",
+          "Title": "New Subtask",
+          "ID": "d2e6cea4-d6e1-4733-8265-9fa03467cd1b",
+          "DueDate": null
+        },
+        {
+          "Progress": 0,
+          "Priority": "Medium",
+          "Status": "InProgress",
+          "ParentId": "d2e6cea4-d6e1-4733-8265-9fa03467cd1b",
+          "SubtaskIds": "49d55e2b-44be-4c08-91b7-ff5b107581ae",
+          "Description": "",
+          "ModifiedDate": "2025-07-19 21:49:00",
+          "KanbanColumn": "In Progress",
+          "Tags": [],
+          "CreatedDate": "2025-07-19 21:48:58",
+          "Title": "New Subtask",
+          "ID": "6fd797ba-1e37-4bdc-854e-b9aa8d8a739c",
+          "DueDate": null
+        },
+        {
+          "Progress": 0,
+          "Priority": "Medium",
+          "Status": "InProgress",
+          "ParentId": "6fd797ba-1e37-4bdc-854e-b9aa8d8a739c",
+          "Description": "",
+          "ModifiedDate": "2025-07-19 21:49:00",
+          "KanbanColumn": "In Progress",
+          "Tags": [],
+          "CreatedDate": "2025-07-19 21:49:00",
+          "Title": "New Subtask",
+          "ID": "49d55e2b-44be-4c08-91b7-ff5b107581ae",
+          "DueDate": null
+        },
+        {
+          "Title": "New Task",
+          "Progress": 0,
+          "DueDate": null,
+          "Description": "",
+          "CreatedDate": "2025-07-19 21:52:29",
+          "ID": "2f053cf9-3d30-4c59-b011-4e5eaa13dd3d",
+          "Tags": [],
+          "KanbanColumn": "To Do",
+          "Status": "Pending",
+          "ModifiedDate": "2025-07-19 21:52:29",
+          "Priority": "Medium"
+        }
+      ]
+    }
+  ],
+  "configuration": {
+    "kanbanColumns": [
+      {
+        "name": "To Do",
+        "status": "Pending"
+      },
+      {
+        "name": "In Progress",
+        "status": "InProgress"
+      },
+      {
+        "name": "Done",
+        "status": "Completed"
+      }
+    ],
+    "defaultTheme": "Default",
+    "exportFormats": [
+      "CSV",
+      "JSON"
+    ]
+  }
+}

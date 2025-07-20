@@ -381,7 +381,7 @@ class TaskScreen : Screen {
     [void] AddTaskFull() {
         # Create new task and open full edit dialog
         $newTask = $this.TaskService.AddTask("New Task")
-        $dialog = New-Object -TypeName "EditDialog" -ArgumentList $this, $newTask, $true
+        $dialog = New-Object EditDialog -ArgumentList $this, $newTask, $true
         
         # Store reference to task list for adding after dialog
         $dialog | Add-Member -NotePropertyName ParentTaskScreen -NotePropertyValue $this
@@ -446,7 +446,7 @@ class TaskScreen : Screen {
     [void] EditTaskDetails() {
         if ($this.FilteredTasks.Count -gt 0 -and $this.Layout.FocusedPane -eq 1) {
             $task = $this.FilteredTasks[$this.TaskIndex]
-            $dialog = New-Object -TypeName "EditDialog" -ArgumentList $this, $task, $false
+            $dialog = New-Object EditDialog -ArgumentList $this, $task, $false
             
             # Store reference to parent for refresh after dialog
             $dialog | Add-Member -NotePropertyName ParentTaskScreen -NotePropertyValue $this

@@ -6,10 +6,11 @@ class FileBrowserScreen : Screen {
     hidden [FastPanel]$CurrentPanel
     hidden [FastPanel]$PreviewPanel
     
-    # ListBoxes
-    hidden [FastFileListBox]$ParentList
-    hidden [FastFileListBox]$CurrentList
-    hidden [FastFileListBox]$PreviewList
+    # File lists
+    [System.Collections.ArrayList]$ParentFiles
+    [System.Collections.ArrayList]$CurrentFiles  
+    [System.Collections.ArrayList]$PreviewFiles
+    [int]$SelectedIndex = 0
     
     # State
     [string]$CurrentPath
@@ -23,46 +24,10 @@ class FileBrowserScreen : Screen {
     }
     
     [void] Initialize() {
-        $width = [Console]::WindowWidth
-        $height = [Console]::WindowHeight
-        $panelWidth = [int]($width / 3)
-        
-        # Parent directory panel
-        $this.ParentPanel = [FastPanel]::new("ParentPanel")
-        $this.ParentPanel.X = 0
-        $this.ParentPanel.Y = 2
-        $this.ParentPanel.Width = $panelWidth
-        $this.ParentPanel.Height = $height - 4
-        $this.ParentPanel.Title = "Parent"
-        $this.ParentPanel.BorderStyle = "Single"
-        
-        $this.ParentList = [FastFileListBox]::new(1, 1, $panelWidth - 2, $height - 6)
-        $this.ParentList.HasBorder = $false
-        
-        # Current directory panel
-        $this.CurrentPanel = [FastPanel]::new("CurrentPanel")
-        $this.CurrentPanel.X = $panelWidth
-        $this.CurrentPanel.Y = 2
-        $this.CurrentPanel.Width = $panelWidth
-        $this.CurrentPanel.Height = $height - 4
-        $this.CurrentPanel.Title = "Current"
-        $this.CurrentPanel.BorderStyle = "Double"
-        
-        $this.CurrentList = [FastFileListBox]::new($panelWidth + 1, 3, $panelWidth - 2, $height - 6)
-        $this.CurrentList.HasBorder = $false
-        $this.CurrentList.IsFocused = $true
-        
-        # Preview panel
-        $this.PreviewPanel = [FastPanel]::new("PreviewPanel")
-        $this.PreviewPanel.X = $panelWidth * 2
-        $this.PreviewPanel.Y = 2
-        $this.PreviewPanel.Width = $width - ($panelWidth * 2)
-        $this.PreviewPanel.Height = $height - 4
-        $this.PreviewPanel.Title = "Preview"
-        $this.PreviewPanel.BorderStyle = "Single"
-        
-        $this.PreviewList = [FastFileListBox]::new(($panelWidth * 2) + 1, 3, $this.PreviewPanel.Width - 2, $height - 6)
-        $this.PreviewList.HasBorder = $false
+        # Initialize file lists
+        $this.ParentFiles = [System.Collections.ArrayList]::new()
+        $this.CurrentFiles = [System.Collections.ArrayList]::new()
+        $this.PreviewFiles = [System.Collections.ArrayList]::new()
         
         # Load initial directory
         $this.LoadDirectory($this.CurrentPath)
@@ -118,104 +83,101 @@ class FileBrowserScreen : Screen {
         }) | Out-Null
     }
     
+    # Fast string rendering - maximum performance like TaskScreen
     [string] RenderContent() {
-        $output = ""
         $width = [Console]::WindowWidth
         $height = [Console]::WindowHeight
         
-        # Clear background
-        for ($y = 1; $y -le $height; $y++) {
-            $output += [VT]::MoveTo(1, $y)
-            $output += " " * $width
-        }
+        $output = ""
+        
+        # Clear screen efficiently
+        $output += [VT]::Clear()
         
         # Title bar
         $titleBar = " RANGER-STYLE FILE BROWSER "
-        $x = [int](($width - $titleBar.Length) / 2)
-        $output += [VT]::MoveTo($x, 1)
+        $titleX = [int](($width - $titleBar.Length) / 2)
+        $output += [VT]::MoveTo($titleX, 1)
         $output += [VT]::RGB(100, 200, 255) + $titleBar + [VT]::Reset()
         
-        # Update panel focus indicators
-        $this.UpdatePanelFocus()
+        # Calculate panel dimensions
+        $panelWidth = [int]($width / 3)
+        $panelHeight = $height - 4
         
-        # Render panels (using simple rendering for now)
-        $output += $this.RenderPanel($this.ParentPanel, $this.ParentList)
-        $output += $this.RenderPanel($this.CurrentPanel, $this.CurrentList)
-        $output += $this.RenderPanel($this.PreviewPanel, $this.PreviewList)
+        # Check for selection changes
+        $this.OnCurrentSelectionChanged()
+        
+        # Render all three panels directly
+        $output += $this.RenderPanelSimple("Parent", 0, 2, $panelWidth, $panelHeight, ($this.FocusedPanel -eq 0), $this.ParentFiles)
+        $output += $this.RenderPanelSimple("Current", $panelWidth, 2, $panelWidth, $panelHeight, ($this.FocusedPanel -eq 1), $this.CurrentFiles)
+        $output += $this.RenderPanelSimple("Preview", $panelWidth * 2, 2, $width - ($panelWidth * 2), $panelHeight, ($this.FocusedPanel -eq 2), $this.PreviewFiles)
         
         return $output
     }
     
-    [string] RenderPanel([Panel]$panel, [ListBox]$listbox) {
+    [string] RenderPanelSimple([string]$title, [int]$x, [int]$y, [int]$width, [int]$height, [bool]$focused, [System.Collections.ArrayList]$files) {
         $output = ""
         
         # Draw border
-        $borderColor = if ($panel -eq $this.CurrentPanel -and $this.FocusedPanel -eq 1) {
+        $borderColor = if ($focused) {
             [VT]::RGB(100, 200, 255)
         } else {
             [VT]::RGB(100, 100, 150)
         }
         
         # Top border with title
-        $output += [VT]::MoveTo($panel.X, $panel.Y)
-        $output += $borderColor + "┌" + ("─" * ($panel.Width - 2)) + "┐" + [VT]::Reset()
+        $output += [VT]::MoveTo($x, $y)
+        $output += $borderColor + "┌" + ("─" * ($width - 2)) + "┐" + [VT]::Reset()
         
-        if ($panel.Title) {
-            $titleText = " $($panel.Title) "
-            $output += [VT]::MoveTo($panel.X + 2, $panel.Y)
+        if ($title) {
+            $titleText = " $title "
+            $output += [VT]::MoveTo($x + 2, $y)
             $output += $borderColor + $titleText + [VT]::Reset()
         }
         
         # Sides and content
-        for ($y = 1; $y -lt $panel.Height - 1; $y++) {
-            $output += [VT]::MoveTo($panel.X, $panel.Y + $y)
+        for ($panelY = 1; $panelY -lt $height - 1; $panelY++) {
+            $output += [VT]::MoveTo($x, $y + $panelY)
             $output += $borderColor + "│" + [VT]::Reset()
-            $output += [VT]::MoveTo($panel.X + $panel.Width - 1, $panel.Y + $y)
+            $output += [VT]::MoveTo($x + $width - 1, $y + $panelY)
             $output += $borderColor + "│" + [VT]::Reset()
         }
         
         # Bottom border
-        $output += [VT]::MoveTo($panel.X, $panel.Y + $panel.Height - 1)
-        $output += $borderColor + "└" + ("─" * ($panel.Width - 2)) + "┘" + [VT]::Reset()
+        $output += [VT]::MoveTo($x, $y + $height - 1)
+        $output += $borderColor + "└" + ("─" * ($width - 2)) + "┘" + [VT]::Reset()
         
-        # Render list items
-        $output += $this.RenderListBox($listbox, $panel.X + 1, $panel.Y + 1, $panel.Width - 2, $panel.Height - 2)
+        # Render file items
+        $output += $this.RenderFileList($files, $x + 1, $y + 1, $width - 2, $height - 2, $focused)
         
         return $output
     }
     
-    [string] RenderListBox([ListBox]$listbox, [int]$x, [int]$y, [int]$width, [int]$height) {
+    [string] RenderFileList([System.Collections.ArrayList]$files, [int]$x, [int]$y, [int]$width, [int]$height, [bool]$isCurrent) {
         $output = ""
         
-        # Calculate visible range
-        $listbox.EnsureVisible()
-        $endIndex = [Math]::Min($listbox.ScrollOffset + $height, $listbox.Items.Count)
+        # Show first few items that fit
+        $visibleCount = [Math]::Min($files.Count, $height)
         
-        for ($i = $listbox.ScrollOffset; $i -lt $endIndex; $i++) {
-            $item = $listbox.Items[$i]
-            $itemY = $y + ($i - $listbox.ScrollOffset)
+        for ($i = 0; $i -lt $visibleCount; $i++) {
+            $item = $files[$i]
+            $itemY = $y + $i
             
             # Format item
             $text = $this.FormatFileItem($item)
-            if ($text.Length -gt $width - 1) {
-                $text = $text.Substring(0, $width - 4) + "..."
+            if ($text.Length -gt $width - 2) {
+                $text = $text.Substring(0, $width - 5) + "..."
             }
             
             $output += [VT]::MoveTo($x, $itemY)
             
-            # Highlight selected item
-            if ($i -eq $listbox.SelectedIndex) {
+            # Highlight selected item in current panel
+            if ($isCurrent -and $i -eq $this.SelectedIndex) {
                 $output += [VT]::RGBBG(40, 40, 80) + [VT]::RGB(255, 255, 255)
-                $output += " " + $text.PadRight($width - 1)
+                $output += " " + $text.PadRight($width - 2) + " "
                 $output += [VT]::Reset()
             } else {
                 $output += " " + $text
             }
-        }
-        
-        # Scrollbar if needed
-        if ($listbox.Items.Count -gt $height) {
-            $this.RenderScrollbar($output, $x + $width - 1, $y, $height, $listbox.ScrollOffset, $listbox.Items.Count)
         }
         
         return $output
@@ -263,9 +225,10 @@ class FileBrowserScreen : Screen {
     [void] LoadDirectory([string]$path) {
         try {
             $this.CurrentPath = [System.IO.Path]::GetFullPath($path)
-            $this.CurrentPanel.Title = [System.IO.Path]::GetFileName($this.CurrentPath)
-            if (-not $this.CurrentPanel.Title) {
-                $this.CurrentPanel.Title = $this.CurrentPath
+            # Update screen title based on current directory
+            $dirName = [System.IO.Path]::GetFileName($this.CurrentPath)
+            if (-not $dirName) {
+                $dirName = $this.CurrentPath
             }
             
             # Load parent directory
@@ -273,7 +236,7 @@ class FileBrowserScreen : Screen {
             if ($parent) {
                 $this.LoadParentDirectory($parent.FullName)
             } else {
-                $this.ParentList.Clear()
+                $this.ParentList.SetFiles(@())
             }
             
             # Load current directory
@@ -292,7 +255,13 @@ class FileBrowserScreen : Screen {
             $files = Get-ChildItem -Path $this.CurrentPath -File -Force | Sort-Object Name
             $items += $files
             
-            $this.CurrentList.SetFiles($items)
+            $this.CurrentFiles.Clear()
+            foreach ($item in $items) {
+                $this.CurrentFiles.Add($item) | Out-Null
+            }
+            
+            # Reset selection
+            $this.SelectedIndex = 0
             
             # Update preview
             $this.OnCurrentSelectionChanged()
@@ -322,27 +291,27 @@ class FileBrowserScreen : Screen {
             $files = Get-ChildItem -Path $path -File -Force | Sort-Object Name
             $items += $files
             
-            $this.ParentList.SetFiles($items)
-            
-            # Select current directory in parent list
-            $currentDirName = [System.IO.Path]::GetFileName($this.CurrentPath)
-            for ($i = 0; $i -lt $this.ParentList.Items.Count; $i++) {
-                $item = $this.ParentList.Items[$i]
-                if ($item -is [System.IO.DirectoryInfo] -and $item.Name -eq $currentDirName) {
-                    $this.ParentList.SelectedIndex = $i
-                    break
-                }
+            $this.ParentFiles.Clear()
+            foreach ($item in $items) {
+                $this.ParentFiles.Add($item) | Out-Null
             }
+            
+            # Select current directory in parent list (simple implementation)
         }
         catch {
-            $this.ParentList.Clear()
+            $this.ParentFiles.Clear()
         }
     }
     
     [void] OnCurrentSelectionChanged() {
-        $selected = $this.CurrentList.GetSelectedItem()
+        if ($this.SelectedIndex -ge $this.CurrentFiles.Count) {
+            $this.PreviewFiles.Clear()
+            return
+        }
+        
+        $selected = $this.CurrentFiles[$this.SelectedIndex]
         if (-not $selected) {
-            $this.PreviewList.Clear()
+            $this.PreviewFiles.Clear()
             return
         }
         
@@ -354,10 +323,14 @@ class FileBrowserScreen : Screen {
                 $files = Get-ChildItem -Path $selected.FullName -File -Force | Select-Object -First 20 | Sort-Object Name
                 $items += $dirs
                 $items += $files
-                $this.PreviewList.SetItems($items)
+                $this.PreviewFiles.Clear()
+                foreach ($item in $items) {
+                    $this.PreviewFiles.Add($item) | Out-Null
+                }
             }
             catch {
-                $this.PreviewList.SetItems(@("Access denied"))
+                $this.PreviewFiles.Clear()
+                $this.PreviewFiles.Add("Access denied") | Out-Null
             }
         }
         elseif ($selected -is [System.IO.FileInfo]) {
@@ -373,7 +346,10 @@ class FileBrowserScreen : Screen {
             # Text files - show content
             if ($ext -in @(".txt", ".md", ".ps1", ".json", ".xml", ".yml", ".yaml", ".ini", ".cfg")) {
                 $lines = Get-Content -Path $path -TotalCount 50 -ErrorAction Stop
-                $this.PreviewList.SetItems($lines)
+                $this.PreviewFiles.Clear()
+                foreach ($line in $lines) {
+                    $this.PreviewFiles.Add($line) | Out-Null
+                }
             }
             # Binary files - show info
             else {
@@ -385,36 +361,35 @@ class FileBrowserScreen : Screen {
                     "Modified: $($file.LastWriteTime)",
                     "Extension: $($file.Extension)"
                 )
-                $this.PreviewList.SetItems($info)
+                $this.PreviewFiles.Clear()
+                foreach ($line in $info) {
+                    $this.PreviewFiles.Add($line) | Out-Null
+                }
             }
         }
         catch {
-            $this.PreviewList.SetItems(@("Cannot preview file"))
+            $this.PreviewFiles.Clear()
+            $this.PreviewFiles.Add("Cannot preview file") | Out-Null
         }
     }
     
     [void] UpdatePanelFocus() {
-        # Update border colors based on focus
-        $this.ParentPanel.IsFocused = ($this.FocusedPanel -eq 0)
-        $this.CurrentPanel.IsFocused = ($this.FocusedPanel -eq 1)
-        $this.PreviewPanel.IsFocused = ($this.FocusedPanel -eq 2)
+        # Panel focus is now handled in rendering
     }
     
     # Navigation methods
     [void] NavigateUp() {
-        switch ($this.FocusedPanel) {
-            0 { $this.ParentList.HandleInput([System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::UpArrow, $false, $false, $false)) }
-            1 { $this.CurrentList.HandleInput([System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::UpArrow, $false, $false, $false)) }
-            2 { $this.PreviewList.HandleInput([System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::UpArrow, $false, $false, $false)) }
+        if ($this.FocusedPanel -eq 1 -and $this.SelectedIndex -gt 0) {
+            $this.SelectedIndex--
+            $this.OnCurrentSelectionChanged()
         }
         $this.RequestRender()
     }
     
     [void] NavigateDown() {
-        switch ($this.FocusedPanel) {
-            0 { $this.ParentList.HandleInput([System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::DownArrow, $false, $false, $false)) }
-            1 { $this.CurrentList.HandleInput([System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::DownArrow, $false, $false, $false)) }
-            2 { $this.PreviewList.HandleInput([System.ConsoleKeyInfo]::new([char]0, [ConsoleKey]::DownArrow, $false, $false, $false)) }
+        if ($this.FocusedPanel -eq 1 -and $this.SelectedIndex -lt $this.CurrentFiles.Count - 1) {
+            $this.SelectedIndex++
+            $this.OnCurrentSelectionChanged()
         }
         $this.RequestRender()
     }
@@ -443,7 +418,8 @@ class FileBrowserScreen : Screen {
     }
     
     [void] OpenSelected() {
-        $selected = $this.CurrentList.GetSelectedItem()
+        if ($this.SelectedIndex -ge $this.CurrentFiles.Count) { return }
+        $selected = $this.CurrentFiles[$this.SelectedIndex]
         if ($selected -eq "..") {
             $parent = [System.IO.Directory]::GetParent($this.CurrentPath)
             if ($parent) {
@@ -459,10 +435,11 @@ class FileBrowserScreen : Screen {
     }
     
     [void] EditSelected() {
-        $selected = $this.CurrentList.GetSelectedItem()
+        if ($this.SelectedIndex -ge $this.CurrentFiles.Count) { return }
+        $selected = $this.CurrentFiles[$this.SelectedIndex]
         if ($selected -is [System.IO.FileInfo]) {
-            # Open text editor
-            $editor = [TextEditorScreen]::new($selected.FullName)
+            # Open simple text editor
+            $editor = [SimpleTextEditor]::new($selected.FullName)
             $global:ScreenManager.Push($editor)
         }
     }
@@ -473,19 +450,17 @@ class FileBrowserScreen : Screen {
     }
     
     [void] GoToTop() {
-        switch ($this.FocusedPanel) {
-            0 { $this.ParentList.SelectedIndex = 0; $this.ParentList.ScrollOffset = 0 }
-            1 { $this.CurrentList.SelectedIndex = 0; $this.CurrentList.ScrollOffset = 0 }
-            2 { $this.PreviewList.SelectedIndex = 0; $this.PreviewList.ScrollOffset = 0 }
+        if ($this.FocusedPanel -eq 1) {
+            $this.SelectedIndex = 0
+            $this.OnCurrentSelectionChanged()
         }
         $this.RequestRender()
     }
     
     [void] GoToBottom() {
-        switch ($this.FocusedPanel) {
-            0 { $this.ParentList.SelectedIndex = $this.ParentList.Items.Count - 1 }
-            1 { $this.CurrentList.SelectedIndex = $this.CurrentList.Items.Count - 1 }
-            2 { $this.PreviewList.SelectedIndex = $this.PreviewList.Items.Count - 1 }
+        if ($this.FocusedPanel -eq 1 -and $this.CurrentFiles.Count -gt 0) {
+            $this.SelectedIndex = $this.CurrentFiles.Count - 1
+            $this.OnCurrentSelectionChanged()
         }
         $this.RequestRender()
     }

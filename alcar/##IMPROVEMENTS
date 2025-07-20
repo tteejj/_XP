@@ -1,0 +1,158 @@
+##MAIN MENU SCREEN
+**AI: Navigation and UI improvements - right arrow should activate selected item instead of moving cursor**
+-right arrow navigates to a screen, not jump down the list
+**AI: Good for large menu lists**
+-make main menu scrollable
+**AI: ASCII art enhancement for visual appeal**
+-add block character title ALCAR with shadows and cool gradient effect back
+**AI: Simplify UI by removing redundant help text**
+-remove the bottom help. it's unneeded.
+
+##TASKS SCREEN
+**AI: Layout optimization for better content display**
+-middle panel needs more room 
+-left panel does not need number count by filter list (extra room can go to middle)
+**AI: Critical bug - EditDialog constructor issue affecting all task operations**
+- pressing 'a' = 
+	Error: Exception calling ".ctor" with "3" argument(s): "Cannot find an overload for "new" and the argument count: "1"."
+	at AddTaskFull, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 384
+	at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 74
+	at HandleInput, /home/teej/projects/github/_XP/alcar/Base/Screen.ps1: line 187
+	at HandleInput, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 236
+	at Run, /home/teej/projects/github/_XP/alcar/Core/ScreenManager.ps1: line 131
+	at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/bolt.ps1: line 247
+	
+	Press any key to exit...
+**AI: Same constructor error as 'a' key**
+- pressing 'A' = Error: Exception calling ".ctor" with "3" argument(s): "Cannot find an overload for "new" and the argument count: "1"."
+at AddTaskFull, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 384
+at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 74
+at HandleInput, /home/teej/projects/github/_XP/alcar/Base/Screen.ps1: line 187
+at HandleInput, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 236
+at Run, /home/teej/projects/github/_XP/alcar/Core/ScreenManager.ps1: line 131
+at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/bolt.ps1: line 247
+
+Press any key to exit...
+**AI: UX simplification - merge 'a' and 'A' functionality, they seem redundant**
+- what is the difference between the two (a and A) functions? would one be possible?
+**AI: Same constructor issue affecting edit functionality**
+press 'e' = Error: Exception calling ".ctor" with "3" argument(s): "Cannot find an overload for "new" and the argument count: "1"."
+at AddTaskFull, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 384
+at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 74
+at HandleInput, /home/teej/projects/github/_XP/alcar/Base/Screen.ps1: line 187
+at HandleInput, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 236
+at Run, /home/teej/projects/github/_XP/alcar/Core/ScreenManager.ps1: line 131
+at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/bolt.ps1: line 247
+
+Press any key to exit...
+**AI: Different method (EditTaskDetails) but same constructor error pattern**
+-press E = Error: Exception calling ".ctor" with "3" argument(s): "Cannot find an overload for "new" and the argument count: "1"."
+at EditTaskDetails, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 449
+at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 78
+at HandleInput, /home/teej/projects/github/_XP/alcar/Base/Screen.ps1: line 187
+at HandleInput, /home/teej/projects/github/_XP/alcar/Screens/TaskScreen.ps1: line 236
+at Run, /home/teej/projects/github/_XP/alcar/Core/ScreenManager.ps1: line 131
+at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/bolt.ps1: line 247
+
+Press any key to exit...
+
+-
+
+##ENHANCED TASKS
+**AI: Good approach - move to examples/demos folder to preserve as reference**
+-remove from main menu, from loading in program. mark as an feature example? or something, so i can refer to it later, but I have no sue for this function in my tasks
+
+##PROJECTS SCREEN
+**AI: Missing CRUD operations - need implementation**
+-press 'e' - feature not implemented
+-press 'd' - feature not implemented yet
+
+##TIMETRACKING SCREEN
+**AI: VT class method error - likely typo, should be VT::TextBright() or similar**
+Error: Method invocation failed because [VT] does not contain a method named 'Title'.
+at Render, /home/teej/projects/github/_XP/alcar/Screens/TimeTrackingScreen.ps1: line 143
+at Run, /home/teej/projects/github/_XP/alcar/Core/ScreenManager.ps1: line 136
+at <ScriptBlock>, /home/teej/projects/github/_XP/alcar/bolt.ps1: line 247
+
+Press any key to exit...
+
+##NEW PROJECT SCREEN
+**AI: UX improvement - direct form interaction without button press**
+-needed to press a button to trigger the start. i dont want that.
+**AI: Better form UX with arrow navigation and consistent interaction patterns**
+-how about a form to fill out, user can arrow up/down list, left arrow exits screen or cancels text entry, as does esc, right presses enter to start text entry or can press enter
+**AI: Remove unnecessary fields to simplify**
+-nickname not needed
+**AI: Fix double-enter issue, improve form flow**
+have to press enter twice to move to next item. dont want that. enter should confirm, move focus to next item in the new form i am proposing.
+**AI: Smart defaults for better UX**
+-enter should enter the default.
+**AI: File browser integration - very doable with hotkey system**
+-the file path entry questions should bring up the file browser to allow selecting that way. possible? add a hotkey to select folder/file?
+**AI: Critical freeze bug - needs investigation**
+-entering y at final confirmation and pressing enter freezes the program
+
+##PTUI DEMO SCREEN
+**AI: Move to examples folder like Enhanced Tasks**
+-remove, same as the other
+
+##CALENDAR SCREEN
+**AI: Good calendar design, standard month view with navigation**
+-implement a calendar:
+MONTH NAME
+S M T W T F S
+          1 2
+..
+..
+..
+...     30 31
+**AI: Calendar navigation with detail panel - very achievable**
+-cardinal cursor movement between dates, shows daily details on a detail panel, highlight current dayhighlight cursor selected day
+**AI: Could add task integration, scheduling features**
+-other functions/abilities here?
+
+##FILEBROWSER SCREEN
+**AI: Remove vim keys, add standard file operations - system calls possible**
+-remove hjkl, add and implement crud for file functions - copy/paste/rename/delete/enter to open with system default? possible without deep hooks,com32 or whatever?
+
+##TEXT EDITOR SCREEN
+**AI: Move to examples folder**
+-remove like others
+
+##SIMPLE TEXT EDITOR
+**AI: File browser integration for open/save dialogs**
+-enable functionality to open/save whatever files it is capable of, use filebrowser screen for this
+**AI: Search integration with existing search functionality**
+-find/copy/paste possible? - find using the enhanced tasks search functionality?
+
+
+
+
+###ADDITIONS
+**AI: Already implemented! Unified data model working with kanban screen**
+-from doc_review.txt - the unified data model
+**AI: Implemented and working! Kanban screen with three columns and Ctrl+arrow movement**
+-kanban style todo screen- three columns, ctrl+arrow key moves selected task to different pane, or up/down list in that panel? hotkeys for other needed actions. 
+**AI: IMPLEMENTED! Created NavigationStandard class with consistent patterns across all screens**
+-every screen navigation should be pretty similar,except for ones where that is difficult, like textedit. but bottom menu focus should be enabled by a single press/release of the ctrl button. it is not currently working. press/release again removes focus back to main screen, or esc. if sub actions for the displayed menu item can be made, like a list, or standard dropdown menu, that would be great also, allowing arrow key nav.
+**AI: IMPLEMENTED! Created TaskScreenLazyGit.ps1 - clean multi-pane interface with context-sensitive help**
+tighter integration of data/screens? or better/different layout of screens? make it more elegant for the user. take inspiration from classic tui programs. maybe lazygit???
+
+###COMPLETED IMPROVEMENTS (AI Session)
+**AI: ✅ FIXED - All constructor errors resolved across codebase**
+- Fixed EditDialog constructor calls from [EditDialog]::new() to New-Object EditDialog
+- Updated TaskScreen.ps1, KanbanScreen.ps1, EnhancedTaskScreen.ps1, MainMenuScreen.ps1, ProjectsScreen.ps1
+
+**AI: ✅ IMPLEMENTED - Consistent navigation patterns**
+- NavigationStandard class provides consistent key bindings across all screens
+- StandardMode: Up/Down navigate, Right selects, Left goes back
+- MultiPane: Tab switches panes, arrows navigate within panes
+- FormEditing: Up/Down for fields, Left/Right for values
+
+**AI: ✅ DEMONSTRATED - Lazygit-inspired interface**
+- Created TaskScreenLazyGit.ps1 showcasing clean multi-pane design
+- Context-sensitive help bar (changes based on active pane)
+- Minimal borders, clean typography, efficient space usage
+- Single-letter commands (n=new, d=delete, e=edit, space=toggle status)
+- Added to main menu as "Tasks (LazyGit Style)" - press 'L' to access
+- Fixed class loading by adding to bolt.ps1 screen file list

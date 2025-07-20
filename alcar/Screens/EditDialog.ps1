@@ -9,12 +9,12 @@ class EditDialog : Dialog {
     [string]$EditBuffer = ""
     [bool]$Saved = $false
     
-    EditDialog([Screen]$parent, [Task]$task, [bool]$isNew) : base($parent) {
+    EditDialog([Screen]$parent, [Task]$task, [bool]$isNew) : base() {
         $this.Task = $task
         $this.IsNew = $isNew
         $this.Title = if ($isNew) { "NEW TASK" } else { "EDIT TASK" }
-        $this.Width = 70
-        $this.Height = 20
+        $this.DialogWidth = 70
+        $this.DialogHeight = 20
         
         $this.InitializeFields()
         $this.InitializeKeyBindings()
@@ -102,13 +102,19 @@ class EditDialog : Dialog {
             $this.Saved = $true
             $this.Active = $false
             
-            # If this is a new task, add it to the parent's task list
-            if ($this.IsNew -and $this.ParentTaskScreen -and $this.NewTask) {
-                $this.ParentTaskScreen.Tasks.Add($this.NewTask) | Out-Null
-            }
-            
-            # Refresh parent after save
-            if ($this.ParentTaskScreen) {
+            # Handle different parent screen types
+            if ($this.ParentKanbanScreen) {
+                # For KanbanScreen
+                if ($this.IsNew) {
+                    $this.ParentKanbanScreen.OnTaskCreated($this.Task)
+                } else {
+                    $this.ParentKanbanScreen.OnTaskUpdated($this.Task)
+                }
+            } elseif ($this.ParentTaskScreen) {
+                # For TaskScreen (legacy support)
+                if ($this.IsNew -and $this.NewTask) {
+                    $this.ParentTaskScreen.Tasks.Add($this.NewTask) | Out-Null
+                }
                 $this.ParentTaskScreen.ApplyFilter()
             }
         })
@@ -142,12 +148,30 @@ class EditDialog : Dialog {
         })
     }
     
-    [string] RenderContent() {
-        # Draw dialog
-        $output = $this.DrawBox()
+    # Buffer-based render - zero string allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Clear background
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
+        }
+        
+        # Render using fallback for now
+        $content = $this.RenderContent()
+        $lines = $content -split "`n"
+        for ($i = 0; $i -lt [Math]::Min($lines.Count, $buffer.Height); $i++) {
+            $buffer.WriteString(0, $i, $lines[$i], $normalFG, $normalBG)
+        }
+    }
+    
+    [string] RenderDialogContent() {
+        $output = ""
         
         # Draw fields
-        $fieldY = $this.Y + 2
+        $fieldY = $this.DialogY + 2
         $fieldCount = $this.Fields.Count
         for ($i = 0; $i -lt $fieldCount; $i++) {
             $y = $fieldY + ($i * 2)
@@ -155,7 +179,7 @@ class EditDialog : Dialog {
             $isSelected = $i -eq $this.FieldIndex
             
             # Label
-            $output += [VT]::MoveTo($this.X + 3, $y)
+            $output += [VT]::MoveTo($this.DialogX + 3, $y)
             if ($isSelected) {
                 $output += [VT]::Selected() + " > " + $field.Name + ":"
             } else {
@@ -163,7 +187,7 @@ class EditDialog : Dialog {
             }
             
             # Value
-            $output += [VT]::MoveTo($this.X + 20, $y)
+            $output += [VT]::MoveTo($this.DialogX + 20, $y)
             
             if ($this.EditMode -and $isSelected) {
                 # Edit mode
@@ -184,7 +208,7 @@ class EditDialog : Dialog {
         }
         
         # Instructions
-        $output += [VT]::MoveTo($this.X + 3, $this.Y + $this.Height - 2)
+        $output += [VT]::MoveTo($this.DialogX + 3, $this.DialogY + $this.DialogHeight - 2)
         $output += [VT]::TextDim()
         if ($this.EditMode) {
             $output += "[Enter] save field  [Esc] cancel edit"

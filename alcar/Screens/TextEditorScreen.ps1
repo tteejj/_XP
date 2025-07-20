@@ -191,27 +191,28 @@ class TextEditorScreen : Screen {
         }
     }
     
-    [string] RenderContent() {
-        $output = ""
-        $width = [Console]::WindowWidth
-        $height = [Console]::WindowHeight
-        
+    # Buffer-based render - zero string allocation for fast text editing
+    [void] RenderToBuffer([Buffer]$buffer) {
         # Clear background
-        for ($y = 1; $y -le $height; $y++) {
-            $output += [VT]::MoveTo(1, $y)
-            $output += " " * $width
+        $normalBG = "#1E1E23"
+        $normalFG = "#D4D4D4"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
         }
         
         # Title bar
         $titleText = " $($this.Title) "
-        $x = [int](($width - $titleText.Length) / 2)
-        $output += [VT]::MoveTo($x, 1)
-        $output += [VT]::RGB(100, 200, 255) + $titleText + [VT]::Reset()
+        $titleX = [int](($buffer.Width - $titleText.Length) / 2)
+        for ($i = 0; $i -lt $titleText.Length; $i++) {
+            $buffer.SetCell($titleX + $i, 0, $titleText[$i], "#64C8FF", $normalBG)
+        }
         
         # Calculate visible area
-        $editorY = 2
-        $editorHeight = $height - 4  # Leave room for title and status bar
-        $editorWidth = $width
+        $editorY = 1
+        $editorHeight = $buffer.Height - 3
+        $editorWidth = $buffer.Width
         
         # Ensure cursor is visible
         $this.EnsureCursorVisible($editorHeight, $editorWidth)
@@ -221,38 +222,58 @@ class TextEditorScreen : Screen {
         $endLine = [Math]::Min($startLine + $editorHeight, $this.Lines.Count)
         
         for ($i = $startLine; $i -lt $endLine; $i++) {
-            $y = $editorY + ($i - $startLine)
-            $output += [VT]::MoveTo(1, $y)
+            $screenY = $editorY + ($i - $startLine)
             
             # Line number
+            $contentX = 0
             if ($this.ShowLineNumbers) {
                 $lineNum = ($i + 1).ToString().PadLeft($this.LineNumberWidth - 1)
-                $output += [VT]::RGB(100, 100, 150) + $lineNum + " " + [VT]::Reset()
+                $lineNumText = $lineNum + " "
+                for ($j = 0; $j -lt $lineNumText.Length; $j++) {
+                    $buffer.SetCell($j, $screenY, $lineNumText[$j], "#6496C8", $normalBG)
+                }
+                $contentX = $this.LineNumberWidth
             }
             
-            # Line content
+            # Line content - direct character rendering
             $line = $this.Lines[$i]
-            $visibleLine = $this.GetVisibleLine($line, $this.ScrollOffsetX, $editorWidth - $this.LineNumberWidth)
+            $startX = [Math]::Max(0, $this.ScrollOffsetX)
+            $maxChars = $buffer.Width - $contentX
             
-            # Syntax highlighting (simple)
-            if ($this.FilePath -like "*.ps1") {
-                $visibleLine = $this.HighlightPowerShell($visibleLine)
+            for ($charIdx = 0; $charIdx -lt $maxChars -and ($startX + $charIdx) -lt $line.Length; $charIdx++) {
+                $char = $line[$startX + $charIdx]
+                $screenX = $contentX + $charIdx
+                
+                # Simple syntax highlighting for PowerShell
+                $color = $normalFG
+                if ($this.FilePath -like "*.ps1") {
+                    if ($char -eq '$') {
+                        $color = "#569CD6"  # Variable
+                    } elseif ($char -eq '"' -or $char -eq "'") {
+                        $color = "#CE9178"  # String
+                    } elseif ($char -eq '#') {
+                        $color = "#6A9955"  # Comment
+                    }
+                }
+                
+                $buffer.SetCell($screenX, $screenY, $char, $color, $normalBG)
             }
-            
-            $output += $visibleLine
         }
         
-        # Show cursor
-        $cursorScreenX = 1 + $this.LineNumberWidth + $this.CursorX - $this.ScrollOffsetX
+        # Cursor
+        $cursorScreenX = if ($this.ShowLineNumbers) { $this.LineNumberWidth } else { 0 }
+        $cursorScreenX += $this.CursorX - $this.ScrollOffsetX
         $cursorScreenY = $editorY + $this.CursorY - $this.ScrollOffsetY
         
-        if ($cursorScreenX -ge 1 -and $cursorScreenX -le $width -and 
+        if ($cursorScreenX -ge 0 -and $cursorScreenX -lt $buffer.Width -and 
             $cursorScreenY -ge $editorY -and $cursorScreenY -lt $editorY + $editorHeight) {
-            $output += [VT]::MoveTo($cursorScreenX, $cursorScreenY)
-            $output += [VT]::ShowCursor()
+            # Get current character or space
+            $cursorChar = ' '
+            if ($this.CursorY -lt $this.Lines.Count -and $this.CursorX -lt $this.Lines[$this.CursorY].Length) {
+                $cursorChar = $this.Lines[$this.CursorY][$this.CursorX]
+            }
+            $buffer.SetCell($cursorScreenX, $cursorScreenY, $cursorChar, "#000000", "#FFFFFF")
         }
-        
-        return $output
     }
     
     [string] GetVisibleLine([string]$line, [int]$scrollX, [int]$maxWidth) {

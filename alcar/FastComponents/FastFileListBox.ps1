@@ -151,26 +151,16 @@ class FastFileListBox : FastComponentBase {
         return $false
     }
     
-    # Direct render
-    [string] Render() {
-        if (-not $this.Visible -or $this.Items.Count -eq 0) { return "" }
+    # Direct buffer render - zero string allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        if (-not $this.Visible -or $this.Items.Count -eq 0) { return }
         
-        $out = [System.Text.StringBuilder]::new(4096)
-        
-        # Border color
-        $borderColor = if ($this.IsFocused) { 
-            [FastComponentBase]::VTCache.Colors['Focus'] 
-        } else { 
-            "`e[38;2;80;80;100m" 
-        }
-        
-        # Draw top border
-        if ($this.HasBorder) {
-            [void]$out.Append($this.MT($this.X, $this.Y))
-            [void]$out.Append($borderColor)
-            [void]$out.Append($this._borderTop)
-            [void]$out.Append([FastComponentBase]::VTCache.Reset)
-        }
+        # Colors
+        $borderFG = if ($this.IsFocused) { "#64C8FF" } else { "#646464" }
+        $selectedBG = "#282850"
+        $selectedFG = "#FFFFFF"
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
         
         # Ensure selected item is visible
         if ($this.SelectedIndex -lt $this.ScrollOffset) {
@@ -179,7 +169,7 @@ class FastFileListBox : FastComponentBase {
             $this.ScrollOffset = $this.SelectedIndex - $this._visibleItems + 1
         }
         
-        # Draw items
+        # Calculate content area
         if ($this.HasBorder) {
             $contentX = $this.X + 1
             $contentY = $this.Y + 1
@@ -190,73 +180,76 @@ class FastFileListBox : FastComponentBase {
             $contentWidth = $this.Width
         }
         
+        # Draw top border
+        if ($this.HasBorder) {
+            $buffer.SetCell($this.X, $this.Y, '┌', $borderFG, $normalBG)
+            for ($x = 1; $x -lt $this.Width - 1; $x++) {
+                $buffer.SetCell($this.X + $x, $this.Y, '─', $borderFG, $normalBG)
+            }
+            $buffer.SetCell($this.X + $this.Width - 1, $this.Y, '┐', $borderFG, $normalBG)
+        }
+        
+        # Draw items
         $endIndex = [Math]::Min($this.ScrollOffset + $this._visibleItems, $this.Items.Count)
         
         for ($i = $this.ScrollOffset; $i -lt $endIndex; $i++) {
             $y = $contentY + ($i - $this.ScrollOffset)
             
-            # Draw item background
-            [void]$out.Append($this.MT($this.X, $y))
-            
-            if ($this.HasBorder) {
-                [void]$out.Append($borderColor)
-                [void]$out.Append("│")
-                [void]$out.Append([FastComponentBase]::VTCache.Reset)
-            }
-            
-            [void]$out.Append($this.MT($contentX, $y))
-            
+            # Item colors
             if ($i -eq $this.SelectedIndex) {
-                [void]$out.Append([FastComponentBase]::VTCache.Colors['Selected'])
+                $itemBG = $selectedBG
+                $itemFG = $selectedFG
             } else {
-                [void]$out.Append([FastComponentBase]::VTCache.Colors['Normal'])
+                $itemBG = $normalBG
+                $itemFG = $normalFG
             }
             
-            # Pad and truncate item
-            $item = $this.Items[$i]
-            if ($item.Length -gt $contentWidth) {
-                $item = $item.Substring(0, $contentWidth)
-            } else {
-                $item = $item.PadRight($contentWidth)
-            }
-            
-            [void]$out.Append($item)
-            [void]$out.Append([FastComponentBase]::VTCache.Reset)
-            
+            # Draw left border
             if ($this.HasBorder) {
-                [void]$out.Append($this.MT($this.X + $this.Width - 1, $y))
-                [void]$out.Append($borderColor)
-                [void]$out.Append("│")
-                [void]$out.Append([FastComponentBase]::VTCache.Reset)
+                $buffer.SetCell($this.X, $y, '│', $borderFG, $normalBG)
+            }
+            
+            # Draw item content
+            $item = $this.Items[$i]
+            for ($x = 0; $x -lt $contentWidth; $x++) {
+                $char = if ($x -lt $item.Length) { $item[$x] } else { ' ' }
+                $buffer.SetCell($contentX + $x, $y, $char, $itemFG, $itemBG)
+            }
+            
+            # Draw right border
+            if ($this.HasBorder) {
+                $buffer.SetCell($this.X + $this.Width - 1, $y, '│', $borderFG, $normalBG)
             }
         }
         
-        # Fill empty space
+        # Fill empty rows
         for ($i = $endIndex - $this.ScrollOffset; $i -lt $this._visibleItems; $i++) {
             $y = $contentY + $i
-            [void]$out.Append($this.MT($this.X, $y))
             
+            # Draw left border
             if ($this.HasBorder) {
-                [void]$out.Append($borderColor)
-                [void]$out.Append("│")
-                [void]$out.Append(" " * ($this.Width - 2))
-                [void]$out.Append("│")
-            } else {
-                [void]$out.Append(" " * $this.Width)
+                $buffer.SetCell($this.X, $y, '│', $borderFG, $normalBG)
             }
             
-            [void]$out.Append([FastComponentBase]::VTCache.Reset)
+            # Fill with spaces
+            for ($x = 0; $x -lt $contentWidth; $x++) {
+                $buffer.SetCell($contentX + $x, $y, ' ', $normalFG, $normalBG)
+            }
+            
+            # Draw right border
+            if ($this.HasBorder) {
+                $buffer.SetCell($this.X + $this.Width - 1, $y, '│', $borderFG, $normalBG)
+            }
         }
         
         # Draw bottom border
         if ($this.HasBorder) {
-            [void]$out.Append($this.MT($this.X, $this.Y + $this.Height - 1))
-            [void]$out.Append($borderColor)
-            [void]$out.Append($this._borderBottom)
-            [void]$out.Append([FastComponentBase]::VTCache.Reset)
+            $buffer.SetCell($this.X, $this.Y + $this.Height - 1, '└', $borderFG, $normalBG)
+            for ($x = 1; $x -lt $this.Width - 1; $x++) {
+                $buffer.SetCell($this.X + $x, $this.Y + $this.Height - 1, '─', $borderFG, $normalBG)
+            }
+            $buffer.SetCell($this.X + $this.Width - 1, $this.Y + $this.Height - 1, '┘', $borderFG, $normalBG)
         }
-        
-        return $out.ToString()
     }
     
     # Handle input

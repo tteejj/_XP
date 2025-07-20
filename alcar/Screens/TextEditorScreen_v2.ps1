@@ -124,7 +124,7 @@ class TextEditorScreenV2 : Screen {
     TextEditorScreenV2([string]$filePath) {
         $this.FilePath = $filePath
         $this.Title = "Text Editor v2"
-        $this.Buffer = [GapBuffer]::new()
+        $this.Buffer = [GapBuffer]::new(1024)
         $this.UndoStack = [System.Collections.Generic.Stack[object]]::new()
         $this.RedoStack = [System.Collections.Generic.Stack[object]]::new()
         $this.Initialize()
@@ -133,7 +133,7 @@ class TextEditorScreenV2 : Screen {
     TextEditorScreenV2() {
         $this.FilePath = ""
         $this.Title = "Text Editor v2 - New File"
-        $this.Buffer = [GapBuffer]::new()
+        $this.Buffer = [GapBuffer]::new(1024)
         $this.UndoStack = [System.Collections.Generic.Stack[object]]::new()
         $this.RedoStack = [System.Collections.Generic.Stack[object]]::new()
         $this.Initialize()
@@ -559,27 +559,28 @@ class TextEditorScreenV2 : Screen {
         }
     }
     
-    [string] RenderContent() {
-        $output = ""
-        $width = [Console]::WindowWidth
-        $height = [Console]::WindowHeight
-        
+    # Buffer-based render - zero string allocation for maximum text editing performance
+    [void] RenderToBuffer([Buffer]$buffer) {
         # Clear background
-        for ($y = 1; $y -le $height; $y++) {
-            $output += [VT]::MoveTo(1, $y)
-            $output += " " * $width
+        $normalBG = "#1E1E23"
+        $normalFG = "#D4D4D4"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
         }
         
         # Title bar
         $titleText = " $($this.Title) "
-        $x = [int](($width - $titleText.Length) / 2)
-        $output += [VT]::MoveTo($x, 1)
-        $output += [VT]::RGB(100, 200, 255) + $titleText + [VT]::Reset()
+        $titleX = [int](($buffer.Width - $titleText.Length) / 2)
+        for ($i = 0; $i -lt $titleText.Length; $i++) {
+            $buffer.SetCell($titleX + $i, 0, $titleText[$i], "#64C8FF", $normalBG)
+        }
         
         # Calculate visible area
-        $editorY = 2
-        $editorHeight = $height - 4
-        $editorWidth = $width
+        $editorY = 1
+        $editorHeight = $buffer.Height - 3
+        $editorWidth = $buffer.Width
         
         # Update line cache if needed
         $this.UpdateLineStarts()
@@ -592,16 +593,20 @@ class TextEditorScreenV2 : Screen {
         $endLine = [Math]::Min($startLine + $editorHeight, $this.LineStarts.Count)
         
         for ($lineNum = $startLine; $lineNum -lt $endLine; $lineNum++) {
-            $y = $editorY + ($lineNum - $startLine)
-            $output += [VT]::MoveTo(1, $y)
+            $screenY = $editorY + ($lineNum - $startLine)
             
             # Line number
+            $contentX = 0
             if ($this.ShowLineNumbers) {
                 $lineNumStr = ($lineNum + 1).ToString().PadLeft($this.LineNumberWidth - 1)
-                $output += $this.Colors.LineNumber + $lineNumStr + " " + [VT]::Reset()
+                $lineNumText = $lineNumStr + " "
+                for ($i = 0; $i -lt $lineNumText.Length; $i++) {
+                    $buffer.SetCell($i, $screenY, $lineNumText[$i], "#6496C8", $normalBG)
+                }
+                $contentX = $this.LineNumberWidth
             }
             
-            # Line content
+            # Line content - direct character rendering for speed
             $lineStart = $this.LineStarts[$lineNum]
             $lineEnd = if ($lineNum + 1 -lt $this.LineStarts.Count) {
                 $this.LineStarts[$lineNum + 1] - 1
@@ -610,29 +615,41 @@ class TextEditorScreenV2 : Screen {
             }
             
             # Extract visible portion of line
-            $x = if ($this.ShowLineNumbers) { $this.LineNumberWidth } else { 0 }
-            for ($i = $lineStart + $this.ScrollOffsetX; $i -lt $lineEnd -and $x -lt $width; $i++) {
-                $char = $this.Buffer.GetChar($i)
+            $screenX = $contentX
+            for ($charIndex = $lineStart + $this.ScrollOffsetX; $charIndex -lt $lineEnd -and $screenX -lt $buffer.Width; $charIndex++) {
+                $char = $this.Buffer.GetChar($charIndex)
                 if ($char -ne "`n") {
-                    $output += $char
-                    $x++
+                    # Syntax highlighting colors
+                    $color = $this.Colors.Foreground
+                    if ($char -eq '"' -or $char -eq "'") {
+                        $color = $this.Colors.String
+                    } elseif ($char -eq '#') {
+                        $color = $this.Colors.Comment
+                    }
+                    
+                    $buffer.SetCell($screenX, $screenY, $char, $color, $normalBG)
+                    $screenX++
                 }
             }
         }
         
-        # Show cursor
+        # Cursor - use special cursor cell if visible
         $cursorLine = $this.GetCurrentLine()
         $cursorColumn = $this.GetCurrentColumn()
-        $cursorScreenX = 1 + $this.LineNumberWidth + $cursorColumn - $this.ScrollOffsetX
+        $cursorScreenX = if ($this.ShowLineNumbers) { $this.LineNumberWidth } else { 0 }
+        $cursorScreenX += $cursorColumn - $this.ScrollOffsetX
         $cursorScreenY = $editorY + $cursorLine - $this.ScrollOffsetY
         
-        if ($cursorScreenX -ge 1 -and $cursorScreenX -le $width -and 
+        if ($cursorScreenX -ge 0 -and $cursorScreenX -lt $buffer.Width -and 
             $cursorScreenY -ge $editorY -and $cursorScreenY -lt $editorY + $editorHeight) {
-            $output += [VT]::MoveTo($cursorScreenX, $cursorScreenY)
-            $output += [VT]::ShowCursor()
+            # Highlight cursor position
+            $cursorChar = if ($this.CursorPosition -lt $this.Buffer.Length) {
+                $this.Buffer.GetChar($this.CursorPosition)
+            } else {
+                ' '
+            }
+            $buffer.SetCell($cursorScreenX, $cursorScreenY, $cursorChar, "#000000", "#FFFFFF")
         }
-        
-        return $output
     }
     
     [void] PageUp() {

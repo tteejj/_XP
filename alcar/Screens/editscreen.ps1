@@ -27,6 +27,12 @@ class EditScreen {
         )
     }
     
+    # Buffer-based render for compatibility
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Legacy fallback
+        $this.Render()
+    }
+    
     [void] Render() {
         $width = [Console]::WindowWidth
         $height = [Console]::WindowHeight
@@ -220,5 +226,20 @@ class EditScreen {
             }
         }
         $this.Task.Update()
+    }
+    
+    # Buffer-based render compatibility
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Clear background
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
+        }
+        
+        # Legacy fallback - this file is not a proper Screen class
+        $this.Render()
     }
 }

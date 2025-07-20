@@ -275,4 +275,11 @@ class Dialog : Screen {
         
         return $output
     }
+    
+    # Helper method for dialog forms
+    [void] AddLabel([string]$text, [int]$x, [int]$y) {
+        # Store label for rendering - dialogs typically handle their own rendering
+        # This is a compatibility method for dialogs that expect AddLabel to exist
+        # Individual dialog classes should implement their own label rendering
+    }
 }

@@ -18,11 +18,17 @@ class DeleteConfirmDialog : Dialog {
             $this.Confirmed = $true
             $this.Active = $false
             # Handle deletion after dialog closes
-            if ($this.TaskToDelete -and $this.ParentTaskScreen) {
-                $this.ParentTaskScreen.Tasks.Remove($this.TaskToDelete)
-                $this.ParentTaskScreen.ApplyFilter()
-                if ($this.ParentTaskScreen.TaskIndex -ge $this.ParentTaskScreen.FilteredTasks.Count -and $this.ParentTaskScreen.TaskIndex -gt 0) {
-                    $this.ParentTaskScreen.TaskIndex--
+            if ($this.TaskToDelete) {
+                if ($this.ParentKanbanScreen) {
+                    # For KanbanScreen
+                    $this.ParentKanbanScreen.OnTaskDeleted($this.TaskToDelete)
+                } elseif ($this.ParentTaskScreen) {
+                    # For TaskScreen (legacy support)
+                    $this.ParentTaskScreen.Tasks.Remove($this.TaskToDelete)
+                    $this.ParentTaskScreen.ApplyFilter()
+                    if ($this.ParentTaskScreen.TaskIndex -ge $this.ParentTaskScreen.FilteredTasks.Count -and $this.ParentTaskScreen.TaskIndex -gt 0) {
+                        $this.ParentTaskScreen.TaskIndex--
+                    }
                 }
             }
         })
@@ -41,6 +47,25 @@ class DeleteConfirmDialog : Dialog {
             $this.Confirmed = $false
             $this.Active = $false
         })
+    }
+    
+    # Buffer-based render - zero string allocation
+    [void] RenderToBuffer([Buffer]$buffer) {
+        # Clear background
+        $normalBG = "#1E1E23"
+        $normalFG = "#C8C8C8"
+        for ($y = 0; $y -lt $buffer.Height; $y++) {
+            for ($x = 0; $x -lt $buffer.Width; $x++) {
+                $buffer.SetCell($x, $y, ' ', $normalFG, $normalBG)
+            }
+        }
+        
+        # Render using fallback for now
+        $content = $this.RenderContent()
+        $lines = $content -split "`n"
+        for ($i = 0; $i -lt [Math]::Min($lines.Count, $buffer.Height); $i++) {
+            $buffer.WriteString(0, $i, $lines[$i], $normalFG, $normalBG)
+        }
     }
     
     [string] RenderContent() {
