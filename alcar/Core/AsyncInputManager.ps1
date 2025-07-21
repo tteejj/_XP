@@ -91,10 +91,10 @@ class AsyncInputManager {
     [void] ProcessKey([ConsoleKeyInfo]$keyInfo) {
         $this.LastKeyTime = [System.DateTime]::Now
         
-        # Check for command mode trigger (:)
-        if ($keyInfo.KeyChar -eq ':' -and -not $this.InCommandMode) {
+        # Check for command mode trigger (/)
+        if ($keyInfo.KeyChar -eq '/' -and -not $this.InCommandMode) {
             $this.InCommandMode = $true
-            $this.CommandBuffer = ":"
+            $this.CommandBuffer = "/"
             return
         }
         
@@ -104,7 +104,7 @@ class AsyncInputManager {
                 ([ConsoleKey]::Enter) {
                     # Execute command
                     if ($this.CommandBuffer.Length -gt 1) {
-                        $cmd = $this.CommandBuffer.Substring(1)  # Remove leading :
+                        $cmd = $this.CommandBuffer.Substring(1)  # Remove leading /
                         $this.CommandQueue.Enqueue(@{
                             Type = "Command"
                             Command = $cmd
@@ -133,7 +133,7 @@ class AsyncInputManager {
                     # Remove last character
                     if ($this.CommandBuffer.Length -gt 1) {
                         $this.CommandBuffer = $this.CommandBuffer.Substring(0, $this.CommandBuffer.Length - 1)
-                    } elseif ($this.CommandBuffer -eq ":") {
+                    } elseif ($this.CommandBuffer -eq "/") {
                         $this.CommandBuffer = ""
                         $this.InCommandMode = $false
                     }
@@ -149,7 +149,7 @@ class AsyncInputManager {
                         }
                         
                         if ($this.HistoryIndex -ge 0) {
-                            $this.CommandBuffer = ":" + $this.CommandHistory[$this.HistoryIndex]
+                            $this.CommandBuffer = "/" + $this.CommandHistory[$this.HistoryIndex]
                         }
                     }
                 }
@@ -161,7 +161,7 @@ class AsyncInputManager {
                         $this.CommandBuffer = ":" + $this.CommandHistory[$this.HistoryIndex]
                     } elseif ($this.HistoryIndex -eq $this.CommandHistory.Count - 1) {
                         $this.HistoryIndex = -1
-                        $this.CommandBuffer = ":"
+                        $this.CommandBuffer = "/"
                     }
                 }
                 
@@ -171,7 +171,7 @@ class AsyncInputManager {
                     $matches = $this.GetCommandCompletions($partial)
                     
                     if ($matches.Count -eq 1) {
-                        $this.CommandBuffer = ":" + $matches[0]
+                        $this.CommandBuffer = "/" + $matches[0]
                     } elseif ($matches.Count -gt 1) {
                         # Show completions (queue for display)
                         $this.CommandQueue.Enqueue(@{

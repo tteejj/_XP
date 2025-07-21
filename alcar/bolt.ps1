@@ -188,6 +188,11 @@ try {
                 "SimpleTextEditor.ps1",
                 "FileBrowserScreen.ps1",
                 "ProjectContextScreen.ps1",
+                "ProjectContextScreenV2.ps1",
+                "ProjectContextScreenV3.ps1",
+                "ProjectContextScreenV3_Enhanced.ps1",
+                "ProjectContextScreenV3_Fixed.ps1",
+                "ProjectContextScreenV3_Final.ps1",
                 "ALCARLazyGitScreen.ps1",
                 "MainMenuScreen.ps1"
             )

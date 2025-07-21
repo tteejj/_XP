@@ -336,3 +336,188 @@ Tab through context-aware tools:
 - Time tracking tied to current task
 - File browser knows project root
 - Commands can be project-specific scripts
+
+
+
+######V3
+● Ah yes, I understand now! You're talking about the command menu screens (like
+  "press A for Add, press N for New") vs the vim-style :command input I created
+  without being asked. Let me discuss ideas for making the v2 ProjectContextScreen
+  and the overall system MORE powerful:
+
+  V2 ProjectContextScreen Enhancement Ideas
+
+  1. Make It Actually Functional
+
+  Currently it's mostly a shell. To make it powerful:
+
+  Project Pane:
+  @@SHOW THE PROJECT DETAILS - LOOK AT THE INFO I ADD FOR PROJECTS. THATS WHAT I WANT TO SEE
+  @@add things like the project health,budget/hrs, quick stats and colour coding, sure
+  @@BUT LOOK AT WHAT I ACTUALLY NEED, NOT SOME MADE UP ASSUMED NEEDS
+  @@in ~/Downloads 
+  - Show project health indicators (overdue, on-track, at-risk)
+  - Display budget/hours remaining visually
+  - Quick stats: active tasks, blockers, recent activity
+  - Color coding for project status
+
+  Task Details:
+  @@I DONT WANT TIMERS. I JUST NEED TO SHOW THE TASKS AND SUBTASKS AND SELECTING ONE 
+  @@WILL bring up the detailed task info
+  @@the rest of these ideas wont help or be pertinent to my needs
+  - Show task dependencies and blockers
+  - Display attachments/linked files
+  - Show task history/activity log
+  - Quick timer controls right in the view
+
+  Context Tools:
+  @@do not need file watcher, git integration, probably dont need recent clipboard history
+  @@the quick script/commands ARE needed. I envisioned something like the command palette. the commands i need are ususlly short text strings (@commands for caseware idea). i want to make retrieval easy, so tags pr other ways to organize them would be helpful and view them. not sure how to do that. ideas?
+  @@the commandpalette sort of way or something else. once a command selected, it needs to be copied to the clipboard. 
+  
+  - Live file watcher showing recently modified project files
+  - Git integration showing uncommitted changes
+  - Quick access to project-specific scripts/commands
+  - Recent clipboard history for the project
+
+  2. Multi-Screen Layouts
+
+  ┌─────────┬─────────┬─────────┐
+  │Projects │  Tasks  │  Timer  │  <- Multiple screens at once
+  │ List    │  Grid   │ Running │
+  ├─────────┴─────────┴─────────┤
+  │     Unified Status Bar       │
+  └─────────────────────────────┘
+
+  3. Smart Context Switching
+
+  - When you select a project, ALL panes update
+  - Breadcrumb navigation (Project > Task > Subtask)
+  - "Workspace memory" - remembers your view per project
+  - Quick context switcher (like Alt+Tab for projects)
+
+  Command Screen Enhancements
+
+  1. Context-Aware Commands
+
+  Instead of static menus, commands change based on context:
+  In Project View:
+  [N] New Project  [E] Edit  [A] Archive  [T] Tasks  [R] Reports
+
+  In Task View:
+  [N] New Task  [C] Complete  [T] Timer  [D] Dependencies  [A] Assign
+
+  2. Command Palettes at Multiple Levels
+
+  - Global commands (always available)
+  - Context commands (based on current screen)
+  - Object commands (based on selected item)
+  - Quick actions (learned from your patterns)
+@@quick commands seems difficult and therefore unneccessary right now
+
+
+  3. Visual Command Feedback
+
+  Show command previews or confirmations:
+  Press [D] to Delete Task...
+  ┌─────────────────────────┐
+  │ Delete "Fix login bug"? │
+  │ This will also delete:  │
+  │ - 3 time entries        │
+  │ - 2 attachments         │
+  │ [Y]es  [N]o            │
+  └─────────────────────────┘
+
+  Navigation Improvements
+
+  1. Reverse Tab (Shift+Tab)
+
+  - Add proper modifier key support
+  - Could detect Shift+Tab in the input handler
+  - Alternative: use [ and ] for prev/next
+@@[] probably better and maybe / for the commands not :? what is feasibility of having user defined keys? so i can try different layouts - maybe try vim hjkl, etc,etc 
+
+
+
+  2. Screen Ordering & Customization
+
+  # In settings or config:
+  $ScreenOrder = @(
+      "ProjectContext",
+      "Tasks",
+      "TimeTracking",
+      "Git"
+  )
+
+  # Or even layouts:
+  $Layouts = @{
+      "Development" = @("Tasks", "Git", "Files")
+      "Planning" = @("Projects", "Kanban", "Calendar")
+      "Review" = @("Time", "Reports", "Tasks")
+  }
+@@great, why not a simple dialog or screen for user to do that in program?
+
+  3. Quick Jump Navigation
+
+  - Number keys jump to specific screens (1-9)
+  - Bookmark frequently used views
+  - "Pin" screens to always be accessible
+@@dont need bookmark, but the rest is good
+
+  Information Density Ideas
+
+  1. Sparklines and Mini-Charts
+
+  Project A ████████░░ 80% │ ▁▃▅▇█▅▃ │ 5 tasks
+  Project B ███░░░░░░░ 30% │ ▇▅▃▁▁▃▅ │ 12 tasks
+
+  2. Inline Previews
+
+  Hover or select to see quick previews without navigating:
+  > Task: Fix login │ Preview: User reports SSO failing
+    Task: Add API  │ when company domain is used...
+
+  3. Status Densification
+
+  Pack more info into status bars:
+  [P:WebPortal|T:5/12|H:45.5/100|Git:3M|Timer:02:15:33|CPU:12%|MEM:1.2G]
+@@probably not helpful for me, but maybe as i use more. dont implement, but note its possible
+
+
+  Integration Ideas
+@@NO OUTSIDE INTEGRATION, none of 1,2,3 right now
+  1. Live External Data
+
+  - Pull from JIRA/GitLab/GitHub APIs
+  - Show CI/CD pipeline status
+  - Display team member activity
+  - Show calendar events
+
+  2. Smart Suggestions
+
+  - "You usually work on auth.js when fixing login bugs"
+  - "This task is similar to #142 (2 hours)"
+  - "Sara is also working on this module"
+
+  3. Workflow Automation
+
+  - Auto-create tasks from git commits
+  - Start timer when opening certain files
+  - Generate time reports automatically
+  - Link files to tasks by usage patterns
+
+  The "MORE" Factor
+
+  To truly make it MORE, we need:
+
+  1. Depth - Each screen should reveal layers of information
+  2. Context - Everything connects and updates together
+  3. Speed - Keyboard shortcuts for everything
+  4. Intelligence - Learn patterns and suggest actions
+  5. Integration - Connect to external tools/services
+  6. Customization - Let users define their workflows
+
+  What aspects excite you most? Should we focus on making the v2 screen truly
+  powerful first, or improve navigation/commands across the board?
+
+

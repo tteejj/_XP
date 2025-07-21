@@ -19,9 +19,17 @@ class ProjectContextScreen : Screen {
     [int]$FocusedPane = 0  # 0=Projects, 1=Details, 2=Tools
     [string]$ActiveTab = "Tasks"  # Tasks, Time, Notes, Files, Commands
     
-    # Layout dimensions
-    [int]$LeftWidth = 12
-    [int]$MiddleWidth = 25
+    # Command mode
+    [bool]$InCommandMode = $false
+    [string]$CommandBuffer = ""
+    [bool]$ShowCommandPalette = $false
+    [string]$CommandSearch = ""
+    [System.Collections.ArrayList]$FilteredCommands
+    [int]$CommandIndex = 0
+    
+    # Layout dimensions - Fixed for proper alignment
+    [int]$LeftWidth = 15
+    [int]$MiddleWidth = 30
     [int]$RightWidth = 0  # Calculated
     
     # Filter state
@@ -44,8 +52,10 @@ class ProjectContextScreen : Screen {
             Write-Debug "TimeTrackingService not available"
         }
         
-        # Calculate layout
-        $this.RightWidth = [Console]::WindowWidth - $this.LeftWidth - $this.MiddleWidth - 4
+        # Calculate layout - ensure proper alignment
+        $totalWidth = [Console]::WindowWidth
+        $borders = 4  # 2 outer borders + 2 inner borders
+        $this.RightWidth = $totalWidth - $this.LeftWidth - $this.MiddleWidth - $borders
         
         # Load data
         $this.LoadProjects()
@@ -117,6 +127,10 @@ class ProjectContextScreen : Screen {
         $this.BindKey('t', { $this.ToggleTimer() })
         $this.BindKey('e', { $this.EditCurrent() })
         $this.BindKey('f', { $this.ToggleFilter(); $this.RequestRender() })
+        
+        # Command mode
+        $this.BindKey('/', { $this.StartCommand(); $this.RequestRender() })
+        $this.BindKey('p', [System.ConsoleModifiers]::Control, { $this.ToggleCommandPalette(); $this.RequestRender() })
     }
     
     [void] NavigateUp() {
@@ -186,35 +200,67 @@ class ProjectContextScreen : Screen {
     [void] UpdateStatusBar() {
         $this.StatusBarItems.Clear()
         
-        if ($this.SelectedProject) {
-            $projectInfo = "$($this.SelectedProject.Nickname) | $($this.Tasks.Count) tasks"
-            if ($this.SelectedProject.CumulativeHrs -gt 0) {
-                $projectInfo += " | $($this.SelectedProject.CumulativeHrs)h used"
+        # Context-aware status items based on focused pane and tab
+        switch ($this.FocusedPane) {
+            0 { # Projects list
+                $this.StatusBarItems.Add("[N]ew")
+                $this.StatusBarItems.Add("[E]dit")
+                $this.StatusBarItems.Add("[F]ilter")
+                $this.StatusBarItems.Add("[Enter] Select")
             }
-            if ($this.SelectedProject.DateDue -ne [DateTime]::MinValue) {
-                $daysLeft = ($this.SelectedProject.DateDue - [DateTime]::Now).Days
-                $projectInfo += " | Due in $daysLeft days"
+            1 { # Project details
+                $this.StatusBarItems.Add("[E]dit")
+                $this.StatusBarItems.Add("[→] Tools")
+                $this.StatusBarItems.Add("[Esc] Back")
             }
-            $this.StatusBarItems.Add($projectInfo)
-        } else {
-            $this.StatusBarItems.Add("Select a project")
+            2 { # Tools pane
+                switch ($this.ActiveTab) {
+                    "Tasks" {
+                        $this.StatusBarItems.Add("[N]ew Task")
+                        $this.StatusBarItems.Add("[Enter] Details")
+                        $this.StatusBarItems.Add("[E]dit")
+                    }
+                    "Time" {
+                        $this.StatusBarItems.Add("[N]ew Entry")
+                        $this.StatusBarItems.Add("[E]xport")
+                    }
+                    "Notes" {
+                        $this.StatusBarItems.Add("[Enter] Edit Notes")
+                        $this.StatusBarItems.Add("[N]ew Note")
+                    }
+                    "Files" {
+                        $this.StatusBarItems.Add("[F] Browse Files")
+                        $this.StatusBarItems.Add("[Enter] Open")
+                    }
+                    "Commands" {
+                        $this.StatusBarItems.Add("[Enter] Copy")
+                        $this.StatusBarItems.Add("[Ctrl+P] Palette")
+                    }
+                }
+            }
         }
+        
+        # Always show these
+        $this.StatusBarItems.Add("[/] Command")
+        $this.StatusBarItems.Add("[Tab] Next")
+        $this.StatusBarItems.Add("[Q] Quit")
     }
     
     [string] RenderContent() {
         $output = ""
         $output += [VT]::Clear()
         
-        # Command palette bar
-        $output += [VT]::MoveTo(0, 0)
-        $output += $this.RenderCommandBar()
+        # Command palette overlay (if active)
+        if ($this.ShowCommandPalette) {
+            return $this.RenderCommandPalette()
+        }
         
-        # Tab bar
-        $output += [VT]::MoveTo(0, 1)
+        # Tab bar at top
+        $output += [VT]::MoveTo(0, 0)
         $output += $this.RenderTabBar()
         
         # Main content area
-        $output += [VT]::MoveTo(0, 2)
+        $output += [VT]::MoveTo(0, 1)
         $output += $this.RenderMainArea()
         
         # Status bar at bottom
@@ -222,18 +268,16 @@ class ProjectContextScreen : Screen {
         $output += [VT]::MoveTo(0, $height - 2)
         $output += $this.RenderStatusBar()
         
-        # Command input line if in command mode
-        if ($this.AsyncInputManager -and $this.AsyncInputManager.IsInCommandMode()) {
-            $output += [VT]::MoveTo(0, $height - 1)
-            $output += [VT]::Border() + $this.AsyncInputManager.GetCommandBuffer() + [VT]::Reset()
-        }
+        # Command input line - dedicated row
+        $output += [VT]::MoveTo(0, $height - 1)
+        $output += $this.RenderCommandLine()
         
         return $output
     }
     
     [string] RenderCommandBar() {
         $width = [Console]::WindowWidth
-        $commands = ":task new  :time start  :note add  :file open"
+        $commands = "/task new  /time start  /note add  /file open"
         $menu = "[MainMenu]"
         
         $bar = [VT]::Border() + $commands
@@ -261,7 +305,7 @@ class ProjectContextScreen : Screen {
     
     [string] RenderMainArea() {
         $output = ""
-        $height = [Console]::WindowHeight - 4  # Leave room for command, tab, status bars
+        $height = [Console]::WindowHeight - 3  # Leave room for tab, status, command bars
         
         # Draw borders
         $output += $this.DrawPaneBorders($height)
@@ -278,13 +322,13 @@ class ProjectContextScreen : Screen {
         $output = ""
         
         # Top border
-        $output += [VT]::MoveTo(0, 2)
+        $output += [VT]::MoveTo(0, 1)
         $output += [VT]::Border()
-        $output += "├" + ("─" * ($this.LeftWidth)) + "┬" + ("─" * ($this.MiddleWidth)) + "┬" + ("─" * ($this.RightWidth)) + "┤"
+        $output += "├" + ("─" * $this.LeftWidth) + "┬" + ("─" * $this.MiddleWidth) + "┬" + ("─" * $this.RightWidth) + "┤"
         $output += [VT]::Reset()
         
-        # Vertical borders
-        for ($i = 3; $i -lt $height + 2; $i++) {
+        # Vertical borders with correct spacing
+        for ($i = 2; $i -lt $height + 1; $i++) {
             $output += [VT]::MoveTo(0, $i) + [VT]::Border() + "│" + [VT]::Reset()
             $output += [VT]::MoveTo($this.LeftWidth + 1, $i) + [VT]::Border() + "│" + [VT]::Reset()
             $output += [VT]::MoveTo($this.LeftWidth + $this.MiddleWidth + 2, $i) + [VT]::Border() + "│" + [VT]::Reset()
@@ -292,27 +336,42 @@ class ProjectContextScreen : Screen {
         }
         
         # Bottom border
-        $output += [VT]::MoveTo(0, $height + 2)
+        $output += [VT]::MoveTo(0, $height + 1)
         $output += [VT]::Border()
-        $output += "├" + ("─" * ($this.LeftWidth)) + "┴" + ("─" * ($this.MiddleWidth)) + "┴" + ("─" * ($this.RightWidth)) + "┤"
+        $output += "├" + ("─" * $this.LeftWidth) + "┴" + ("─" * $this.MiddleWidth) + "┴" + ("─" * $this.RightWidth) + "┤"
         $output += [VT]::Reset()
         
-        # Pane titles
-        $output += [VT]::MoveTo(2, 3) + [VT]::TextBright() + "PROJECTS" + [VT]::Reset()
-        $output += [VT]::MoveTo($this.LeftWidth + 3, 3) + [VT]::TextBright() + "PROJECT DETAILS" + [VT]::Reset()
-        $output += [VT]::MoveTo($this.LeftWidth + $this.MiddleWidth + 4, 3) + [VT]::TextBright() + "PROJECT TOOLS" + [VT]::Reset()
+        # Pane titles with focus indicator
+        $projectTitle = if ($this.FocusedPane -eq 0) { "▶ PROJECTS" } else { "PROJECTS" }
+        $detailTitle = if ($this.FocusedPane -eq 1) { "▶ PROJECT DETAILS" } else { "PROJECT DETAILS" }
+        $toolsTitle = if ($this.FocusedPane -eq 2) { "▶ " } else { "" }
+        $toolsTitle += "PROJECT TOOLS: " + $this.ActiveTab.ToUpper()
+        
+        $output += [VT]::MoveTo(1, 2) + [VT]::TextBright() + $projectTitle + [VT]::Reset()
+        $output += [VT]::MoveTo($this.LeftWidth + 2, 2) + [VT]::TextBright() + $detailTitle + [VT]::Reset()
+        $output += [VT]::MoveTo($this.LeftWidth + $this.MiddleWidth + 3, 2) + [VT]::TextBright() + $toolsTitle + [VT]::Reset()
         
         return $output
     }
     
     [string] RenderProjectsPane([int]$height) {
         $output = ""
-        $startY = 5
+        $startY = 4
+        
+        # Quick filters
+        $output += [VT]::MoveTo(1, $startY)
+        $output += [VT]::TextDim() + "Filter:" + [VT]::Reset()
+        $output += [VT]::MoveTo(1, $startY + 1)
+        $output += if ($this.ShowActiveOnly) { [VT]::Accent() + "☑" + [VT]::Reset() } else { "☐" }
+        $output += " Active"
         
         # Project list
-        for ($i = 0; $i -lt $this.Projects.Count -and $i -lt ($height - 8); $i++) {
+        $listStartY = $startY + 3
+        $maxItems = $height - 8
+        
+        for ($i = 0; $i -lt [Math]::Min($this.Projects.Count, $maxItems); $i++) {
             $project = $this.Projects[$i]
-            $output += [VT]::MoveTo(2, $startY + $i)
+            $output += [VT]::MoveTo(1, $listStartY + $i)
             
             if ($i -eq $this.ProjectIndex) {
                 $output += [VT]::Selected()
@@ -325,10 +384,19 @@ class ProjectContextScreen : Screen {
                 $output += "  "
             }
             
+            # Status indicator
+            if ($project.ClosedDate -ne [DateTime]::MinValue) {
+                $output += [VT]::TextDim() + "✓ " + [VT]::Reset()
+            } elseif ($project.DateDue -lt [DateTime]::Now) {
+                $output += [VT]::Error() + "! " + [VT]::Reset()
+            } else {
+                $output += "  "
+            }
+            
             # Truncate nickname to fit
             $name = $project.Nickname
-            if ($name.Length -gt ($this.LeftWidth - 4)) {
-                $name = $name.Substring(0, $this.LeftWidth - 7) + "..."
+            if ($name.Length -gt ($this.LeftWidth - 5)) {
+                $name = $name.Substring(0, $this.LeftWidth - 8) + "..."
             }
             
             $output += $name
@@ -337,27 +405,21 @@ class ProjectContextScreen : Screen {
             }
         }
         
-        # Status filter
-        $filterY = $startY + $this.Projects.Count + 1
-        if ($filterY -lt $height - 3) {
-            $output += [VT]::MoveTo(2, $filterY)
-            $output += [VT]::TextDim() + "Status" + [VT]::Reset()
-            $output += [VT]::MoveTo(2, $filterY + 1)
-            $output += if ($this.ShowActiveOnly) { "☑" } else { "☐" }
-            $output += " Active"
-        }
-        
         # New button
-        $output += [VT]::MoveTo(2, $height - 1)
-        $output += "[+ New]"
+        $output += [VT]::MoveTo(1, $height - 1)
+        if ($this.FocusedPane -eq 0) {
+            $output += [VT]::Accent() + "[+ New]" + [VT]::Reset()
+        } else {
+            $output += "[+ New]"
+        }
         
         return $output
     }
     
     [string] RenderDetailsPane([int]$height) {
         $output = ""
-        $startY = 5
-        $x = $this.LeftWidth + 3
+        $startY = 4
+        $x = $this.LeftWidth + 2
         
         if (-not $this.SelectedProject) {
             $output += [VT]::MoveTo($x, $startY)
@@ -430,7 +492,7 @@ class ProjectContextScreen : Screen {
     
     [string] RenderTaskList([int]$x, [int]$height) {
         $output = ""
-        $startY = 5
+        $startY = 4
         
         $output += [VT]::MoveTo($x, $startY)
         $output += [VT]::TextBright() + "Tasks ($($this.Tasks.Count) active):" + [VT]::Reset()
@@ -474,15 +536,15 @@ class ProjectContextScreen : Screen {
     
     [string] RenderTimeEntries([int]$x, [int]$height) {
         $output = ""
-        $output += [VT]::MoveTo($x, 5)
+        $output += [VT]::MoveTo($x, 4)
         $output += [VT]::TextBright() + "Time This Week:" + [VT]::Reset()
         
         # Mock time data for now
-        $output += [VT]::MoveTo($x, 7)
+        $output += [VT]::MoveTo($x, 6)
         $output += "Mon ████░ 6.5h"
-        $output += [VT]::MoveTo($x, 8)
+        $output += [VT]::MoveTo($x, 7)
         $output += "Tue ███░░ 4.2h"
-        $output += [VT]::MoveTo($x, 9)
+        $output += [VT]::MoveTo($x, 8)
         $output += "Today █░░░ 2.1h"
         
         return $output
@@ -490,9 +552,9 @@ class ProjectContextScreen : Screen {
     
     [string] RenderNotes([int]$x, [int]$height) {
         $output = ""
-        $output += [VT]::MoveTo($x, 5)
+        $output += [VT]::MoveTo($x, 4)
         $output += [VT]::TextBright() + "Project Notes:" + [VT]::Reset()
-        $output += [VT]::MoveTo($x, 7)
+        $output += [VT]::MoveTo($x, 6)
         $output += "[Enter] Open notes.md"
         
         return $output
@@ -500,9 +562,9 @@ class ProjectContextScreen : Screen {
     
     [string] RenderFiles([int]$x, [int]$height) {
         $output = ""
-        $output += [VT]::MoveTo($x, 5)
+        $output += [VT]::MoveTo($x, 4)
         $output += [VT]::TextBright() + "Project Files:" + [VT]::Reset()
-        $output += [VT]::MoveTo($x, 7)
+        $output += [VT]::MoveTo($x, 6)
         $output += "📁 " + ($this.SelectedProject.CAAPath ?? "No path set")
         
         return $output
@@ -510,7 +572,7 @@ class ProjectContextScreen : Screen {
     
     [string] RenderCommands([int]$x, [int]$height) {
         $output = ""
-        $output += [VT]::MoveTo($x, 5)
+        $output += [VT]::MoveTo($x, 4)
         $output += [VT]::TextBright() + "Quick Commands:" + [VT]::Reset()
         
         $commands = @(
@@ -521,7 +583,7 @@ class ProjectContextScreen : Screen {
             "[r] Recent files"
         )
         
-        $y = 7
+        $y = 6
         foreach ($cmd in $commands) {
             $output += [VT]::MoveTo($x, $y)
             $output += $cmd
@@ -569,5 +631,228 @@ class ProjectContextScreen : Screen {
     [void] ToggleFilter() {
         $this.ShowActiveOnly = -not $this.ShowActiveOnly
         $this.LoadProjects()
+    }
+    
+    [void] StartCommand() {
+        $this.InCommandMode = $true
+        $this.CommandBuffer = "/"
+        $this.FocusedPane = -1  # Special focus state for command line
+    }
+    
+    [void] ToggleCommandPalette() {
+        $this.ShowCommandPalette = -not $this.ShowCommandPalette
+        if ($this.ShowCommandPalette) {
+            $this.CommandSearch = ""
+            $this.CommandIndex = 0
+            $this.UpdateFilteredCommands()
+        }
+    }
+    
+    [void] UpdateFilteredCommands() {
+        if (-not $this.FilteredCommands) {
+            $this.FilteredCommands = [System.Collections.ArrayList]::new()
+        }
+        $this.FilteredCommands.Clear()
+        
+        # Sample commands
+        $commands = @(
+            @{Name="task new"; Description="Create a new task"},
+            @{Name="time start"; Description="Start time tracking"},
+            @{Name="note add"; Description="Add a note"},
+            @{Name="file open"; Description="Open project files"}
+        )
+        
+        if ([string]::IsNullOrEmpty($this.CommandSearch)) {
+            $this.FilteredCommands.AddRange($commands)
+        } else {
+            foreach ($cmd in $commands) {
+                if ($cmd.Name -like "*$($this.CommandSearch)*" -or 
+                    $cmd.Description -like "*$($this.CommandSearch)*") {
+                    $this.FilteredCommands.Add($cmd) | Out-Null
+                }
+            }
+        }
+    }
+    
+    [string] RenderCommandLine() {
+        $output = ""
+        
+        if ($this.InCommandMode) {
+            # Command entry line with cursor
+            $output += $this.CommandBuffer
+            if ($this.FocusedPane -eq -1) {
+                $output += "_"  # Show cursor
+            }
+        } else {
+            # Empty line when not in command mode
+            $output += " " * [Console]::WindowWidth
+        }
+        
+        return $output
+    }
+    
+    [string] RenderCommandPalette() {
+        $output = [VT]::Clear()
+        $width = [Console]::WindowWidth
+        $height = [Console]::WindowHeight
+        
+        # Calculate palette dimensions
+        $paletteWidth = [Math]::Min(60, $width - 10)
+        $paletteHeight = [Math]::Min(20, $height - 10)
+        $startX = ($width - $paletteWidth) / 2
+        $startY = ($height - $paletteHeight) / 2
+        
+        # Draw palette border
+        $output += [VT]::MoveTo($startX, $startY)
+        $output += [VT]::Border() + "┌" + ("─" * ($paletteWidth - 2)) + "┐" + [VT]::Reset()
+        
+        for ($i = 1; $i -lt $paletteHeight - 1; $i++) {
+            $output += [VT]::MoveTo($startX, $startY + $i)
+            $output += [VT]::Border() + "│" + [VT]::Reset()
+            $output += [VT]::MoveTo($startX + $paletteWidth - 1, $startY + $i)
+            $output += [VT]::Border() + "│" + [VT]::Reset()
+        }
+        
+        $output += [VT]::MoveTo($startX, $startY + $paletteHeight - 1)
+        $output += [VT]::Border() + "└" + ("─" * ($paletteWidth - 2)) + "┘" + [VT]::Reset()
+        
+        # Title
+        $output += [VT]::MoveTo($startX + 2, $startY + 1)
+        $output += [VT]::TextBright() + "Command Palette" + [VT]::Reset()
+        
+        # Search box
+        $output += [VT]::MoveTo($startX + 2, $startY + 3)
+        $output += "Search: " + $this.CommandSearch + "_"
+        
+        # Command list
+        $listStart = $startY + 5
+        $maxItems = $paletteHeight - 7
+        
+        for ($i = 0; $i -lt [Math]::Min($this.FilteredCommands.Count, $maxItems); $i++) {
+            $cmd = $this.FilteredCommands[$i]
+            $output += [VT]::MoveTo($startX + 2, $listStart + $i)
+            
+            if ($i -eq $this.CommandIndex) {
+                $output += [VT]::Selected() + "> " + $cmd.Name + [VT]::Reset()
+            } else {
+                $output += "  " + $cmd.Name
+            }
+            
+            # Description
+            $output += [VT]::TextDim() + " - " + $cmd.Description + [VT]::Reset()
+        }
+        
+        # Instructions
+        $output += [VT]::MoveTo($startX + 2, $startY + $paletteHeight - 2)
+        $output += [VT]::TextDim() + "[Enter] Execute  [Esc] Cancel" + [VT]::Reset()
+        
+        return $output
+    }
+    
+    [void] ProcessKeyPress([ConsoleKeyInfo]$key) {
+        # Handle command mode input
+        if ($this.InCommandMode) {
+            switch ($key.Key) {
+                ([ConsoleKey]::Escape) {
+                    $this.InCommandMode = $false
+                    $this.CommandBuffer = ""
+                    $this.FocusedPane = 0
+                    $this.RequestRender()
+                    return
+                }
+                ([ConsoleKey]::Enter) {
+                    $this.ExecuteCommand()
+                    $this.InCommandMode = $false
+                    $this.CommandBuffer = ""
+                    $this.FocusedPane = 0
+                    $this.RequestRender()
+                    return
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CommandBuffer.Length -gt 1) {
+                        $this.CommandBuffer = $this.CommandBuffer.Substring(0, $this.CommandBuffer.Length - 1)
+                    }
+                    $this.RequestRender()
+                    return
+                }
+                default {
+                    if ($key.KeyChar -and [char]::IsLetterOrDigit($key.KeyChar) -or $key.KeyChar -eq ' ') {
+                        $this.CommandBuffer += $key.KeyChar
+                        $this.RequestRender()
+                    }
+                    return
+                }
+            }
+        }
+        
+        # Handle command palette input
+        if ($this.ShowCommandPalette) {
+            switch ($key.Key) {
+                ([ConsoleKey]::Escape) {
+                    $this.ShowCommandPalette = $false
+                    $this.RequestRender()
+                    return
+                }
+                ([ConsoleKey]::Enter) {
+                    if ($this.FilteredCommands.Count -gt 0) {
+                        $cmd = $this.FilteredCommands[$this.CommandIndex]
+                        # Execute the selected command
+                        $this.CommandBuffer = "/" + $cmd.Name
+                        $this.ShowCommandPalette = $false
+                        $this.ExecuteCommand()
+                        $this.CommandBuffer = ""
+                        $this.RequestRender()
+                    }
+                    return
+                }
+                ([ConsoleKey]::UpArrow) {
+                    if ($this.CommandIndex -gt 0) {
+                        $this.CommandIndex--
+                    }
+                    $this.RequestRender()
+                    return
+                }
+                ([ConsoleKey]::DownArrow) {
+                    if ($this.CommandIndex -lt $this.FilteredCommands.Count - 1) {
+                        $this.CommandIndex++
+                    }
+                    $this.RequestRender()
+                    return
+                }
+                ([ConsoleKey]::Backspace) {
+                    if ($this.CommandSearch.Length -gt 0) {
+                        $this.CommandSearch = $this.CommandSearch.Substring(0, $this.CommandSearch.Length - 1)
+                        $this.UpdateFilteredCommands()
+                        $this.CommandIndex = 0
+                    }
+                    $this.RequestRender()
+                    return
+                }
+                default {
+                    if ($key.KeyChar -and [char]::IsLetterOrDigit($key.KeyChar) -or $key.KeyChar -eq ' ') {
+                        $this.CommandSearch += $key.KeyChar
+                        $this.UpdateFilteredCommands()
+                        $this.CommandIndex = 0
+                        $this.RequestRender()
+                    }
+                    return
+                }
+            }
+        }
+        
+        # Normal key processing
+        ([Screen]$this).ProcessKeyPress($key)
+    }
+    
+    [void] ExecuteCommand() {
+        $cmd = $this.CommandBuffer.Substring(1).Trim()  # Remove leading /
+        
+        switch -Wildcard ($cmd) {
+            "task new*" { $this.NewTask() }
+            "time start*" { $this.ToggleTimer() }
+            "note add*" { Write-Host "Adding note..." }
+            "file open*" { Write-Host "Opening files..." }
+            default { Write-Host "Unknown command: $cmd" }
+        }
     }
 }

@@ -82,12 +82,32 @@ class MainMenuScreen : Screen {
                 }.GetNewClosure()
             },
             @{
-                Title = "Project Context (New)"
+                Title = "Project Context V2"
                 Category = 0
                 Icon = "◈"
                 Key = "X"
                 Action = {
-                    $screen = [ProjectContextScreen]::new()
+                    $screen = [ProjectContextScreenV2]::new()
+                    $global:ScreenManager.Push($screen)
+                }.GetNewClosure()
+            },
+            @{
+                Title = "Project Context V3 (Final)"
+                Category = 0
+                Icon = "◈"
+                Key = "R"
+                Action = {
+                    $screen = [ProjectContextScreenV3_Final]::new()
+                    $global:ScreenManager.Push($screen)
+                }.GetNewClosure()
+            },
+            @{
+                Title = "Project Context V3 Enhanced"
+                Category = 0
+                Icon = "🚀"
+                Key = "V"
+                Action = {
+                    $screen = [ProjectContextScreenV3_Enhanced]::new()
                     $global:ScreenManager.Push($screen)
                 }.GetNewClosure()
             },
