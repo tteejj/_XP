@@ -82,6 +82,16 @@ class MainMenuScreen : Screen {
                 }.GetNewClosure()
             },
             @{
+                Title = "Project Context (New)"
+                Category = 0
+                Icon = "◈"
+                Key = "X"
+                Action = {
+                    $screen = [ProjectContextScreen]::new()
+                    $global:ScreenManager.Push($screen)
+                }.GetNewClosure()
+            },
+            @{
                 Title = "Kanban Board"
                 Category = 0
                 Icon = "⚡"

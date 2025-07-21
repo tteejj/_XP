@@ -10,6 +10,10 @@ class Screen {
     static [Buffer]$CurrentBuffer  # Current frame buffer
     static [Buffer]$PreviousBuffer  # Previous frame buffer
     
+    # Async input support
+    [bool]$SupportsAsyncInput = $true
+    [object]$AsyncInputManager = $null
+    
     Screen() {
         $this.StatusBarItems = [System.Collections.ArrayList]::new()
         $this.InitializeKeyBindings()
@@ -168,6 +172,11 @@ class Screen {
     
     # Standard input handling
     [void] HandleInput([ConsoleKeyInfo]$key) {
+        # Process async commands first if enabled
+        if ($this.AsyncInputManager -and $this.AsyncInputManager.IsEnabled) {
+            $this.AsyncInputManager.ProcessCommands($this)
+        }
+        
         # Check key bindings first
         $binding = $null
         

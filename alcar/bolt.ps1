@@ -2,7 +2,8 @@
 # BOLT-AXIOM - The ONE launcher that works
 
 param(
-    [switch]$Debug
+    [switch]$Debug,
+    [switch]$AsyncInput
 )
 
 # Set error action preference
@@ -117,6 +118,13 @@ try {
                 . $componentFile
             }
             
+            # Load AsyncInputManager before ScreenManager
+            $asyncInputFile = Join-Path $PSScriptRoot "Core/AsyncInputManager.ps1"
+            if (Test-Path $asyncInputFile) {
+                if ($Debug) { Write-Host "  - Loading AsyncInputManager.ps1" -ForegroundColor DarkGray }
+                . $asyncInputFile
+            }
+            
             # Now load ScreenManager after base classes
             $screenManagerFile = Join-Path $PSScriptRoot "Core/ScreenManager.ps1"
             if (Test-Path $screenManagerFile) {
@@ -179,6 +187,7 @@ try {
                 "TextEditorScreen_v2.ps1",
                 "SimpleTextEditor.ps1",
                 "FileBrowserScreen.ps1",
+                "ProjectContextScreen.ps1",
                 "ALCARLazyGitScreen.ps1",
                 "MainMenuScreen.ps1"
             )
@@ -269,6 +278,12 @@ try {
     
     # Create and run screen manager
     $global:ScreenManager = [ScreenManager]::new()
+    
+    # Enable async input if requested
+    if ($AsyncInput) {
+        Write-Host "Async input mode enabled" -ForegroundColor Yellow
+        $global:ScreenManager.AsyncInputEnabled = $true
+    }
     
     # Start with main menu
     $mainMenu = [MainMenuScreen]::new()

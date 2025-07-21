@@ -5,6 +5,7 @@ class ScreenManager {
     [Screen]$CurrentScreen
     [bool]$Running = $true
     [bool]$UseAlternateBuffer = $false
+    [bool]$AsyncInputEnabled = $false
     
     ScreenManager() {
         $this.ScreenStack = [System.Collections.Stack]::new()
@@ -100,9 +101,19 @@ class ScreenManager {
         # Enter alternate screen buffer, hide cursor
         [Console]::Write("`e[?1049h`e[?25l")
         
+        # Initialize async input if enabled
+        if ($this.AsyncInputEnabled -and -not $global:AsyncInputManager) {
+            $global:AsyncInputManager = [AsyncInputManager]::new()
+            $global:AsyncInputManager.Enable()
+        }
+        
         try {
             # Initial render
             if ($this.CurrentScreen) {
+                # Set async input manager on screen if supported
+                if ($this.AsyncInputEnabled -and $this.CurrentScreen.SupportsAsyncInput) {
+                    $this.CurrentScreen.AsyncInputManager = $global:AsyncInputManager
+                }
                 $this.CurrentScreen.Render()
             }
             
@@ -117,7 +128,19 @@ class ScreenManager {
                 }
                 
                 # Handle input
-                if ([Console]::KeyAvailable) {
+                $hasInput = $false
+                
+                # Check async input first
+                if ($this.AsyncInputEnabled -and $global:AsyncInputManager -and $global:AsyncInputManager.HasInput()) {
+                    $input = $global:AsyncInputManager.GetNextInput()
+                    if ($input -and $input.Type -eq "Key") {
+                        $this.CurrentScreen.HandleInput($input.KeyInfo)
+                        $hasInput = $true
+                    }
+                }
+                
+                # Check normal input if no async input
+                if (-not $hasInput -and [Console]::KeyAvailable) {
                     $key = [Console]::ReadKey($true)
                     
                     # Global shortcuts
@@ -139,6 +162,11 @@ class ScreenManager {
                 # No sleep needed - fast rendering with proper VT100
             }
         } finally {
+            # Cleanup async input if enabled
+            if ($this.AsyncInputEnabled -and $global:AsyncInputManager) {
+                $global:AsyncInputManager.Disable()
+            }
+            
             # Cleanup - exit alternate buffer and restore cursor
             [Console]::Write("`e[?1049l`e[?25h")
             try {
