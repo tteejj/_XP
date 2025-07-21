@@ -51,6 +51,8 @@ class ALCARLazyGitScreen : Screen {
             
             # Create LazyGit components
             $this.Layout = [LazyGitLayout]::new()
+            $this.Layout.CommandPaletteHeight = 3  # Just the command bar height
+            $this.Layout.CalculateLayout()  # Recalculate layout with new command palette height
             $this.Renderer = [LazyGitRenderer]::new(8192)
             $this.FocusManager = [LazyGitFocusManager]::new()
             
@@ -343,20 +345,13 @@ class ALCARLazyGitScreen : Screen {
         # Render command bar at top
         $buffer.Append($this.CommandBar.Render()) | Out-Null
         
-        # Render all panels (they're positioned below command bar)
+        # Render all panels (layout already accounts for command bar space)
         foreach ($panel in $this.LeftPanels) {
-            # Adjust Y position by 3 for command bar
-            $originalY = $panel.Y
-            $panel.Y = $originalY + 3
             $buffer.Append($panel.Render()) | Out-Null
-            $panel.Y = $originalY  # Restore
         }
         
         # Main panel
-        $originalY = $this.MainPanel.Y
-        $this.MainPanel.Y = $originalY + 3
         $buffer.Append($this.MainPanel.Render()) | Out-Null
-        $this.MainPanel.Y = $originalY
         
         # Render status and help
         $this.RenderStatusLine($buffer)
@@ -364,6 +359,12 @@ class ALCARLazyGitScreen : Screen {
         # Render help overlay if active
         if ($this.ShowHelp) {
             $this.RenderHelpOverlay($buffer)
+        }
+        
+        # Render command dropdown as overlay (last so it appears on top)
+        $dropdownOverlay = $this.CommandBar.RenderDropdownOverlay()
+        if ($dropdownOverlay) {
+            $buffer.Append($dropdownOverlay) | Out-Null
         }
         
         return $buffer.ToString()
@@ -735,7 +736,7 @@ class ALCARFilterView : LazyGitViewBase {
         
         for ($i = $startIdx; $i -lt $endIdx; $i++) {
             $item = $this.Items[$i]
-            $prefix = if ($item.Filter -eq $this.ActiveFilter) { "[X] " } else { "[ ] " }
+            $prefix = if ($item.Filter -eq $this.ActiveFilter) { "◉ " } else { "◯ " }  # Radio button style
             $line = $this.RenderListItem($i, "$prefix$($item.Name)", $width)
             $output.AppendLine($line) | Out-Null
         }
@@ -815,10 +816,10 @@ class ALCARProjectView : LazyGitViewBase {
         for ($i = 0; $i -lt [Math]::Min($this.Items.Count, $height); $i++) {
             $item = $this.Items[$i]
             $icon = switch ($item.Type) {
-                "Project" { "[PRJ]" }
-                "NoProject" { "[N/A]" }
-                "Error" { "[ERR]" }
-                default { "[---]" }
+                "Project" { "◆" }  # Diamond for projects
+                "NoProject" { "◇" }  # Empty diamond for no project
+                "Error" { "⚠" }  # Warning symbol for errors
+                default { "•" }  # Bullet for default
             }
             
             $text = "$icon $($item.Name)"
@@ -904,12 +905,12 @@ class ALCARProjectTreeView : LazyGitViewBase {
             $icon = ""
             if ($item.Type -eq "Project") {
                 $isExpanded = $this.ExpandedProjects[$item.ProjectId]
-                $icon = if ($isExpanded) { "v [PRJ]" } else { "> [PRJ]" }
+                $icon = if ($isExpanded) { "▼ ◆" } else { "▶ ◆" }  # Triangle for expand/collapse, diamond for project
             } else {
                 $icon = switch ($item.Status) {
-                    "Completed" { "  [DONE]" }
-                    "Active" { "  [ACTV]" }
-                    default { "  [PEND]" }
+                    "Completed" { "  ✓" }  # Checkmark for completed
+                    "Active" { "  ●" }  # Filled circle for active
+                    default { "  ○" }  # Empty circle for pending
                 }
             }
             
@@ -1006,10 +1007,10 @@ class ALCARTaskView : LazyGitViewBase {
         for ($i = 0; $i -lt [Math]::Min($this.Items.Count, $height); $i++) {
             $task = $this.Items[$i]
             $icon = switch ($task.Status) {
-                "Completed" { "[DONE]" }
-                "Active" { "[ACTV]" }
-                "Blocked" { "[BLKD]" }
-                default { "[PEND]" }
+                "Completed" { "✓" }  # Checkmark
+                "Active" { "●" }     # Filled circle
+                "Blocked" { "⊗" }    # Circle with X
+                default { "○" }       # Empty circle
             }
             
             # Use ViewDefinitionService if available for consistent formatting
@@ -1169,12 +1170,12 @@ class ALCARTaskListView : LazyGitViewBase {
         for ($i = $startIdx; $i -lt $endIdx; $i++) {
             $item = $this.Items[$i]
             
-            # Format: [STATUS] TaskName (Priority)
+            # Format: STATUS TaskName (Priority)
             $status = switch ($item.Status) {
-                "Completed" { "[DONE]" }
-                "Active" { "[ACTV]" }
-                "Blocked" { "[BLKD]" }
-                default { "[PEND]" }
+                "Completed" { "✓" }  # Checkmark
+                "Active" { "●" }     # Filled circle
+                "Blocked" { "⊗" }    # Circle with X
+                default { "○" }       # Empty circle
             }
             
             $priority = switch ($item.Priority) {
@@ -1286,7 +1287,7 @@ class ALCARRecentView : LazyGitViewBase {
         
         for ($i = 0; $i -lt [Math]::Min($this.Items.Count, $height); $i++) {
             $item = $this.Items[$i]
-            $icon = if ($item.Type -eq "Task") { "[TSK]" } else { "[PRJ]" }
+            $icon = if ($item.Type -eq "Task") { "▸" } else { "◆" }  # Right triangle for tasks, diamond for projects
             $timeAgo = $this.GetTimeAgo($item.Time)
             
             $text = "$icon $($item.Name) - $timeAgo"

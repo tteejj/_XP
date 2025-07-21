@@ -7,6 +7,7 @@ class EnhancedCommandBar {
     [object[]]$AllCommands = @()
     [object[]]$FilteredResults = @()
     [int]$SelectedIndex = 0
+    [int]$ScrollOffset = 0
     [bool]$IsActive = $false
     [bool]$ShowDropdown = $false
     [int]$MaxDropdownItems = 8
@@ -15,7 +16,7 @@ class EnhancedCommandBar {
     [int]$X = 0
     [int]$Y = 0
     [int]$Width = 80
-    [int]$Height = 1  # Bar height, dropdown extends below
+    [int]$Height = 3  # Bar height including borders
     
     # Context for ranking
     [object]$CurrentProject = $null
@@ -34,6 +35,8 @@ class EnhancedCommandBar {
     hidden [string]$_selectedBg = "`e[48;2;60;80;120m"
     hidden [string]$_matchColor = "`e[38;2;100;200;255m"
     hidden [string]$_dimColor = "`e[38;2;150;150;150m"
+    hidden [string]$_dropdownBg = "`e[48;2;10;10;20m"  # Very dark background for dropdown
+    hidden [string]$_dropdownBorder = "`e[38;2;80;80;100m"  # Slightly dimmer border for dropdown
     hidden [string]$_reset = "`e[0m"
     
     EnhancedCommandBar() {
@@ -300,29 +303,47 @@ class EnhancedCommandBar {
                 }
             }
             
-            # Sort by score and take top results
+            # Sort by score (no limit on results for scrolling)
             $this.FilteredResults = $results | 
                 Sort-Object -Property Score -Descending | 
-                Select-Object -First $this.MaxDropdownItems -ExpandProperty Command
+                Select-Object -ExpandProperty Command
         }
         
-        # Reset selection
+        # Reset selection and scroll
         $this.SelectedIndex = 0
+        $this.ScrollOffset = 0
         $this.ShowDropdown = $this.FilteredResults.Count -gt 0
     }
     
     [string] Render() {
         $output = [System.Text.StringBuilder]::new(2048)
         
-        # Render command bar
+        # Always render command bar
         $this.RenderBar($output)
         
-        # Render dropdown if active
-        if ($this.IsActive -and $this.ShowDropdown) {
-            $this.RenderDropdown($output)
+        return $output.ToString()
+    }
+    
+    [string] RenderDropdownOverlay() {
+        if (-not $this.IsActive -or -not $this.ShowDropdown) {
+            return ""
         }
         
+        $output = [System.Text.StringBuilder]::new(2048)
+        $this.RenderDropdown($output)
         return $output.ToString()
+    }
+    
+    [void] ClearDropdownArea([System.Text.StringBuilder]$output) {
+        $dropY = $this.Y + 3
+        # Clear up to max dropdown items + borders
+        $maxHeight = $this.MaxDropdownItems + 2
+        
+        for ($line = 0; $line -lt $maxHeight; $line++) {
+            $output.Append("`e[$($dropY + $line);$($this.X)H") | Out-Null
+            $output.Append($this._reset) | Out-Null
+            $output.Append(" " * 80) | Out-Null
+        }
     }
     
     [void] RenderBar([System.Text.StringBuilder]$output) {
@@ -348,18 +369,23 @@ class EnhancedCommandBar {
         $output.Append($prompt) | Out-Null
         
         # Input text
-        if ($this.CurrentInput.Length -gt 0) {
-            $output.Append($this.CurrentInput) | Out-Null
+        $inputText = if ($this.CurrentInput.Length -gt 0) {
+            $this.CurrentInput
         } else {
-            $output.Append($this._dimColor) | Out-Null
-            $output.Append("Search commands...") | Out-Null
-            $output.Append($this._fgColor) | Out-Null
+            if (-not $this.IsActive) {
+                $output.Append($this._dimColor) | Out-Null
+            }
+            "Search commands..."
         }
+        $output.Append($inputText) | Out-Null
         
         # Cursor
         if ($this.IsActive) {
             $output.Append("█") | Out-Null
         }
+        
+        # Calculate space for right-aligned text
+        $currentPos = 3 + $inputText.Length + ($this.IsActive ? 1 : 0)  # prompt + text + cursor
         
         # Right side info
         $rightText = if ($this.IsActive -and $this.FilteredResults.Count -gt 0) {
@@ -368,12 +394,18 @@ class EnhancedCommandBar {
             "[Ctrl+P to focus]"
         }
         
-        $rightPos = $this.X + $this.Width - $rightText.Length - 3
-        $output.Append("`e[$($this.Y + 1);${rightPos}H") | Out-Null
+        # Pad middle with dashes
+        $paddingLength = $this.Width - $currentPos - $rightText.Length - 4  # -4 for borders and spaces
+        if ($paddingLength -gt 0) {
+            $output.Append($this._borderColor) | Out-Null
+            $output.Append("─" * $paddingLength) | Out-Null
+        }
+        
         $output.Append($this._dimColor) | Out-Null
         $output.Append($rightText) | Out-Null
+        $output.Append(" ") | Out-Null
         $output.Append($this._borderColor) | Out-Null
-        $output.Append(" │") | Out-Null
+        $output.Append("│") | Out-Null
         
         # Bottom border
         $output.Append("`e[$($this.Y + 2);$($this.X)H") | Out-Null
@@ -385,31 +417,58 @@ class EnhancedCommandBar {
     }
     
     [void] RenderDropdown([System.Text.StringBuilder]$output) {
-        $dropY = $this.Y + 3
+        # Position dropdown below command bar, over the panels
+        $dropY = 4  # Just below the 3-line command bar
+        $dropX = 2  # Slight indent from left edge
         
-        # Dropdown background
-        $output.Append($this._bgColor) | Out-Null
+        # Calculate actual dropdown dimensions
+        $dropdownHeight = [Math]::Min($this.FilteredResults.Count, $this.MaxDropdownItems) + 2  # +2 for borders
+        $dropWidth = 60  # Narrower dropdown width
         
-        # Top border of dropdown
-        $output.Append("`e[${dropY};$($this.X)H") | Out-Null
-        $output.Append($this._borderColor) | Out-Null
-        $output.Append("├") | Out-Null
-        $output.Append("─" * ($this.Width - 2)) | Out-Null
-        $output.Append("┤") | Out-Null
+        # Clear dropdown area with solid background
+        for ($line = 0; $line -lt $dropdownHeight; $line++) {
+            $output.Append("`e[$($dropY + $line);${dropX}H") | Out-Null
+            $output.Append($this._dropdownBg) | Out-Null
+            $output.Append(" " * $dropWidth) | Out-Null
+            $output.Append($this._reset) | Out-Null
+        }
         
-        # Render each result
-        for ($i = 0; $i -lt $this.FilteredResults.Count; $i++) {
-            $cmd = $this.FilteredResults[$i]
-            $isSelected = $i -eq $this.SelectedIndex
+        # Top border of dropdown with scroll indicator
+        $output.Append("`e[${dropY};${dropX}H") | Out-Null
+        $output.Append($this._dropdownBg) | Out-Null
+        $output.Append($this._dropdownBorder) | Out-Null
+        $output.Append("╭") | Out-Null
+        
+        # Show scroll indicator if scrolled
+        if ($this.ScrollOffset -gt 0) {
+            $leftPadding = [Math]::Floor(($dropWidth - 4) / 2)
+            $output.Append("─" * $leftPadding) | Out-Null
+            $output.Append(" ▲ ") | Out-Null
+            $output.Append("─" * ($dropWidth - $leftPadding - 4)) | Out-Null
+        } else {
+            $output.Append("─" * ($dropWidth - 2)) | Out-Null
+        }
+        
+        $output.Append("╮") | Out-Null
+        $output.Append($this._reset) | Out-Null
+        
+        # Render each result (up to MaxDropdownItems)
+        $itemsToShow = [Math]::Min($this.FilteredResults.Count - $this.ScrollOffset, $this.MaxDropdownItems)
+        for ($i = 0; $i -lt $itemsToShow; $i++) {
+            $actualIndex = $i + $this.ScrollOffset
+            $cmd = $this.FilteredResults[$actualIndex]
+            $isSelected = $actualIndex -eq $this.SelectedIndex
             
-            $output.Append("`e[$($dropY + $i + 1);$($this.X)H") | Out-Null
-            $output.Append($this._borderColor) | Out-Null
+            $output.Append("`e[$($dropY + $i + 1);${dropX}H") | Out-Null
+            $output.Append($this._dropdownBg) | Out-Null
+            $output.Append($this._dropdownBorder) | Out-Null
             $output.Append("│") | Out-Null
             
             if ($isSelected) {
                 $output.Append($this._selectedBg) | Out-Null
                 $output.Append(" ▶ ") | Out-Null
             } else {
+                $output.Append($this._dropdownBg) | Out-Null
                 $output.Append("   ") | Out-Null
             }
             
@@ -421,33 +480,48 @@ class EnhancedCommandBar {
             $output.Append($this._dimColor) | Out-Null
             $output.Append(" [$($cmd.Category)]") | Out-Null
             
+            # Pad to fill width (accounting for borders and content)
+            $currentLength = 3 + $cmd.Name.Length + 3 + $cmd.Category.Length  # 3 for arrow/space, 3 for " []"
+            $padding = $dropWidth - $currentLength - 2  # -2 for borders
+            if ($cmd.Shortcut) {
+                $padding -= ($cmd.Shortcut.Length + 2)  # Account for shortcut space
+            }
+            if ($padding -gt 0) {
+                $output.Append(" " * $padding) | Out-Null
+            }
+            
             # Shortcut if available
             if ($cmd.Shortcut) {
-                $shortcutPos = $this.X + $this.Width - $cmd.Shortcut.Length - 4
-                $output.Append("`e[$($dropY + $i + 1);${shortcutPos}H") | Out-Null
                 $output.Append($this._dimColor) | Out-Null
                 $output.Append($cmd.Shortcut) | Out-Null
+                $output.Append(" ") | Out-Null
             }
             
             # Right border
-            $output.Append("`e[$($dropY + $i + 1);$($this.X + $this.Width - 1)H") | Out-Null
-            $output.Append($this._borderColor) | Out-Null
+            $output.Append($this._dropdownBorder) | Out-Null
             $output.Append("│") | Out-Null
-            
-            if ($isSelected) {
-                $output.Append($this._reset) | Out-Null
-                $output.Append($this._bgColor) | Out-Null
-            }
+            $output.Append($this._reset) | Out-Null
         }
         
-        # Bottom border
-        $bottomY = $dropY + $this.FilteredResults.Count + 1
-        $output.Append("`e[${bottomY};$($this.X)H") | Out-Null
-        $output.Append($this._borderColor) | Out-Null
-        $output.Append("└") | Out-Null
-        $output.Append("─" * ($this.Width - 2)) | Out-Null
-        $output.Append("┘") | Out-Null
+        # Bottom border with scroll indicator
+        $bottomY = $dropY + $itemsToShow + 1
+        $output.Append("`e[${bottomY};${dropX}H") | Out-Null
+        $output.Append($this._dropdownBg) | Out-Null
+        $output.Append($this._dropdownBorder) | Out-Null
+        $output.Append("╰") | Out-Null
         
+        # Show scroll indicator if more items below
+        $hasMoreItems = ($this.ScrollOffset + $itemsToShow) -lt $this.FilteredResults.Count
+        if ($hasMoreItems) {
+            $leftPadding = [Math]::Floor(($dropWidth - 4) / 2)
+            $output.Append("─" * $leftPadding) | Out-Null
+            $output.Append(" ▼ ") | Out-Null
+            $output.Append("─" * ($dropWidth - $leftPadding - 4)) | Out-Null
+        } else {
+            $output.Append("─" * ($dropWidth - 2)) | Out-Null
+        }
+        
+        $output.Append("╯") | Out-Null
         $output.Append($this._reset) | Out-Null
     }
     
@@ -502,6 +576,10 @@ class EnhancedCommandBar {
             ([ConsoleKey]::UpArrow) {
                 if ($this.FilteredResults.Count -gt 0 -and $this.SelectedIndex -gt 0) {
                     $this.SelectedIndex--
+                    # Adjust scroll if needed
+                    if ($this.SelectedIndex -lt $this.ScrollOffset) {
+                        $this.ScrollOffset = $this.SelectedIndex
+                    }
                     return $true
                 }
             }
@@ -509,6 +587,10 @@ class EnhancedCommandBar {
                 if ($this.FilteredResults.Count -gt 0 -and 
                     $this.SelectedIndex -lt $this.FilteredResults.Count - 1) {
                     $this.SelectedIndex++
+                    # Adjust scroll if needed
+                    if ($this.SelectedIndex -ge $this.ScrollOffset + $this.MaxDropdownItems) {
+                        $this.ScrollOffset = $this.SelectedIndex - $this.MaxDropdownItems + 1
+                    }
                     return $true
                 }
             }

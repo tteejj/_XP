@@ -96,13 +96,14 @@ class LazyGitLayout {
         for ($i = 0; $i -lt $this.LeftPanelCount; $i++) {
             $panelId = "LeftPanel$i"
             $x = $this.PanelSpacing
-            $y = $i * $this.LeftPanelHeight
+            # Panels start after command palette space
+            $y = $this.CommandPaletteHeight + ($i * $this.LeftPanelHeight)
             $width = $this.LeftPanelWidth
             $height = $this.LeftPanelHeight
             
             # Last panel gets any remaining height
             if ($i -eq ($this.LeftPanelCount - 1)) {
-                $height = $this.ContentHeight - $y
+                $height = ($this.ContentHeight + $this.CommandPaletteHeight) - $y
             }
             
             $this.PanelPositions[$panelId] = @{ X = $x; Y = $y }
@@ -111,16 +112,16 @@ class LazyGitLayout {
         
         # Main panel (right side)
         $mainX = $this.LeftPanelWidth + ($this.PanelSpacing * 2)
-        $this.PanelPositions["MainPanel"] = @{ X = $mainX; Y = 0 }
+        $this.PanelPositions["MainPanel"] = @{ X = $mainX; Y = $this.CommandPaletteHeight }
         $this.PanelDimensions["MainPanel"] = @{ 
             Width = $this.MainPanelWidth - $this.PanelSpacing
             Height = $this.MainPanelHeight 
         }
         
-        # Command palette (bottom)
+        # Command palette (top for ALCAR)
         $this.PanelPositions["CommandPalette"] = @{ 
             X = 0; 
-            Y = $this.ContentHeight 
+            Y = 0 
         }
         $this.PanelDimensions["CommandPalette"] = @{ 
             Width = $this.TerminalWidth

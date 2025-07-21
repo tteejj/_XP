@@ -204,6 +204,12 @@ class LazyGitPanel {
             $view = $this.AvailableViews[$viewName]
             $tabText = " $($view.ShortName) "
             
+            # Add separator between tabs
+            if ($i -gt 0) {
+                [void]$output.Append(" │ ")  # Vertical bar separator
+                $remainingWidth -= 3
+            }
+            
             if ($remainingWidth -lt $tabText.Length) {
                 break  # No more space
             }
