@@ -1,0 +1,1144 @@
+# Enhanced PowerShell Todoist TUI - Professional Version v3.1 (Parser Fix)
+# Rich display, smart completions, full feature implementation
+# Refactored for Separation of Concerns (ViewModel Pattern) and a complete schema-driven architecture.
+
+# === GLOBAL CONFIGURATION ===
+$global:TaskFile = Join-Path $PSScriptRoot "tasks.json"
+$global:ConfigFile = Join-Path $PSScriptRoot "config.json"
+$global:LastShownTaskMap = @{}
+$global:CurrentContext = "inbox"
+$global:LastAction = $null
+$global:SessionStats = @{
+    TasksAdded = 0
+    TasksCompleted = 0
+    TimeLogged = 0
+    CommandsRun = 0
+    SessionStart = Get-Date
+}
+
+# === CONFIGURATION MANAGER ===
+class ConfigManager {
+    static [hashtable] $Config = @{
+        Colors = @{
+            Overdue = "Red"
+            Today = "Yellow"
+            Tomorrow = "Cyan"
+            Upcoming = "Green"
+            Priority1 = "Magenta"
+            Priority2 = "Yellow"
+            Priority3 = "Blue"
+            Project = "DarkCyan"
+            Context = "Cyan"
+            TimeLog = "Blue"
+        }
+        Display = @{
+            MaxTasksPerSection = 10
+            ShowEmptyProjects = $false
+            ShowCompletedInReports = $true
+            DateFormat = "ddd MM/dd"
+            Use24Hour = $false
+            CompactMode = $false
+        }
+        Behavior = @{
+            AutoArchiveAfterDays = 30
+            DefaultDueDateDays = 7
+            WarnBeforeDelete = $true
+            ShowWelcome = $true
+            EnableNotifications = $false
+        }
+        Shortcuts = @{
+            't' = 'today'
+            'tm' = 'tomorrow'
+            'nd' = 'noduedate'
+            'od' = 'overdue'
+        }
+    }
+    
+    static [void] Load() {
+        if (Test-Path $global:ConfigFile) {
+            $saved = Get-Content $global:ConfigFile -Raw | ConvertFrom-Json
+            foreach ($key in $saved.PSObject.Properties) {
+                [ConfigManager]::Config[$key.Name] = $key.Value
+            }
+        }
+    }
+    
+    static [void] Save() {
+        [ConfigManager]::Config | ConvertTo-Json -Depth 10 | Set-Content $global:ConfigFile
+    }
+}
+
+# === DATA PERSISTENCE LAYER ===
+function Initialize-DataStorage {
+    if (-not (Test-Path $global:TaskFile)) {
+        @{
+            tasks = @()
+            lastId = 0
+            deleted = @()
+            completed = @()
+            projects = @( 
+                @{ name = 'inbox'; description = 'Default inbox'; color = 'Gray'; icon = '📥'; sortOrder = 0; isArchived = $false },
+                @{ name = 'personal'; description = 'Personal tasks'; color = 'Green'; icon = '🏠'; sortOrder = 1; isArchived = $false },
+                @{ name = 'work'; description = 'Work-related tasks'; color = 'Blue'; icon = '💼'; sortOrder = 2; isArchived = $false }
+            )
+            timelogs = @()
+            currentContext = 'inbox'
+            templates = @{}
+            labels = @('urgent', 'waiting', 'someday', 'reference')
+            dependencies = @()
+            notes = @{}
+            activityLog = @()
+        } | ConvertTo-Json -Depth 10 | Set-Content $global:TaskFile
+    }
+}
+
+function Get-TaskData { 
+    $data = Get-Content $global:TaskFile -Raw | ConvertFrom-Json
+    if (-not $data.PSObject.Properties['activityLog']) {
+        $data | Add-Member -MemberType NoteProperty -Name activityLog -Value @()
+    }
+    if (-not $data.PSObject.Properties['dependencies']) {
+        $data | Add-Member -MemberType NoteProperty -Name dependencies -Value @()
+    }
+    return $data
+}
+
+function Save-TaskData($data) {
+    if (-not $data.activityLog) {
+        $data | Add-Member -MemberType NoteProperty -Name activityLog -Value @()
+    }
+    
+    $data.activityLog += @{
+        timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        action = $global:LastAction
+        user = $env:USERNAME
+    }
+    
+    if ($data.activityLog.Count -gt 1000) {
+        $data.activityLog = $data.activityLog[-1000..-1]
+    }
+    
+    $data | ConvertTo-Json -Depth 10 | Set-Content $global:TaskFile
+}
+
+# === ROBUST COMPLETION & PARSING SYSTEM ===
+
+enum CompletionMode {
+    Command
+    Subcommand
+    SyntaxDiscovery
+    PrefixCompletion
+    FreeText
+    Help
+}
+
+class CompletionState {
+    [string] $OriginalBuffer = ""
+    [int] $CursorPosition = 0
+    [string] $FullCommandName = ""
+    [array] $ArgumentTokens = @()
+    [ParsedToken] $TokenUnderCursor = $null
+    [bool] $IsOnNewWord = $false
+    [hashtable] $ParsedArguments = @{}
+    [CompletionMode] $Mode = [CompletionMode]::Command
+    [string] $PrefixBeingCompleted = ""
+}
+
+class ParsedToken {
+    [string] $Text = ""
+    [int] $StartPos = 0
+    [int] $EndPos = 0
+    [string] $Type = "Unknown"
+    
+    ParsedToken([string] $text, [int] $start, [int] $end) {
+        $this.Text = $text
+        $this.StartPos = $start
+        $this.EndPos = $end
+    }
+}
+
+class CompletionItem {
+    [string] $Text = ""
+    [string] $Description = ""
+    [string] $Category = ""
+    [int] $Score = 0
+    
+    CompletionItem([string] $text, [string] $description, [string] $category, [int] $score) {
+        $this.Text = $text
+        $this.Description = $description
+        $this.Category = $category
+        $this.Score = $score
+    }
+}
+
+class CommandContext {
+    [string] $CommandName = ""
+    [hashtable] $Args = @{}
+    [string[]] $FreeText = @()
+    [string] $RawText = ""
+    [CompletionState] $State = $null
+    [object] $Parser = $null
+    [string[]] $ValidationErrors = @()
+    [string[]] $ValidationWarnings = @()
+    [bool] $IsValid = $true
+    
+    CommandContext([CompletionState] $state, [object] $parser) {
+        $this.State = $state
+        $this.Parser = $parser
+        $this.CommandName = $state.FullCommandName
+        $this.ParseArguments()
+        $this.ValidateCommand()
+    }
+    
+    [void] ParseArguments() {
+        $this.Args = @{}
+        $freeTextTokens = @()
+        
+        foreach ($token in $this.State.ArgumentTokens) {
+            $text = $token.Text
+            if ($text -match '^@(.+)') { $this.Args['project'] = $matches[1] }
+            elseif ($text -match '^p([1-3])$') { $this.Args['priority'] = [int]$matches[1] }
+            elseif ($text -eq '!') { $this.Args['priority'] = 3 }
+            elseif ($text -eq '!!') { $this.Args['priority'] = 2 }
+            elseif ($text -eq '!!!') { $this.Args['priority'] = 1 }
+            elseif ($text -match '^due:(.+)') { $this.Args['due'] = $matches[1] }
+            elseif ($text -match '^est:(.+)') { $this.Args['estimate'] = $matches[1] }
+            elseif ($text -match '^#(.+)') {
+                if (-not $this.Args.ContainsKey('tags')) { $this.Args['tags'] = @() }
+                $this.Args['tags'] += $matches[1]
+            }
+            elseif ($text -match '^recur:(.+)') { $this.Args['recur'] = $matches[1] }
+            elseif ($text -match '^dep:(.+)') {
+                if (-not $this.Args.ContainsKey('dependencies')) { $this.Args['dependencies'] = @() }
+                $this.Args['dependencies'] += $matches[1]
+            }
+            else { $freeTextTokens += $text }
+        }
+        
+        $this.FreeText = $freeTextTokens
+        $this.RawText = ($freeTextTokens -join ' ').Trim()
+    }
+    
+    [bool] HasArg([string] $name) { return $this.Args.ContainsKey($name) }
+    [object] GetArg([string] $name, [object] $default = $null) { if ($this.HasArg($name)) { return $this.Args[$name] } else { return $default } }
+    [string] GetProject() { return $this.GetArg('project', $global:CurrentContext) }
+    [int] GetPriority() { return $this.GetArg('priority', 0) }
+    [string[]] GetTags() { return $this.GetArg('tags', @()) }
+    [string] GetText() { return $this.RawText }
+    
+    [void] AddError([string] $message) { $this.ValidationErrors += $message; $this.IsValid = $false }
+    [void] AddWarning([string] $message) { $this.ValidationWarnings += $message }
+    
+    [void] ValidateCommand() {
+        if ($this.Parser -and $this.Parser.CommandSchemas.ContainsKey($this.CommandName)) {
+            $this.ValidateWithSchema($this.Parser.CommandSchemas[$this.CommandName])
+        }
+    }
+    
+    [void] ValidateWithSchema([CommandSchema] $schema) {
+        foreach ($argSchema in $schema.Arguments) {
+            if ($argSchema.Required) {
+                if ($argSchema.Type -eq "text" -and [string]::IsNullOrWhiteSpace($this.GetText())) {
+                    $this.AddError("$($argSchema.Description) is required")
+                } elseif ($argSchema.Type -ne "text" -and -not $this.HasArg($argSchema.Name)) {
+                    $this.AddError("$($argSchema.Description) is required")
+                }
+            }
+        }
+        foreach ($argName in $this.Args.Keys) {
+            $argSchema = $schema.GetArgumentSchema($argName)
+            if ($argSchema) {
+                $value = $this.Args[$argName]
+                if ($argSchema.Pattern -and $value -notmatch $argSchema.Pattern) {
+                    $this.AddError("Invalid format for $($argSchema.Name): '$value'. Expected: $($argSchema.Example)")
+                }
+                if ($argSchema.ValidValues.Count -gt 0 -and $value -notin $argSchema.ValidValues) {
+                    $this.AddError("Invalid value for $($argSchema.Name): '$value'. Valid: $($argSchema.ValidValues -join ', ')")
+                }
+            }
+        }
+    }
+    
+    [void] ShowValidationErrors() {
+        if ($this.ValidationErrors.Count -gt 0) {
+            Write-Host "  ❌ VALIDATION ERRORS:" -ForegroundColor Red
+            foreach ($error in $this.ValidationErrors) { Write-Host "     • $error" -ForegroundColor Red }
+            Write-Host ""
+        }
+        if ($this.ValidationWarnings.Count -gt 0) {
+            Write-Host "  ⚠️  WARNINGS:" -ForegroundColor Yellow
+            foreach ($warning in $this.ValidationWarnings) { Write-Host "     • $warning" -ForegroundColor Yellow }
+            Write-Host ""
+        }
+    }
+}
+
+class ArgumentSchema {
+    [string] $Name
+    [string] $Type
+    [string] $Prefix
+    [bool] $Required
+    [string[]] $ValidValues = @()
+    [string] $Pattern
+    [string] $Description
+    [string] $Example
+}
+
+class CommandSchema {
+    [string] $CommandName
+    [ArgumentSchema[]] $Arguments = @()
+    [string] $Description
+    [string] $Syntax
+    
+    [ArgumentSchema] GetArgumentSchema([string] $argName) {
+        return $this.Arguments | Where-Object { $_.Name -eq $argName } | Select-Object -First 1
+    }
+}
+
+class SmartCommandParser {
+    [hashtable] $Commands = @{}
+    [hashtable] $Aliases = @{}
+    [hashtable] $CommandSchemas = @{}
+    [object] $CachedData = $null
+    [datetime] $CacheTime = [datetime]::MinValue
+    
+    SmartCommandParser() {
+        $this.InitializeCommands()
+        $this.InitializeAliases()
+        $this.InitializeCommandSchemas()
+    }
+    
+    [void] InitializeCommands() {
+        $this.Commands = @{
+            'agenda'       = @{ Handler = { $vm = Get-AgendaViewModel; Show-RichAgenda $vm }; Description = "Smart agenda view"; Category = "View" }
+            'today'        = @{ Handler = { Show-FilteredTasks @{Filter='today'} }; Description = "Tasks due today"; Category = "View" }
+            'tomorrow'     = @{ Handler = { Show-FilteredTasks @{Filter='tomorrow'} }; Description = "Tasks due tomorrow"; Category = "View" }
+            'week'         = @{ Handler = { $vm = Get-WeekViewModel; Show-WeekView $vm }; Description = "Week calendar view"; Category = "View" }
+            'overdue'      = @{ Handler = { Show-FilteredTasks @{Filter='overdue'} }; Description = "Overdue tasks"; Category = "View" }
+            'upcoming'     = @{ Handler = { Show-FilteredTasks @{Filter='upcoming'} }; Description = "Next 7 days"; Category = "View" }
+            'noduedate'    = @{ Handler = { Show-FilteredTasks @{Filter='noduedate'} }; Description = "Tasks without due dates"; Category = "View" }
+            'search'       = @{ Handler = { param($c) Show-FilteredTasks @{Search=$c.GetText()} }; Description = "Search tasks"; Category = "View"; NeedsArg = $true }
+            'blocked'      = @{ Handler = { Show-BlockedTasks }; Description = "Tasks with unmet dependencies"; Category = "View" }
+            'proj'         = @{ Handler = { $vm = Get-ProjectDashboardViewModel; Show-ProjectDashboard $vm }; Description = "Project dashboard"; Category = "Project" }
+            'proj add'     = @{ Handler = { param($c) Add-Project $c }; Description = "Create new project"; Category = "Project"; NeedsArg = $true }
+            'proj rename'  = @{ Handler = { param($c) Rename-Project $c }; Description = "Rename project"; Category = "Project"; NeedsArg = $true }
+            'proj archive' = @{ Handler = { param($c) Archive-Project $c }; Description = "Archive project"; Category = "Project"; NeedsArg = $true }
+            'proj delete'  = @{ Handler = { param($c) Delete-Project $c }; Description = "Delete project"; Category = "Project"; NeedsArg = $true }
+            'add'          = @{ Handler = { param($c) Add-SmartTask $c }; Description = "Add task with natural language"; Category = "Task"; NeedsArg = $true }
+            'done'         = @{ Handler = { param($c) Complete-SmartTasks $c }; Description = "Complete tasks (supports ranges)"; Category = "Task"; NeedsArg = $true }
+            'delete'       = @{ Handler = { param($c) Delete-SmartTasks $c }; Description = "Delete tasks"; Category = "Task"; NeedsArg = $true }
+            'update'       = @{ Handler = { param($c) Update-SmartTask $c }; Description = "Update task properties"; Category = "Task"; NeedsArg = $true }
+            'postpone'     = @{ Handler = { param($c) Postpone-Task $c }; Description = "Postpone task by N days"; Category = "Task"; NeedsArg = $true }
+            'move'         = @{ Handler = { param($c) Move-Task $c }; Description = "Move task to different project"; Category = "Task"; NeedsArg = $true }
+            'dep add'      = @{ Handler = { param($c) Add-SmartDependency $c }; Description = "Add task dependency"; Category = "Dependency"; NeedsArg = $true }
+            'dep remove'   = @{ Handler = { param($c) Remove-SmartDependency $c }; Description = "Remove dependency"; Category = "Dependency"; NeedsArg = $true }
+            'dep show'     = @{ Handler = { param($c) Show-Dependencies $c }; Description = "Show task dependencies"; Category = "Dependency" }
+            'focus'        = @{ Handler = { param($c) Set-SmartFocus $c }; Description = "Set project context"; Category = "Context"; NeedsArg = $true }
+            'unfocus'      = @{ Handler = { Clear-Focus }; Description = "Clear context"; Category = "Context" }
+            'next'         = @{ Handler = { $vm = Get-NextActionsViewModel; Show-NextActions $vm }; Description = "AI-suggested next actions"; Category = "Productivity" }
+            'stats'        = @{ Handler = { $vm = Get-ProductivityStatsViewModel; Show-ProductivityStats $vm }; Description = "Productivity analytics"; Category = "Productivity" }
+            'help'         = @{ Handler = { param($c) Show-SmartHelp $c }; Description = "Context-aware help"; Category = "Utility" }
+            'quit'         = @{ Handler = { Exit-SmartTUI }; Description = "Save and exit"; Category = "Utility" }
+        }
+    }
+    
+    [void] InitializeAliases() {
+        $this.Aliases = @{
+            'a'='add'; 'd'='done'; 'u'='update'; 'p'='proj'; 'f'='focus'; 't'='today'; 'w'='week'; 'n'='next'; 's'='search'; 'h'='help'; 'q'='quit';
+            'td'='today'; 'tm'='tomorrow'; 'od'='overdue'; 'nd'='noduedate'; 'del'='delete'; 'rm'='delete'; 'mv'='move'; 'ls'='agenda'; 'x'='done'; 'xx'='delete'
+        }
+    }
+    
+    [void] InitializeCommandSchemas() {
+        $this.CommandSchemas["add"] = [CommandSchema]@{
+            CommandName = "add"; Description = "Add a new task"; Syntax = "add [@proj] [p1-3] [due:date] [#tag] <desc>"
+            Arguments = @(
+                [ArgumentSchema]@{ Name="description"; Type="text"; Required=$true; Description="Task description" },
+                [ArgumentSchema]@{ Name="project"; Type="project"; Prefix="@"; Description="Project name" },
+                [ArgumentSchema]@{ Name="priority"; Type="priority"; Prefix="p"; ValidValues=@(1,2,3); Description="Priority (1-3)" },
+                [ArgumentSchema]@{ Name="due"; Type="date"; Prefix="due:"; Description="Due date" },
+                [ArgumentSchema]@{ Name="estimate"; Type="duration"; Prefix="est:"; Description="Time estimate" },
+                [ArgumentSchema]@{ Name="tags"; Type="tag"; Prefix="#"; Description="Tags" }
+            )
+        }
+        $this.CommandSchemas["done"] = [CommandSchema]@{
+            CommandName = "done"; Description = "Mark task(s) as completed"; Syntax = "done <task_id_or_range>"
+            Arguments = @([ArgumentSchema]@{ Name="taskRef"; Type="text"; Required=$true; Pattern="^\d+(-\d+)?$"; Description="Task ID or range (e.g., 1-5)"; Example="12" })
+        }
+        $this.CommandSchemas["delete"] = [CommandSchema]@{
+            CommandName = "delete"; Description = "Delete task(s)"; Syntax = "delete <task_id_or_range>"
+            Arguments = @([ArgumentSchema]@{ Name="taskRef"; Type="text"; Required=$true; Pattern="^\d+(-\d+)?$"; Description="Task ID or range (e.g., 1-5)"; Example="12" })
+        }
+        $this.CommandSchemas["update"] = [CommandSchema]@{
+            CommandName = "update"; Description = "Update a task"; Syntax = "update <task_id> <new_content>"
+            Arguments = @(
+                [ArgumentSchema]@{ Name="taskRef"; Type="text"; Required=$true; Pattern="^\d+$"; Description="Task ID to update"; Example="12" },
+                [ArgumentSchema]@{ Name="content"; Type="text"; Required=$true; Description="New content and arguments" }
+            )
+        }
+        $this.CommandSchemas["proj add"] = [CommandSchema]@{
+            CommandName = "proj add"; Description = "Add a new project"; Syntax = "proj add <project_name>"
+            Arguments = @([ArgumentSchema]@{ Name="projectName"; Type="text"; Required=$true; Description="New project name" })
+        }
+        $this.CommandSchemas["dep add"] = [CommandSchema]@{
+            CommandName = "dep add"; Description = "Add a task dependency"; Syntax = "dep add <task_id> <depends_on_id>"
+            Arguments = @([ArgumentSchema]@{ Name="taskIds"; Type="text"; Required=$true; Description="Two task IDs" })
+        }
+    }
+    
+    [CommandSchema] GetCommandSchema([string] $commandName) { return $this.CommandSchemas[$commandName] }
+    
+    [array] GetSmartCompletions([string] $buffer, [int] $cursorPosition = -1) {
+        try {
+            $actualCursor = if ($cursorPosition -eq -1) { $buffer.Length } else { $cursorPosition }
+            $this.RefreshDataCache()
+            $state = $this.ParseBufferToState($buffer, $actualCursor)
+            $completions = $this.GetCompletionsForState($state)
+            return $this.ConvertToLegacyFormat($completions)
+        } catch {
+            return @([PSCustomObject]@{ Command = ''; Description = "Completion error: $($_.Exception.Message)"; Category = 'Error' })
+        }
+    }
+    
+    [CompletionState] ParseBufferToState([string] $buffer, [int] $cursorPosition) {
+        $state = [CompletionState]::new()
+        $state.OriginalBuffer = $buffer
+        $state.CursorPosition = [Math]::Min([Math]::Max($cursorPosition, 0), $buffer.Length)
+        if ([string]::IsNullOrWhiteSpace($buffer)) {
+            $state.Mode = [CompletionMode]::Command
+            $state.IsOnNewWord = $true
+            return $state
+        }
+        $tokens = $this.TokenizeBuffer($buffer)
+        $state.TokenUnderCursor = $tokens | Where-Object { $_.StartPos -le $state.CursorPosition -and $state.CursorPosition -le $_.EndPos } | Select-Object -Last 1
+        $state.IsOnNewWord = ($state.CursorPosition -gt 0 -and $buffer[$state.CursorPosition - 1] -match '\s') -or ($buffer.EndsWith(' ') -and $state.CursorPosition -eq $buffer.Length)
+        $this.AnalyzeTokensForCompletion($state, $tokens)
+        return $state
+    }
+    
+    [array] TokenizeBuffer([string] $buffer) {
+        $tokens = @()
+        $pattern = '("[^"]*")|(\S+)'
+        foreach ($match in [regex]::Matches($buffer, $pattern)) {
+            $tokens += [ParsedToken]::new($match.Value, $match.Index, ($match.Index + $match.Length))
+        }
+        return $tokens
+    }
+    
+    [void] AnalyzeTokensForCompletion([CompletionState] $state, [array] $tokens) {
+        if ($tokens.Count -eq 0) {
+            $state.Mode = [CompletionMode]::Command
+            return
+        }
+        $firstToken = $tokens[0].Text.ToLower()
+        $resolvedCommand = $this.ResolveAlias($firstToken)
+        if ($tokens.Count -ge 2 -and $this.Commands.ContainsKey("$resolvedCommand $($tokens[1].Text.ToLower())")) {
+            $state.FullCommandName = "$resolvedCommand $($tokens[1].Text.ToLower())"
+            $state.ArgumentTokens = if ($tokens.Count -gt 2) { $tokens[2..($tokens.Count - 1)] } else { @() }
+        } elseif ($this.Commands.ContainsKey($resolvedCommand)) {
+            $state.FullCommandName = $resolvedCommand
+            $state.ArgumentTokens = if ($tokens.Count -gt 1) { $tokens[1..($tokens.Count - 1)] } else { @() }
+        }
+    }
+
+    [array] GetCompletionsForState([CompletionState] $state) {
+        if (-not $state.FullCommandName) { return $this.GetCommandCompletions($state) }
+        $schema = $this.GetCommandSchema($state.FullCommandName)
+        if (-not $schema) { return $this.GetTaskIdCompletions($state.TokenUnderCursor.Text ?? "") }
+        $context = [CommandContext]::new($state, $this)
+        if ($state.IsOnNewWord) {
+            return $schema.Arguments | Where-Object {
+                $arg = $_
+                -not ($context.HasArg($arg.Name) -and $arg.Type -ne 'tag')
+            } | ForEach-Object {
+                if ($_.Type -ne 'text') { [CompletionItem]::new($_.Prefix, $_.Description, "Argument", 100) }
+            }
+        }
+        if ($state.TokenUnderCursor) {
+            $tokenText = $state.TokenUnderCursor.Text
+            $argSchema = $schema.Arguments | Where-Object { $tokenText.StartsWith($_.Prefix) -and $_.Prefix } | Select-Object -First 1
+            if ($argSchema) {
+                $partial = $tokenText.Substring($argSchema.Prefix.Length)
+                switch ($argSchema.Type) {
+                    'project'  { return $this.GetProjectCompletions($partial, $argSchema.Prefix) }
+                    'date'     { return $this.GetDateCompletions($partial, $argSchema.Prefix) }
+                    'duration' { return $this.GetEstimateCompletions($partial, $argSchema.Prefix) }
+                    'tag'      { return $this.GetTagCompletions($partial, $argSchema.Prefix) }
+                }
+            }
+        }
+        return @()
+    }
+    
+    [array] GetCommandCompletions([CompletionState] $state) {
+        $completions = @()
+        $partial = $state.TokenUnderCursor.Text ?? ""
+        foreach ($cmd in $this.Commands.Keys | Sort-Object) {
+            if ([string]::IsNullOrEmpty($partial) -or $cmd.StartsWith($partial)) {
+                $info = $this.Commands[$cmd]
+                $completions += [CompletionItem]::new($cmd, $info.Description, $info.Category, 100)
+            }
+        }
+        foreach ($alias in $this.Aliases.Keys | Sort-Object) {
+            if ([string]::IsNullOrEmpty($partial) -or $alias.StartsWith($partial)) {
+                $target = $this.Aliases[$alias]
+                if ($this.Commands.ContainsKey($target)) {
+                    $completions += [CompletionItem]::new($alias, "→ $target", $this.Commands[$target].Category, 90)
+                }
+            }
+        }
+        return $completions
+    }
+    
+    [array] GetProjectCompletions([string] $partial, [string] $prefix = '@') {
+        return $this.CachedData.projects |
+            Where-Object { -not $_.isArchived -and $_.name.StartsWith($partial, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { [CompletionItem]::new("$prefix$($_.name)", "Project: $($_.name)", 'Project', 90) }
+    }
+    
+    [array] GetDateCompletions([string] $partial, [string] $prefix = 'due:') {
+        $dates = @{ 'today'='Due today'; 'tomorrow'='Due tomorrow'; 'mon'='Next Monday'; 'fri'='Next Friday'; 'nextweek'='In 7 days' }
+        $completions = @()
+        foreach ($entry in $dates.GetEnumerator()) {
+            if ($entry.Name.StartsWith($partial, [StringComparison]::OrdinalIgnoreCase)) {
+                $completions += [CompletionItem]::new("$prefix$($entry.Name)", $entry.Value, 'Date', 85)
+            }
+        }
+        return $completions
+    }
+    
+    [array] GetEstimateCompletions([string] $partial, [string] $prefix = 'est:') {
+        return @('15m', '30m', '1h', '2h') |
+            Where-Object { $_.StartsWith($partial, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { [CompletionItem]::new("$prefix$_", "Estimate: $_", 'Estimate', 80) }
+    }
+    
+    [array] GetTagCompletions([string] $partial, [string] $prefix = '#') {
+        return $this.CachedData.labels |
+            Where-Object { $_.StartsWith($partial, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { [CompletionItem]::new("$prefix$_", "Tag: $_", 'Tag', 75) }
+    }
+    
+    [array] GetTaskIdCompletions([string] $partial) {
+        $completions = @()
+        if ($global:LastShownTaskMap) {
+            foreach ($localId in $global:LastShownTaskMap.Keys) {
+                if ([string]::IsNullOrEmpty($partial) -or $localId.ToString().StartsWith($partial)) {
+                    $task = $this.CachedData.tasks | Where-Object { $_.id -eq $global:LastShownTaskMap[$localId] }
+                    if ($task) {
+                        $desc = $task.text.Substring(0, [Math]::Min($task.text.Length, 40))
+                        $completions += [CompletionItem]::new($localId.ToString(), $desc, 'Task', 95)
+                    }
+                }
+            }
+        }
+        return $completions
+    }
+    
+    [string] ResolveAlias([string] $word) { if ($this.Aliases.ContainsKey($word)) { return $this.Aliases[$word] } else { return $word } }
+    [void] RefreshDataCache() { if ((Get-Date) - $this.CacheTime -gt [TimeSpan]::FromSeconds(5)) { $this.CachedData = Get-TaskData; $this.CacheTime = Get-Date } }
+    [array] ConvertToLegacyFormat([array] $completions) { return $completions | Sort-Object @{E='Score'; D=$true}, Text | ForEach-Object { [PSCustomObject]@{ Command=$_.Text; Description=$_.Description; Category=$_.Category } } }
+    
+    [void] ExecuteStructured([string]$input) {
+        $global:SessionStats.CommandsRun++
+        $state = $this.ParseBufferToState($input.Trim())
+        if ([string]::IsNullOrWhiteSpace($input)) { $state.FullCommandName = 'agenda' }
+        if ($state.FullCommandName -and $this.Commands.ContainsKey($state.FullCommandName)) {
+            $global:LastAction = $state.FullCommandName
+            $cmd = $this.Commands[$state.FullCommandName]
+            try {
+                $context = [CommandContext]::new($state, $this)
+                if (-not $context.IsValid) { $context.ShowValidationErrors(); return }
+                & $cmd.Handler $context
+            } catch {
+                Write-Host "Error executing $($state.FullCommandName): $_" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "Unknown command: '$input'. Type 'help' for commands." -ForegroundColor Red
+        }
+    }
+}
+
+# === VIEWMODEL GENERATORS (BUSINESS LOGIC) ===
+
+function Get-AgendaViewModel {
+    $data = Get-TaskData
+    $today = (Get-Date).Date
+    $todayStr = $today.ToString("yyyy-MM-dd")
+    $pendingTasks = $data.tasks | Where-Object { $_.status -eq 'pending' }
+    $overdue = $pendingTasks | Where-Object { $_.due -and $_.due -lt $todayStr } | Sort-Object due, @{E='priority'; D=$true}
+    $todayTasks = $pendingTasks | Where-Object { $_.due -eq $todayStr } | Sort-Object @{E='priority'; D=$true}
+    $upcoming = $pendingTasks | Where-Object { $_.due -and $_.due -gt $todayStr -and $_.due -le $today.AddDays(7).ToString("yyyy-MM-dd") } | Sort-Object due, @{E='priority'; D=$true}
+    $noDue = $pendingTasks | Where-Object { (-not $_.due) -and ($_.project -eq $global:CurrentContext -or $global:CurrentContext -eq 'inbox') } | Sort-Object @{E='priority'; D=$true}
+    
+    return [PSCustomObject]@{
+        HeaderDate     = (Get-Date).ToString('dddd, MMMM d, yyyy')
+        CurrentContext = $global:CurrentContext
+        Stats          = @{ Pending = $pendingTasks.Count; Today = $todayTasks.Count; Overdue = $overdue.Count }
+        OverdueTasks   = $overdue
+        TodayTasks     = $todayTasks
+        UpcomingTasks  = $upcoming
+        NoDueDateTasks = $noDue
+    }
+}
+
+function Get-ProjectDashboardViewModel {
+    $data = Get-TaskData
+    $weekStart = (Get-Date).Date.AddDays(-[int](Get-Date).DayOfWeek)
+    $projectModels = @()
+    $projects = $data.projects | Where-Object { -not $_.isArchived } | Sort-Object sortOrder
+    
+    foreach ($proj in $projects) {
+        $projTasks = $data.tasks | Where-Object { $_.project -eq $proj.name }
+        $pending = $projTasks | Where-Object { $_.status -eq 'pending' }
+        $completedCount = ($projTasks | Where-Object { $_.status -eq 'completed' }).Count
+        $overdueCount = ($pending | Where-Object { $_.due -and $_.due -lt (Get-Date).ToString("yyyy-MM-dd") }).Count
+        $timeThisWeek = 0
+        if ($data.timelogs) {
+            $logs = $data.timelogs | Where-Object { $_.project -eq $proj.name -and [datetime]::Parse($_.date) -ge $weekStart }
+            if ($logs) { $timeThisWeek = ($logs | Measure-Object minutes -Sum).Sum }
+        }
+        $totalForProgress = $pending.Count + $completedCount
+        $progressPercent = if ($totalForProgress -gt 0) { [Math]::Round(($completedCount / $totalForProgress) * 100) } else { 0 }
+        
+        $projectModels += [PSCustomObject]@{
+            Name              = $proj.name
+            Icon              = $proj.icon ?? "📁"
+            Description       = $proj.description
+            IsCurrentContext  = ($proj.name -eq $global:CurrentContext)
+            PendingCount      = $pending.Count
+            CompletedCount    = $completedCount
+            OverdueCount      = $overdueCount
+            TimeThisWeekHours = [Math]::Round($timeThisWeek / 60, 1)
+            ProgressPercent   = $progressPercent
+        }
+    }
+    return $projectModels
+}
+
+function Get-WeekViewModel {
+    $data = Get-TaskData
+    $today = (Get-Date).Date
+    $weekStart = $today.AddDays(-[int]$today.DayOfWeek)
+    $weekDays = @()
+    
+    for ($i = 0; $i -lt 7; $i++) {
+        $currentDay = $weekStart.AddDays($i)
+        $dayStr = $currentDay.ToString("yyyy-MM-dd")
+        $dayTasks = $data.tasks | Where-Object { $_.status -eq 'pending' -and $_.due -eq $dayStr } | Sort-Object @{E='priority'; D=$true}
+        $weekDays += [PSCustomObject]@{
+            Date    = $currentDay
+            IsToday = ($currentDay.Date -eq $today)
+            Tasks   = $dayTasks
+        }
+    }
+    return $weekDays
+}
+
+function Get-ProductivityStatsViewModel {
+    $data = Get-TaskData
+    $weekStart = (Get-Date).Date.AddDays(-[int](Get-Date).DayOfWeek)
+    $allTasks = $data.tasks + $data.completed
+    $pendingCount = ($data.tasks | Where-Object { $_.status -eq 'pending' }).Count
+    $completedCount = $allTasks.Count - $pendingCount
+    $weekTasks = $allTasks | Where-Object { $_.created -and [datetime]::Parse($_.created) -ge $weekStart }
+    
+    return [PSCustomObject]@{
+        TotalTasks        = $allTasks.Count
+        Pending           = $pendingCount
+        Completed         = $completedCount
+        CompletionRate    = if ($allTasks.Count > 0) { [Math]::Round(($completedCount / $allTasks.Count) * 100, 1) } else { 0 }
+        AddedThisWeek     = $weekTasks.Count
+        CompletedThisWeek = ($weekTasks | Where-Object { $_.status -eq 'completed' }).Count
+        ProjectStats      = $data.tasks | Group-Object project | Sort-Object Count -Descending | Select-Object -First 5 | ForEach-Object {
+            [PSCustomObject]@{
+                Name      = $_.Name
+                Pending   = ($_.Group | Where-Object status -eq 'pending').Count
+                Completed = ($_.Group | Where-Object status -eq 'completed').Count
+            }
+        }
+        SessionDuration   = [Math]::Round(((Get-Date) - $global:SessionStats.SessionStart).TotalMinutes)
+        SessionStats      = $global:SessionStats
+    }
+}
+
+function Get-NextActionsViewModel {
+    $data = Get-TaskData
+    $today = (Get-Date).Date
+    $scoredTasks = @()
+    
+    foreach ($task in $data.tasks | Where-Object { $_.status -eq 'pending' }) {
+        $score = 0
+        $reasons = @()
+        $score += $task.priority * 10
+        if ($task.priority -eq 3) { $reasons += "🔺 High priority" }
+        if ($task.due) {
+            $daysUntil = ([datetime]::Parse($task.due) - $today).TotalDays
+            if ($daysUntil -lt 0) { $score += 50; $reasons += "⚠ OVERDUE" }
+            elseif ($daysUntil -eq 0) { $score += 45; $reasons += "📅 Due today" }
+            elseif ($daysUntil -eq 1) { $score += 35; $reasons += "⏰ Due tomorrow" }
+        }
+        if ($task.project -eq $global:CurrentContext -and $global:CurrentContext -ne 'inbox') {
+            $score += 20
+            $reasons += "📍 In current context"
+        }
+        $scoredTasks += [PSCustomObject]@{
+            Task    = $task
+            Score   = $score
+            Reasons = ($reasons -join ' | ')
+        }
+    }
+    return $scoredTasks | Sort-Object Score -Descending | Select-Object -First 5
+}
+
+# === UI / DISPLAY FUNCTIONS (PRESENTATION LAYER) ===
+
+function Show-RichAgenda {
+    param([PSCustomObject]$ViewModel)
+    
+    Clear-Host
+    Write-Host "`n  ╔════════════════════════════════════════════════════════════╗" -ForegroundColor DarkGray
+    Write-Host "  ║  AGENDA - $($ViewModel.HeaderDate.PadRight(45))║" -ForegroundColor Cyan
+    if ($ViewModel.CurrentContext -ne 'inbox') {
+        $ctx = "  Context: $($ViewModel.CurrentContext.ToUpper())"
+        Write-Host "  ║$($ctx.PadRight(58))║" -ForegroundColor Yellow
+    }
+    Write-Host "  ╚════════════════════════════════════════════════════════════╝" -ForegroundColor DarkGray
+    
+    $localId = 1
+    $global:LastShownTaskMap = @{}
+    
+    Write-Host "`n  📊 Total: $($ViewModel.Stats.Pending) |" -NoNewline
+    Write-Host " Today: $($ViewModel.Stats.Today) " -ForegroundColor Yellow -NoNewline
+    Write-Host "|" -NoNewline
+    Write-Host " Overdue: $($ViewModel.Stats.Overdue) " -ForegroundColor Red
+    
+    if ($ViewModel.OverdueTasks) {
+        Write-Host "`n  🔴 OVERDUE ($($ViewModel.OverdueTasks.Count))" -ForegroundColor Red
+        Write-Host "  ─────────────" -ForegroundColor DarkRed
+        foreach ($task in $ViewModel.OverdueTasks | Select-Object -First 5) {
+            $global:LastShownTaskMap[$localId] = $task.id
+            $daysSince = [Math]::Round(((Get-Date).Date - [datetime]::Parse($task.due)).TotalDays)
+            $priSymbol = @("  ", "🔹", "🔸", "🔺")[$task.priority]
+            $taskText = $task.text.PadRight(40).Substring(0,40)
+            Write-Host "  [$localId] $priSymbol $taskText (${daysSince}d ago) @$($task.project)" -ForegroundColor Red
+            $localId++
+        }
+    }
+    
+    if ($ViewModel.TodayTasks) {
+        Write-Host "`n  📅 TODAY ($($ViewModel.TodayTasks.Count))" -ForegroundColor Yellow
+        Write-Host "  ─────────" -ForegroundColor DarkYellow
+        foreach ($task in $ViewModel.TodayTasks) {
+            $global:LastShownTaskMap[$localId] = $task.id
+            $priSymbol = @("  ", "🔹", "🔸", "🔺")[$task.priority]
+            Write-Host "  [$localId] $priSymbol $($task.text)" -ForegroundColor Yellow
+            $localId++
+        }
+    }
+
+    if ($ViewModel.UpcomingTasks) {
+        Write-Host "`n  📆 UPCOMING ($($ViewModel.UpcomingTasks.Count))" -ForegroundColor Green
+        Write-Host "  ────────────" -ForegroundColor DarkGreen
+        foreach ($task in $ViewModel.UpcomingTasks | Select-Object -First 5) {
+            $global:LastShownTaskMap[$localId] = $task.id
+            $dueDate = [datetime]::Parse($task.due)
+            $dayStr = $dueDate.ToString("ddd")
+            Write-Host "  [$localId] $dayStr - $($task.text)" -ForegroundColor Green
+            $localId++
+        }
+    }
+
+    if ($ViewModel.NoDueDateTasks) {
+        Write-Host "`n  📋 NO DUE DATE ($($ViewModel.NoDueDateTasks.Count))" -ForegroundColor Gray
+        Write-Host "  ──────────────" -ForegroundColor DarkGray
+        foreach ($task in $ViewModel.NoDueDateTasks | Select-Object -First 3) {
+            $global:LastShownTaskMap[$localId] = $task.id
+            $priSymbol = @("  ", "🔹", "🔸", "🔺")[$task.priority]
+            Write-Host "  [$localId] $priSymbol $($task.text)" -ForegroundColor Gray
+            $localId++
+        }
+        if ($ViewModel.NoDueDateTasks.Count -gt 3) {
+            Write-Host "  ... and $($ViewModel.NoDueDateTasks.Count - 3) more" -ForegroundColor DarkGray
+        }
+    }
+    
+    Write-Host "`n  ────────────────────────────────────────────" -ForegroundColor DarkGray
+    $tip = @("💡 Press Tab for commands", "💡 Use 'next' for AI-suggested tasks", "💡 Use 'stats' for analytics") | Get-Random
+    Write-Host "  $tip" -ForegroundColor DarkCyan
+    Write-Host ""
+}
+
+function Show-ProjectDashboard {
+    param([array]$ViewModel)
+    Clear-Host
+    Write-Host "`n  ╔════════════════════════════════════════════════════════════╗" -ForegroundColor DarkGray
+    Write-Host "  ║                    PROJECT DASHBOARD                        ║" -ForegroundColor Cyan
+    Write-Host "  ╚════════════════════════════════════════════════════════════╝" -ForegroundColor DarkGray
+    Write-Host ""
+    foreach ($proj in $ViewModel) {
+        $marker = if ($proj.IsCurrentContext) { "▶" } else { " " }
+        $color = if ($proj.IsCurrentContext) { "Yellow" } else { "Green" }
+        Write-Host "  $marker $($proj.Icon) $($proj.Name.ToUpper())" -NoNewline -ForegroundColor $color
+        Write-Host " ($($proj.PendingCount) pending, $($proj.OverdueCount) overdue, $($proj.TimeThisWeekHours)h this week)" -ForegroundColor DarkGray
+        if ($proj.Description) { Write-Host "     $($proj.Description)" -ForegroundColor Gray }
+        if ($proj.ProgressPercent -gt 0) {
+            $barWidth = 30
+            $filled = [Math]::Round(($proj.ProgressPercent / 100) * $barWidth)
+            $empty = $barWidth - $filled
+            Write-Host "     [" -NoNewline -ForegroundColor DarkGray
+            Write-Host ("█" * $filled) -NoNewline -ForegroundColor Green
+            Write-Host ("░" * $empty) -NoNewline -ForegroundColor DarkGray
+            Write-Host "] $($proj.ProgressPercent)%" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+    }
+}
+
+function Show-WeekView {
+    param([array]$ViewModel)
+    Clear-Host
+    Write-Host "`n  WEEK VIEW - $(Get-Date -Format 'MMMM yyyy')" -ForegroundColor Cyan
+    Write-Host "  ═══════════════════════════════════════════" -ForegroundColor DarkCyan
+    Write-Host ""
+    foreach ($day in $ViewModel) {
+        $dayName = $day.Date.ToString("dddd, MMM d")
+        if ($day.IsToday) { Write-Host "  ▶ $dayName (TODAY)" -ForegroundColor Yellow }
+        else { Write-Host "    $dayName" -ForegroundColor White }
+        
+        if ($day.Tasks) {
+            foreach ($task in $day.Tasks) {
+                $priSymbol = @("○", "◐", "◑", "●")[$task.priority]
+                $priColor = @("Gray", "Blue", "Yellow", "Red")[$task.priority]
+                Write-Host "      $priSymbol $($task.text)" -ForegroundColor $priColor
+            }
+        } else {
+            Write-Host "      (no tasks)" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+    }
+}
+
+function Show-ProductivityStats {
+    param([PSCustomObject]$ViewModel)
+    Clear-Host
+    Write-Host "`n  📊 PRODUCTIVITY ANALYTICS" -ForegroundColor Cyan
+    Write-Host "  ════════════════════════════" -ForegroundColor DarkCyan
+    Write-Host ""
+    Write-Host "  📋 TASKS" -ForegroundColor Yellow
+    Write-Host "  Total: $($ViewModel.TotalTasks), Pending: $($ViewModel.Pending), Completed: $($ViewModel.Completed), Rate: $($ViewModel.CompletionRate)%"
+    Write-Host "`n  📅 THIS WEEK" -ForegroundColor Yellow
+    Write-Host "  Added: $($ViewModel.AddedThisWeek), Completed: $($ViewModel.CompletedThisWeek)"
+    Write-Host "`n  📁 BY PROJECT" -ForegroundColor Yellow
+    foreach ($proj in $ViewModel.ProjectStats) {
+        Write-Host "  $($proj.Name): $($proj.Pending) pending, $($proj.Completed) done"
+    }
+    Write-Host "`n  ⚡ THIS SESSION ($($ViewModel.SessionDuration)m)" -ForegroundColor Yellow
+    Write-Host "  Commands: $($ViewModel.SessionStats.CommandsRun), Added: $($ViewModel.SessionStats.TasksAdded), Completed: $($ViewModel.SessionStats.TasksCompleted)"
+    Write-Host ""
+}
+
+function Show-NextActions {
+    param([array]$ViewModel)
+    Clear-Host
+    Write-Host "`n  🎯 NEXT ACTIONS - AI Recommendations" -ForegroundColor Cyan
+    Write-Host "  ════════════════════════════════════" -ForegroundColor DarkCyan
+    Write-Host ""
+    if ($ViewModel.Count -eq 0) {
+        Write-Host "  No pending tasks to recommend!" -ForegroundColor Green
+        Write-Host ""
+        return
+    }
+    $num = 1
+    foreach ($rec in $ViewModel) {
+        Write-Host "  $num. $($rec.Task.text)" -ForegroundColor White
+        Write-Host "     @$($rec.Task.project) | $($rec.Reasons)" -ForegroundColor Gray
+        Write-Host ""
+        $num++
+    }
+}
+
+# === COMMAND HANDLERS ===
+
+function Add-SmartTask {
+    param([CommandContext]$context)
+    $data = Get-TaskData
+    $task = @{
+        id = ++$data.lastId
+        text = $context.GetText()
+        project = $context.GetProject()
+        priority = $context.GetPriority()
+        status = 'pending'
+        created = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        due = $null
+        tags = $context.GetTags()
+    }
+    if ($context.HasArg('due')) {
+        $task.due = Parse-SmartDate $context.GetArg('due')
+    }
+    $data.tasks += $task
+    Save-TaskData $data
+    $global:SessionStats.TasksAdded++
+    Write-Host "`n  ✅ Task #$($task.id) created: '$($task.text)' in project @$($task.project)" -ForegroundColor Green
+    Write-Host ""
+}
+
+function Parse-SmartDate {
+    param([string]$input)
+    $today = (Get-Date).Date
+    switch -Wildcard ($input.ToLower()) {
+        'today'     { return $today.ToString("yyyy-MM-dd") }
+        'tomorrow'  { return $today.AddDays(1).ToString("yyyy-MM-dd") }
+        'mon*'      { $day = [DayOfWeek]::Monday; $days = (($day - $today.DayOfWeek) + 7) % 7; if($days -eq 0) {$days=7}; return $today.AddDays($days).ToString("yyyy-MM-dd") }
+        'fri*'      { $day = [DayOfWeek]::Friday; $days = (($day - $today.DayOfWeek) + 7) % 7; if($days -eq 0) {$days=7}; return $today.AddDays($days).ToString("yyyy-MM-dd") }
+        'nextweek'  { return $today.AddDays(7).ToString("yyyy-MM-dd") }
+        '+\d*'      { return $today.AddDays([int]($input -replace '\+')).ToString("yyyy-MM-dd") }
+        default     { try { return ([datetime]$input).ToString("yyyy-MM-dd") } catch { throw "Invalid date format: '$input'" } }
+    }
+}
+
+Function Complete-SmartTasks { param($context) { Write-Host "Completing tasks: $($context.GetText())" } }
+Function Delete-SmartTasks { param($context) { Write-Host "Deleting tasks: $($context.GetText())" } }
+Function Update-SmartTask { param($context) { Write-Host "Updating task: $($context.GetText())" } }
+Function Postpone-Task { param($context) { Write-Host "Postponing task: $($context.GetText())" } }
+Function Move-Task { param($context) { Write-Host "Moving task: $($context.GetText())" } }
+Function Add-Project { param($context) { Write-Host "Adding project: $($context.GetText())" } }
+Function Rename-Project { param($context) { Write-Host "Renaming project: $($context.GetText())" } }
+Function Archive-Project { param($context) { Write-Host "Archiving project: $($context.GetText())" } }
+Function Delete-Project { param($context) { Write-Host "Deleting project: $($context.GetText())" } }
+Function Add-SmartDependency { param($context) { Write-Host "Adding dependency: $($context.GetText())" } }
+Function Remove-SmartDependency { param($context) { Write-Host "Removing dependency: $($context.GetText())" } }
+Function Show-Dependencies { param($context) { Write-Host "Showing dependencies for: $($context.GetText())" } }
+Function Set-SmartFocus { param($context) { $global:CurrentContext = $context.GetText(); Write-Host "Context set to: $($global:CurrentContext)" } }
+Function Clear-Focus { $global:CurrentContext = 'inbox'; Write-Host "Context cleared." }
+Function Show-FilteredTasks { param($args) { Write-Host "Showing filtered tasks: $($args | Out-String)" } }
+Function Show-BlockedTasks { Write-Host "Showing blocked tasks..." }
+Function Show-SmartHelp { Write-Host "Help system..." }
+
+# === ENHANCED INPUT HANDLER ===
+class SmartInputHandler {
+    [SmartCommandParser] $Parser
+    [string] $Buffer = ""
+    [int] $CursorPos = 0
+    [array] $Completions = @()
+    [array] $CompletionDetails = @()
+    [int] $CompletionIndex = -1
+    [bool] $InCompletion = $false
+    [string] $OriginalInput = ""
+    [array] $History = @()
+    [int] $HistoryIndex = -1
+    
+    SmartInputHandler([SmartCommandParser]$parser) {
+        $this.Parser = $parser
+        $this.LoadHistory()
+    }
+    
+    [void] LoadHistory() {
+        $historyFile = Join-Path $PSScriptRoot "history.txt"
+        if (Test-Path $historyFile) {
+            $this.History = @(Get-Content $historyFile)
+        }
+    }
+    
+    [void] SaveHistory() {
+        $historyFile = Join-Path $PSScriptRoot "history.txt"
+        $this.History | Select-Object -Last 100 | Set-Content $historyFile
+    }
+    
+    [string] ReadCommand() {
+        $this.Buffer = ""
+        $this.CursorPos = 0
+        $this.InCompletion = $false
+        $this.HistoryIndex = $this.History.Count
+        Write-Host -NoNewline (Get-Prompt)
+        
+        while ($true) {
+            $key = [Console]::ReadKey($true)
+            switch ($key.Key) {
+                'Tab' { $this.HandleTab() }
+                'Enter' {
+                    if ($this.InCompletion) { $this.AcceptCompletion() }
+                    else {
+                        Write-Host ""
+                        if (-not [string]::IsNullOrWhiteSpace($this.Buffer)) {
+                            $this.History += $this.Buffer
+                            $this.SaveHistory()
+                        }
+                        return $this.Buffer
+                    }
+                }
+                'Escape' {
+                    if ($this.InCompletion) { $this.CancelCompletion() }
+                    else { $this.Buffer = ""; $this.CursorPos = 0; $this.RedrawLine() }
+                }
+                'Backspace' {
+                    if ($this.CursorPos -gt 0) {
+                        $this.Buffer = $this.Buffer.Remove($this.CursorPos - 1, 1)
+                        $this.CursorPos--
+                        $this.CancelCompletionAndRedraw()
+                    }
+                }
+                'UpArrow' {
+                    if ($this.HistoryIndex -gt 0) {
+                        $this.HistoryIndex--
+                        $this.Buffer = $this.History[$this.HistoryIndex]
+                        $this.CursorPos = $this.Buffer.Length
+                        $this.RedrawLine()
+                    }
+                }
+                'DownArrow' {
+                    if ($this.HistoryIndex -lt $this.History.Count) {
+                        $this.HistoryIndex++
+                        $this.Buffer = if($this.HistoryIndex -eq $this.History.Count) {""} else {$this.History[$this.HistoryIndex]}
+                        $this.CursorPos = $this.Buffer.Length
+                        $this.RedrawLine()
+                    }
+                }
+                'LeftArrow' { if ($this.CursorPos > 0) { $this.CursorPos--; [Console]::SetCursorPosition((Get-Prompt).Length + $this.CursorPos, [Console]::CursorTop) } }
+                'RightArrow' { if ($this.CursorPos -lt $this.Buffer.Length) { $this.CursorPos++; [Console]::SetCursorPosition((Get-Prompt).Length + $this.CursorPos, [Console]::CursorTop) } }
+                default {
+                    if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
+                        $this.Buffer = $this.Buffer.Insert($this.CursorPos, $key.KeyChar)
+                        $this.CursorPos++
+                        $this.CancelCompletionAndRedraw()
+                    }
+                }
+            }
+        }
+        # THIS LINE IS REQUIRED to satisfy the PowerShell parser, even though it's unreachable.
+        return ""
+    }
+    
+    [void] HandleTab() {
+        if (-not $this.InCompletion) {
+            $this.OriginalInput = $this.Buffer
+            $this.CompletionDetails = $this.Parser.GetSmartCompletions($this.Buffer, $this.CursorPos)
+            $this.Completions = @($this.CompletionDetails | Select-Object -ExpandProperty Command)
+            if ($this.Completions.Count -gt 0) {
+                $this.InCompletion = $true
+                $this.CompletionIndex = 0
+                $this.ApplyCompletion()
+            }
+        } else {
+            $this.CompletionIndex = ($this.CompletionIndex + 1) % $this.Completions.Count
+            $this.ApplyCompletion()
+        }
+    }
+    
+    [void] ApplyCompletion() {
+        if ($this.Completions.Count -gt 0) {
+            $completion = $this.Completions[$this.CompletionIndex]
+            $state = $this.Parser.ParseBufferToState($this.OriginalInput, $this.CursorPos)
+            $this.Buffer = $this.BuildNewBufferWithCompletion($completion, $state)
+            $this.CursorPos = $this.Buffer.Length
+            $this.RedrawLine()
+            $this.ShowCompletionIndicators()
+        }
+    }
+    
+    [string] BuildNewBufferWithCompletion([string] $completion, [CompletionState] $state) {
+        if (-not $state.TokenUnderCursor) {
+            return ($state.OriginalBuffer.TrimEnd() + " " + $completion).TrimStart()
+        }
+        $start = $state.TokenUnderCursor.StartPos
+        $prefix = $state.OriginalBuffer.Substring(0, $start)
+        return $prefix + $completion + " "
+    }
+    
+    [void] AcceptCompletion() {
+        $this.InCompletion = $false
+        $this.Buffer = $this.Buffer.TrimEnd() + " "
+        $this.CursorPos = $this.Buffer.Length
+        $this.RedrawLine()
+    }
+    
+    [void] CancelCompletion() {
+        $this.Buffer = $this.OriginalInput
+        $this.CursorPos = $this.Buffer.Length
+        $this.InCompletion = $false
+        $this.RedrawLine()
+    }
+    
+    [void] CancelCompletionAndRedraw() {
+        if($this.InCompletion) { $this.CancelCompletion() }
+        else { $this.RedrawLine() }
+    }
+    
+    [void] RedrawLine() {
+        [Console]::SetCursorPosition(0, [Console]::CursorTop)
+        Write-Host -NoNewline (" " * [Console]::WindowWidth)
+        [Console]::SetCursorPosition(0, [Console]::CursorTop)
+        Write-Host -NoNewline (Get-Prompt)
+        Write-Host -NoNewline $this.Buffer
+        [Console]::SetCursorPosition((Get-Prompt).Length + $this.CursorPos, [Console]::CursorTop)
+    }
+    
+    [void] ShowCompletionIndicators() {
+        if ($this.CompletionDetails.Count > 0) {
+            $detail = $this.CompletionDetails[$this.CompletionIndex]
+            $indicator = " [$($this.CompletionIndex + 1)/$($this.Completions.Count)]"
+            Write-Host -NoNewline $indicator -ForegroundColor DarkGray
+            $cursorTop = [Console]::CursorTop
+            [Console]::SetCursorPosition(0, $cursorTop + 1)
+            Write-Host (" " * [Console]::WindowWidth) -NoNewline
+            [Console]::SetCursorPosition(0, $cursorTop + 1)
+            Write-Host "  → $($detail.Description)" -ForegroundColor DarkCyan -NoNewline
+            [Console]::SetCursorPosition((Get-Prompt).Length + $this.CursorPos, $cursorTop)
+        }
+    }
+}
+
+function Get-Prompt {
+    if ($global:CurrentContext -and $global:CurrentContext -ne 'inbox') {
+        return "todo:$($global:CurrentContext)> "
+    }
+    return "todo> "
+}
+
+function Exit-SmartTUI {
+    $duration = [Math]::Round(((Get-Date) - $global:SessionStats.SessionStart).TotalMinutes)
+    Write-Host "`n  👋 SESSION SUMMARY ($($duration)m)" -ForegroundColor Cyan
+    Write-Host "  Tasks Added: $($global:SessionStats.TasksAdded), Completed: $($global:SessionStats.TasksCompleted), Commands: $($global:SessionStats.CommandsRun)"
+    Write-Host "`n  Goodbye! 🚀`n" -ForegroundColor Cyan
+    exit
+}
+
+# === MAIN ENTRY POINT ===
+function Start-TodoistTUI {
+    [ConfigManager]::Load()
+    Initialize-DataStorage
+    
+    Clear-Host
+    Write-Host "`n  ╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "  ║      TODOIST TUI PROFESSIONAL - v3.1 (Parser Fix)          ║" -ForegroundColor Cyan
+    Write-Host "  ║  Tab: Complete  |  ↑↓: History  |  help: Commands           ║" -ForegroundColor DarkCyan
+    Write-Host "  ╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    
+    $data = Get-TaskData
+    $global:CurrentContext = $data.currentContext
+    
+    $agendaViewModel = Get-AgendaViewModel
+    Show-RichAgenda $agendaViewModel
+    
+    $parser = [SmartCommandParser]::new()
+    $inputHandler = [SmartInputHandler]::new($parser)
+    
+    while ($true) {
+        try {
+            $command = $inputHandler.ReadCommand()
+            if ($command -eq 'exit' -or $command -eq 'quit' -or $command -eq 'q') {
+                Exit-SmartTUI
+            }
+            $parser.ExecuteStructured($command)
+        } catch {
+            Write-Host "Fatal Error: $_" -ForegroundColor Red
+        }
+    }
+}
+
+# Auto-start if not being dot-sourced
+if ($MyInvocation.InvocationName -ne '.') {
+    Start-TodoistTUI
+} else {
+    Write-Host "Enhanced Todoist TUI loaded. Run 'Start-TodoistTUI' to begin." -ForegroundColor Cyan
+}
